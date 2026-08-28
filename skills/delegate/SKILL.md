@@ -57,6 +57,17 @@ There is no implicit lane default. If the answer names a supported model or reas
 
 P0-A certifies the MCP implementation path only for Codex on macOS arm64 when its capability report names `codex-native-sandbox` and marks the edit Lane eligible.
 
+### Architect-side Claude subagents
+
+The architect session — whatever model it runs, including Fable — may dispatch Claude subagents through the host's `Agent` tool with a `model` of `opus` or `sonnet` for **non-writing** roles, and it may do so in parallel with a running lane:
+
+- **Scout** (`sonnet`, or `Explore`): read-only reconnaissance before a spec is frozen — call sites, nearby patterns, which files an allowlist must cover.
+- **Spec drafter** (`sonnet`): turn an agreed design into candidate `successCriteria` and verification commands for the architect to review; the architect still owns and freezes the spec.
+- **Candidate reviewer** (`candidate-reviewer`, `opus`): an independent review of the frozen bytes through `reviewCandidate`, with no Producer context. Use it for the per-task review and for the whole-branch final review, then let the architect weigh the verdict and call `decideCandidate`.
+- **Advisor** (`claude-advisor`, `fable`): commitment-boundary second opinion.
+
+A Claude subagent is never an implementer. It edits nothing in the checkout, calls neither `decideCandidate` nor `integrateCandidate`, and never dispatches a lane on its own; only the `delegation-lane` courier calls `delegate`/`delegatePipeline`. When the work is implementation and the model you want is Opus or Sonnet, that is the `claude-implementer` lane above: the same model, but run as an untrusted Producer inside an isolated worktree, frozen, and independently verified.
+
 ## Build the Delegation Spec
 
 Construct a candidate spec with every required field:

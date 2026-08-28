@@ -118,7 +118,7 @@ Then append `Task <N>: complete (run <runId>, manifest <hash7>, review clean)` �
 
 ## Final review
 
-After the last task, review the **whole candidate branch and the cumulative attempts**, not just the final diff — a defect introduced in Task 2 and papered over in Task 6 is only visible across the range. Dispatch the final review on the most capable available model, point it at the ledger's deferred-minor and parked lines, and give it the branch range from the merge base.
+After the last task, review the **whole candidate branch and the cumulative attempts**, not just the final diff — a defect introduced in Task 2 and papered over in Task 6 is only visible across the range. Dispatch the final review on the most capable available model — the `candidate-reviewer` agent on `opus`, or `claude-advisor` on `fable` — point it at the ledger's deferred-minor and parked lines, and give it the branch range from the merge base.
 
 If it returns findings, handle them as one fix wave — a single revised delegation carrying the complete findings list, not one delegation per finding — then exactly one scoped re-review. Residual findings are adjudicated as at the breaker.
 

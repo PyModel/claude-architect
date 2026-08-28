@@ -18,6 +18,11 @@ All notable changes to Claude Architect are recorded here. The format follows
   this plugin's own MCP tools, and cannot nest subagents. darwin/arm64 only,
   confined by the same host Seatbelt backend as the Pi, OpenCode, Pythinker,
   and agy lanes.
+- The delegate skill now names the architect-side roles a Claude subagent
+  (Opus or Sonnet) may take — scouting, spec drafting, and independent candidate
+  review through the new read-only `candidate-reviewer` agent — and the one it
+  never takes: editing the checkout.
+
 ### Changed
 
 - Producers declare their own host state directories through

@@ -112,6 +112,7 @@ What this does not relax: independent verification still decides what may be acc
 | Skill | `/claude-architect:codex` | Runs Codex CLI directly against the current checkout without the verified delegation lifecycle. |
 | Skill | `/claude-architect:subagent-driven-delegation` | Executes a multi-task plan with the Superpowers subagent-driven-development loop, using a verified Producer as the implementer for every task. |
 | Agent | `advisor` | Current strictly read-only commitment-boundary advisor. |
+| Agent | `candidate-reviewer` | Read-only Opus reviewer for one frozen candidate: reads the exact bytes through `reviewCandidate`, returns two verdicts and a recommendation, never decides or integrates. |
 | MCP | `validateDelegationSpec` | Validates a spec without starting a Producer and returns its canonical correlation digest. |
 | MCP | `delegate` | Runs one validated, isolated, independently verified attempt. |
 | MCP | `delegatePipeline` | Runs the fresh-context implement/review/repair pipeline. |
