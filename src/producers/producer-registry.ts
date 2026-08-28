@@ -1,4 +1,5 @@
 import { AgyAdapter } from "./agy-adapter.js";
+import { ClaudeAdapter } from "./claude-adapter.js";
 import { CodexAdapter } from "./codex-adapter.js";
 import { OpenCodeAdapter } from "./opencode-adapter.js";
 import { PiAdapter } from "./pi-adapter.js";
@@ -21,4 +22,4 @@ export class ProducerRegistry {
   }
 }
 
-export const registry = new ProducerRegistry([new CodexAdapter(), new OpenCodeAdapter(), new PiAdapter(), new PythinkerAdapter(), new AgyAdapter()]);
+export const registry = new ProducerRegistry([new CodexAdapter(), new OpenCodeAdapter(), new PiAdapter(), new PythinkerAdapter(), new AgyAdapter(), new ClaudeAdapter()]);

@@ -25,7 +25,7 @@ The normal MCP flow is:
 
 The Codex adapter uses Codex's native sandbox, requests `workspace-write`, disables network, constrains shell environment inclusion, disables multi-agent delegation, and uses ephemeral configuration. The backend table in `src/platform/sandbox/backends.ts` marks native macOS arm64 Codex as certified, native Linux as tested, and native Windows as unsupported for the edit lane. The macOS Seatbelt backend is used by other MCP adapters where eligible. Linux confinement fails closed when the required backend is unavailable. Windows process supervision uses the packaged watchdog/helper, but this is not a certified Windows Codex edit sandbox.
 
-OpenCode, Pi, Pythinker, and Antigravity CLI (`agy`) use the same validated MCP attempt lifecycle and remain subject to adapter and platform eligibility checks. A requested Producer with no eligible confinement backend is unavailable: the runtime fails closed instead of selecting an unconfined path or substituting a different Producer. Certification claims remain specific to the Producer, platform, and backend reported by the capability registry.
+OpenCode, Pi, Pythinker, Antigravity CLI (`agy`), and headless Claude Code (`claude -p`) use the same validated MCP attempt lifecycle and remain subject to adapter and platform eligibility checks. A requested Producer with no eligible confinement backend is unavailable: the runtime fails closed instead of selecting an unconfined path or substituting a different Producer. Certification claims remain specific to the Producer, platform, and backend reported by the capability registry.
 
 ## State and recovery
 

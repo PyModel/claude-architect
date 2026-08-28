@@ -6,6 +6,18 @@ All notable changes to Claude Architect are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `claude-implementer`: a sixth delegation-lane Producer that runs a headless
+  Claude Code session (`claude -p --output-format json`) as an untrusted
+  Producer, so the architect can delegate implementation to Opus or Sonnet
+  (`producerOverrides.model`) with an optional `--effort` override. The attempt
+  runs with `--strict-mcp-config`, `--setting-sources ""`,
+  `--disable-slash-commands`, `--no-session-persistence`, and a built-in tool
+  allowlist without `Agent`, so it sees only the Delegation Spec, cannot load
+  this plugin's own MCP tools, and cannot nest subagents. darwin/arm64 only,
+  confined by the same host Seatbelt backend as the Pi, OpenCode, Pythinker,
+  and agy lanes.
 ### Changed
 
 - Producers declare their own host state directories through

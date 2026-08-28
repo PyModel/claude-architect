@@ -14,7 +14,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-3fb950?style=flat-square&labelColor=0b0e14">
 </p>
 
-**Verified coding-agent delegation for Claude Code.** Claude stays the architect and reviewer — it writes the spec, judges the evidence, and reports what landed. Implementation is delegated to fresh-context subagent implementers running on the coding CLI you choose — **Codex, OpenCode, Pi, Pythinker, or Antigravity CLI** — each invocation starting clean with no inherited conversation state, inside an isolated Git worktree. The work comes back as a frozen, hash-anchored candidate that Claude reviews against independent verification evidence before a single byte can reach your checkout.
+**Verified coding-agent delegation for Claude Code.** Claude stays the architect and reviewer — it writes the spec, judges the evidence, and reports what landed. Implementation is delegated to fresh-context subagent implementers running on the coding CLI you choose — **Codex, OpenCode, Pi, Pythinker, Antigravity CLI, or a headless Claude Code session (Opus/Sonnet)** — each invocation starting clean with no inherited conversation state, inside an isolated Git worktree. The work comes back as a frozen, hash-anchored candidate that Claude reviews against independent verification evidence before a single byte can reach your checkout.
 
 In practice that means three guarantees the plugin enforces in host code, not in prompts:
 
@@ -57,7 +57,7 @@ claude plugin install claude-architect@claude-architect
 claude plugin list --json
 ```
 
-Restart Claude Code after installing or updating. Install and authenticate at least one supported Producer CLI (`codex`, `opencode`, `pi`, or `pythinker`); Claude Architect reports unavailable lanes rather than silently substituting another agent.
+Restart Claude Code after installing or updating. Install and authenticate at least one supported Producer CLI (`codex`, `opencode`, `pi`, `pythinker`, `agy`, or `claude`); Claude Architect reports unavailable lanes rather than silently substituting another agent.
 
 ## Quick start
 
@@ -67,7 +67,7 @@ Open Claude Code in a Git repository and name the Producer you want:
 /claude-architect:delegate Use Codex to add rate limiting to the public API, run the tests, and show me the independently reviewed candidate before integration.
 ```
 
-If no Producer is named, the skill asks you to choose Codex, OpenCode, Pi, Pythinker, or Antigravity CLI. OpenCode, Pythinker, and Antigravity CLI are harnesses that accept optional model and thinking/variant/effort overrides; model selection within a harness lane is optional and otherwise defers to that CLI's configured default. The Pi lane has no model override: it always runs the model configured in Pi, and a requested override fails the lane rather than silently substituting another model. For non-trivial work it uses the fresh-context review pipeline. Read the exact patch, findings, and verification output before deciding whether to accept.
+If no Producer is named, the skill asks you to choose Codex, OpenCode, Pi, Pythinker, Antigravity CLI, or Claude Code. OpenCode, Pythinker, Antigravity CLI, and Claude Code are harnesses that accept optional model and thinking/variant/effort overrides; model selection within a harness lane is optional and otherwise defers to that CLI's configured default. The Pi lane has no model override: it always runs the model configured in Pi, and a requested override fails the lane rather than silently substituting another model. For non-trivial work it uses the fresh-context review pipeline. Read the exact patch, findings, and verification output before deciding whether to accept.
 
 ### Direct Codex CLI
 

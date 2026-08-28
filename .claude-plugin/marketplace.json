@@ -1,6 +1,6 @@
 {
   "name": "claude-architect",
-  "description": "CLI coding-agent orchestration for Claude through Codex, OpenCode, Pi, and Pythinker Code, with a commitment-boundary advisor.",
+  "description": "CLI coding-agent orchestration for Claude through Codex, OpenCode, Pi, Pythinker Code, Antigravity CLI, and headless Claude Code, with a commitment-boundary advisor.",
   "owner": {
     "name": "elkaix"
   },

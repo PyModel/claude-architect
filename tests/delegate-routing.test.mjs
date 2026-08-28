@@ -6,7 +6,7 @@ const skill = fs.readFileSync(new URL("../skills/delegate/SKILL.md", import.meta
 assert.match(skill, /If the user invokes `\/claude-architect:delegate` without naming a CLI, implementer, or agent, use the host's structured question tool when available, ask this question, and wait for the answer\./);
 assert.match(skill, /Which CLI should handle this delegation\?.*Use a custom answer to name a different supported reasoning level\./);
 
-for (const lane of ["codex-implementer", "opencode-implementer", "pi-implementer", "pythinker-implementer", "agy-implementer"]) {
+for (const lane of ["codex-implementer", "opencode-implementer", "pi-implementer", "pythinker-implementer", "agy-implementer", "claude-implementer"]) {
   assert.ok(skill.includes(`\`${lane}\``), `delegate question must offer ${lane}`);
 }
 
@@ -18,6 +18,8 @@ assert.match(skill, /The Pi lane accepts no model override: it always runs the m
 assert.doesNotMatch(skill, /--thinking-effort/);
 assert.match(skill, /the installed pythinker-code CLI exposes no reasoning override, so the Pythinker configured default always applies/);
 assert.match(skill, /`--effort low\|medium\|high`/);
+assert.match(skill, /`--model opus\|sonnet\|fable\|haiku`/);
+assert.match(skill, /`--effort low\|medium\|high\|xhigh\|max`/);
 assert.match(skill, /include it in the delegation spec/);
 
 assert.doesNotMatch(skill, /Use Codex by default|default implementation lane/);

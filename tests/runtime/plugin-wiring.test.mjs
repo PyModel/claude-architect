@@ -138,7 +138,7 @@ describe("P0-A plugin wiring", () => {
       /hash you computed/u,
       "review correlation must retain the runtime digest rather than reintroducing caller hashing",
     );
-    for (const rosterName of ["codex-implementer", "opencode-implementer", "pi-implementer", "pythinker-implementer"]) {
+    for (const rosterName of ["codex-implementer", "opencode-implementer", "pi-implementer", "pythinker-implementer", "agy-implementer", "claude-implementer"]) {
       assert.ok(skill.includes(`\`${rosterName}\``), `delegate skill must retain ${rosterName} in its selection roster`);
     }
     const trustedLifecycleHeading = skill.indexOf("## Trusted MCP lifecycle");

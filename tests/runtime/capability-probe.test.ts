@@ -73,6 +73,7 @@ describe("ProducerRegistry", () => {
       "pi",
       "pythinker",
       "agy",
+      "claude",
     ]);
   });
 });

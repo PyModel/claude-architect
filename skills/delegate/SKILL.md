@@ -38,6 +38,7 @@ The delegated CLIs are the architect's **implementation agents** — the same su
 | `pi-implementer` | Pi configured model | optional `--thinking` |
 | `pythinker-implementer` | Pythinker provider/model | the installed pythinker-code CLI exposes no reasoning override; the configured default always applies |
 | `agy-implementer` | Antigravity CLI (`agy`) configured model | optional `--effort low\|medium\|high` |
+| `claude-implementer` | Claude Code headless (`claude -p`) — Opus, Sonnet, or the configured default | optional `--model opus\|sonnet\|fable\|haiku`, optional `--effort low\|medium\|high\|xhigh\|max` |
 
 If the user invokes `/claude-architect:delegate` without naming a CLI, implementer, or agent, use the host's structured question tool when available, ask this question, and wait for the answer. Include the producer and reasoning control in each option so the user knows what the lane will run:
 
@@ -50,6 +51,7 @@ Offer exactly these choices:
 - **Pi** - `pi-implementer`; always uses the model configured in Pi — a spec naming a model override fails the lane rather than substituting one — with optional `--thinking off|minimal|low|medium|high|xhigh|max`.
 - **Pythinker** - `pythinker-implementer`; configured provider/model unless overridden; the installed pythinker-code CLI exposes no reasoning override, so the Pythinker configured default always applies.
 - **Antigravity CLI** - `agy-implementer`; configured model unless overridden, with optional `--effort low|medium|high`; darwin/arm64 only until a Linux/Windows write-confinement backend exists.
+- **Claude Code** - `claude-implementer`; a second Claude session run headless as an untrusted Producer — the configured default model unless overridden with `--model opus|sonnet|fable|haiku`, with optional `--effort low|medium|high|xhigh|max`; darwin/arm64 only, same Seatbelt backend. The attempt runs with settings, hooks, MCP servers, skills, and CLAUDE.md discovery disabled, so it sees only the Delegation Spec and cannot reach this plugin's own tools.
 
 There is no implicit lane default. If the answer names a supported model or reasoning override, include it in the delegation spec; otherwise let the selected Producer use its configured default. The Pi lane accepts no model override: it always runs the model configured in Pi.
 
