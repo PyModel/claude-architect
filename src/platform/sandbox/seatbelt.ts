@@ -1,6 +1,4 @@
 import { realpathSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, join } from "node:path/posix";
 import type { ProducerInvocation } from "../../producers/producer-adapter.js";
 
 export interface SeatbeltPolicy {
@@ -51,72 +49,16 @@ function sbPath(path: string): string {
   return `"${path.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
 }
 
-function openCodeWritablePaths(
+/**
+ * State the Producer declared it must write while running with the real HOME.
+ * A temporary home replaces that state wholesale, so the declaration is moot.
+ */
+function inheritedStateWritablePaths(
   invocation: ProducerInvocation,
   policy: SeatbeltPolicy,
 ): string[] {
-  if (
-    policy.tempHome !== null
-    || !invocation.requiredEnv.includes("OPENCODE_CONFIG_DIR")
-  ) return [];
-
-  const home = homedir();
-  const dataHome = invocation.env?.XDG_DATA_HOME
-    ?? process.env.XDG_DATA_HOME
-    ?? join(home, ".local", "share");
-  const stateHome = invocation.env?.XDG_STATE_HOME
-    ?? process.env.XDG_STATE_HOME
-    ?? join(home, ".local", "state");
-  return [join(dataHome, "opencode"), join(stateHome, "opencode")];
-}
-
-function piWritablePaths(
-  invocation: ProducerInvocation,
-  policy: SeatbeltPolicy,
-): string[] {
-  if (
-    policy.tempHome !== null
-    || !invocation.requiredEnv.includes("PI_API_KEY")
-  ) return [];
-
-  const home = invocation.env?.HOME ?? process.env.HOME ?? homedir();
-  return [join(home, ".pi", "agent")];
-}
-
-function isPythinkerInvocation(invocation: ProducerInvocation): boolean {
-  return [invocation.executable.command, ...invocation.executable.prefixArgs]
-    .some(part => basename(part) === "pythinker");
-}
-
-function isAgyInvocation(invocation: ProducerInvocation): boolean {
-  return [invocation.executable.command, ...invocation.executable.prefixArgs]
-    .some(part => basename(part) === "agy");
-}
-
-function agyWritablePaths(
-  invocation: ProducerInvocation,
-  policy: SeatbeltPolicy,
-): string[] {
-  if (policy.tempHome !== null || !isAgyInvocation(invocation)) return [];
-
-  const home = invocation.env?.HOME ?? process.env.HOME ?? homedir();
-  return [join(home, ".gemini", "antigravity-cli")];
-}
-
-function pythinkerWritablePaths(
-  invocation: ProducerInvocation,
-  policy: SeatbeltPolicy,
-): string[] {
-  if (policy.tempHome !== null || !isPythinkerInvocation(invocation)) return [];
-
-  // Pythinker's real default data directory is `~/.pythinker`, overridable with
-  // `PYTHINKER_SHARE_DIR` — see the matching rationale in pythinker-adapter.ts.
-  const configuredHome = invocation.env?.PYTHINKER_SHARE_DIR
-    ?? process.env.PYTHINKER_SHARE_DIR;
-  if (configuredHome !== undefined && configuredHome.length > 0) return [configuredHome];
-
-  const home = invocation.env?.HOME ?? process.env.HOME ?? homedir();
-  return [join(home, ".pythinker")];
+  if (policy.tempHome !== null) return [];
+  return [...(invocation.inheritedStateWritablePaths ?? [])];
 }
 
 function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): string {
@@ -156,12 +98,7 @@ export function wrapInvocationWithSeatbelt(
   invocation: ProducerInvocation,
   policy: SeatbeltPolicy,
 ): ProducerInvocation {
-  const profile = buildProfile(policy, [
-    ...openCodeWritablePaths(invocation, policy),
-    ...piWritablePaths(invocation, policy),
-    ...pythinkerWritablePaths(invocation, policy),
-    ...agyWritablePaths(invocation, policy),
-  ]);
+  const profile = buildProfile(policy, inheritedStateWritablePaths(invocation, policy));
   const inner = [
     invocation.executable.command,
     ...invocation.executable.prefixArgs,

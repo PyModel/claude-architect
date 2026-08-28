@@ -465,6 +465,19 @@ describe("OpenCodeAdapter", () => {
     });
   });
 
+  it("declares OpenCode's XDG data and state directories as inherited writable state", () => {
+    const adapter = new OpenCodeAdapter({
+      env: { XDG_STATE_HOME: "/Users/test/.local/state" },
+      homeDirectory: "/Users/test",
+      hasAuthStore: () => false,
+    });
+    const invocation = adapter.buildInvocation(sampleSpec(), invocationContext());
+    expect(invocation.inheritedStateWritablePaths).toEqual([
+      "/Users/test/.local/share/opencode",
+      "/Users/test/.local/state/opencode",
+    ]);
+  });
+
   it("declares the OpenCode configuration isolation profile", () => {
     expect(new OpenCodeAdapter().configurationProfile()).toEqual({
       isolationState: "controlled-config-with-copied-credentials",

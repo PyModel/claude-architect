@@ -1,15 +1,9 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { supervise } from "../platform/process-supervisor.js";
-import type { ResolvedExecutable } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
-import {
-  normalizeNodeShim,
-  normalizePlainText,
-  renderProducerPrompt,
-  selectOsWriteConfinementBackend,
-} from "./plain-text.js";
+import { probeOsConfinedCli } from "./cli-probe.js";
+import { normalizePlainText, renderProducerPrompt } from "./plain-text.js";
 import type {
   CapabilityReport,
   InvocationContext,
@@ -20,35 +14,6 @@ import type {
 } from "./producer-adapter.js";
 
 const OPENCODE_REQUIRED_ENV = ["OPENCODE_CONFIG_DIR", "XDG_DATA_HOME"] as const;
-const VERSION_TIMEOUT_MS = 10_000;
-const VERSION_OUTPUT_LIMIT = 64 * 1024;
-
-function unavailableReport(
-  ctx: ProbeContext,
-  reason: string,
-  resolvedExecutable: ResolvedExecutable | null = null,
-): CapabilityReport {
-  return {
-    producerId: "opencode",
-    available: false,
-    reason,
-    os: ctx.os,
-    arch: ctx.arch,
-    environmentType: ctx.environmentType,
-    resolvedExecutable,
-    version: null,
-    authState: "unknown",
-    executionModes: ["edit"],
-    structuredOutput: false,
-    writeConfinementBackend: null,
-    laneEligibility: { edit: false },
-  };
-}
-
-function parseVersion(stdout: string): string | null {
-  const match = /(?:^|\s)(\d+\.\d+\.\d+(?:[-+][^\s]+)?)(?:\s|$)/u.exec(stdout.trim());
-  return match?.[1] ?? null;
-}
 
 export interface OpenCodeAdapterDeps {
   env: Record<string, string | undefined>;
@@ -81,54 +46,22 @@ export class OpenCodeAdapter implements ProducerAdapter {
   }
 
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
-    if (ctx.os === "win32") return unavailableReport(ctx, "unsupported-platform");
+    return probeOsConfinedCli(ctx, {
+      producerId: this.producerId,
+      executableName: "opencode",
+      structuredOutput: this.structuredOutput,
+      isAuthenticated: () =>
+        this.hasAuthStore(join(this.deps.homeDirectory, ".local", "share", "opencode")),
+    });
+  }
 
-    let executable: ResolvedExecutable;
-    try {
-      executable = await normalizeNodeShim(
-        await ctx.ps.resolveExecutable({ name: "opencode" }),
-      );
-    } catch {
-      return unavailableReport(ctx, "missing-executable");
-    }
-
-    try {
-      const result = await supervise(ctx.ps, {
-        executable,
-        args: ["--version"],
-        cwd: process.cwd(),
-        env: {},
-        timeoutMs: VERSION_TIMEOUT_MS,
-        maxOutputBytes: VERSION_OUTPUT_LIMIT,
-      }, {});
-      const version = result.spawnError === undefined && result.exitCode === 0
-        ? parseVersion(result.stdout)
-        : null;
-      if (version === null) return unavailableReport(ctx, "probe-failed", executable);
-
-      const writeConfinementBackend = selectOsWriteConfinementBackend(ctx);
-      const authStore = join(this.deps.homeDirectory, ".local", "share", "opencode");
-      const authState = this.hasAuthStore(authStore)
-        ? "authenticated"
-        : "unauthenticated";
-      return {
-        producerId: this.producerId,
-        available: true,
-        reason: null,
-        os: ctx.os,
-        arch: ctx.arch,
-        environmentType: ctx.environmentType,
-        resolvedExecutable: executable,
-        version,
-        authState,
-        executionModes: [...this.executionModes],
-        structuredOutput: this.structuredOutput,
-        writeConfinementBackend,
-        laneEligibility: { edit: writeConfinementBackend !== null },
-      };
-    } catch {
-      return unavailableReport(ctx, "probe-failed", executable);
-    }
+  /** OpenCode's XDG data (auth) and state directories, honoring host overrides. */
+  private stateDirectories(): string[] {
+    const dataHome = this.deps.env.XDG_DATA_HOME
+      ?? join(this.deps.homeDirectory, ".local", "share");
+    const stateHome = this.deps.env.XDG_STATE_HOME
+      ?? join(this.deps.homeDirectory, ".local", "state");
+    return [join(dataHome, "opencode"), join(stateHome, "opencode")];
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
@@ -151,6 +84,7 @@ export class OpenCodeAdapter implements ProducerAdapter {
       args,
       stdin: renderProducerPrompt(spec, ctx.readOnly === true),
       requiredEnv: [...OPENCODE_REQUIRED_ENV],
+      inheritedStateWritablePaths: this.stateDirectories(),
       env: defaultOpenCodeEnv({
         env: this.deps.env,
         homeDirectory: this.deps.homeDirectory,

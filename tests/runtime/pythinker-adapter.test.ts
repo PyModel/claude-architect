@@ -544,6 +544,18 @@ describe("PythinkerAdapter", () => {
     }
   });
 
+  it("declares PYTHINKER_SHARE_DIR, else ~/.pythinker, as inherited writable state", () => {
+    const withOverride = new PythinkerAdapter({
+      env: { PYTHINKER_SHARE_DIR: "/Users/test/custom-pythinker-home" },
+      homeDirectory: "/Users/test",
+    });
+    expect(withOverride.buildInvocation(sampleSpec(), invocationContext()).inheritedStateWritablePaths)
+      .toEqual(["/Users/test/custom-pythinker-home"]);
+    const withDefault = new PythinkerAdapter({ env: {}, homeDirectory: "/Users/test" });
+    expect(withDefault.buildInvocation(sampleSpec(), invocationContext()).inheritedStateWritablePaths)
+      .toEqual(["/Users/test/.pythinker"]);
+  });
+
   it("declares the Pythinker configuration isolation profile", () => {
     expect(new PythinkerAdapter().configurationProfile()).toEqual({
       isolationState: "inherited-config-only",

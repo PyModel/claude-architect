@@ -76,38 +76,10 @@ describe("seatbelt profile", () => {
     }
   });
 
-  it("allowlists only OpenCode's XDG state directories without a temp home", () => {
-    const previousStateHome = process.env.XDG_STATE_HOME;
-    process.env.XDG_STATE_HOME = "/Users/test/.local/state";
-
-    try {
-      const wrapped = wrapInvocationWithSeatbelt({
-        ...invocation,
-        requiredEnv: ["OPENCODE_CONFIG_DIR", "XDG_DATA_HOME"],
-        env: { XDG_DATA_HOME: "/Users/test/.local/share" },
-      }, {
-        worktreePath: "/tmp/wt",
-        tempHome: null,
-        allowNetwork: false,
-      });
-      const profile = wrapped.args[1] ?? "";
-
-      expect(profile).toContain('(subpath "/Users/test/.local/share/opencode")');
-      expect(profile).toContain('(subpath "/Users/test/.local/state/opencode")');
-      expect(profile).not.toContain('(subpath "/Users/test/.local/share")');
-      expect(profile).not.toContain('(subpath "/Users/test/.local/state")');
-      expect(profile).not.toContain('(subpath "/Users/test")');
-    } finally {
-      if (previousStateHome === undefined) delete process.env.XDG_STATE_HOME;
-      else process.env.XDG_STATE_HOME = previousStateHome;
-    }
-  });
-
-  it("allowlists only Pi's agent state directory without a temp home", () => {
+  it("grants exactly the Producer's declared inherited-state paths without a temp home", () => {
     const wrapped = wrapInvocationWithSeatbelt({
       ...invocation,
-      requiredEnv: ["PI_API_KEY"],
-      env: { HOME: "/Users/test" },
+      inheritedStateWritablePaths: ["/Users/test/.pi/agent", "/Users/test/.local/state/opencode"],
     }, {
       worktreePath: "/tmp/wt",
       tempHome: null,
@@ -116,80 +88,31 @@ describe("seatbelt profile", () => {
     const profile = wrapped.args[1] ?? "";
 
     expect(profile).toContain('(subpath "/Users/test/.pi/agent")');
+    expect(profile).toContain('(subpath "/Users/test/.local/state/opencode")');
     expect(profile).not.toContain('(subpath "/Users/test/.pi")');
+    expect(profile).not.toContain('(subpath "/Users/test/.local/state")');
     expect(profile).not.toContain('(subpath "/Users/test")');
   });
 
-  it("detects Pythinker by resolved executable identity, not a --work-dir flag the installed CLI does not have", () => {
-    // PythinkerAdapter.buildInvocation() only ever sends ["--prompt", ...] (and
-    // optionally "--model"); it never sends "--work-dir". Detection keyed off
-    // that flag never fired, so real pythinker attempts always ran with zero
-    // writable paths and crashed with EPERM on their own session directory.
+  it("ignores declared inherited-state paths when a temp home replaces the real one", () => {
     const wrapped = wrapInvocationWithSeatbelt({
       ...invocation,
-      executable: {
-        kind: "native",
-        command: "/usr/local/bin/pythinker",
-        prefixArgs: [],
-        resolvedFrom: "path:/usr/local/bin/pythinker",
-      },
-      args: ["--prompt", "test"],
-      env: { HOME: "/Users/test" },
+      inheritedStateWritablePaths: ["/Users/test/.pi/agent"],
     }, {
       worktreePath: "/tmp/wt",
-      tempHome: null,
+      tempHome: "/tmp/home",
       allowNetwork: false,
     });
     const profile = wrapped.args[1] ?? "";
 
-    expect(profile).toContain('(subpath "/Users/test/.pythinker")');
+    expect(profile).toContain('(subpath "/tmp/home")');
+    expect(profile).not.toContain('(subpath "/Users/test/.pi/agent")');
   });
 
-  it("allowlists only Pythinker's state directory (.pythinker) without a temp home", () => {
-    const wrapped = wrapInvocationWithSeatbelt({
-      ...invocation,
-      executable: {
-        kind: "native",
-        command: "/usr/local/bin/pythinker",
-        prefixArgs: [],
-        resolvedFrom: "path:/usr/local/bin/pythinker",
-      },
-      args: ["--prompt", "test"],
-      env: { HOME: "/Users/test" },
-    }, {
-      worktreePath: "/tmp/wt",
-      tempHome: null,
-      allowNetwork: false,
-    });
-    const profile = wrapped.args[1] ?? "";
-
-    expect(profile).toContain('(subpath "/Users/test/.pythinker")');
-    expect(profile).not.toContain('(subpath "/Users/test")');
-  });
-
-  it("grants Pythinker's PYTHINKER_SHARE_DIR override instead of the default when set", () => {
-    const wrapped = wrapInvocationWithSeatbelt({
-      ...invocation,
-      executable: {
-        kind: "native",
-        command: "/usr/local/bin/pythinker",
-        prefixArgs: [],
-        resolvedFrom: "path:/usr/local/bin/pythinker",
-      },
-      args: ["--prompt", "test"],
-      env: { HOME: "/Users/test", PYTHINKER_SHARE_DIR: "/Users/test/custom-pythinker-home" },
-    }, {
-      worktreePath: "/tmp/wt",
-      tempHome: null,
-      allowNetwork: false,
-    });
-    const profile = wrapped.args[1] ?? "";
-
-    expect(profile).toContain('(subpath "/Users/test/custom-pythinker-home")');
-    expect(profile).not.toContain('(subpath "/Users/test/.pythinker")');
-  });
-
-  it("allowlists only agy's config/state directory (~/.gemini/antigravity-cli), detected by executable identity", () => {
+  it("never derives writable state from executable identity or required env names", () => {
+    // Earlier revisions sniffed `basename(command)` and `requiredEnv` to guess a
+    // Producer's config directory; an adapter that forgot to be recognized ran
+    // with zero host-state access. Only the explicit declaration counts now.
     const wrapped = wrapInvocationWithSeatbelt({
       ...invocation,
       executable: {
@@ -198,7 +121,7 @@ describe("seatbelt profile", () => {
         prefixArgs: [],
         resolvedFrom: "path:/usr/local/bin/agy",
       },
-      args: ["-p", "test"],
+      requiredEnv: ["PI_API_KEY", "OPENCODE_CONFIG_DIR", "GEMINI_API_KEY"],
       env: { HOME: "/Users/test" },
     }, {
       worktreePath: "/tmp/wt",
@@ -207,46 +130,7 @@ describe("seatbelt profile", () => {
     });
     const profile = wrapped.args[1] ?? "";
 
-    expect(profile).toContain('(subpath "/Users/test/.gemini/antigravity-cli")');
-    expect(profile).not.toContain('(subpath "/Users/test/.gemini")');
-    expect(profile).not.toContain('(subpath "/Users/test")');
-  });
-
-  it("does not allowlist agy's directory for an unrelated executable requiring GEMINI_API_KEY", () => {
-    const wrapped = wrapInvocationWithSeatbelt({
-      ...invocation,
-      requiredEnv: ["GEMINI_API_KEY"],
-      env: { HOME: "/Users/test" },
-    }, {
-      worktreePath: "/tmp/wt",
-      tempHome: null,
-      allowNetwork: false,
-    });
-    const profile = wrapped.args[1] ?? "";
-
-    expect(profile).not.toContain('(subpath "/Users/test/.gemini/antigravity-cli")');
-  });
-
-  it("keeps joined subpaths POSIX even when HOME contains win32-style separators", () => {
-    const wrapped = wrapInvocationWithSeatbelt({
-      ...invocation,
-      executable: {
-        kind: "native",
-        command: "/usr/local/bin/pythinker",
-        prefixArgs: [],
-        resolvedFrom: "path:/usr/local/bin/pythinker",
-      },
-      args: ["--prompt", "test"],
-      env: { HOME: "C:\\Users\\test" },
-    }, {
-      worktreePath: "/tmp/wt",
-      tempHome: null,
-      allowNetwork: false,
-    });
-    const profile = wrapped.args[1] ?? "";
-
-    expect(profile).toContain('(subpath "C:\\\\Users\\\\test/.pythinker")');
-    expect(profile).not.toContain('(subpath "C:\\\\Users\\\\test")');
+    expect(profile).not.toContain("/Users/test");
   });
 
   it("escapes quotes and rejects control characters in paths", () => {

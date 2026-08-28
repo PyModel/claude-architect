@@ -4,6 +4,18 @@ All notable changes to Claude Architect are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Producers declare their own host state directories through
+  `ProducerInvocation.inheritedStateWritablePaths`; the macOS Seatbelt backend
+  grants exactly those paths instead of guessing a Producer's config directory
+  from its executable name or required environment variables. A new adapter
+  therefore touches only its adapter file and the registry.
+- The four OS-confined CLI adapters share one probe (`probeOsConfinedCli`)
+  instead of four copies of the resolve → version → confinement → auth flow.
+
 ## [0.49.0] - 2026-08-08
 
 ### Changed

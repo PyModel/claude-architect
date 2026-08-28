@@ -38,6 +38,14 @@ export interface ProducerInvocation {
   requiredEnv: string[];
   /** Adapter-supplied defaults; never override a host-provided allowlisted value. */
   env?: Record<string, string>;
+  /**
+   * Absolute paths the Producer must be able to write when it runs with the
+   * host's real HOME (no temporary home): its own auth/config/state store.
+   * The OS write-confinement backend grants exactly these on top of the
+   * worktree; it never derives them from executable identity or env names.
+   * Ignored whenever a temporary home is in effect.
+   */
+  inheritedStateWritablePaths?: string[];
   network: "denied" | "allowed";
 }
 

@@ -1,14 +1,9 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { supervise } from "../platform/process-supervisor.js";
-import type { ResolvedExecutable } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
-import {
-  normalizeNodeShim,
-  renderProducerPrompt,
-  selectOsWriteConfinementBackend,
-} from "./plain-text.js";
+import { probeOsConfinedCli } from "./cli-probe.js";
+import { renderProducerPrompt } from "./plain-text.js";
 import type {
   AdapterEvent,
   CapabilityReport,
@@ -20,8 +15,6 @@ import type {
 } from "./producer-adapter.js";
 
 const AGY_REQUIRED_ENV = ["GEMINI_API_KEY"] as const;
-const VERSION_TIMEOUT_MS = 10_000;
-const VERSION_OUTPUT_LIMIT = 64 * 1024;
 const TEXT_LIMIT = 8_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -32,33 +25,6 @@ function stringProperty(value: unknown, name: string): string | undefined {
   if (!isRecord(value)) return undefined;
   const property = value[name];
   return typeof property === "string" ? property : undefined;
-}
-
-function unavailableReport(
-  ctx: ProbeContext,
-  reason: string,
-  resolvedExecutable: ResolvedExecutable | null = null,
-): CapabilityReport {
-  return {
-    producerId: "agy",
-    available: false,
-    reason,
-    os: ctx.os,
-    arch: ctx.arch,
-    environmentType: ctx.environmentType,
-    resolvedExecutable,
-    version: null,
-    authState: "unknown",
-    executionModes: ["edit"],
-    structuredOutput: true,
-    writeConfinementBackend: null,
-    laneEligibility: { edit: false },
-  };
-}
-
-function parseVersion(stdout: string): string | null {
-  const match = /(?:^|\s)(\d+\.\d+\.\d+(?:[-+][^\s]+)?)(?:\s|$)/u.exec(stdout.trim());
-  return match?.[1] ?? null;
 }
 
 /** Go time.ParseDuration accepts a bare seconds-magnitude unit; keep it simple. */
@@ -87,54 +53,17 @@ export class AgyAdapter implements ProducerAdapter {
   }
 
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
-    if (ctx.os === "win32") return unavailableReport(ctx, "unsupported-platform");
+    return probeOsConfinedCli(ctx, {
+      producerId: this.producerId,
+      executableName: "agy",
+      structuredOutput: this.structuredOutput,
+      isAuthenticated: () => this.hasAuthStore(this.configDirectory()),
+    });
+  }
 
-    let executable: ResolvedExecutable;
-    try {
-      executable = await normalizeNodeShim(
-        await ctx.ps.resolveExecutable({ name: "agy" }),
-      );
-    } catch {
-      return unavailableReport(ctx, "missing-executable");
-    }
-
-    try {
-      const result = await supervise(ctx.ps, {
-        executable,
-        args: ["--version"],
-        cwd: process.cwd(),
-        env: {},
-        timeoutMs: VERSION_TIMEOUT_MS,
-        maxOutputBytes: VERSION_OUTPUT_LIMIT,
-      }, {});
-      const version = result.spawnError === undefined && result.exitCode === 0
-        ? parseVersion(result.stdout)
-        : null;
-      if (version === null) return unavailableReport(ctx, "probe-failed", executable);
-
-      const writeConfinementBackend = selectOsWriteConfinementBackend(ctx);
-      const authStore = join(this.deps.homeDirectory, ".gemini", "antigravity-cli");
-      const authState = this.hasAuthStore(authStore)
-        ? "authenticated"
-        : "unauthenticated";
-      return {
-        producerId: this.producerId,
-        available: true,
-        reason: null,
-        os: ctx.os,
-        arch: ctx.arch,
-        environmentType: ctx.environmentType,
-        resolvedExecutable: executable,
-        version,
-        authState,
-        executionModes: [...this.executionModes],
-        structuredOutput: this.structuredOutput,
-        writeConfinementBackend,
-        laneEligibility: { edit: writeConfinementBackend !== null },
-      };
-    } catch {
-      return unavailableReport(ctx, "probe-failed", executable);
-    }
+  /** agy's settings/auth store; the only host state an attempt must write. */
+  private configDirectory(): string {
+    return join(this.deps.env.HOME ?? this.deps.homeDirectory, ".gemini", "antigravity-cli");
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
@@ -161,6 +90,7 @@ export class AgyAdapter implements ProducerAdapter {
       executable: ctx.executable,
       args,
       requiredEnv: [...AGY_REQUIRED_ENV],
+      inheritedStateWritablePaths: [this.configDirectory()],
       // Model sessions must reach the provider API; write-protection remains the confinement goal.
       network: "allowed",
     };
