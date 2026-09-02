@@ -4,7 +4,7 @@ import { freezeCandidate } from "../git/candidate-tree.js";
 import { git } from "../git/git-exec.js";
 import { checkPreconditions } from "../git/repo-preconditions.js";
 import { WorktreeManager } from "./worktree-manager.js";
-import { guardWorktreeMutations } from "./worktree-mutation-gate.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import type {
   CheckoutLock,
   PlatformServices,
@@ -363,7 +363,8 @@ export async function runAttempt(
 ): Promise<AttemptResult> {
   if (hasEnvironmentMarker(deps.env ?? process.env)) throw new NestedDelegationError();
 
-  const ps = guardWorktreeMutations(deps.ps ?? getPlatformServices());
+  const ps = deps.ps ?? getPlatformServices();
+  const safety = new PlatformSafety(ps);
   const producerRegistry = deps.producerRegistry ?? registry;
   const now = deps.now ?? Date.now;
   const startedAtMs = now();
@@ -422,20 +423,15 @@ export async function runAttempt(
   };
   const canonical = await ps.canonicalizePath(checkoutPath);
   const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
-  let lock: CheckoutLock | null = deps.borrowedCheckoutLease ?? null;
-  let ownedLock: CheckoutLock | null = null;
-  let worktree: { path: string; cleanup(): Promise<void> } | null = null;
-  let tempHome: string | null = null;
-  let builtEnvironment: BuiltEnvironment | null = null;
-  let primaryError: unknown;
-  let archivedResult: AttemptResult | null = null;
-  try {
-    if (lock === null) {
-      ownedLock = await ps.acquireCheckoutLock(canonical.canonical, { runId });
-      lock = ownedLock;
-    }
+  const runWithLease = async (lock: CheckoutLock, ownership: "borrowed" | "owned"): Promise<AttemptResult> => {
+    let worktree: { path: string; cleanup(): Promise<void> } | null = null;
+    let tempHome: string | null = null;
+    let builtEnvironment: BuiltEnvironment | null = null;
+    let primaryError: unknown;
+    let archivedResult: AttemptResult | null = null;
+    try {
+
     if (lock.repositoryIdentity !== repositoryIdentity) {
-      const ownership = ownedLock === null ? "borrowed" : "owned";
       throw new RuntimeError(`${ownership} checkout lease repository identity mismatch`);
     }
     const preconditions = await checkPreconditions(canonical.canonical, {
@@ -531,12 +527,12 @@ export async function runAttempt(
   }
 
   await reportPhase(deps, "probing producers");
-  const reports = await probeAll({
+  const reports = await runtime.probeAll({
     ps,
     os: ps.os,
     arch: process.arch,
     environmentType: detectEnvironmentType(),
-  }, producerRegistry);
+  }, undefined, producerRegistry);
   const routing = route(spec.producerPreferences, reports);
   if (routing.producerId === null) {
     const signals: FailureSignals = routing.reason === "authentication-required"
@@ -852,7 +848,7 @@ export async function runAttempt(
       builtEnvironment,
       worktree,
       tempHome,
-      lock: ownedLock,
+      lock: null,
     });
     if (cleanupError !== null) {
       const detail = redact(
@@ -884,4 +880,15 @@ export async function runAttempt(
       }
     }
   }
+};
+
+
+
+  if (deps.borrowedCheckoutLease !== undefined && deps.borrowedCheckoutLease !== null) {
+    return await runWithLease(deps.borrowedCheckoutLease, "borrowed");
+  }
+  return await safety.withCheckoutLease(canonical.canonical, async (acquiredLock) => {
+    return await runWithLease(acquiredLock, "owned");
+  }, { runId });
 }
+

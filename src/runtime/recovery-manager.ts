@@ -43,7 +43,27 @@ import {
   WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY,
   type ManagedWorktreeDirectoryIdentity,
 } from "./worktree-manager.js";
-import { lockOwnerStatus, parseLockOwner, type LockOwnerStatus } from "../platform/lock-owner.js";
+import {
+  lockOwnerStatus,
+  parseLockOwner,
+  type LockOwnerStatus,
+  type LockOwner,
+  type AcquiredLock,
+  type DeadLockReclaimResult,
+  reclaimDeadLock,
+  reclaimDeadCheckoutLocks,
+  reclaimLocks,
+  lockIsOwnedByLiveProcess,
+  validateOwnedLockState,
+  validatePublishedLock,
+  removeExpectedLockPath,
+  cleanupOwnedLockPaths,
+  createOwnedLock,
+  acquireOwnedLock,
+  releaseOwnedLock,
+  defaultIsProcessAlive,
+} from "../platform/lock-ownership.js";
+import { platformSafety } from "../platform/platform-safety.js";
 import type { PlatformServices } from "../platform/platform-services.js";
 import { CLEANUP_JOURNAL_LOCK_KEY } from "../platform/posix-platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
@@ -77,7 +97,6 @@ const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const MAX_STATE_FILE_BYTES = 8_000_000;
 const MAX_STATE_FILE_BYTES_BIGINT = BigInt(MAX_STATE_FILE_BYTES);
 const SAFE_RUN_ID = /^[a-z0-9][a-z0-9._-]*$/;
-const LOCK_NAME = /^([0-9a-f]{64})\.lock$/;
 const WORKFLOW_WORKTREE_NAME = /^workflow-([0-9a-f]{32})(?:-final)?$/;
 const LEGACY_FINAL_WORKTREE_NAME = /^final-([0-9a-f]{24})$/;
 const WORKFLOW_OWNERSHIP_NAME = /^([0-9a-f]{64})\.json$/;
@@ -178,23 +197,6 @@ export interface WorktreeSweepIssue {
   repositoryIdentity?: string;
 }
 
-interface LockOwner {
-  pid: number;
-  processToken: string;
-}
-
-interface AcquiredLock {
-  lockPath: string;
-  identity: DirectoryIdentity;
-  contents: Buffer;
-}
-
-type DeadLockReclaimResult =
-  | "reclaimed"
-  | "live"
-  | "contended"
-  | "malformed"
-  | "unverifiable";
 
 function errorCode(error: unknown): string | undefined {
   return (error as NodeJS.ErrnoException).code;
@@ -1444,9 +1446,7 @@ async function replayInterruptedPrunes(
       commonResult.stdout,
       "cleanup repository identity",
     ));
-    const lease = await ps.acquireCheckoutLock(repoRoot);
-    let primaryError: unknown;
-    try {
+    await platformSafety.withRecoveryLease(repoRoot, async (lease) => {
       if (lease.repositoryIdentity !== repositoryIdentity) {
         throw new RuntimeError("checkout lease repository identity changed during prune recovery");
       }
@@ -1471,24 +1471,10 @@ async function replayInterruptedPrunes(
         anchorCleanup: outcome,
         recordedAt: new Date().toISOString(),
       });
-    } catch (error) {
-      primaryError = error;
-    } finally {
-      try {
-        await lease.release();
-      } catch (releaseError) {
-        if (primaryError !== undefined) {
-          throw new AggregateError(
-            [primaryError, releaseError],
-            "prune recovery failed and its checkout lease could not be released",
-          );
-        }
-        throw releaseError;
-      }
-    }
-    if (primaryError !== undefined) throw primaryError;
+    });
   }
 }
+
 
 async function managedWorktreeMarkerIsPresent(worktreePath: string): Promise<boolean> {
   let marker;
@@ -1708,573 +1694,6 @@ async function readHandleBytes(
   return contents.subarray(0, offset);
 }
 
-async function removeLockIfUnchanged(
-  lockPath: string,
-  handle: Awaited<ReturnType<typeof open>>,
-  expectedIdentity: DirectoryIdentity,
-  expectedContents: Buffer,
-  expectedLinks = 1,
-): Promise<boolean> {
-  const expectedSize = expectedContents.byteLength;
-  const handleMetadata = await handle.stat({ bigint: true });
-  if (!isExpectedLockMetadata(
-    handleMetadata,
-    expectedIdentity,
-    expectedSize,
-    expectedLinks,
-  )) return false;
-  const currentContents = await readHandleBytes(handle, Number(handleMetadata.size));
-  if (!currentContents.equals(expectedContents)) return false;
-
-  let pathMetadata;
-  try {
-    pathMetadata = await lstat(lockPath, { bigint: true });
-  } catch (error) {
-    if (isMissing(error)) return false;
-    throw error;
-  }
-  if (!isExpectedLockMetadata(
-    pathMetadata,
-    expectedIdentity,
-    expectedSize,
-    expectedLinks,
-  )) return false;
-
-  const settledHandleMetadata = await handle.stat({ bigint: true });
-  if (!isExpectedLockMetadata(
-    settledHandleMetadata,
-    expectedIdentity,
-    expectedSize,
-    expectedLinks,
-  )) return false;
-  const settledContents = await readHandleBytes(handle, Number(settledHandleMetadata.size));
-  if (!settledContents.equals(expectedContents)) return false;
-
-  let settledPathMetadata;
-  try {
-    settledPathMetadata = await lstat(lockPath, { bigint: true });
-  } catch (error) {
-    if (isMissing(error)) return false;
-    throw error;
-  }
-  if (!isExpectedLockMetadata(
-    settledPathMetadata,
-    expectedIdentity,
-    expectedSize,
-    expectedLinks,
-  )) return false;
-  try {
-    await rm(lockPath, { force: false });
-    return true;
-  } catch (error) {
-    if (isMissing(error)) return false;
-    throw error;
-  }
-}
-
-async function reclaimDeadLock(
-  lockPath: string,
-  isProcessAlive: (pid: number) => boolean,
-  getProcessStartToken: (pid: number) => Promise<string | null>,
-): Promise<DeadLockReclaimResult> {
-  let handle;
-  try {
-    handle = await open(lockPath, constants.O_RDONLY | NO_FOLLOW);
-  } catch (error) {
-    if (isMissing(error)) return "contended";
-    throw error;
-  }
-  try {
-    const metadata = await handle.stat({ bigint: true });
-    if (!metadata.isFile() || metadata.size > MAX_STATE_FILE_BYTES_BIGINT) {
-      throw new RuntimeError("recovery lock must be a bounded regular file");
-    }
-    const contents = await readHandleBytes(handle, Number(metadata.size));
-    if (BigInt(contents.byteLength) !== metadata.size) return "contended";
-    const owner = parseLockOwner(contents.toString("utf8"));
-    if (owner === null) {
-      logger.warn("startup recovery preserved malformed lock", {
-        event: "recovery-malformed-lock",
-        lockName: path.basename(lockPath),
-        reason: "invalid-owner-record",
-      });
-      return "malformed";
-    }
-    const ownerStatus = await lockOwnerStatus(
-      owner,
-      isProcessAlive,
-      getProcessStartToken,
-    );
-    if (ownerStatus === "live") return "live";
-    if (ownerStatus === "unverifiable") {
-      logger.warn("startup recovery preserved unverifiable lock", {
-        event: "recovery-unverifiable-lock",
-        lockName: path.basename(lockPath),
-        reason: "process-token-unavailable",
-      });
-      return "unverifiable";
-    }
-    return await removeLockIfUnchanged(
-      lockPath,
-      handle,
-      {
-        dev: metadata.dev,
-        ino: metadata.ino,
-        birthtimeNs: metadata.birthtimeNs,
-      },
-      contents,
-    ) ? "reclaimed" : "contended";
-  } finally {
-    await handle.close();
-  }
-}
-
-async function validateLockParentIdentity(
-  parentPath: string,
-  expectedIdentity: DirectoryIdentity,
-): Promise<void> {
-  const metadata = await lstat(parentPath, { bigint: true });
-  if (!isPlainDirectory(metadata) || !sameIdentity(metadata, expectedIdentity)) {
-    throw new RuntimeError("recovery lock parent identity changed");
-  }
-}
-
-function isExpectedLockMetadata(
-  metadata: {
-    dev: bigint;
-    ino: bigint;
-    nlink: bigint;
-    size: bigint;
-    birthtimeNs: bigint;
-    isFile(): boolean;
-    isSymbolicLink(): boolean;
-  },
-  expectedIdentity: DirectoryIdentity,
-  expectedSize: number,
-  expectedLinks: number,
-): boolean {
-  return metadata.isFile()
-    && !metadata.isSymbolicLink()
-    && metadata.nlink === BigInt(expectedLinks)
-    && sameIdentity(metadata, expectedIdentity)
-    && metadata.size === BigInt(expectedSize)
-    && metadata.size <= MAX_STATE_FILE_BYTES_BIGINT;
-}
-
-async function validateOwnedLockState(
-  handle: Awaited<ReturnType<typeof open>>,
-  namedPaths: readonly string[],
-  expectedIdentity: DirectoryIdentity,
-  expectedContents: Buffer,
-  expectedLinks: number,
-  parentPath: string,
-  parentIdentity: DirectoryIdentity,
-): Promise<void> {
-  const validateHandle = async () => {
-    const metadata = await handle.stat({ bigint: true });
-    if (!isExpectedLockMetadata(
-      metadata,
-      expectedIdentity,
-      expectedContents.byteLength,
-      expectedLinks,
-    ) || !(await readHandleBytes(handle, Number(metadata.size))).equals(expectedContents)) {
-      throw new RuntimeError("recovery lock handle or contents changed");
-    }
-  };
-
-  await validateLockParentIdentity(parentPath, parentIdentity);
-  await validateHandle();
-  for (const namedPath of namedPaths) {
-    const metadata = await lstat(namedPath, { bigint: true });
-    if (!isExpectedLockMetadata(
-      metadata,
-      expectedIdentity,
-      expectedContents.byteLength,
-      expectedLinks,
-    )) throw new RuntimeError("recovery lock path changed");
-  }
-  await validateHandle();
-  await validateLockParentIdentity(parentPath, parentIdentity);
-}
-
-type ExpectedLockRemoval = "removed" | "absent" | "changed";
-
-async function removeExpectedLockPath(
-  filename: string,
-  expectedIdentity: DirectoryIdentity,
-  expectedContents: Buffer,
-  expectedLinks: number,
-): Promise<ExpectedLockRemoval> {
-  let handle;
-  try {
-    handle = await open(filename, constants.O_RDONLY | NO_FOLLOW);
-  } catch (error) {
-    if (isMissing(error)) return "absent";
-    throw error;
-  }
-  let primaryError: unknown;
-  let removed = false;
-  try {
-    removed = await removeLockIfUnchanged(
-      filename,
-      handle,
-      expectedIdentity,
-      expectedContents,
-      expectedLinks,
-    );
-  } catch (error) {
-    primaryError = error;
-  }
-  try {
-    await handle.close();
-  } catch (closeError) {
-    if (primaryError !== undefined) {
-      throw new AggregateError(
-        [primaryError, closeError],
-        "recovery lock cleanup failed and its handle could not be closed",
-      );
-    }
-    throw closeError;
-  }
-  if (primaryError !== undefined) throw primaryError;
-  return removed ? "removed" : "changed";
-}
-
-async function pathNamesLockIdentity(
-  filename: string,
-  expectedIdentity: DirectoryIdentity,
-): Promise<boolean> {
-  try {
-    const metadata = await lstat(filename, { bigint: true });
-    return metadata.isFile()
-      && !metadata.isSymbolicLink()
-      && sameIdentity(metadata, expectedIdentity);
-  } catch (error) {
-    if (isMissing(error)) return false;
-    throw error;
-  }
-}
-
-async function validatePublishedLock(
-  lockPath: string,
-  expectedIdentity: DirectoryIdentity,
-  expectedContents: Buffer,
-  parentPath: string,
-  parentIdentity: DirectoryIdentity,
-  expectedLinks = 1,
-  namedPaths: readonly string[] = [lockPath],
-): Promise<void> {
-  const handle = await open(lockPath, constants.O_RDONLY | NO_FOLLOW);
-  let primaryError: unknown;
-  try {
-    await validateOwnedLockState(
-      handle,
-      namedPaths,
-      expectedIdentity,
-      expectedContents,
-      expectedLinks,
-      parentPath,
-      parentIdentity,
-    );
-  } catch (error) {
-    primaryError = error;
-  }
-  try {
-    await handle.close();
-  } catch (closeError) {
-    if (primaryError !== undefined) {
-      throw new AggregateError(
-        [primaryError, closeError],
-        "published recovery lock validation failed and its handle could not be closed",
-      );
-    }
-    throw closeError;
-  }
-  if (primaryError !== undefined) throw primaryError;
-}
-
-function throwLockAcquisitionErrors(errors: unknown[]): never {
-  if (errors.length === 1) throw errors[0]!;
-  throw new AggregateError(errors, "recovery lock acquisition and safe cleanup failed");
-}
-
-async function cleanupOwnedLockPaths(
-  parentPath: string,
-  parentIdentity: DirectoryIdentity,
-  temporaryPath: string,
-  lockPath: string,
-  expectedIdentity: DirectoryIdentity,
-  expectedContents: Buffer,
-  published: boolean,
-): Promise<unknown[]> {
-  const errors: unknown[] = [];
-  try {
-    await validateLockParentIdentity(parentPath, parentIdentity);
-  } catch (error) {
-    return [error];
-  }
-
-  if (published) {
-    try {
-      const temporaryExists = await pathNamesLockIdentity(temporaryPath, expectedIdentity);
-      const result = await removeExpectedLockPath(
-        lockPath,
-        expectedIdentity,
-        expectedContents,
-        temporaryExists ? 2 : 1,
-      );
-      if (result === "changed") {
-        errors.push(new RuntimeError("published recovery lock changed before safe cleanup"));
-      }
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-  try {
-    const result = await removeExpectedLockPath(
-      temporaryPath,
-      expectedIdentity,
-      expectedContents,
-      1,
-    );
-    if (result === "changed") {
-      errors.push(new RuntimeError("temporary recovery lock changed before safe cleanup"));
-    }
-  } catch (error) {
-    errors.push(error);
-  }
-  try {
-    await validateLockParentIdentity(parentPath, parentIdentity);
-  } catch (error) {
-    errors.push(error);
-  }
-  return errors;
-}
-
-async function createOwnedLock(
-  lockPath: string,
-  contents: Buffer,
-): Promise<AcquiredLock | null> {
-  if (contents.byteLength > MAX_STATE_FILE_BYTES) {
-    throw new RuntimeError("new recovery lock exceeds its size limit");
-  }
-  const parentPath = path.dirname(lockPath);
-  const parentIdentity = await plainDirectoryIdentity(parentPath);
-  if (parentIdentity === null) {
-    throw new RuntimeError("recovery lock parent must remain a plain directory");
-  }
-  const temporaryPath = path.join(parentPath, `.recovery-lock-${randomUUID()}.tmp`);
-  let handle;
-  let temporaryIdentity: DirectoryIdentity | undefined;
-  let temporaryCreated = false;
-  let published = false;
-  let contended = false;
-  const errors: unknown[] = [];
-
-  try {
-    handle = await open(
-      temporaryPath,
-      constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-      0o600,
-    );
-    temporaryCreated = true;
-    const metadata = await handle.stat({ bigint: true });
-    temporaryIdentity = {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs,
-    };
-    await handle.writeFile(contents);
-    await handle.sync();
-    await validateOwnedLockState(
-      handle,
-      [temporaryPath],
-      temporaryIdentity,
-      contents,
-      1,
-      parentPath,
-      parentIdentity,
-    );
-    try {
-      await link(temporaryPath, lockPath);
-      published = true;
-    } catch (error) {
-      if (errorCode(error) === "EEXIST") contended = true;
-      else throw error;
-    }
-    if (published) {
-      await validateOwnedLockState(
-        handle,
-        [temporaryPath, lockPath],
-        temporaryIdentity,
-        contents,
-        2,
-        parentPath,
-        parentIdentity,
-      );
-    }
-  } catch (error) {
-    errors.push(error);
-  }
-  if (handle !== undefined) {
-    try {
-      await handle.close();
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-
-  if (temporaryCreated && temporaryIdentity === undefined) {
-    errors.push(new RuntimeError("temporary recovery lock identity is unavailable for cleanup"));
-  }
-  if (temporaryIdentity === undefined) throwLockAcquisitionErrors(errors);
-
-  if (contended) {
-    errors.push(...await cleanupOwnedLockPaths(
-      parentPath,
-      parentIdentity,
-      temporaryPath,
-      lockPath,
-      temporaryIdentity,
-      contents,
-      false,
-    ));
-    if (errors.length === 0) return null;
-    throwLockAcquisitionErrors(errors);
-  }
-
-  if (!published) {
-    if (temporaryCreated) {
-      errors.push(...await cleanupOwnedLockPaths(
-        parentPath,
-        parentIdentity,
-        temporaryPath,
-        lockPath,
-        temporaryIdentity,
-        contents,
-        false,
-      ));
-    }
-    throwLockAcquisitionErrors(errors);
-  }
-
-  if (errors.length === 0) {
-    try {
-      await validateLockParentIdentity(parentPath, parentIdentity);
-      const result = await removeExpectedLockPath(
-        temporaryPath,
-        temporaryIdentity,
-        contents,
-        2,
-      );
-      if (result === "changed") {
-        throw new RuntimeError("temporary recovery lock changed before unlink");
-      }
-      await validatePublishedLock(
-        lockPath,
-        temporaryIdentity,
-        contents,
-        parentPath,
-        parentIdentity,
-      );
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-
-  if (errors.length === 0) {
-    return { lockPath, identity: temporaryIdentity, contents };
-  }
-  errors.push(...await cleanupOwnedLockPaths(
-    parentPath,
-    parentIdentity,
-    temporaryPath,
-    lockPath,
-    temporaryIdentity,
-    contents,
-    true,
-  ));
-  throwLockAcquisitionErrors(errors);
-}
-
-async function acquireOwnedLock(
-  lockPath: string,
-  contents: Buffer,
-  isProcessAlive: (pid: number) => boolean,
-  getProcessStartToken: (pid: number) => Promise<string | null>,
-): Promise<AcquiredLock | null> {
-  const created = await createOwnedLock(lockPath, contents);
-  if (created !== null) return created;
-  if (await reclaimDeadLock(lockPath, isProcessAlive, getProcessStartToken) !== "reclaimed") {
-    return null;
-  }
-  return createOwnedLock(lockPath, contents);
-}
-
-async function releaseOwnedLock(lock: AcquiredLock): Promise<void> {
-  let handle;
-  try {
-    handle = await open(lock.lockPath, constants.O_RDONLY | NO_FOLLOW);
-  } catch (error) {
-    if (isMissing(error)) return;
-    throw error;
-  }
-  try {
-    await removeLockIfUnchanged(lock.lockPath, handle, lock.identity, lock.contents);
-  } finally {
-    await handle.close();
-  }
-}
-
-function defaultIsProcessAlive(pid: number): boolean {
-  if (!Number.isSafeInteger(pid) || pid <= 1) return false;
-  try {
-    nodeProcess.kill(pid, 0);
-    return true;
-  } catch (error) {
-    if (errorCode(error) === "EPERM") return true;
-    if (errorCode(error) === "ESRCH") return false;
-    throw error;
-  }
-}
-
-async function reclaimLocks(
-  locksRoot: string,
-  isProcessAlive: (pid: number) => boolean,
-  getProcessStartToken: (pid: number) => Promise<string | null>,
-): Promise<void> {
-  let entries;
-  try {
-    const rootIdentity = await plainDirectoryIdentity(locksRoot);
-    if (rootIdentity === null) return;
-    entries = await readdir(locksRoot, { withFileTypes: true });
-  } catch (error) {
-    if (isMissing(error)) return;
-    throw error;
-  }
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const match = LOCK_NAME.exec(entry.name);
-    if (match === null) continue;
-    const lockPath = path.join(locksRoot, entry.name);
-    if (!entry.isFile() || entry.isSymbolicLink()) {
-      throw new RuntimeError("checkout lock must be a regular file during recovery");
-    }
-    await reclaimDeadLock(lockPath, isProcessAlive, getProcessStartToken);
-  }
-}
-
-async function lockIsOwnedByLiveProcess(
-  locksRoot: string,
-  lockKey: string,
-  isProcessAlive: (pid: number) => boolean,
-  getProcessStartToken: (pid: number) => Promise<string | null>,
-): Promise<boolean> {
-  const contents = await readBoundedRegularFile(path.join(locksRoot, `${lockKey}.lock`));
-  if (contents === null) return false;
-  const owner = parseLockOwner(contents);
-  if (owner === null) return true;
-  return await lockOwnerStatus(owner, isProcessAlive, getProcessStartToken) !== "dead";
-}
 
 async function assertRegistrationBacklink(
   registrationPath: string,
@@ -2442,9 +1861,7 @@ async function recoverWorktreeCreationIntent(
     throw new RuntimeError("worktree creation intent repository identity changed");
   }
 
-  const lease = await platformServices.acquireCheckoutLock(commonDir);
-  let primaryError: unknown;
-  try {
+  await platformSafety.withRecoveryLease(commonDir, async (lease) => {
     if (!platformPathsEqual(lease.repositoryIdentity, commonDir)) {
       throw new RuntimeError("worktree creation recovery lease identity mismatch");
     }
@@ -2561,21 +1978,9 @@ async function recoverWorktreeCreationIntent(
     }
     await Promise.all([syncDirectory(registrationRoot), syncDirectory(quarantineRoot)]);
     await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
-  } catch (error) {
-    primaryError = error;
-    throw error;
-  } finally {
-    try {
-      await lease.release();
-    } catch (releaseError) {
-      if (primaryError === undefined) throw releaseError;
-      throw new AggregateError(
-        [primaryError, releaseError],
-        "worktree creation recovery failed and its checkout lease could not be released",
-      );
-    }
-  }
+  });
 }
+
 
 export async function recoverPendingWorktreeRemovals(
   platformServices: PlatformServices = getPlatformServices(),
@@ -2583,7 +1988,6 @@ export async function recoverPendingWorktreeRemovals(
 ): Promise<WorktreeRemovalManifestIssue[]> {
   const { pending, issues } = await readPendingWorktreeRemovalManifests();
   for (const { manifestPath, manifest, temporaryPath, temporaryKind } of pending) {
-    let lease: Awaited<ReturnType<PlatformServices["acquireCheckoutLock"]>> | null = null;
     let recoveryError: unknown;
     let repositoryIdentity: string | undefined;
     try {
@@ -2923,10 +2327,11 @@ export async function recoverPendingWorktreeRemovals(
           birthtimeNs: BigInt(manifest.physicalBirthtimeNs),
         }
         : null;
-      lease = await platformServices.acquireCheckoutLock(commonDir);
-      if (lease.repositoryIdentity !== commonDir) {
-        throw new RuntimeError("worktree removal recovery lease identity mismatch");
-      }
+      await platformSafety.withRecoveryLease(commonDir, async (lease) => {
+        if (lease.repositoryIdentity !== commonDir) {
+          throw new RuntimeError("worktree removal recovery lease identity mismatch");
+        }
+
       if (temporaryPath !== undefined && temporaryKind === "linked") {
         await settleLinkedWorktreeRemovalManifest(
           manifestPath,
@@ -2938,7 +2343,7 @@ export async function recoverPendingWorktreeRemovals(
         manifestPath,
         manifest.transactionId,
       );
-      if (lockedManifest === null) continue;
+      if (lockedManifest === null) return;
       if (JSON.stringify(lockedManifest) !== JSON.stringify(manifest)) {
         throw new RuntimeError("worktree removal manifest changed before recovery lease");
       }
@@ -3120,22 +2525,12 @@ export async function recoverPendingWorktreeRemovals(
         await syncRemovalRoots();
         await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
       }
-    } catch (error) {
-      recoveryError = error;
-    } finally {
-      if (lease !== null) {
-        try {
-          await lease.release();
-        } catch (releaseError) {
-          recoveryError = recoveryError === undefined
-            ? releaseError
-            : new AggregateError(
-              [recoveryError, releaseError],
-              "worktree removal recovery failed and its checkout lease could not be released",
-            );
-        }
-      }
-    }
+    });
+  } catch (error) {
+    recoveryError = error;
+  }
+
+
     if (recoveryError !== undefined) {
       issues.push({
         manifestPath,

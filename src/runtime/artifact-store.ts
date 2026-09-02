@@ -49,7 +49,7 @@ import {
 } from "./run-manifest.js";
 import { resolveStateDir } from "./state-dir.js";
 import { getPlatformServices } from "../platform/select-platform.js";
-import { guardWorktreeMutations } from "./worktree-mutation-gate.js";
+import { PlatformSafety, platformSafety, openDurableDirectorySession } from "../platform/platform-safety.js";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
 import {
   advisorReportHash,
@@ -802,45 +802,11 @@ export class ArtifactStore {
 
   private async writeArchiveFile(relativePath: string, text: string): Promise<void> {
     const directory = await this.ensureArchiveDirectory(relativePath);
-    const directoryIdentity = await ensurePlainDirectory(directory);
-    const destination = path.join(directory, path.basename(relativePath));
-    const temporaryPath = path.join(directory, `.${path.basename(destination)}.${randomUUID()}.tmp`);
-    let handle;
-    let temporaryCreated = false;
+    const session = await openDurableDirectorySession(directory);
     try {
-      await assertDirectoryIdentity(directory, directoryIdentity);
-      handle = await open(
-        temporaryPath,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-        0o600,
-      );
-      temporaryCreated = true;
-      await assertDirectoryIdentity(directory, directoryIdentity);
-      await handle.writeFile(text, { encoding: "utf8" });
-      await handle.sync();
-      await handle.close();
-      handle = undefined;
-
-      try {
-        await assertDirectoryIdentity(directory, directoryIdentity);
-        await link(temporaryPath, destination);
-        await assertDirectoryIdentity(directory, directoryIdentity);
-      } catch (error) {
-        if (!isAlreadyPresent(error)) throw error;
-        await assertDirectoryIdentity(directory, directoryIdentity);
-        const existing = await readRegularFile(destination, directoryIdentity);
-        if (existing !== text) {
-          throw new RuntimeError(`archive entry already exists with different content: ${relativePath}`);
-        }
-      }
+      await platformSafety.writeAtomic(session, path.basename(relativePath), text, "immutable");
     } finally {
-      await handle?.close();
-      if (temporaryCreated) {
-        await assertDirectoryIdentity(directory, directoryIdentity);
-        await rm(temporaryPath, { force: true });
-        await syncDirectory(directory);
-        await assertDirectoryIdentity(directory, directoryIdentity);
-      }
+      await session.close();
     }
   }
 
@@ -858,34 +824,15 @@ export class ArtifactStore {
     }
     const directory = await this.ensureRunDirectory(false);
     if (directory === null) throw new RuntimeError("run archive does not exist");
-    const directoryIdentity = await ensurePlainDirectory(directory);
-    const destination = path.join(directory, relativePath);
-    const temporaryPath = path.join(directory, `.${relativePath}.${randomUUID()}.tmp`);
-    const serialized = `${serializeJson(value, 2)}\n`;
-    let handle;
-    let temporaryCreated = false;
+    const session = await openDurableDirectorySession(directory);
     try {
-      await assertDirectoryIdentity(directory, directoryIdentity);
-      handle = await open(
-        temporaryPath,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-        0o600,
-      );
-      temporaryCreated = true;
-      await handle.writeFile(serialized, { encoding: "utf8" });
-      await handle.sync();
-      await handle.close();
-      handle = undefined;
-      await assertDirectoryIdentity(directory, directoryIdentity);
-      await rename(temporaryPath, destination);
-      temporaryCreated = false;
-      await syncDirectory(directory);
-      await assertDirectoryIdentity(directory, directoryIdentity);
+      const serialized = `${serializeJson(value, 2)}\n`;
+      await platformSafety.writeAtomic(session, relativePath, serialized, "replace");
     } finally {
-      await handle?.close();
-      if (temporaryCreated) await rm(temporaryPath, { force: true });
+      await session.close();
     }
   }
+
 
   async writeRunStatus(status: RunStatus): Promise<void> {
     if (status.runId !== this.runId) {
@@ -1784,23 +1731,12 @@ export class ArtifactStore {
         // Serialize archive removal against the checkout lifecycle: hold the
         // repository's checkout lease so recovery/integration cannot race a
         // prune that is deleting the same candidate anchors.
-        const platformServices = guardWorktreeMutations(
-          dependencies.platformServices ?? getPlatformServices(),
-        );
+        const platformServices = dependencies.platformServices ?? getPlatformServices();
         let canonical;
         try {
           canonical = await platformServices.canonicalizePath(initialManifest.repoRoot);
         } catch (error) {
           if (errorCode(error) !== "ENOENT") throw error;
-          // The repository this run was delegated from is gone. Its candidate/backup
-          // refs died with it and no live checkout can integrate from a vanished
-          // repository, so reclaim the archive directly — no lease, no Git — instead of
-          // retaining the run forever and blocking maxBytes/maxAge convergence. Any other
-          // canonicalization failure stays fail-closed (retained) via the outer catch.
-          // Tradeoff: a transiently-unmounted volume also reads as ENOENT, so a run on it
-          // may be reclaimed early. This is bounded — only maxAge/maxBytes-eligible runs
-          // reach here, and no Git runs, so the repository's refs survive a remount — and
-          // preferable to retaining unreclaimable runs forever.
           await this.reclaimRepoAbsentArchive(
             entry, reason, quarantineName, quarantinePath, initialManifest.repoRoot,
           );
@@ -1808,81 +1744,89 @@ export class ArtifactStore {
           retainedBytes -= entry.bytes;
           return;
         }
-        const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
-        lease = await platformServices.acquireCheckoutLock(
-          canonical.canonical, { runId: entry.runId },
-        );
-        if (lease.repositoryIdentity !== repositoryIdentity) {
-          throw new RuntimeError("checkout lease repository identity changed before pruning");
-        }
-        await assertDirectoryIdentity(entry.directory, entry.identity);
-        // Re-establish authority under the lease: the manifest, terminal
-        // result, and active marker may all have changed while we waited.
-        const currentManifest = await this.readManifest(entry.runId);
-        if (currentManifest === null
-          || serializeJson(currentManifest) !== serializeJson(initialManifest)) {
-          retained.push({ runId: entry.runId, reason: "run identity changed while waiting" });
-          return;
-        }
-        if (await this.readPipelineActiveMarker(entry.runId) !== null) {
-          retained.push({ runId: entry.runId, reason: "active-run" });
-          return;
-        }
-        const result = await this.readResult(entry.runId);
-        if (result === null) {
-          retained.push({ runId: entry.runId, reason: "incomplete-run" });
-          return;
-        }
-        if (serializeJson(result) !== serializeJson(initialResult)) {
-          retained.push({ runId: entry.runId, reason: "terminal authority changed while waiting" });
-          return;
-        }
-        prepared = await this.prepareCandidateAnchorCleanup(
-          entry.runId,
-          result,
-          currentManifest,
-          canonical.canonical,
-        );
-        await this.appendCleanupRecord({
-          event: "prune-cleanup-intent",
+        const safety = new PlatformSafety(platformServices);
+        await safety.withCheckoutLease(canonical.canonical, async (acquiredLease) => {
+          lease = acquiredLease;
+          await assertDirectoryIdentity(entry.directory, entry.identity);
+          // Re-establish authority under the lease: the manifest, terminal
+          // result, and active marker may all have changed while we waited.
+          const currentManifest = await this.readManifest(entry.runId);
+          if (currentManifest === null
+            || serializeJson(currentManifest) !== serializeJson(initialManifest)) {
+            retained.push({ runId: entry.runId, reason: "run identity changed while waiting" });
+            return;
+          }
+          if (await this.readPipelineActiveMarker(entry.runId) !== null) {
+            retained.push({ runId: entry.runId, reason: "active-run" });
+            return;
+          }
+          const result = await this.readResult(entry.runId);
+          if (result === null) {
+            retained.push({ runId: entry.runId, reason: "incomplete-run" });
+            return;
+          }
+          if (serializeJson(result) !== serializeJson(initialResult)) {
+            retained.push({ runId: entry.runId, reason: "terminal authority changed while waiting" });
+            return;
+          }
+          prepared = await this.prepareCandidateAnchorCleanup(
+            entry.runId,
+            result,
+            currentManifest,
+            canonical.canonical,
+          );
+          await this.appendCleanupRecord({
+            event: "prune-cleanup-intent",
+            runId: entry.runId,
+            reason,
+            anchorCleanup: "pending",
+            archiveBytes: entry.bytes,
+            quarantineName,
+            repoRoot: prepared.repoRoot,
+            anchorRef: prepared.anchorRef,
+            backupRef: prepared.backupRef,
+            candidateCommitOid: prepared.candidateCommitOid,
+            recordedAt: new Date().toISOString(),
+          });
+          transaction = await this.beginCandidateAnchorCleanup(prepared, entry.runId);
+          runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
+          await assertDirectoryIdentity(entry.directory, entry.identity);
+          await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
+          await rename(entry.directory, quarantinePath);
+          await syncDirectory(this.runsRoot);
+          await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
+          await assertDirectoryIdentity(quarantinePath, entry.identity);
+          archiveRemovalCommitted = true;
+          await rm(quarantinePath, { recursive: true, force: false });
+          await syncDirectory(this.runsRoot);
+          await transaction.commit();
+          await this.appendCleanupRecord({
+            event: "prune-cleanup-complete",
+            runId: entry.runId,
+            reason,
+            anchorCleanup: transaction.outcome,
+            archiveBytes: entry.bytes,
+            quarantineName,
+            repoRoot: prepared.repoRoot,
+            anchorRef: prepared.anchorRef,
+            backupRef: prepared.backupRef,
+            candidateCommitOid: prepared.candidateCommitOid,
+            recordedAt: new Date().toISOString(),
+          });
+          removed.add(entry.runId);
+          retainedBytes -= entry.bytes;
+        }, {
           runId: entry.runId,
-          reason,
-          anchorCleanup: "pending",
-          archiveBytes: entry.bytes,
-          quarantineName,
-          repoRoot: prepared.repoRoot,
-          anchorRef: prepared.anchorRef,
-          backupRef: prepared.backupRef,
-          candidateCommitOid: prepared.candidateCommitOid,
-          recordedAt: new Date().toISOString(),
+          onReleaseError: (releaseError) => {
+            const reason = redact(releaseError instanceof Error ? releaseError.message : String(releaseError));
+            retained.push({
+              runId: entry.runId,
+              reason: archiveRemovalCommitted
+                ? `archive removed; checkout lease release failed: ${reason}`
+                : reason,
+            });
+          },
         });
-        transaction = await this.beginCandidateAnchorCleanup(prepared, entry.runId);
-        runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
-        await assertDirectoryIdentity(entry.directory, entry.identity);
-        await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-        await rename(entry.directory, quarantinePath);
-        await syncDirectory(this.runsRoot);
-        await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-        await assertDirectoryIdentity(quarantinePath, entry.identity);
-        archiveRemovalCommitted = true;
-        await rm(quarantinePath, { recursive: true, force: false });
-        await syncDirectory(this.runsRoot);
-        await transaction.commit();
-        await this.appendCleanupRecord({
-          event: "prune-cleanup-complete",
-          runId: entry.runId,
-          reason,
-          anchorCleanup: transaction.outcome,
-          archiveBytes: entry.bytes,
-          quarantineName,
-          repoRoot: prepared.repoRoot,
-          anchorRef: prepared.anchorRef,
-          backupRef: prepared.backupRef,
-          candidateCommitOid: prepared.candidateCommitOid,
-          recordedAt: new Date().toISOString(),
-        });
-        removed.add(entry.runId);
-        retainedBytes -= entry.bytes;
       } catch (error) {
         let rollbackError: unknown;
         if (!archiveRemovalCommitted) {
@@ -1905,19 +1849,19 @@ export class ArtifactStore {
             } else {
               throw new RuntimeError("archive run directory disappeared during rollback");
             }
-            await transaction?.rollback();
+            await (transaction as any)?.rollback();
             if (prepared !== null) {
               await this.appendCleanupRecord({
                 event: "prune-cleanup-rollback",
                 runId: entry.runId,
                 reason,
-                anchorCleanup: prepared.outcome,
+                anchorCleanup: (prepared as any).outcome,
                 archiveBytes: entry.bytes,
                 quarantineName,
-                repoRoot: prepared.repoRoot,
-                anchorRef: prepared.anchorRef,
-                backupRef: prepared.backupRef,
-                candidateCommitOid: prepared.candidateCommitOid,
+                repoRoot: (prepared as any).repoRoot,
+                anchorRef: (prepared as any).anchorRef,
+                backupRef: (prepared as any).backupRef,
+                candidateCommitOid: (prepared as any).candidateCommitOid,
                 recordedAt: new Date().toISOString(),
               });
             }
@@ -1928,6 +1872,7 @@ export class ArtifactStore {
           removed.add(entry.runId);
           retainedBytes -= entry.bytes;
         }
+
         const primary = error instanceof Error ? error.message : String(error);
         const rollback = rollbackError instanceof Error
           ? `; rollback failed: ${rollbackError.message}`
@@ -1937,22 +1882,6 @@ export class ArtifactStore {
             runId: entry.runId,
             reason: redact(`${primary}${rollback}`),
           });
-        }
-      } finally {
-        if (lease !== null) {
-          try {
-            await lease.release();
-          } catch (error) {
-            // A release failure must never be swallowed. Surface it, and make
-            // clear whether the archive was already removed under the lease.
-            const reason = redact(error instanceof Error ? error.message : String(error));
-            retained.push({
-              runId: entry.runId,
-              reason: archiveRemovalCommitted
-                ? `archive removed; checkout lease release failed: ${reason}`
-                : reason,
-            });
-          }
         }
       }
     };

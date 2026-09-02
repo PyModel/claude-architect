@@ -13,5 +13,5 @@ export async function probeAll(
   producerRegistry: ProducerRegistry = registry,
   options?: ProbeOptions,
 ): Promise<CapabilityReport[]> {
-  return producerRuntime.probeAll(ctx, options, producerRegistry);
+  return producerRuntime.probeAll(ctx, { fresh: true, ...options }, producerRegistry);
 }

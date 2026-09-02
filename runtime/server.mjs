@@ -419,11 +419,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants13) {
+      optimizeNames(names, constants15) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants13);
+          this.rhs = optimizeExpr(this.rhs, names, constants15);
         return this;
       }
       get names() {
@@ -440,10 +440,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants13) {
+      optimizeNames(names, constants15) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants13);
+        this.rhs = optimizeExpr(this.rhs, names, constants15);
         return this;
       }
       get names() {
@@ -504,8 +504,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants13) {
-        this.code = optimizeExpr(this.code, names, constants13);
+      optimizeNames(names, constants15) {
+        this.code = optimizeExpr(this.code, names, constants15);
         return this;
       }
       get names() {
@@ -534,12 +534,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants13) {
+      optimizeNames(names, constants15) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants13))
+          if (n.optimizeNames(names, constants15))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -592,12 +592,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants13) {
+      optimizeNames(names, constants15) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants13);
-        if (!(super.optimizeNames(names, constants13) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants15);
+        if (!(super.optimizeNames(names, constants15) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants13);
+        this.condition = optimizeExpr(this.condition, names, constants15);
         return this;
       }
       get names() {
@@ -620,10 +620,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants13) {
-        if (!super.optimizeNames(names, constants13))
+      optimizeNames(names, constants15) {
+        if (!super.optimizeNames(names, constants15))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants13);
+        this.iteration = optimizeExpr(this.iteration, names, constants15);
         return this;
       }
       get names() {
@@ -659,10 +659,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants13) {
-        if (!super.optimizeNames(names, constants13))
+      optimizeNames(names, constants15) {
+        if (!super.optimizeNames(names, constants15))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants13);
+        this.iterable = optimizeExpr(this.iterable, names, constants15);
         return this;
       }
       get names() {
@@ -704,11 +704,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants13) {
+      optimizeNames(names, constants15) {
         var _a3, _b;
-        super.optimizeNames(names, constants13);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants13);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants13);
+        super.optimizeNames(names, constants15);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants15);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants15);
         return this;
       }
       get names() {
@@ -1009,7 +1009,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants13) {
+    function optimizeExpr(expr, names, constants15) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1024,14 +1024,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants13[n.str];
+        const c = constants15[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants13[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants15[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -3238,8 +3238,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path33) {
-      let input = path33;
+    function removeDotSegments(path35) {
+      let input = path35;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3491,8 +3491,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path33, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path33 && path33 !== "/" ? path33 : void 0;
+        const [path35, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path35 && path35 !== "/" ? path35 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -8176,8 +8176,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path33, errorMaps, issueData } = params;
-  const fullPath = [...path33, ...issueData.path || []];
+  const { data, path: path35, errorMaps, issueData } = params;
+  const fullPath = [...path35, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -8292,11 +8292,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path33, key) {
+  constructor(parent, value, path35, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path33;
+    this._path = path35;
     this._key = key;
   }
   get path() {
@@ -12216,10 +12216,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path33) {
-  if (!path33)
+function getElementAtPath(obj, path35) {
+  if (!path35)
     return obj;
-  return path33.reduce((acc, key) => acc?.[key], obj);
+  return path35.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12628,11 +12628,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path33, issues) {
+function prefixIssues(path35, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path33);
+    iss.path.unshift(path35);
     return iss;
   });
 }
@@ -12779,16 +12779,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path33 = []) => {
+  const processError = (error52, path35 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path33, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path35, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path33, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path35, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path33, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path35, ...issue2.path]);
       } else {
-        const fullpath = [...path33, ...issue2.path];
+        const fullpath = [...path35, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -12815,17 +12815,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path33 = []) => {
+  const processError = (error52, path35 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path33, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path35, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path33, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path35, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path33, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path35, ...issue2.path]);
       } else {
-        const fullpath = [...path33, ...issue2.path];
+        const fullpath = [...path35, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -12857,8 +12857,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path33 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path33) {
+  const path35 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path35) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -23970,11 +23970,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path33) {
-  if (path33.length === 0) {
+function getDotPath(path35) {
+  if (path35.length === 0) {
     return "object root";
   }
-  return path33.reduce((acc, seg, index) => {
+  return path35.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -25999,13 +25999,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path33 = ref.slice(1).split("/").filter(Boolean);
-  if (path33.length === 0) {
+  const path35 = ref.slice(1).split("/").filter(Boolean);
+  if (path35.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path33[0] === defsKey) {
-    const key = path33[1];
+  if (path35[0] === defsKey) {
+    const key = path35[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -31903,7 +31903,7 @@ var StdioServerTransport = class {
 };
 
 // src/mcp/server.ts
-import path32 from "node:path";
+import path34 from "node:path";
 
 // src/protocol/versions.ts
 var PROTOCOL_VERSION = "2.0.0";
@@ -31936,63 +31936,33 @@ function classifyFailure(s) {
 
 // src/mcp/doctor.ts
 import { createHash as createHash5 } from "node:crypto";
-import { constants as constants5 } from "node:fs";
-import { lstat as lstat5, open as open5, readdir as readdir3, realpath as realpath5 } from "node:fs/promises";
-import path13 from "node:path";
-import nodeProcess4 from "node:process";
+import { constants as constants6 } from "node:fs";
+import { lstat as lstat6, open as open6, readdir as readdir4, realpath as realpath5 } from "node:fs/promises";
+import path14 from "node:path";
+import nodeProcess5 from "node:process";
 
 // src/autopilot/workflow-store.ts
-import { createHash as createHash3, randomUUID } from "node:crypto";
-import { constants as constants3 } from "node:fs";
+import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
+import { constants as constants4 } from "node:fs";
 import {
-  lstat as lstat3,
-  link,
+  lstat as lstat4,
+  link as link2,
   mkdir as mkdir2,
-  open as open2,
-  readdir as readdir2,
+  open as open3,
+  readdir as readdir3,
   realpath as realpath2,
   rename,
-  rm
+  rm as rm2
 } from "node:fs/promises";
-import path5 from "node:path";
+import path6 from "node:path";
 
 // src/platform/posix-platform-services.ts
 import { spawn, execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { constants, promises as fs } from "node:fs";
+import { constants as constants2, promises as fs } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import path from "node:path";
-import nodeProcess2 from "node:process";
-
-// src/runtime/state-dir.ts
-import { tmpdir } from "node:os";
-import nodeProcess from "node:process";
-
-// src/util/errors.ts
-var RuntimeError = class extends Error {
-  constructor(message, detail) {
-    super(message);
-    this.detail = detail;
-    this.name = "RuntimeError";
-  }
-  detail;
-};
-var NestedDelegationError = class extends RuntimeError {
-  // CLAUDE_ARCHITECT_DELEGATED already set
-  constructor() {
-    super("nested delegation denied");
-    this.name = "NestedDelegationError";
-  }
-};
-
-// src/runtime/state-dir.ts
-function resolveStateDir() {
-  if (nodeProcess.env.CLAUDE_PLUGIN_DATA) return nodeProcess.env.CLAUDE_PLUGIN_DATA;
-  if (nodeProcess.env.NODE_ENV === "test") {
-    return nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR ?? tmpdir();
-  }
-  throw new RuntimeError("CLAUDE_PLUGIN_DATA is required outside test environments");
-}
+import path2 from "node:path";
+import nodeProcess3 from "node:process";
 
 // src/util/bounded-buffer.ts
 var BoundedBuffer = class {
@@ -32020,6 +31990,23 @@ var BoundedBuffer = class {
   }
   toString() {
     return Buffer.concat(this.parts).toString("utf8");
+  }
+};
+
+// src/util/errors.ts
+var RuntimeError = class extends Error {
+  constructor(message, detail) {
+    super(message);
+    this.detail = detail;
+    this.name = "RuntimeError";
+  }
+  detail;
+};
+var NestedDelegationError = class extends RuntimeError {
+  // CLAUDE_ARCHITECT_DELEGATED already set
+  constructor() {
+    super("nested delegation denied");
+    this.name = "NestedDelegationError";
   }
 };
 
@@ -32054,8 +32041,79 @@ var logger = {
   error: (m, meta3) => emit("error", m, meta3)
 };
 
-// src/platform/lock-owner.ts
-function parseLockOwner(contents) {
+// src/platform/lock-ownership.ts
+import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
+import { link, lstat, open, readdir, readFile, rm } from "node:fs/promises";
+import path from "node:path";
+import nodeProcess2 from "node:process";
+
+// src/runtime/state-dir.ts
+import { tmpdir } from "node:os";
+import nodeProcess from "node:process";
+function resolveStateDir() {
+  if (nodeProcess.env.CLAUDE_PLUGIN_DATA) return nodeProcess.env.CLAUDE_PLUGIN_DATA;
+  if (nodeProcess.env.NODE_ENV === "test") {
+    return nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR ?? tmpdir();
+  }
+  throw new RuntimeError("CLAUDE_PLUGIN_DATA is required outside test environments");
+}
+
+// src/platform/lock-ownership.ts
+var NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
+var MAX_STATE_FILE_BYTES = 1e6;
+var MAX_STATE_FILE_BYTES_BIGINT = BigInt(MAX_STATE_FILE_BYTES);
+var CHECKOUT_LOCK_NAME_PATTERN = /^([0-9a-f]{64})\.lock$/;
+var LOCK_RETRY_MS = 30;
+var LOCK_TIMEOUT_MS = nodeProcess2.platform === "win32" ? 15e3 : 2500;
+var OWNER_PROBE_TIMEOUT_MS = 1e3;
+var SAFE_RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+function isMissing(error51) {
+  return errorCode(error51) === "ENOENT";
+}
+function errorCode(error51) {
+  return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
+}
+function delay(ms) {
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isPlainDirectory(metadata) {
+  return metadata.isDirectory() && !metadata.isSymbolicLink();
+}
+function sameIdentity(left, right) {
+  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
+}
+async function plainDirectoryIdentity(directoryPath) {
+  try {
+    const metadata = await lstat(directoryPath, { bigint: true });
+    if (!isPlainDirectory(metadata) || metadata.birthtimeNs <= 0n) return null;
+    return { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
+  } catch (error51) {
+    if (isMissing(error51)) return null;
+    throw error51;
+  }
+}
+function isCheckoutLockFileName(filename) {
+  return CHECKOUT_LOCK_NAME_PATTERN.test(filename);
+}
+function lockFileName(key) {
+  return `${key}.lock`;
+}
+function lockFilePath(key, stateDir = resolveStateDir()) {
+  return path.join(stateDir, "locks", lockFileName(key));
+}
+function formatLockRecord(record2) {
+  return JSON.stringify({
+    pid: record2.pid,
+    processToken: record2.processToken,
+    acquiredAt: record2.acquiredAt,
+    ...record2.runId === void 0 ? {} : { runId: record2.runId }
+  });
+}
+function parseLockRecord(contents) {
   const trimmed = contents.trim();
   let value;
   try {
@@ -32063,10 +32121,19 @@ function parseLockOwner(contents) {
   } catch {
     return null;
   }
-  if (typeof value !== "object" || value === null) return null;
-  const owner = value;
-  if (typeof owner.pid !== "number" || !Number.isSafeInteger(owner.pid) || owner.pid <= 1 || typeof owner.processToken !== "string" || owner.processToken.length === 0) return null;
-  return { pid: owner.pid, processToken: owner.processToken };
+  if (!isRecord(value)) return null;
+  if (typeof value.pid !== "number" || !Number.isSafeInteger(value.pid) || value.pid <= 1) {
+    return null;
+  }
+  const processToken = typeof value.processToken === "string" && value.processToken.length > 0 ? value.processToken : null;
+  const acquiredAt = typeof value.acquiredAt === "string" ? value.acquiredAt : (/* @__PURE__ */ new Date(0)).toISOString();
+  const runId = typeof value.runId === "string" && SAFE_RUN_ID.test(value.runId) ? value.runId : void 0;
+  return { pid: value.pid, processToken, acquiredAt, runId };
+}
+function parseLockOwner(contents) {
+  const record2 = parseLockRecord(contents);
+  if (record2 === null || record2.processToken === null) return null;
+  return { pid: record2.pid, processToken: record2.processToken };
 }
 async function lockOwnerStatus(owner, isProcessAlive2, getProcessStartToken) {
   if (owner === null || !isProcessAlive2(owner.pid)) return "dead";
@@ -32075,72 +32142,116 @@ async function lockOwnerStatus(owner, isProcessAlive2, getProcessStartToken) {
   if (currentToken === null) return "unverifiable";
   return currentToken === owner.processToken ? "live" : "dead";
 }
-
-// src/platform/posix-platform-services.ts
-var LOCK_RETRY_MS = 30;
-var LOCK_TIMEOUT_MS = nodeProcess2.platform === "win32" ? 15e3 : 2500;
-var OWNER_PROBE_TIMEOUT_MS = 1e3;
-var SAFE_RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-var CLEANUP_JOURNAL_LOCK_KEY = createHash("sha256").update("claude-architect:cleanup-journal:v1").digest("hex");
-function errorCode(error51) {
-  return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
+async function readHandleBytes(handle, length) {
+  const buffer = Buffer.alloc(length);
+  let bytesRead = 0;
+  while (bytesRead < length) {
+    const result = await handle.read(buffer, bytesRead, length - bytesRead, bytesRead);
+    if (result.bytesRead === 0) break;
+    bytesRead += result.bytesRead;
+  }
+  return bytesRead === length ? buffer : buffer.subarray(0, bytesRead);
 }
-function delay(ms) {
-  return new Promise((resolve2) => setTimeout(resolve2, ms));
+async function removeLockIfUnchanged(lockPath, handle, expectedIdentity, expectedContents, expectedLinks = 1) {
+  const beforeMetadata = await handle.stat({ bigint: true });
+  if (!beforeMetadata.isFile() || beforeMetadata.isSymbolicLink() || !sameIdentity(beforeMetadata, expectedIdentity) || beforeMetadata.nlink !== BigInt(expectedLinks) || beforeMetadata.size !== BigInt(expectedContents.byteLength)) {
+    return false;
+  }
+  const currentBytes = await readHandleBytes(handle, expectedContents.byteLength);
+  if (!currentBytes.equals(expectedContents)) return false;
+  try {
+    await rm(lockPath, { force: true });
+  } catch (error51) {
+    if (isMissing(error51)) return false;
+    throw error51;
+  }
+  const afterMetadata = await handle.stat({ bigint: true });
+  return afterMetadata.nlink === BigInt(expectedLinks - 1);
 }
-function lockFilePath(key) {
-  return path.join(resolveStateDir(), "locks", `${key}.lock`);
-}
-async function acquireWxFileLock(key, timeoutMessage, ownerToken = null, owner = {}) {
-  const lockPath = lockFilePath(key);
-  await fs.mkdir(path.dirname(lockPath), { recursive: true });
-  const deadline = Date.now() + LOCK_TIMEOUT_MS;
-  for (; ; ) {
-    try {
-      const handle = await fs.open(lockPath, "wx");
-      const ownerPid = nodeProcess2.pid;
-      const record2 = {
-        pid: ownerPid,
-        processToken: ownerToken,
-        acquiredAt: (/* @__PURE__ */ new Date()).toISOString(),
-        ...owner.runId === void 0 ? {} : { runId: owner.runId }
-      };
-      try {
-        await handle.writeFile(JSON.stringify(record2));
-      } finally {
-        await handle.close();
-      }
-      return {
-        key,
-        release: async () => {
-          let recordedOwner;
-          try {
-            recordedOwner = JSON.parse(await fs.readFile(lockPath, "utf8"));
-          } catch {
-            return;
-          }
-          if (!isRecord(recordedOwner) || recordedOwner.pid !== ownerPid || recordedOwner.processToken !== ownerToken) return;
-          await fs.rm(lockPath, { force: true });
-        }
-      };
-    } catch (error51) {
-      if (errorCode(error51) !== "EEXIST") throw error51;
-      if (Date.now() >= deadline) {
-        throw new RuntimeError(timeoutMessage ?? `lock is held: ${key}`, { key });
-      }
-      await delay(LOCK_RETRY_MS);
+async function reclaimDeadLock(lockPath, isProcessAlive2, getProcessStartToken) {
+  let handle;
+  try {
+    handle = await open(lockPath, constants.O_RDONLY | NO_FOLLOW);
+  } catch (error51) {
+    if (isMissing(error51)) return "contended";
+    throw error51;
+  }
+  try {
+    const metadata = await handle.stat({ bigint: true });
+    if (!metadata.isFile() || metadata.size > MAX_STATE_FILE_BYTES_BIGINT) {
+      throw new RuntimeError("recovery lock must be a bounded regular file");
     }
+    const contents = await readHandleBytes(handle, Number(metadata.size));
+    if (BigInt(contents.byteLength) !== metadata.size) return "contended";
+    const owner = parseLockOwner(contents.toString("utf8"));
+    if (owner === null) {
+      logger.warn("startup recovery preserved malformed lock", {
+        event: "recovery-malformed-lock",
+        lockName: path.basename(lockPath),
+        reason: "invalid-owner-record"
+      });
+      return "malformed";
+    }
+    const ownerStatus2 = await lockOwnerStatus(owner, isProcessAlive2, getProcessStartToken);
+    if (ownerStatus2 === "live") return "live";
+    if (ownerStatus2 === "unverifiable") {
+      logger.warn("startup recovery preserved unverifiable lock", {
+        event: "recovery-unverifiable-lock",
+        lockName: path.basename(lockPath),
+        reason: "process-token-unavailable"
+      });
+      return "unverifiable";
+    }
+    return await removeLockIfUnchanged(
+      lockPath,
+      handle,
+      {
+        dev: metadata.dev,
+        ino: metadata.ino,
+        birthtimeNs: metadata.birthtimeNs
+      },
+      contents
+    ) ? "reclaimed" : "contended";
+  } finally {
+    await handle.close();
   }
 }
-function isRecord(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+async function reclaimDeadCheckoutLocks(locksRoot, isProcessAlive2, getProcessStartToken) {
+  let entries;
+  try {
+    entries = await readdir(locksRoot, { withFileTypes: true });
+  } catch (error51) {
+    if (isMissing(error51)) return;
+    throw error51;
+  }
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!isCheckoutLockFileName(entry.name)) continue;
+    const lockPath = path.join(locksRoot, entry.name);
+    await reclaimDeadLock(lockPath, isProcessAlive2, getProcessStartToken);
+  }
 }
-function processIsAlive(pid) {
+var reclaimLocks = reclaimDeadCheckoutLocks;
+async function lockIsOwnedByLiveProcess(locksRoot, lockKey, isProcessAlive2, getProcessStartToken) {
+  let contents;
+  try {
+    contents = await readFile(path.join(locksRoot, lockFileName(lockKey)), "utf8");
+  } catch (error51) {
+    if (isMissing(error51)) return false;
+    throw error51;
+  }
+  const owner = parseLockOwner(contents);
+  if (owner === null) return true;
+  return await lockOwnerStatus(owner, isProcessAlive2, getProcessStartToken) !== "dead";
+}
+function defaultIsProcessAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 1) return false;
   try {
     nodeProcess2.kill(pid, 0);
     return true;
   } catch (error51) {
-    return errorCode(error51) === "EPERM";
+    if (errorCode(error51) === "EPERM") return true;
+    if (errorCode(error51) === "ESRCH") return false;
+    throw error51;
   }
 }
 function heldFor(acquiredAt) {
@@ -32153,44 +32264,6 @@ function heldFor(acquiredAt) {
 }
 function heldByRun(runId) {
   return typeof runId === "string" && SAFE_RUN_ID.test(runId) ? `, run ${runId}` : "";
-}
-async function describeLockContention(key, getProcessStartToken) {
-  let contents;
-  try {
-    contents = await fs.readFile(lockFilePath(key), "utf8");
-  } catch {
-    return null;
-  }
-  const owner = parseLockOwner(contents);
-  if (owner === null) {
-    return `its owner cannot be identified, and startup recovery preserves a lock it cannot parse, so remove it by hand: ${lockFilePath(key)}`;
-  }
-  const annotations = (() => {
-    try {
-      return JSON.parse(contents.trim());
-    } catch {
-      return {};
-    }
-  })();
-  const extras = isRecord(annotations) ? `${heldByRun(annotations.runId)}${heldFor(annotations.acquiredAt)}` : "";
-  let status;
-  try {
-    status = await lockOwnerStatus(
-      owner,
-      processIsAlive,
-      (pid) => withTimeout(getProcessStartToken(pid), OWNER_PROBE_TIMEOUT_MS, null)
-    );
-  } catch {
-    return null;
-  }
-  if (status === "dead") {
-    return `it was left behind by a process that exited (pid ${owner.pid}${extras}); startup recovery reclaims it on the next server start`;
-  }
-  if (status === "unverifiable") {
-    return `it is held by pid ${owner.pid}${extras}, whose identity could not be verified; startup recovery preserves it until that changes`;
-  }
-  const self = owner.pid === nodeProcess2.pid ? " (this same process)" : "";
-  return `it is held by live pid ${owner.pid}${self}${extras}`;
 }
 function withTimeout(work, ms, fallback) {
   return new Promise((resolve2) => {
@@ -32207,6 +32280,38 @@ function withTimeout(work, ms, fallback) {
     );
   });
 }
+async function describeLockContention(key, getProcessStartToken) {
+  let contents;
+  try {
+    contents = await readFile(lockFilePath(key), "utf8");
+  } catch {
+    return null;
+  }
+  const owner = parseLockOwner(contents);
+  if (owner === null) {
+    return `its owner cannot be identified, and startup recovery preserves a lock it cannot parse, so remove it by hand: ${lockFilePath(key)}`;
+  }
+  const annotations = parseLockRecord(contents);
+  const extras = annotations !== null ? `${heldByRun(annotations.runId)}${heldFor(annotations.acquiredAt)}` : "";
+  let status;
+  try {
+    status = await lockOwnerStatus(
+      owner,
+      defaultIsProcessAlive,
+      (pid) => withTimeout(getProcessStartToken(pid), OWNER_PROBE_TIMEOUT_MS, null)
+    );
+  } catch {
+    return null;
+  }
+  if (status === "dead") {
+    return `it was left behind by a process that exited (pid ${owner.pid}${extras}); startup recovery reclaims it on the next server start`;
+  }
+  if (status === "unverifiable") {
+    return `it is held by pid ${owner.pid}${extras}, whose identity could not be verified; startup recovery preserves it until that changes`;
+  }
+  const self = owner.pid === nodeProcess2.pid ? " (this same process)" : "";
+  return `it is held by live pid ${owner.pid}${self}${extras}`;
+}
 async function withLockContentionDetail(error51, key, getProcessStartToken) {
   if (!(error51 instanceof RuntimeError)) return error51;
   let description;
@@ -32217,6 +32322,370 @@ async function withLockContentionDetail(error51, key, getProcessStartToken) {
   }
   if (description === null) return error51;
   return new RuntimeError(`${error51.message} \u2014 ${description}`, { ...error51.detail, key });
+}
+async function acquireWxFileLock(key, timeoutMessage, ownerToken = null, owner = {}) {
+  const targetLockPath = lockFilePath(key);
+  const locksDir = path.dirname(targetLockPath);
+  const { mkdir: mkdir10 } = await import("node:fs/promises");
+  await mkdir10(locksDir, { recursive: true });
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  for (; ; ) {
+    try {
+      const handle = await open(targetLockPath, "wx");
+      const ownerPid = nodeProcess2.pid;
+      const record2 = {
+        pid: ownerPid,
+        processToken: ownerToken,
+        acquiredAt: (/* @__PURE__ */ new Date()).toISOString(),
+        ...owner.runId === void 0 ? {} : { runId: owner.runId }
+      };
+      try {
+        await handle.writeFile(formatLockRecord(record2));
+      } finally {
+        await handle.close();
+      }
+      return {
+        key,
+        release: async () => {
+          let recordedOwner;
+          try {
+            recordedOwner = parseLockRecord(await readFile(targetLockPath, "utf8"));
+          } catch {
+            return;
+          }
+          if (recordedOwner === null || recordedOwner.pid !== ownerPid || recordedOwner.processToken !== ownerToken) {
+            return;
+          }
+          await rm(targetLockPath, { force: true });
+        }
+      };
+    } catch (error51) {
+      if (errorCode(error51) !== "EEXIST") throw error51;
+      if (Date.now() >= deadline) {
+        throw new RuntimeError(timeoutMessage ?? `lock is held: ${key}`, { key });
+      }
+      await delay(LOCK_RETRY_MS);
+    }
+  }
+}
+async function validateLockParentIdentity(parentPath, expectedIdentity) {
+  const metadata = await lstat(parentPath, { bigint: true });
+  if (!isPlainDirectory(metadata) || !sameIdentity(metadata, expectedIdentity)) {
+    throw new RuntimeError("recovery lock parent identity changed");
+  }
+}
+function isExpectedLockMetadata(metadata, expectedIdentity, expectedSize, expectedLinks) {
+  return metadata.isFile() && !metadata.isSymbolicLink() && metadata.nlink === BigInt(expectedLinks) && sameIdentity(metadata, expectedIdentity) && metadata.size === BigInt(expectedSize) && metadata.size <= MAX_STATE_FILE_BYTES_BIGINT;
+}
+async function validateOwnedLockState(handle, namedPaths, expectedIdentity, expectedContents, expectedLinks, parentPath, parentIdentity) {
+  const validateHandle = async () => {
+    const metadata = await handle.stat({ bigint: true });
+    if (!isExpectedLockMetadata(
+      metadata,
+      expectedIdentity,
+      expectedContents.byteLength,
+      expectedLinks
+    ) || !(await readHandleBytes(handle, Number(metadata.size))).equals(expectedContents)) {
+      throw new RuntimeError("recovery lock handle or contents changed");
+    }
+  };
+  await validateLockParentIdentity(parentPath, parentIdentity);
+  await validateHandle();
+  for (const namedPath of namedPaths) {
+    const metadata = await lstat(namedPath, { bigint: true });
+    if (!isExpectedLockMetadata(
+      metadata,
+      expectedIdentity,
+      expectedContents.byteLength,
+      expectedLinks
+    )) throw new RuntimeError("recovery lock path changed");
+  }
+  await validateHandle();
+  await validateLockParentIdentity(parentPath, parentIdentity);
+}
+async function removeExpectedLockPath(filename, expectedIdentity, expectedContents, expectedLinks) {
+  let handle;
+  try {
+    handle = await open(filename, constants.O_RDONLY | NO_FOLLOW);
+  } catch (error51) {
+    if (isMissing(error51)) return "absent";
+    throw error51;
+  }
+  let primaryError;
+  let removed = false;
+  try {
+    removed = await removeLockIfUnchanged(
+      filename,
+      handle,
+      expectedIdentity,
+      expectedContents,
+      expectedLinks
+    );
+  } catch (error51) {
+    primaryError = error51;
+  }
+  try {
+    await handle.close();
+  } catch (closeError) {
+    if (primaryError !== void 0) {
+      throw new AggregateError(
+        [primaryError, closeError],
+        "recovery lock cleanup failed and its handle could not be closed"
+      );
+    }
+    throw closeError;
+  }
+  if (primaryError !== void 0) throw primaryError;
+  return removed ? "removed" : "changed";
+}
+async function pathNamesLockIdentity(filename, expectedIdentity) {
+  try {
+    const metadata = await lstat(filename, { bigint: true });
+    return metadata.isFile() && !metadata.isSymbolicLink() && sameIdentity(metadata, expectedIdentity);
+  } catch (error51) {
+    if (isMissing(error51)) return false;
+    throw error51;
+  }
+}
+async function validatePublishedLock(lockPath, expectedIdentity, expectedContents, parentPath, parentIdentity, expectedLinks = 1, namedPaths = [lockPath]) {
+  const handle = await open(lockPath, constants.O_RDONLY | NO_FOLLOW);
+  let primaryError;
+  try {
+    await validateOwnedLockState(
+      handle,
+      namedPaths,
+      expectedIdentity,
+      expectedContents,
+      expectedLinks,
+      parentPath,
+      parentIdentity
+    );
+  } catch (error51) {
+    primaryError = error51;
+  }
+  try {
+    await handle.close();
+  } catch (closeError) {
+    if (primaryError !== void 0) {
+      throw new AggregateError(
+        [primaryError, closeError],
+        "published recovery lock validation failed and its handle could not be closed"
+      );
+    }
+    throw closeError;
+  }
+  if (primaryError !== void 0) throw primaryError;
+}
+function throwLockAcquisitionErrors(errors) {
+  if (errors.length === 1) throw errors[0];
+  throw new AggregateError(errors, "recovery lock acquisition and safe cleanup failed");
+}
+async function cleanupOwnedLockPaths(parentPath, parentIdentity, temporaryPath, lockPath, expectedIdentity, expectedContents, published) {
+  const errors = [];
+  try {
+    await validateLockParentIdentity(parentPath, parentIdentity);
+  } catch (error51) {
+    return [error51];
+  }
+  if (published) {
+    try {
+      const temporaryExists = await pathNamesLockIdentity(temporaryPath, expectedIdentity);
+      const result = await removeExpectedLockPath(
+        lockPath,
+        expectedIdentity,
+        expectedContents,
+        temporaryExists ? 2 : 1
+      );
+      if (result === "changed") {
+        errors.push(new RuntimeError("published recovery lock changed before safe cleanup"));
+      }
+    } catch (error51) {
+      errors.push(error51);
+    }
+  }
+  try {
+    const result = await removeExpectedLockPath(
+      temporaryPath,
+      expectedIdentity,
+      expectedContents,
+      1
+    );
+    if (result === "changed") {
+      errors.push(new RuntimeError("temporary recovery lock changed before safe cleanup"));
+    }
+  } catch (error51) {
+    errors.push(error51);
+  }
+  try {
+    await validateLockParentIdentity(parentPath, parentIdentity);
+  } catch (error51) {
+    errors.push(error51);
+  }
+  return errors;
+}
+async function createOwnedLock(lockPath, contents) {
+  if (contents.byteLength > MAX_STATE_FILE_BYTES) {
+    throw new RuntimeError("new recovery lock exceeds its size limit");
+  }
+  const parentPath = path.dirname(lockPath);
+  const parentIdentity = await plainDirectoryIdentity(parentPath);
+  if (parentIdentity === null) {
+    throw new RuntimeError("recovery lock parent must remain a plain directory");
+  }
+  const temporaryPath = path.join(parentPath, `.recovery-lock-${randomUUID()}.tmp`);
+  let handle;
+  let temporaryIdentity;
+  let temporaryCreated = false;
+  let published = false;
+  let contended = false;
+  const errors = [];
+  try {
+    handle = await open(
+      temporaryPath,
+      constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
+      384
+    );
+    temporaryCreated = true;
+    const metadata = await handle.stat({ bigint: true });
+    temporaryIdentity = {
+      dev: metadata.dev,
+      ino: metadata.ino,
+      birthtimeNs: metadata.birthtimeNs
+    };
+    await handle.writeFile(contents);
+    await handle.sync();
+    await validateOwnedLockState(
+      handle,
+      [temporaryPath],
+      temporaryIdentity,
+      contents,
+      1,
+      parentPath,
+      parentIdentity
+    );
+    try {
+      await link(temporaryPath, lockPath);
+      published = true;
+    } catch (error51) {
+      if (errorCode(error51) === "EEXIST") contended = true;
+      else throw error51;
+    }
+    if (published) {
+      await validateOwnedLockState(
+        handle,
+        [temporaryPath, lockPath],
+        temporaryIdentity,
+        contents,
+        2,
+        parentPath,
+        parentIdentity
+      );
+    }
+  } catch (error51) {
+    errors.push(error51);
+  }
+  if (handle !== void 0) {
+    try {
+      await handle.close();
+    } catch (error51) {
+      errors.push(error51);
+    }
+  }
+  if (temporaryCreated && temporaryIdentity === void 0) {
+    errors.push(new RuntimeError("temporary recovery lock identity is unavailable for cleanup"));
+  }
+  if (temporaryIdentity === void 0) throwLockAcquisitionErrors(errors);
+  if (contended) {
+    errors.push(...await cleanupOwnedLockPaths(
+      parentPath,
+      parentIdentity,
+      temporaryPath,
+      lockPath,
+      temporaryIdentity,
+      contents,
+      false
+    ));
+    if (errors.length === 0) return null;
+    throwLockAcquisitionErrors(errors);
+  }
+  if (!published) {
+    if (temporaryCreated) {
+      errors.push(...await cleanupOwnedLockPaths(
+        parentPath,
+        parentIdentity,
+        temporaryPath,
+        lockPath,
+        temporaryIdentity,
+        contents,
+        false
+      ));
+    }
+    throwLockAcquisitionErrors(errors);
+  }
+  if (errors.length === 0) {
+    try {
+      await validateLockParentIdentity(parentPath, parentIdentity);
+      const result = await removeExpectedLockPath(
+        temporaryPath,
+        temporaryIdentity,
+        contents,
+        2
+      );
+      if (result === "changed") {
+        throw new RuntimeError("temporary recovery lock changed before unlink");
+      }
+      await validatePublishedLock(
+        lockPath,
+        temporaryIdentity,
+        contents,
+        parentPath,
+        parentIdentity
+      );
+    } catch (error51) {
+      errors.push(error51);
+    }
+  }
+  if (errors.length === 0) {
+    return { lockPath, identity: temporaryIdentity, contents };
+  }
+  errors.push(...await cleanupOwnedLockPaths(
+    parentPath,
+    parentIdentity,
+    temporaryPath,
+    lockPath,
+    temporaryIdentity,
+    contents,
+    true
+  ));
+  throwLockAcquisitionErrors(errors);
+}
+async function acquireOwnedLock(lockPath, contents, isProcessAlive2 = defaultIsProcessAlive, getProcessStartToken = async () => null) {
+  const created = await createOwnedLock(lockPath, contents);
+  if (created !== null) return created;
+  if (await reclaimDeadLock(lockPath, isProcessAlive2, getProcessStartToken) !== "reclaimed") {
+    return null;
+  }
+  return createOwnedLock(lockPath, contents);
+}
+async function releaseOwnedLock(lock) {
+  let handle;
+  try {
+    handle = await open(lock.lockPath, constants.O_RDONLY | NO_FOLLOW);
+  } catch (error51) {
+    if (isMissing(error51)) return;
+    throw error51;
+  }
+  try {
+    await removeLockIfUnchanged(lock.lockPath, handle, lock.identity, lock.contents);
+  } finally {
+    await handle.close();
+  }
+}
+
+// src/platform/posix-platform-services.ts
+var CLEANUP_JOURNAL_LOCK_KEY = createHash("sha256").update("claude-architect:cleanup-journal:v1").digest("hex");
+function errorCode2(error51) {
+  return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
 }
 async function gitCommonDir(cwd) {
   return new Promise((resolve2, reject) => {
@@ -32238,17 +32707,17 @@ function killProcessGroup(pid, signal) {
     return;
   }
   try {
-    nodeProcess2.kill(-pid, signal);
+    nodeProcess3.kill(-pid, signal);
   } catch (error51) {
-    if (errorCode(error51) !== "ESRCH") throw error51;
+    if (errorCode2(error51) !== "ESRCH") throw error51;
   }
 }
 var PosixPlatformServices = class {
-  os = nodeProcess2.platform === "darwin" ? "darwin" : "linux";
+  os = nodeProcess3.platform === "darwin" ? "darwin" : "linux";
   async resolveExecutable(request) {
     if (request.explicitPath !== void 0) {
       try {
-        await fs.access(request.explicitPath, constants.X_OK);
+        await fs.access(request.explicitPath, constants2.X_OK);
       } catch (cause) {
         throw new RuntimeError(`executable is not accessible: ${request.explicitPath}`, { cause });
       }
@@ -32259,10 +32728,10 @@ var PosixPlatformServices = class {
         resolvedFrom: `explicit:${request.explicitPath}`
       };
     }
-    for (const directory of (request.searchPath ?? nodeProcess2.env.PATH ?? "").split(path.delimiter)) {
-      const candidate = path.join(directory, request.name);
+    for (const directory of (request.searchPath ?? nodeProcess3.env.PATH ?? "").split(path2.delimiter)) {
+      const candidate = path2.join(directory, request.name);
       try {
-        await fs.access(candidate, constants.X_OK);
+        await fs.access(candidate, constants2.X_OK);
         return { kind: "native", command: candidate, prefixArgs: [], resolvedFrom: `path:${candidate}` };
       } catch {
       }
@@ -32323,7 +32792,7 @@ var PosixPlatformServices = class {
   }
   async getProcessStartToken(pid) {
     if (!Number.isSafeInteger(pid) || pid <= 1) return null;
-    if (nodeProcess2.platform === "linux") {
+    if (nodeProcess3.platform === "linux") {
       try {
         const stat = await fs.readFile(`/proc/${pid}/stat`, "utf8");
         const afterComm = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
@@ -32358,7 +32827,7 @@ var PosixPlatformServices = class {
     }
     const repositoryIdentity = commonDir;
     const key = createHash("sha256").update(repositoryIdentity).digest("hex");
-    const ownerToken = await this.getProcessStartToken(nodeProcess2.pid);
+    const ownerToken = await this.getProcessStartToken(nodeProcess3.pid);
     let lock;
     try {
       lock = await acquireWxFileLock(key, `checkout is locked: ${checkout}`, ownerToken, owner);
@@ -32372,15 +32841,15 @@ var PosixPlatformServices = class {
     return { ...lock, repositoryIdentity };
   }
   async acquireCleanupJournalLock() {
-    const ownerToken = await this.getProcessStartToken(nodeProcess2.pid);
+    const ownerToken = await this.getProcessStartToken(nodeProcess3.pid);
     return acquireWxFileLock(CLEANUP_JOURNAL_LOCK_KEY, "cleanup journal is locked", ownerToken);
   }
   async createSecureTempDirectory() {
-    return fs.mkdtemp(path.join(tmpdir2(), "claude-architect-"));
+    return fs.mkdtemp(path2.join(tmpdir2(), "claude-architect-"));
   }
   async assertDirectoryWriteIntegrity(directory, expectedIdentity) {
     const metadata = await fs.lstat(directory, { bigint: true });
-    const uid = nodeProcess2.getuid?.();
+    const uid = nodeProcess3.getuid?.();
     if (!metadata.isDirectory() || metadata.isSymbolicLink() || metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino || metadata.birthtimeNs <= 0n || metadata.birthtimeNs !== expectedIdentity.birthtimeNs || uid === void 0 || metadata.uid !== BigInt(uid) || (metadata.mode & 0o022n) !== 0n) {
       throw new RuntimeError("directory lacks stable write integrity");
     }
@@ -32402,8 +32871,8 @@ import { execFile as execFile2, spawn as spawn2 } from "node:child_process";
 import { createHash as createHash2 } from "node:crypto";
 import { promises as fs2 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
-import path4 from "node:path";
-import nodeProcess3 from "node:process";
+import path5 from "node:path";
+import nodeProcess4 from "node:process";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/platform/windows-env.ts
@@ -32425,9 +32894,9 @@ function windowsEssentialEnvironment(env = process.env) {
 }
 
 // src/platform/durable-directory.ts
-import { constants as constants2 } from "node:fs";
-import { lstat as lstat2, mkdir, open, readdir } from "node:fs/promises";
-import path3 from "node:path";
+import { constants as constants3 } from "node:fs";
+import { lstat as lstat3, mkdir, open as open2, readdir as readdir2 } from "node:fs/promises";
+import path4 from "node:path";
 
 // src/protocol/delegation-spec.ts
 var DEFAULT_REVIEW_CONFIG = {
@@ -32502,19 +32971,19 @@ async function supervise(ps, req, opts) {
 }
 
 // src/platform/windows-filesystem-helper.ts
-import { access, lstat, realpath } from "node:fs/promises";
-import path2 from "node:path";
+import { access, lstat as lstat2, realpath } from "node:fs/promises";
+import path3 from "node:path";
 import { fileURLToPath } from "node:url";
 async function pluginRoot() {
-  let directory = path2.dirname(fileURLToPath(import.meta.url));
+  let directory = path3.dirname(fileURLToPath(import.meta.url));
   for (; ; ) {
     try {
-      const packagePath = path2.join(directory, "package.json");
-      const metadata = await lstat(packagePath);
+      const packagePath = path3.join(directory, "package.json");
+      const metadata = await lstat2(packagePath);
       if (metadata.isFile() && !metadata.isSymbolicLink()) return directory;
     } catch {
     }
-    const parent = path2.dirname(directory);
+    const parent = path3.dirname(directory);
     if (parent === directory) {
       throw new RuntimeError("unable to locate plugin root for Windows filesystem helper", {
         classification: "cleanup-backend-unavailable",
@@ -32532,12 +33001,12 @@ async function resolveWindowsFilesystemHelper(arch = process.arch) {
     });
   }
   const root = await pluginRoot();
-  const expected = path2.join(root, "native", "bin", `win32-filesystem-${arch}.exe`);
+  const expected = path3.join(root, "native", "bin", `win32-filesystem-${arch}.exe`);
   let canonical;
   try {
     await access(expected);
     canonical = await realpath(expected);
-    const metadata = await lstat(canonical);
+    const metadata = await lstat2(canonical);
     if (!metadata.isFile() || metadata.isSymbolicLink()) {
       throw new RuntimeError("Windows filesystem helper is not a stable regular file");
     }
@@ -32548,7 +33017,7 @@ async function resolveWindowsFilesystemHelper(arch = process.arch) {
       cause: error51
     });
   }
-  if (path2.win32.normalize(canonical).toLowerCase() !== path2.win32.normalize(expected).toLowerCase()) {
+  if (path3.win32.normalize(canonical).toLowerCase() !== path3.win32.normalize(expected).toLowerCase()) {
     throw new RuntimeError("Windows filesystem helper escaped the plugin package", {
       classification: "cleanup-backend-unavailable",
       toolError: "cleanup-backend-unavailable"
@@ -32577,12 +33046,12 @@ async function assertWindowsDirectoryAcl(command, directory, expectedIdentity, p
       executable: helper,
       args: [
         command,
-        path3.toNamespacedPath(directory),
+        path4.toNamespacedPath(directory),
         expectedIdentity.dev.toString(),
         expectedIdentity.ino.toString(),
         expectedIdentity.birthtimeNs.toString()
       ],
-      cwd: path3.dirname(directory),
+      cwd: path4.dirname(directory),
       env: windowsEssentialEnvironment(),
       timeoutMs: WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS,
       maxOutputBytes: 16384
@@ -32624,10 +33093,10 @@ async function ensurePrivateDirectory(directory, options) {
       await mkdir(directory, { mode: 448 });
       created = true;
     } catch (error51) {
-      if (errorCode2(error51) !== "EEXIST") throw error51;
+      if (errorCode3(error51) !== "EEXIST") throw error51;
     }
   }
-  const metadata = await lstat2(directory, { bigint: true });
+  const metadata = await lstat3(directory, { bigint: true });
   if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
     throw new RuntimeError(`${options.description} must be a plain directory`);
   }
@@ -32653,9 +33122,9 @@ async function ensurePrivateDirectory(directory, options) {
       if (options.migratePermissions !== true) {
         throw new RuntimeError(`${options.description} is not private`);
       }
-      const handle = await open(
+      const handle = await open2(
         directory,
-        constants2.O_RDONLY | (constants2.O_NOFOLLOW ?? 0)
+        constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0)
       );
       let primaryError;
       try {
@@ -32689,14 +33158,14 @@ async function ensurePrivateDirectory(directory, options) {
       await syncDirectory4(directory);
     }
   }
-  if (created) await syncDirectory4(path3.dirname(directory));
-  const settled = await lstat2(directory, { bigint: true });
+  if (created) await syncDirectory4(path4.dirname(directory));
+  const settled = await lstat3(directory, { bigint: true });
   if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== identity.dev || settled.ino !== identity.ino || settled.birthtimeNs !== identity.birthtimeNs) {
     throw new RuntimeError(`${options.description} identity changed during privacy validation`);
   }
   return identity;
 }
-function errorCode2(error51) {
+function errorCode3(error51) {
   return error51.code;
 }
 async function closeDirectoryHandle(handle, primaryError) {
@@ -32718,12 +33187,12 @@ async function syncWindowsDirectoryMetadata(directory, expectedIdentity, platfor
     executable: helper,
     args: [
       "sync-directory",
-      path3.toNamespacedPath(directory),
+      path4.toNamespacedPath(directory),
       expectedIdentity.dev.toString(),
       expectedIdentity.ino.toString(),
       expectedIdentity.birthtimeNs.toString()
     ],
-    cwd: path3.dirname(directory),
+    cwd: path4.dirname(directory),
     env: windowsEssentialEnvironment(),
     timeoutMs: WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS,
     maxOutputBytes: 16384
@@ -32736,8 +33205,8 @@ async function syncWindowsDirectoryMetadata(directory, expectedIdentity, platfor
 }
 async function syncDirectoryMetadata(directory, dependencies = {}) {
   const platform = dependencies.platform ?? process.platform;
-  const openDirectory = dependencies.open ?? open;
-  const inspectPath = dependencies.lstat ?? lstat2;
+  const openDirectory = dependencies.open ?? open2;
+  const inspectPath = dependencies.lstat ?? lstat3;
   const initial = await inspectPath(directory, { bigint: true });
   if (!initial.isDirectory() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
     throw new RuntimeError("directory sync target lacks stable plain-directory identity");
@@ -32751,14 +33220,14 @@ async function syncDirectoryMetadata(directory, dependencies = {}) {
   let primaryError;
   let windowsFallbackRequired = false;
   try {
-    handle = await openDirectory(directory, constants2.O_RDONLY | (constants2.O_NOFOLLOW ?? 0));
+    handle = await openDirectory(directory, constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0));
     const opened = await handle.stat({ bigint: true });
     if (!opened.isDirectory() || opened.dev !== expectedIdentity.dev || opened.ino !== expectedIdentity.ino || opened.birthtimeNs !== expectedIdentity.birthtimeNs) {
       throw new RuntimeError("directory sync target identity changed before flush");
     }
     await handle.sync();
   } catch (error51) {
-    if (platform === "win32" && WINDOWS_UNSUPPORTED_DIRECTORY_CODES.has(errorCode2(error51) ?? "")) {
+    if (platform === "win32" && WINDOWS_UNSUPPORTED_DIRECTORY_CODES.has(errorCode3(error51) ?? "")) {
       windowsFallbackRequired = true;
     } else {
       primaryError = error51;
@@ -32783,13 +33252,13 @@ async function syncDirectoryTreeMetadata(directory, options = {}) {
   const syncDirectory4 = options.syncDirectory ?? syncDirectoryMetadata;
   let observedEntries = 0;
   const syncFile = async (filename) => {
-    const initial = await lstat2(filename, { bigint: true });
+    const initial = await lstat3(filename, { bigint: true });
     if (!initial.isFile() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
       throw new RuntimeError("durable directory tree contains a non-regular file");
     }
-    const handle = await open(
+    const handle = await open2(
       filename,
-      constants2.O_RDWR | (constants2.O_NOFOLLOW ?? 0)
+      constants3.O_RDWR | (constants3.O_NOFOLLOW ?? 0)
     );
     let primaryError;
     try {
@@ -32817,24 +33286,24 @@ async function syncDirectoryTreeMetadata(directory, options = {}) {
       throw closeError;
     }
     if (primaryError !== void 0) throw primaryError;
-    const settledPath = await lstat2(filename, { bigint: true });
+    const settledPath = await lstat3(filename, { bigint: true });
     if (!settledPath.isFile() || settledPath.isSymbolicLink() || settledPath.dev !== initial.dev || settledPath.ino !== initial.ino || settledPath.birthtimeNs !== initial.birthtimeNs || settledPath.size !== initial.size || settledPath.mtimeNs !== initial.mtimeNs) {
       throw new RuntimeError("durable file identity changed after flush");
     }
   };
   const visit = async (current, depth) => {
     if (depth > maxDepth) throw new RuntimeError("durable directory tree exceeds depth limit");
-    const initial = await lstat2(current, { bigint: true });
+    const initial = await lstat3(current, { bigint: true });
     if (!initial.isDirectory() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
       throw new RuntimeError("durable directory tree contains an invalid directory");
     }
-    const entries = await readdir(current, { withFileTypes: true });
+    const entries = await readdir2(current, { withFileTypes: true });
     observedEntries += entries.length;
     if (observedEntries > maxEntries) {
       throw new RuntimeError("durable directory tree exceeds entry limit");
     }
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      const entryPath = path3.join(current, entry.name);
+      const entryPath = path4.join(current, entry.name);
       if (entry.isDirectory() && !entry.isSymbolicLink()) {
         await visit(entryPath, depth + 1);
       } else if (entry.isFile() && !entry.isSymbolicLink()) {
@@ -32844,7 +33313,7 @@ async function syncDirectoryTreeMetadata(directory, options = {}) {
       }
     }
     await syncDirectory4(current);
-    const settled = await lstat2(current, { bigint: true });
+    const settled = await lstat3(current, { bigint: true });
     if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== initial.dev || settled.ino !== initial.ino || settled.birthtimeNs !== initial.birthtimeNs) {
       throw new RuntimeError("durable directory identity changed during tree flush");
     }
@@ -32855,7 +33324,7 @@ async function syncDirectoryTreeMetadata(directory, options = {}) {
 // src/platform/windows-platform-services.ts
 var childHandles = /* @__PURE__ */ new WeakMap();
 function resolveJobKillHelper(pluginRoot2, arch) {
-  const helperPath = path4.join(pluginRoot2, "native", "bin", `win32-job-kill-${arch}.exe`);
+  const helperPath = path5.join(pluginRoot2, "native", "bin", `win32-job-kill-${arch}.exe`);
   return {
     path: helperPath,
     async checkAvailable() {
@@ -32869,33 +33338,33 @@ function resolveJobKillHelper(pluginRoot2, arch) {
   };
 }
 async function findPluginRoot() {
-  let directory = path4.dirname(fileURLToPath2(import.meta.url));
+  let directory = path5.dirname(fileURLToPath2(import.meta.url));
   for (; ; ) {
     try {
-      await fs2.access(path4.join(directory, "package.json"));
+      await fs2.access(path5.join(directory, "package.json"));
       return directory;
     } catch {
     }
-    const parent = path4.dirname(directory);
+    const parent = path5.dirname(directory);
     if (parent === directory) throw new RuntimeError("unable to locate plugin root");
     directory = parent;
   }
 }
 async function packageBinEntries(request, directory, fileSystem) {
-  const packageDirectory = path4.win32.join(directory, "node_modules", request.name);
-  const packagePath = path4.win32.join(packageDirectory, "package.json");
+  const packageDirectory = path5.win32.join(directory, "node_modules", request.name);
+  const packagePath = path5.win32.join(packageDirectory, "package.json");
   if (!await fileSystem.isFile(packagePath.toLowerCase())) return [];
   try {
     const parsed = JSON.parse(await fileSystem.readFile(packagePath));
     if (typeof parsed !== "object" || parsed === null || !("bin" in parsed)) return [];
     const bin = parsed.bin;
     if (typeof bin === "string") {
-      return [path4.win32.relative(directory, path4.win32.join(packageDirectory, bin))];
+      return [path5.win32.relative(directory, path5.win32.join(packageDirectory, bin))];
     }
     if (typeof bin !== "object" || bin === null) return [];
     const namedBin = bin[request.name];
     if (typeof namedBin === "string") {
-      return [path4.win32.relative(directory, path4.win32.join(packageDirectory, namedBin))];
+      return [path5.win32.relative(directory, path5.win32.join(packageDirectory, namedBin))];
     }
   } catch {
     return [];
@@ -32918,7 +33387,7 @@ async function resolveWindowsExecutable(request, deps) {
   }
   for (const directory of deps.pathEntries) {
     for (const extension of deps.pathext) {
-      const candidate = path4.win32.join(directory, `${request.name}${extension.toLowerCase()}`);
+      const candidate = path5.win32.join(directory, `${request.name}${extension.toLowerCase()}`);
       if (!await deps.fs.isFile(candidate.toLowerCase())) continue;
       const normalizedExtension = extension.toLowerCase();
       if (normalizedExtension === ".exe" || normalizedExtension === ".com") {
@@ -32932,7 +33401,7 @@ async function resolveWindowsExecutable(request, deps) {
       if (normalizedExtension === ".cmd" || normalizedExtension === ".bat") {
         const entries = deps.npmEntryProbe ?? await packageBinEntries(request, directory, deps.fs);
         for (const entry of entries) {
-          const absoluteEntry = path4.win32.join(directory, entry);
+          const absoluteEntry = path5.win32.join(directory, entry);
           if (await deps.fs.isFile(absoluteEntry.toLowerCase())) {
             return {
               kind: "node-entrypoint",
@@ -32977,16 +33446,16 @@ function canonicalizeForScope(candidate, root) {
     (match) => match.toUpperCase()
   );
   const normalizedCandidate = normalizeVolume(
-    path4.win32.normalize(stripExtendedLengthPrefix(candidate))
+    path5.win32.normalize(stripExtendedLengthPrefix(candidate))
   );
-  let normalizedRoot = normalizeVolume(path4.win32.normalize(stripExtendedLengthPrefix(root)));
-  if (normalizedRoot.endsWith("\\") && path4.win32.parse(normalizedRoot).root !== normalizedRoot) {
+  let normalizedRoot = normalizeVolume(path5.win32.normalize(stripExtendedLengthPrefix(root)));
+  if (normalizedRoot.endsWith("\\") && path5.win32.parse(normalizedRoot).root !== normalizedRoot) {
     normalizedRoot = normalizedRoot.slice(0, -1);
   }
   return normalizedCandidate === normalizedRoot || normalizedCandidate.startsWith(`${normalizedRoot}\\`);
 }
 var WindowsPlatformServices = class {
-  constructor(pluginRoot2, arch = nodeProcess3.arch, tokenExecFile = execFile2) {
+  constructor(pluginRoot2, arch = nodeProcess4.arch, tokenExecFile = execFile2) {
     this.pluginRoot = pluginRoot2;
     this.arch = arch;
     this.tokenExecFile = tokenExecFile;
@@ -33017,8 +33486,8 @@ var WindowsPlatformServices = class {
     });
   }
   async resolveExecutable(request) {
-    const pathext = (nodeProcess3.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean).map((extension) => extension.toUpperCase());
-    const pathEntries = (request.searchPath ?? nodeProcess3.env.Path ?? nodeProcess3.env.PATH ?? "").split(";").filter(Boolean);
+    const pathext = (nodeProcess4.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean).map((extension) => extension.toUpperCase());
+    const pathEntries = (request.searchPath ?? nodeProcess4.env.Path ?? nodeProcess4.env.PATH ?? "").split(";").filter(Boolean);
     const realFs = {
       async isFile(candidate) {
         try {
@@ -33031,8 +33500,8 @@ var WindowsPlatformServices = class {
         return fs2.readFile(candidate, "utf8");
       }
     };
-    const commonDeps = { pathEntries, pathext, fs: realFs, nodeExe: nodeProcess3.execPath };
-    return nodeProcess3.env.ComSpec === void 0 ? resolveWindowsExecutable(request, commonDeps) : resolveWindowsExecutable(request, { ...commonDeps, comSpec: nodeProcess3.env.ComSpec });
+    const commonDeps = { pathEntries, pathext, fs: realFs, nodeExe: nodeProcess4.execPath };
+    return nodeProcess4.env.ComSpec === void 0 ? resolveWindowsExecutable(request, commonDeps) : resolveWindowsExecutable(request, { ...commonDeps, comSpec: nodeProcess4.env.ComSpec });
   }
   async spawnSupervised(req) {
     const helper = await this.jobKillHelper();
@@ -33100,7 +33569,7 @@ var WindowsPlatformServices = class {
   }
   async getProcessStartToken(pid) {
     if (!Number.isSafeInteger(pid) || pid <= 1) return null;
-    if (pid === nodeProcess3.pid && this.ownProcessStartToken !== void 0) {
+    if (pid === nodeProcess4.pid && this.ownProcessStartToken !== void 0) {
       return this.ownProcessStartToken;
     }
     try {
@@ -33128,7 +33597,7 @@ var WindowsPlatformServices = class {
           }
         });
         if (nativeToken !== void 0) {
-          if (pid === nodeProcess3.pid && nativeToken !== null) this.ownProcessStartToken = nativeToken;
+          if (pid === nodeProcess4.pid && nativeToken !== null) this.ownProcessStartToken = nativeToken;
           return nativeToken;
         }
       }
@@ -33150,7 +33619,7 @@ var WindowsPlatformServices = class {
     }
     const repositoryIdentity = commonDir;
     const key = createHash2("sha256").update(repositoryIdentity).digest("hex");
-    const ownerToken = await this.getProcessStartToken(nodeProcess3.pid);
+    const ownerToken = await this.getProcessStartToken(nodeProcess4.pid);
     let lock;
     try {
       lock = await acquireWxFileLock(key, `checkout is locked: ${checkout}`, ownerToken, owner);
@@ -33164,11 +33633,11 @@ var WindowsPlatformServices = class {
     return { ...lock, repositoryIdentity };
   }
   async acquireCleanupJournalLock() {
-    const ownerToken = await this.getProcessStartToken(nodeProcess3.pid);
+    const ownerToken = await this.getProcessStartToken(nodeProcess4.pid);
     return acquireWxFileLock(CLEANUP_JOURNAL_LOCK_KEY, "cleanup journal is locked", ownerToken);
   }
   async createSecureTempDirectory() {
-    return fs2.mkdtemp(path4.join(tmpdir3(), "claude-architect-"));
+    return fs2.mkdtemp(path5.join(tmpdir3(), "claude-architect-"));
   }
   async assertDirectoryWriteIntegrity(directory, expectedIdentity) {
     await assertWindowsDirectoryWriteIntegrity(directory, expectedIdentity, this);
@@ -34503,7 +34972,7 @@ function checkVersionCompat(skillProtocolVersion) {
 }
 
 // src/autopilot/workflow-store.ts
-var NO_FOLLOW = constants3.O_NOFOLLOW ?? 0;
+var NO_FOLLOW2 = constants4.O_NOFOLLOW ?? 0;
 var MAX_WRITER_LOCK_BYTES = 512;
 var MAX_WORKFLOW_OWNER_BYTES = 1024;
 var MAX_WORKFLOW_STATE_BYTES = 1e6;
@@ -34548,13 +35017,13 @@ var LEGAL_WORKFLOW_PHASE_EDGES = Object.freeze({
 function workflowError(message, toolError) {
   return new RuntimeError(message, { toolError });
 }
-function errorCode3(error51) {
+function errorCode4(error51) {
   return error51.code;
 }
-function isMissing(error51) {
-  return errorCode3(error51) === "ENOENT";
+function isMissing2(error51) {
+  return errorCode4(error51) === "ENOENT";
 }
-function isPlainDirectory(metadata) {
+function isPlainDirectory2(metadata) {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
 }
 function isProcessAlive(pid) {
@@ -34562,7 +35031,7 @@ function isProcessAlive(pid) {
     process.kill(pid, 0);
     return true;
   } catch (error51) {
-    return errorCode3(error51) !== "ESRCH";
+    return errorCode4(error51) !== "ESRCH";
   }
 }
 async function isWriterAlive(record2) {
@@ -34602,12 +35071,12 @@ async function workflowOwnerStatus(record2, processAlive, getProcessStartToken) 
   if (currentToken === null) return "unverifiable";
   return currentToken === record2.processToken ? "live" : "dead";
 }
-function sameIdentity(metadata, identity) {
+function sameIdentity2(metadata, identity) {
   return metadata.dev === identity.dev && metadata.ino === identity.ino;
 }
 async function inspectPlainDirectory(directory) {
-  const metadata = await lstat3(directory);
-  if (!isPlainDirectory(metadata)) {
+  const metadata = await lstat4(directory);
+  if (!isPlainDirectory2(metadata)) {
     throw workflowError(
       "workflow state directory must be a plain directory",
       "unsafe-workflow-state"
@@ -34621,26 +35090,26 @@ async function inspectPlainDirectory(directory) {
 }
 async function assertDirectoryIdentity(directory, expected) {
   const [metadata, canonicalPath] = await Promise.all([
-    lstat3(directory),
+    lstat4(directory),
     realpath2(directory)
   ]);
-  if (!isPlainDirectory(metadata) || !sameIdentity(metadata, expected) || canonicalPath !== expected.canonicalPath) {
+  if (!isPlainDirectory2(metadata) || !sameIdentity2(metadata, expected) || canonicalPath !== expected.canonicalPath) {
     throw workflowError("workflow state directory identity changed", "unsafe-workflow-state");
   }
 }
 async function syncDirectory(directory) {
   let handle;
   try {
-    handle = await open2(directory, constants3.O_RDONLY | NO_FOLLOW);
+    handle = await open3(directory, constants4.O_RDONLY | NO_FOLLOW2);
     await handle.sync();
   } catch (error51) {
-    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode3(error51) ?? "");
+    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode4(error51) ?? "");
     if (!unsupportedOnWindows) throw error51;
   } finally {
     await handle?.close();
   }
 }
-async function readHandleBytes(handle, size) {
+async function readHandleBytes2(handle, size) {
   const bytes = Buffer.alloc(size);
   let offset = 0;
   while (offset < size) {
@@ -34903,13 +35372,13 @@ var WorkflowStore = class {
   constructor(workflowId, options = {}) {
     assertWorkflowId(workflowId);
     this.workflowId = workflowId;
-    this.stateRoot = path5.resolve(options.stateDirectory ?? resolveStateDir());
-    this.workflowsDirectory = path5.join(this.stateRoot, "workflows");
-    this.workflowDirectory = path5.join(this.workflowsDirectory, workflowId);
-    this.statePath = path5.join(this.workflowDirectory, "state.json");
-    this.journalPath = path5.join(this.workflowDirectory, "journal.ndjson");
-    this.lockPath = path5.join(this.workflowDirectory, "state.lock");
-    this.ownerPath = path5.join(this.workflowDirectory, "owner.json");
+    this.stateRoot = path6.resolve(options.stateDirectory ?? resolveStateDir());
+    this.workflowsDirectory = path6.join(this.stateRoot, "workflows");
+    this.workflowDirectory = path6.join(this.workflowsDirectory, workflowId);
+    this.statePath = path6.join(this.workflowDirectory, "state.json");
+    this.journalPath = path6.join(this.workflowDirectory, "journal.ndjson");
+    this.lockPath = path6.join(this.workflowDirectory, "state.lock");
+    this.ownerPath = path6.join(this.workflowDirectory, "owner.json");
     this.now = options.now ?? (() => (/* @__PURE__ */ new Date()).toISOString());
     this.maxStateBytes = options.maxStateBytes ?? MAX_WORKFLOW_STATE_BYTES;
     this.maxJournalBytes = options.maxJournalBytes ?? MAX_WORKFLOW_JOURNAL_BYTES;
@@ -35198,19 +35667,19 @@ var WorkflowStore = class {
   async ensureWorkflowDirectory() {
     const root = await inspectPlainDirectory(this.stateRoot);
     await mkdir2(this.workflowsDirectory, { mode: 448 }).catch((error51) => {
-      if (errorCode3(error51) !== "EEXIST") throw error51;
+      if (errorCode4(error51) !== "EEXIST") throw error51;
     });
     await assertDirectoryIdentity(this.stateRoot, root);
     const workflows = await inspectPlainDirectory(this.workflowsDirectory);
-    if (path5.dirname(workflows.canonicalPath) !== root.canonicalPath) {
+    if (path6.dirname(workflows.canonicalPath) !== root.canonicalPath) {
       throw workflowError("workflows directory escapes plugin data", "unsafe-workflow-state");
     }
     await mkdir2(this.workflowDirectory, { mode: 448 }).catch((error51) => {
-      if (errorCode3(error51) !== "EEXIST") throw error51;
+      if (errorCode4(error51) !== "EEXIST") throw error51;
     });
     await assertDirectoryIdentity(this.workflowsDirectory, workflows);
     const workflow = await inspectPlainDirectory(this.workflowDirectory);
-    if (path5.dirname(workflow.canonicalPath) !== workflows.canonicalPath) {
+    if (path6.dirname(workflow.canonicalPath) !== workflows.canonicalPath) {
       throw workflowError("workflow directory escapes plugin data", "unsafe-workflow-state");
     }
     return workflow;
@@ -35219,7 +35688,7 @@ var WorkflowStore = class {
     const root = await inspectPlainDirectory(this.stateRoot);
     const workflows = await inspectPlainDirectory(this.workflowsDirectory);
     const workflow = await inspectPlainDirectory(this.workflowDirectory);
-    if (path5.dirname(workflows.canonicalPath) !== root.canonicalPath || path5.dirname(workflow.canonicalPath) !== workflows.canonicalPath) {
+    if (path6.dirname(workflows.canonicalPath) !== root.canonicalPath || path6.dirname(workflow.canonicalPath) !== workflows.canonicalPath) {
       throw workflowError("workflow state path escapes plugin data", "unsafe-workflow-state");
     }
     return workflow;
@@ -35242,13 +35711,13 @@ var WorkflowStore = class {
     }
     let handle;
     try {
-      handle = await open2(
+      handle = await open3(
         this.ownerPath,
-        constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL | NO_FOLLOW,
+        constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
         384
       );
     } catch (error51) {
-      if (errorCode3(error51) === "EEXIST") {
+      if (errorCode4(error51) === "EEXIST") {
         throw workflowError("workflow already has an owner", "workflow-lease-conflict");
       }
       throw error51;
@@ -35258,7 +35727,7 @@ var WorkflowStore = class {
       await handle.writeFile(bytes);
       await handle.sync();
       const metadata = await handle.stat();
-      const named = await lstat3(this.ownerPath);
+      const named = await lstat4(this.ownerPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size !== bytes.byteLength || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError("workflow owner was substituted", "unsafe-workflow-owner");
       }
@@ -35285,23 +35754,23 @@ var WorkflowStore = class {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     let handle;
     try {
-      handle = await open2(this.ownerPath, constants3.O_RDONLY | NO_FOLLOW);
+      handle = await open3(this.ownerPath, constants4.O_RDONLY | NO_FOLLOW2);
     } catch (error51) {
-      if (isMissing(error51)) {
+      if (isMissing2(error51)) {
         throw workflowError("workflow owner does not exist", "workflow-lease-not-found");
       }
       throw error51;
     }
     try {
       const metadata = await handle.stat();
-      const named = await lstat3(this.ownerPath);
+      const named = await lstat4(this.ownerPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size < 1 || metadata.size > MAX_WORKFLOW_OWNER_BYTES || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError("workflow owner is unsafe", "unsafe-workflow-owner");
       }
-      const first = await readHandleBytes(handle, metadata.size);
-      const second = await readHandleBytes(handle, metadata.size);
+      const first = await readHandleBytes2(handle, metadata.size);
+      const second = await readHandleBytes2(handle, metadata.size);
       const settled = await handle.stat();
-      const settledNamed = await lstat3(this.ownerPath);
+      const settledNamed = await lstat4(this.ownerPath);
       if (!first.equals(second) || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino || settledNamed.size !== metadata.size) {
         throw workflowError("workflow owner changed during read", "unsafe-workflow-owner");
       }
@@ -35321,22 +35790,22 @@ var WorkflowStore = class {
   async removeWorkflowOwner(identity, directory) {
     let handle;
     try {
-      handle = await open2(this.ownerPath, constants3.O_RDONLY | NO_FOLLOW);
+      handle = await open3(this.ownerPath, constants4.O_RDONLY | NO_FOLLOW2);
     } catch (error51) {
-      if (isMissing(error51)) return false;
+      if (isMissing2(error51)) return false;
       throw error51;
     }
     try {
       const metadata = await handle.stat();
-      let named = await lstat3(this.ownerPath);
+      let named = await lstat4(this.ownerPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.dev !== identity.dev || metadata.ino !== identity.ino || metadata.size !== identity.size || metadata.mtimeMs !== identity.mtimeMs || metadata.ctimeMs !== identity.ctimeMs || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== identity.dev || named.ino !== identity.ino) return false;
-      const bytes = await readHandleBytes(handle, metadata.size);
+      const bytes = await readHandleBytes2(handle, metadata.size);
       const settled = await handle.stat();
-      named = await lstat3(this.ownerPath);
+      named = await lstat4(this.ownerPath);
       if (!bytes.equals(identity.bytes) || settled.dev !== identity.dev || settled.ino !== identity.ino || settled.size !== identity.size || settled.mtimeMs !== identity.mtimeMs || settled.ctimeMs !== identity.ctimeMs || named.dev !== identity.dev || named.ino !== identity.ino) return false;
-      await rm(this.ownerPath);
+      await rm2(this.ownerPath);
     } catch (error51) {
-      if (isMissing(error51)) return false;
+      if (isMissing2(error51)) return false;
       throw error51;
     } finally {
       await handle.close();
@@ -35352,11 +35821,11 @@ var WorkflowStore = class {
     let operationError;
     try {
       for (let attempt = 0; attempt < 4; attempt += 1) {
-        const token = randomUUID();
-        const ownerPath = path5.join(this.workflowDirectory, `.state.lock.${token}.owner`);
-        ownerHandle = await open2(
+        const token = randomUUID2();
+        const ownerPath = path6.join(this.workflowDirectory, `.state.lock.${token}.owner`);
+        ownerHandle = await open3(
           ownerPath,
-          constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL | NO_FOLLOW,
+          constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
           384
         );
         const record2 = {
@@ -35369,17 +35838,17 @@ var WorkflowStore = class {
 `, "utf8");
         await ownerHandle.sync();
         const ownerMetadata = await ownerHandle.stat();
-        const namedOwner = await lstat3(ownerPath);
+        const namedOwner = await lstat4(ownerPath);
         if (!ownerMetadata.isFile() || ownerMetadata.nlink !== 1 || ownerMetadata.size > MAX_WRITER_LOCK_BYTES || !namedOwner.isFile() || namedOwner.isSymbolicLink() || namedOwner.dev !== ownerMetadata.dev || namedOwner.ino !== ownerMetadata.ino) {
           throw workflowError("workflow state lock owner was substituted", "unsafe-workflow-state");
         }
         try {
-          await link(ownerPath, this.lockPath);
+          await link2(ownerPath, this.lockPath);
         } catch (error51) {
           await ownerHandle.close();
           ownerHandle = void 0;
-          await rm(ownerPath, { force: true });
-          if (errorCode3(error51) !== "EEXIST") throw error51;
+          await rm2(ownerPath, { force: true });
+          if (errorCode4(error51) !== "EEXIST") throw error51;
           const existing = await this.readWriterLock(directory);
           if (await isWriterAlive(existing.record)) {
             throw workflowError(
@@ -35392,7 +35861,7 @@ var WorkflowStore = class {
           }
           continue;
         }
-        const namedLock = await lstat3(this.lockPath);
+        const namedLock = await lstat4(this.lockPath);
         if (!namedLock.isFile() || namedLock.isSymbolicLink() || namedLock.dev !== ownerMetadata.dev || namedLock.ino !== ownerMetadata.ino) {
           throw workflowError("workflow state lock was substituted", "unsafe-workflow-state");
         }
@@ -35419,7 +35888,7 @@ var WorkflowStore = class {
         await ownerHandle?.close();
         if (lockIdentity !== void 0) {
           await this.retireWriterLock(lockIdentity, directory);
-          await rm(lockIdentity.ownerPath, { force: true });
+          await rm2(lockIdentity.ownerPath, { force: true });
           await syncDirectory(this.workflowDirectory);
         }
       } catch (cleanupError) {
@@ -35433,15 +35902,15 @@ var WorkflowStore = class {
   }
   async readWriterLock(directory) {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open2(this.lockPath, constants3.O_RDONLY | NO_FOLLOW);
+    const handle = await open3(this.lockPath, constants4.O_RDONLY | NO_FOLLOW2);
     try {
       const metadata = await handle.stat();
-      const named = await lstat3(this.lockPath);
+      const named = await lstat4(this.lockPath);
       if (!metadata.isFile() || metadata.nlink < 1 || metadata.nlink > 2 || metadata.size < 1 || metadata.size > MAX_WRITER_LOCK_BYTES || !named.isFile() || named.isSymbolicLink() || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError("workflow state lock is unsafe", "unsafe-workflow-state");
       }
-      const first = await readHandleBytes(handle, metadata.size);
-      const second = await readHandleBytes(handle, metadata.size);
+      const first = await readHandleBytes2(handle, metadata.size);
+      const second = await readHandleBytes2(handle, metadata.size);
       const settled = await handle.stat();
       if (!first.equals(second) || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs) {
         throw workflowError("workflow state lock changed during read", "unsafe-workflow-state");
@@ -35450,7 +35919,7 @@ var WorkflowStore = class {
       return {
         dev: metadata.dev,
         ino: metadata.ino,
-        ownerPath: path5.join(this.workflowDirectory, `.state.lock.${record2.token}.owner`),
+        ownerPath: path6.join(this.workflowDirectory, `.state.lock.${record2.token}.owner`),
         record: record2
       };
     } finally {
@@ -35460,24 +35929,24 @@ var WorkflowStore = class {
   async retireWriterLock(identity, directory) {
     let handle;
     try {
-      handle = await open2(this.lockPath, constants3.O_RDONLY | NO_FOLLOW);
+      handle = await open3(this.lockPath, constants4.O_RDONLY | NO_FOLLOW2);
     } catch (error51) {
-      if (isMissing(error51)) return false;
+      if (isMissing2(error51)) return false;
       throw error51;
     }
     try {
       const metadata = await handle.stat();
-      let named = await lstat3(this.lockPath);
+      let named = await lstat4(this.lockPath);
       if (!metadata.isFile() || metadata.dev !== identity.dev || metadata.ino !== identity.ino || !named.isFile() || named.isSymbolicLink() || named.dev !== identity.dev || named.ino !== identity.ino) return false;
-      const contents = await readHandleBytes(handle, metadata.size);
+      const contents = await readHandleBytes2(handle, metadata.size);
       const record2 = parseWriterLock(contents);
       if (record2.pid !== identity.record.pid || record2.processToken !== identity.record.processToken || record2.token !== identity.record.token) return false;
       const settled = await handle.stat();
-      named = await lstat3(this.lockPath);
+      named = await lstat4(this.lockPath);
       if (settled.dev !== identity.dev || settled.ino !== identity.ino || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || named.dev !== identity.dev || named.ino !== identity.ino) return false;
-      await rm(this.lockPath);
+      await rm2(this.lockPath);
     } catch (error51) {
-      if (isMissing(error51)) return false;
+      if (isMissing2(error51)) return false;
       throw error51;
     } finally {
       await handle.close();
@@ -35489,24 +35958,24 @@ var WorkflowStore = class {
   async retireWriterOwner(identity, directory) {
     let handle;
     try {
-      handle = await open2(identity.ownerPath, constants3.O_RDONLY | NO_FOLLOW);
+      handle = await open3(identity.ownerPath, constants4.O_RDONLY | NO_FOLLOW2);
     } catch (error51) {
-      if (isMissing(error51)) return false;
+      if (isMissing2(error51)) return false;
       throw error51;
     }
     try {
       const metadata = await handle.stat();
-      let named = await lstat3(identity.ownerPath);
+      let named = await lstat4(identity.ownerPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.dev !== identity.dev || metadata.ino !== identity.ino || metadata.size < 1 || metadata.size > MAX_WRITER_LOCK_BYTES || !named.isFile() || named.isSymbolicLink() || named.dev !== identity.dev || named.ino !== identity.ino) return false;
-      const contents = await readHandleBytes(handle, metadata.size);
+      const contents = await readHandleBytes2(handle, metadata.size);
       const record2 = parseWriterLock(contents);
       if (record2.pid !== identity.record.pid || record2.processToken !== identity.record.processToken || record2.token !== identity.record.token) return false;
       const settled = await handle.stat();
-      named = await lstat3(identity.ownerPath);
+      named = await lstat4(identity.ownerPath);
       if (settled.nlink !== 1 || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || named.dev !== identity.dev || named.ino !== identity.ino) return false;
-      await rm(identity.ownerPath);
+      await rm2(identity.ownerPath);
     } catch (error51) {
-      if (isMissing(error51)) return false;
+      if (isMissing2(error51)) return false;
       throw error51;
     } finally {
       await handle.close();
@@ -35517,15 +35986,15 @@ var WorkflowStore = class {
   }
   async recoverAbandonedStateFiles(directory) {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const names = (await readdir2(this.workflowDirectory)).filter((name) => /^\.state\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:tmp|publish)$/u.test(name));
+    const names = (await readdir3(this.workflowDirectory)).filter((name) => /^\.state\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:tmp|publish)$/u.test(name));
     if (names.length === 0) return;
     const artifacts = [];
     for (const name of names) {
-      const filePath = path5.join(this.workflowDirectory, name);
-      const handle = await open2(filePath, constants3.O_RDONLY | NO_FOLLOW);
+      const filePath = path6.join(this.workflowDirectory, name);
+      const handle = await open3(filePath, constants4.O_RDONLY | NO_FOLLOW2);
       try {
         const metadata = await handle.stat();
-        const named = await lstat3(filePath);
+        const named = await lstat4(filePath);
         if (!metadata.isFile() || metadata.nlink < 1 || metadata.nlink > 2 || metadata.size > this.maxStateBytes || !named.isFile() || named.isSymbolicLink() || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
           throw workflowError("abandoned workflow state file is unsafe", "unsafe-workflow-state");
         }
@@ -35534,8 +36003,8 @@ var WorkflowStore = class {
         await handle.close();
       }
     }
-    const stateMetadata = await lstat3(this.statePath).catch((error51) => {
-      if (isMissing(error51)) return null;
+    const stateMetadata = await lstat4(this.statePath).catch((error51) => {
+      if (isMissing2(error51)) return null;
       throw error51;
     });
     const linksByIdentity = /* @__PURE__ */ new Map();
@@ -35554,11 +36023,11 @@ var WorkflowStore = class {
       }
     }
     for (const artifact of artifacts) {
-      const named = await lstat3(artifact.filePath);
+      const named = await lstat4(artifact.filePath);
       if (!named.isFile() || named.isSymbolicLink() || named.dev !== artifact.metadata.dev || named.ino !== artifact.metadata.ino) {
         throw workflowError("abandoned workflow state file changed", "unsafe-workflow-state");
       }
-      await rm(artifact.filePath);
+      await rm2(artifact.filePath);
     }
     await syncDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
@@ -35568,23 +36037,23 @@ var WorkflowStore = class {
     let handle;
     try {
       try {
-        handle = await open2(this.statePath, constants3.O_RDONLY | NO_FOLLOW);
+        handle = await open3(this.statePath, constants4.O_RDONLY | NO_FOLLOW2);
       } catch (error51) {
-        if (isMissing(error51)) return null;
+        if (isMissing2(error51)) return null;
         throw error51;
       }
       const metadata = await handle.stat();
-      const named = await lstat3(this.statePath);
+      const named = await lstat4(this.statePath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size > this.maxStateBytes || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError(
           "workflow state must be a bounded regular single-link file",
           metadata.size > this.maxStateBytes ? "workflow-state-too-large" : "unsafe-workflow-state"
         );
       }
-      const first = await readHandleBytes(handle, metadata.size);
-      const second = await readHandleBytes(handle, metadata.size);
+      const first = await readHandleBytes2(handle, metadata.size);
+      const second = await readHandleBytes2(handle, metadata.size);
       const settled = await handle.stat();
-      const settledNamed = await lstat3(this.statePath);
+      const settledNamed = await lstat4(this.statePath);
       if (!first.equals(second) || !settled.isFile() || settled.nlink !== 1 || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino) {
         throw workflowError("workflow state changed during read", "unsafe-workflow-state");
       }
@@ -35597,7 +36066,7 @@ var WorkflowStore = class {
       await assertDirectoryIdentity(this.workflowDirectory, directory);
       return validateState(parsed, this.workflowId);
     } catch (error51) {
-      if (isMissing(error51)) return null;
+      if (isMissing2(error51)) return null;
       throw error51;
     } finally {
       await handle?.close();
@@ -35654,9 +36123,9 @@ var WorkflowStore = class {
     let handle;
     try {
       try {
-        handle = await open2(this.journalPath, constants3.O_RDONLY | NO_FOLLOW);
+        handle = await open3(this.journalPath, constants4.O_RDONLY | NO_FOLLOW2);
       } catch (error51) {
-        if (isMissing(error51)) {
+        if (isMissing2(error51)) {
           await assertDirectoryIdentity(this.workflowDirectory, directory);
           return {
             entries: [],
@@ -35672,17 +36141,17 @@ var WorkflowStore = class {
         throw error51;
       }
       const metadata = await handle.stat();
-      const named = await lstat3(this.journalPath);
+      const named = await lstat4(this.journalPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size > this.maxJournalBytes || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError(
           "workflow journal must be a bounded regular single-link file",
           metadata.size > this.maxJournalBytes ? "workflow-journal-too-large" : "unsafe-workflow-state"
         );
       }
-      const first = await readHandleBytes(handle, metadata.size);
-      const second = await readHandleBytes(handle, metadata.size);
+      const first = await readHandleBytes2(handle, metadata.size);
+      const second = await readHandleBytes2(handle, metadata.size);
       const settled = await handle.stat();
-      const settledNamed = await lstat3(this.journalPath);
+      const settledNamed = await lstat4(this.journalPath);
       if (!first.equals(second) || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino) {
         throw workflowError("workflow journal changed during read", "unsafe-workflow-state");
       }
@@ -35717,10 +36186,10 @@ var WorkflowStore = class {
   async truncateTornJournalTail(directory, snapshot) {
     if (!snapshot.tornTail || snapshot.identity === null) return;
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open2(this.journalPath, constants3.O_RDWR | NO_FOLLOW);
+    const handle = await open3(this.journalPath, constants4.O_RDWR | NO_FOLLOW2);
     try {
       const metadata = await handle.stat();
-      const named = await lstat3(this.journalPath);
+      const named = await lstat4(this.journalPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.dev !== snapshot.identity.dev || metadata.ino !== snapshot.identity.ino || metadata.size !== snapshot.fileSize || metadata.mtimeMs !== snapshot.mtimeMs || metadata.ctimeMs !== snapshot.ctimeMs || !named.isFile() || named.isSymbolicLink() || named.dev !== metadata.dev || named.ino !== metadata.ino) {
         throw workflowError("workflow journal changed during torn-tail repair", "unsafe-workflow-state");
       }
@@ -35737,14 +36206,14 @@ var WorkflowStore = class {
       throw workflowError("workflow journal exceeds its size limit", "workflow-journal-too-large");
     }
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open2(
+    const handle = await open3(
       this.journalPath,
-      constants3.O_WRONLY | constants3.O_CREAT | constants3.O_APPEND | NO_FOLLOW,
+      constants4.O_WRONLY | constants4.O_CREAT | constants4.O_APPEND | NO_FOLLOW2,
       384
     );
     try {
       const metadata = await handle.stat();
-      const named = await lstat3(this.journalPath);
+      const named = await lstat4(this.journalPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size !== expectedSize || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino) {
         throw workflowError("workflow journal changed before append", "unsafe-workflow-state");
       }
@@ -35768,29 +36237,29 @@ var WorkflowStore = class {
     }
   }
   async publish(bytes, directory, create) {
-    const temporaryPath = path5.join(
+    const temporaryPath = path6.join(
       this.workflowDirectory,
-      `.state.${randomUUID()}.tmp`
+      `.state.${randomUUID2()}.tmp`
     );
-    const publicationPath = path5.join(
+    const publicationPath = path6.join(
       this.workflowDirectory,
-      `.state.${randomUUID()}.publish`
+      `.state.${randomUUID2()}.publish`
     );
     let handle;
     let temporaryExists = false;
     let publicationExists = false;
     let temporaryIdentity;
     try {
-      handle = await open2(
+      handle = await open3(
         temporaryPath,
-        constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL | NO_FOLLOW,
+        constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
         384
       );
       temporaryExists = true;
       await handle.writeFile(bytes);
       await handle.sync();
       const metadata = await handle.stat({ bigint: true });
-      const named = await lstat3(temporaryPath, { bigint: true });
+      const named = await lstat4(temporaryPath, { bigint: true });
       if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size !== BigInt(bytes.byteLength) || !named.isFile() || named.isSymbolicLink() || named.dev !== metadata.dev || named.ino !== metadata.ino) {
         throw workflowError("workflow state temporary file changed", "unsafe-workflow-state");
       }
@@ -35800,10 +36269,10 @@ var WorkflowStore = class {
       await assertDirectoryIdentity(this.workflowDirectory, directory);
       if (create) {
         try {
-          await lstat3(this.statePath);
+          await lstat4(this.statePath);
           throw workflowError("workflow state already exists", "workflow-state-conflict");
         } catch (error51) {
-          if (!isMissing(error51)) throw error51;
+          if (!isMissing2(error51)) throw error51;
         }
       }
       await this.stageStatePublication(
@@ -35819,7 +36288,7 @@ var WorkflowStore = class {
         bytes,
         temporaryIdentity
       );
-      await rm(temporaryPath);
+      await rm2(temporaryPath);
       temporaryExists = false;
       await rename(publicationPath, this.statePath);
       publicationExists = false;
@@ -35828,36 +36297,36 @@ var WorkflowStore = class {
       await assertDirectoryIdentity(this.workflowDirectory, directory);
     } finally {
       await handle?.close();
-      if (temporaryExists) await rm(temporaryPath, { force: true });
-      if (publicationExists) await rm(publicationPath, { force: true });
+      if (temporaryExists) await rm2(temporaryPath, { force: true });
+      if (publicationExists) await rm2(publicationPath, { force: true });
     }
   }
   async stageStatePublication(temporaryPath, publicationPath, expectedBytes, expectedIdentity) {
     let linked = false;
     try {
-      await link(temporaryPath, publicationPath);
+      await link2(temporaryPath, publicationPath);
       linked = true;
-      const publication = await lstat3(publicationPath, { bigint: true });
+      const publication = await lstat4(publicationPath, { bigint: true });
       if (!publication.isFile() || publication.isSymbolicLink() || publication.nlink !== 2n || publication.dev !== expectedIdentity.dev || publication.ino !== expectedIdentity.ino || publication.size !== BigInt(expectedBytes.byteLength)) {
         throw workflowError("workflow state publication source changed", "unsafe-workflow-state");
       }
     } catch (error51) {
-      if (linked) await rm(publicationPath, { force: true });
+      if (linked) await rm2(publicationPath, { force: true });
       throw error51;
     }
   }
   async assertStagedPublication(temporaryPath, publicationPath, expectedBytes, expectedIdentity) {
-    const handle = await open2(publicationPath, constants3.O_RDONLY | NO_FOLLOW);
+    const handle = await open3(publicationPath, constants4.O_RDONLY | NO_FOLLOW2);
     try {
       const metadata = await handle.stat({ bigint: true });
       const [publication, temporary] = await Promise.all([
-        lstat3(publicationPath, { bigint: true }),
-        lstat3(temporaryPath, { bigint: true })
+        lstat4(publicationPath, { bigint: true }),
+        lstat4(temporaryPath, { bigint: true })
       ]);
       if (!metadata.isFile() || metadata.nlink !== 2n || metadata.size !== BigInt(expectedBytes.byteLength) || metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino || !publication.isFile() || publication.isSymbolicLink() || publication.dev !== expectedIdentity.dev || publication.ino !== expectedIdentity.ino || !temporary.isFile() || temporary.isSymbolicLink() || temporary.dev !== expectedIdentity.dev || temporary.ino !== expectedIdentity.ino) {
         throw workflowError("workflow state publication changed before commit", "unsafe-workflow-state");
       }
-      const published = await readHandleBytes(handle, Number(metadata.size));
+      const published = await readHandleBytes2(handle, Number(metadata.size));
       const settled = await handle.stat({ bigint: true });
       if (!published.equals(expectedBytes) || settled.nlink !== metadata.nlink || settled.size !== metadata.size || settled.mtimeNs !== metadata.mtimeNs || settled.ctimeNs !== metadata.ctimeNs) {
         throw workflowError("workflow state publication changed before commit", "unsafe-workflow-state");
@@ -35867,14 +36336,14 @@ var WorkflowStore = class {
     }
   }
   async assertPublishedState(expectedBytes, expectedIdentity) {
-    const handle = await open2(this.statePath, constants3.O_RDONLY | NO_FOLLOW);
+    const handle = await open3(this.statePath, constants4.O_RDONLY | NO_FOLLOW2);
     try {
       const metadata = await handle.stat({ bigint: true });
-      const named = await lstat3(this.statePath, { bigint: true });
+      const named = await lstat4(this.statePath, { bigint: true });
       if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size !== BigInt(expectedBytes.byteLength) || metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1n || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError("published workflow state identity changed", "unsafe-workflow-state");
       }
-      const published = await readHandleBytes(handle, Number(metadata.size));
+      const published = await readHandleBytes2(handle, Number(metadata.size));
       const settled = await handle.stat({ bigint: true });
       if (!published.equals(expectedBytes) || settled.size !== metadata.size || settled.mtimeNs !== metadata.mtimeNs || settled.ctimeNs !== metadata.ctimeNs) {
         throw workflowError("published workflow state bytes changed", "unsafe-workflow-state");
@@ -36056,25 +36525,25 @@ async function git(cwd, args, indexFileOrOptions) {
 
 // src/git/worktree-registration.ts
 import { realpath as realpath3 } from "node:fs/promises";
-import path7 from "node:path";
+import path8 from "node:path";
 
 // src/util/platform-path.ts
-import path6 from "node:path";
+import path7 from "node:path";
 function stripWindowsExtendedPrefix(value) {
   if (value.toLowerCase().startsWith("\\\\?\\unc\\")) return `\\\\${value.slice(8)}`;
   return value.startsWith("\\\\?\\") ? value.slice(4) : value;
 }
 function platformPathsEqual(left, right, platform = process.platform) {
-  if (platform !== "win32") return path6.resolve(left) === path6.resolve(right);
-  return path6.win32.normalize(stripWindowsExtendedPrefix(left)) === path6.win32.normalize(stripWindowsExtendedPrefix(right));
+  if (platform !== "win32") return path7.resolve(left) === path7.resolve(right);
+  return path7.win32.normalize(stripWindowsExtendedPrefix(left)) === path7.win32.normalize(stripWindowsExtendedPrefix(right));
 }
 
 // src/git/worktree-registration.ts
 async function canonicalizeWorktreePath(pathname, allowMissing) {
-  if (!path7.isAbsolute(pathname)) {
+  if (!path8.isAbsolute(pathname)) {
     throw new RuntimeError("worktree registration path is not absolute");
   }
-  const resolved = path7.resolve(pathname);
+  const resolved = path8.resolve(pathname);
   try {
     return await realpath3(resolved);
   } catch (error51) {
@@ -36083,14 +36552,14 @@ async function canonicalizeWorktreePath(pathname, allowMissing) {
   const missingSegments = [];
   let ancestor = resolved;
   for (; ; ) {
-    const parent = path7.dirname(ancestor);
+    const parent = path8.dirname(ancestor);
     if (parent === ancestor) {
       throw new RuntimeError("worktree registration path has no existing ancestor");
     }
-    missingSegments.unshift(path7.basename(ancestor));
+    missingSegments.unshift(path8.basename(ancestor));
     ancestor = parent;
     try {
-      return path7.join(await realpath3(ancestor), ...missingSegments);
+      return path8.join(await realpath3(ancestor), ...missingSegments);
     } catch (error51) {
       if (error51.code !== "ENOENT") throw error51;
     }
@@ -36158,7 +36627,7 @@ import { homedir } from "node:os";
 import { join as join2 } from "node:path";
 
 // src/producers/plain-text.ts
-import { open as open3 } from "node:fs/promises";
+import { open as open4 } from "node:fs/promises";
 
 // src/producers/skill-bootstrap.ts
 import { existsSync } from "node:fs";
@@ -36338,7 +36807,7 @@ async function normalizeNodeShim(executable) {
   if (executable.kind !== "native") return executable;
   let handle;
   try {
-    handle = await open3(executable.command, "r");
+    handle = await open4(executable.command, "r");
     const buffer = Buffer.alloc(256);
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
     const firstLine = buffer.subarray(0, bytesRead).toString("utf8").split(/\r?\n/u, 1)[0] ?? "";
@@ -37341,10 +37810,10 @@ var registry2 = new ProducerRegistry([new CodexAdapter(), new OpenCodeAdapter(),
 // src/producers/producer-runtime.ts
 import { existsSync as existsSync7, statSync as statSync2 } from "node:fs";
 import { homedir as homedir8 } from "node:os";
-import path10 from "node:path";
+import path11 from "node:path";
 
 // src/runtime/environment-policy.ts
-import path8 from "node:path";
+import path9 from "node:path";
 
 // src/runtime/redaction.ts
 var registeredSecrets = /* @__PURE__ */ new Map();
@@ -37591,14 +38060,14 @@ function buildEnvironment(args) {
           env,
           provenance,
           "APPDATA",
-          path8.win32.join(args.tempHome, "AppData", "Roaming"),
+          path9.win32.join(args.tempHome, "AppData", "Roaming"),
           "platform"
         );
         setEnvironmentValue(
           env,
           provenance,
           "LOCALAPPDATA",
-          path8.win32.join(args.tempHome, "AppData", "Local"),
+          path9.win32.join(args.tempHome, "AppData", "Local"),
           "platform"
         );
       } else {
@@ -37668,14 +38137,14 @@ function buildWriteSeatbeltPolicy(args) {
     extraWritableRoots: [...args.extraWritableRoots]
   };
 }
-function sbPath(path33) {
-  for (const character of path33) {
+function sbPath(path35) {
+  for (const character of path35) {
     const codePoint = character.codePointAt(0);
     if (codePoint !== void 0 && (codePoint < 32 || codePoint === 127)) {
-      throw new Error(`seatbelt: control character in path: ${JSON.stringify(path33)}`);
+      throw new Error(`seatbelt: control character in path: ${JSON.stringify(path35)}`);
     }
   }
-  return `"${path33.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
+  return `"${path35.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
 }
 function isDeclaredStateRoot(normalized, invocation, policy) {
   const roots = [];
@@ -37726,14 +38195,14 @@ function isDeclaredStateRoot(normalized, invocation, policy) {
   const winUserHomePattern = /^[a-zA-Z]:\\Users\\[^\\]+(?:\\.*)?$/u;
   return userHomePattern.test(normalized) || winUserHomePattern.test(normalized);
 }
-function isValidInheritedStatePath(path33, invocation, policy) {
-  if (typeof path33 !== "string" || path33.trim().length === 0) return false;
-  if (!isAbsolute(path33)) return false;
-  const parsed = parse3(path33);
-  if (path33 === "/" || path33 === parsed.root) return false;
-  const normalized = normalize(path33);
+function isValidInheritedStatePath(path35, invocation, policy) {
+  if (typeof path35 !== "string" || path35.trim().length === 0) return false;
+  if (!isAbsolute(path35)) return false;
+  const parsed = parse3(path35);
+  if (path35 === "/" || path35 === parsed.root) return false;
+  const normalized = normalize(path35);
   if (normalized === "/" || normalized === parsed.root) return false;
-  if (resolve(path33) === "/" || resolve(path33) === parsed.root) return false;
+  if (resolve(path35) === "/" || resolve(path35) === parsed.root) return false;
   return isDeclaredStateRoot(normalized, invocation, policy);
 }
 function inheritedStateWritablePaths(invocation, policy) {
@@ -37756,18 +38225,18 @@ function buildProfile(policy, additionalWritable) {
     "/dev",
     ...policy.extraWritableRoots ?? [],
     ...additionalWritable
-  ].filter((path33) => typeof path33 === "string" && path33.length > 0).flatMap((path33) => {
+  ].filter((path35) => typeof path35 === "string" && path35.length > 0).flatMap((path35) => {
     try {
-      return [path33, realpathSync2(path33)];
+      return [path35, realpathSync2(path35)];
     } catch {
-      return [path33];
+      return [path35];
     }
   }))];
   const lines = [
     "(version 1)",
     "(allow default)",
     "(deny file-write*)",
-    ...writable.map((path33) => `(allow file-write* (subpath ${sbPath(path33)}))`),
+    ...writable.map((path35) => `(allow file-write* (subpath ${sbPath(path35)}))`),
     '(allow file-write* (literal "/dev/null") (literal "/dev/tty"))'
   ];
   if (!policy.allowNetwork) lines.push("(deny network*)");
@@ -37793,20 +38262,20 @@ function wrapInvocationWithSeatbelt(invocation, policy) {
 }
 
 // src/runtime/run-start.ts
-import { randomUUID as randomUUID2 } from "node:crypto";
-import { constants as constants4 } from "node:fs";
+import { randomUUID as randomUUID3 } from "node:crypto";
+import { constants as constants5 } from "node:fs";
 import {
   access as access2,
-  lstat as lstat4,
-  open as open4,
+  lstat as lstat5,
+  open as open5,
   realpath as realpath4,
   rename as rename2,
-  rm as rm2
+  rm as rm3
 } from "node:fs/promises";
-import path9 from "node:path";
+import path10 from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
-var NO_FOLLOW2 = constants4.O_NOFOLLOW ?? 0;
-function errorCode4(error51) {
+var NO_FOLLOW3 = constants5.O_NOFOLLOW ?? 0;
+function errorCode5(error51) {
   return error51.code;
 }
 async function resolveWatchdogPath() {
@@ -37845,7 +38314,7 @@ async function parentDeathWatchdogInvocation(executable, args) {
 }
 function assertDirectoryIdentity2(target) {
   return Promise.all([
-    lstat4(target.publicDirectory),
+    lstat5(target.publicDirectory),
     realpath4(target.publicDirectory)
   ]).then(([metadata, canonical]) => {
     if (!metadata.isDirectory() || metadata.isSymbolicLink() || metadata.dev !== target.identity.dev || metadata.ino !== target.identity.ino || canonical !== target.canonicalDirectory) {
@@ -37856,10 +38325,10 @@ function assertDirectoryIdentity2(target) {
 async function syncDirectory2(directory) {
   let handle;
   try {
-    handle = await open4(directory, constants4.O_RDONLY | NO_FOLLOW2);
+    handle = await open5(directory, constants5.O_RDONLY | NO_FOLLOW3);
     await handle.sync();
   } catch (error51) {
-    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode4(error51) ?? "");
+    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode5(error51) ?? "");
     if (!unsupportedOnWindows) throw error51;
   } finally {
     await handle?.close();
@@ -37867,13 +38336,13 @@ async function syncDirectory2(directory) {
 }
 async function writeRunStart(target, record2, create) {
   await assertDirectoryIdentity2(target);
-  const destination = path9.join(target.canonicalDirectory, "run-start.json");
+  const destination = path10.join(target.canonicalDirectory, "run-start.json");
   const serialized = `${JSON.stringify(record2, null, 2)}
 `;
   if (create) {
-    const handle2 = await open4(
+    const handle2 = await open5(
       destination,
-      constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
+      constants5.O_WRONLY | constants5.O_CREAT | constants5.O_EXCL | NO_FOLLOW3,
       384
     );
     try {
@@ -37886,16 +38355,16 @@ async function writeRunStart(target, record2, create) {
     await assertDirectoryIdentity2(target);
     return;
   }
-  const temporaryPath = path9.join(
+  const temporaryPath = path10.join(
     target.canonicalDirectory,
-    `.run-start.${randomUUID2()}.tmp`
+    `.run-start.${randomUUID3()}.tmp`
   );
   let created = false;
   let handle;
   try {
-    handle = await open4(
+    handle = await open5(
       temporaryPath,
-      constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
+      constants5.O_WRONLY | constants5.O_CREAT | constants5.O_EXCL | NO_FOLLOW3,
       384
     );
     created = true;
@@ -37910,13 +38379,13 @@ async function writeRunStart(target, record2, create) {
     await assertDirectoryIdentity2(target);
   } finally {
     await handle?.close();
-    if (created) await rm2(temporaryPath, { force: true });
+    if (created) await rm3(temporaryPath, { force: true });
   }
 }
 async function initializeRunStart(store, record2) {
   await store.writeLog("lifecycle", "attempt lock acquired\n");
   const canonicalDirectory = await realpath4(store.runDirectory);
-  const metadata = await lstat4(store.runDirectory);
+  const metadata = await lstat5(store.runDirectory);
   if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
     throw new RuntimeError("run archive directory is not a plain directory");
   }
@@ -38104,7 +38573,7 @@ var ProducerRuntime = class {
       ...request.extraWritableRoots && request.extraWritableRoots.length > 0 ? { extraWritableRoots: request.extraWritableRoots } : {},
       ...request.gitObjectAccess ? {
         gitObjectDirectory: request.gitObjectAccess.privateObjectsDir,
-        gitAlternateObjectDirectories: Array.isArray(request.gitObjectAccess.sharedObjectsDir) ? request.gitObjectAccess.sharedObjectsDir.join(path10.delimiter) : request.gitObjectAccess.sharedObjectsDir
+        gitAlternateObjectDirectories: Array.isArray(request.gitObjectAccess.sharedObjectsDir) ? request.gitObjectAccess.sharedObjectsDir.join(path11.delimiter) : request.gitObjectAccess.sharedObjectsDir
       } : {}
     };
     let invocation = adapter.buildInvocation(request.spec, invocationContext);
@@ -38133,7 +38602,7 @@ var ProducerRuntime = class {
         ...request.envAdditions ?? {},
         ...request.gitObjectAccess ? {
           GIT_OBJECT_DIRECTORY: request.gitObjectAccess.privateObjectsDir,
-          GIT_ALTERNATE_OBJECT_DIRECTORIES: Array.isArray(request.gitObjectAccess.sharedObjectsDir) ? request.gitObjectAccess.sharedObjectsDir.join(path10.delimiter) : request.gitObjectAccess.sharedObjectsDir
+          GIT_ALTERNATE_OBJECT_DIRECTORIES: Array.isArray(request.gitObjectAccess.sharedObjectsDir) ? request.gitObjectAccess.sharedObjectsDir.join(path11.delimiter) : request.gitObjectAccess.sharedObjectsDir
         } : {}
       },
       ...tempHome === null ? {} : { tempHome }
@@ -38181,14 +38650,14 @@ var producerRuntime = new ProducerRuntime();
 
 // src/producers/capability-probe.ts
 async function probeAll(ctx, producerRegistry = registry2, options) {
-  return producerRuntime.probeAll(ctx, options, producerRegistry);
+  return producerRuntime.probeAll(ctx, { fresh: true, ...options }, producerRegistry);
 }
 
 // src/verify/dependency-link.ts
 import { execFile as execFile3 } from "node:child_process";
-import { access as access3, mkdir as mkdir3, mkdtemp, readFile, rm as rm3, writeFile } from "node:fs/promises";
+import { access as access3, mkdir as mkdir3, mkdtemp, readFile as readFile2, rm as rm4, writeFile } from "node:fs/promises";
 import { tmpdir as tmpdir5 } from "node:os";
-import path11 from "node:path";
+import path12 from "node:path";
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile3);
 var LOCKFILES = ["package-lock.json", "bun.lockb", "pnpm-lock.yaml", "yarn.lock"];
@@ -38215,14 +38684,14 @@ async function probeCowSupport(dependencies = {}) {
   if (platform !== "darwin" && platform !== "linux") {
     return { cowSupported: false, strategy: "unsupported" };
   }
-  const probeRoot = await mkdtemp(path11.join(tmpdir5(), "ca-cow-probe-"));
+  const probeRoot = await mkdtemp(path12.join(tmpdir5(), "ca-cow-probe-"));
   try {
-    const source = path11.join(probeRoot, "source");
-    const target = path11.join(probeRoot, "target");
+    const source = path12.join(probeRoot, "source");
+    const target = path12.join(probeRoot, "target");
     const clone2 = cowClone(platform, source, target);
     if (clone2 === null) return { cowSupported: false, strategy: "unsupported" };
     await mkdir3(source);
-    await writeFile(path11.join(source, "sentinel"), "probe\n");
+    await writeFile(path12.join(source, "sentinel"), "probe\n");
     try {
       await (dependencies.execFile ?? execFileAsync)("cp", clone2.args, { timeout: COPY_TIMEOUT_MS });
       return { cowSupported: true, strategy: clone2.strategy };
@@ -38230,15 +38699,15 @@ async function probeCowSupport(dependencies = {}) {
       return { cowSupported: false, strategy: clone2.strategy };
     }
   } finally {
-    await rm3(probeRoot, { recursive: true, force: true });
+    await rm4(probeRoot, { recursive: true, force: true });
   }
 }
 async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies = {}) {
-  const primaryModules = path11.join(primaryRepo, "node_modules");
+  const primaryModules = path12.join(primaryRepo, "node_modules");
   if (!await exists(primaryModules)) return "none";
   const [primaryLockfiles, worktreeLockfiles] = await Promise.all([
-    Promise.all(LOCKFILES.map((lockfile) => exists(path11.join(primaryRepo, lockfile)))),
-    Promise.all(LOCKFILES.map((lockfile) => exists(path11.join(worktreePath, lockfile))))
+    Promise.all(LOCKFILES.map((lockfile) => exists(path12.join(primaryRepo, lockfile)))),
+    Promise.all(LOCKFILES.map((lockfile) => exists(path12.join(worktreePath, lockfile))))
   ]);
   if (!primaryLockfiles.some(Boolean)) return "none";
   if (primaryLockfiles.some((present, index) => present !== worktreeLockfiles[index])) {
@@ -38248,8 +38717,8 @@ async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies =
     const comparisons = await Promise.all(LOCKFILES.map(async (lockfile, index) => {
       if (!primaryLockfiles[index]) return true;
       const [primaryLock, worktreeLock] = await Promise.all([
-        readFile(path11.join(primaryRepo, lockfile)),
-        readFile(path11.join(worktreePath, lockfile))
+        readFile2(path12.join(primaryRepo, lockfile)),
+        readFile2(path12.join(worktreePath, lockfile))
       ]);
       return primaryLock.equals(worktreeLock);
     }));
@@ -38257,7 +38726,7 @@ async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies =
   } catch {
     return "skipped-lockfile-mismatch";
   }
-  const targetModules = path11.join(worktreePath, "node_modules");
+  const targetModules = path12.join(worktreePath, "node_modules");
   const platform = dependencies.platform ?? process.platform;
   const clone2 = cowClone(platform, primaryModules, targetModules);
   if (clone2 === null) return "skipped-cow-unsupported";
@@ -38265,15 +38734,15 @@ async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies =
     await (dependencies.execFile ?? execFileAsync)("cp", clone2.args, { timeout: COPY_TIMEOUT_MS });
     return "inherited";
   } catch {
-    await rm3(targetModules, { recursive: true, force: true });
+    await rm4(targetModules, { recursive: true, force: true });
     return "skipped-cow-unsupported";
   }
 }
 
 // src/mcp/live-bundle.ts
 import { createHash as createHash4 } from "node:crypto";
-import { readFile as readFile2 } from "node:fs/promises";
-import path12 from "node:path";
+import { readFile as readFile3 } from "node:fs/promises";
+import path13 from "node:path";
 var NOT_SELF_HOSTED = {
   selfHosted: false,
   runningVersion: RUNTIME_VERSION,
@@ -38301,18 +38770,18 @@ function declaredName(manifest) {
   }
 }
 async function checkLiveBundle(checkoutPath, deps = {}) {
-  const read = deps.readFile ?? ((target) => readFile2(target));
+  const read = deps.readFile ?? ((target) => readFile3(target));
   const runningVersion = deps.runningVersion ?? RUNTIME_VERSION;
-  const manifest = await readOrNull(read, path12.join(checkoutPath, ".claude-plugin", "plugin.json"));
+  const manifest = await readOrNull(read, path13.join(checkoutPath, ".claude-plugin", "plugin.json"));
   if (manifest === null) return { ...NOT_SELF_HOSTED, runningVersion };
   const declared = declaredName(manifest);
   if (declared === null || declared.name !== "claude-architect") {
     return { ...NOT_SELF_HOSTED, runningVersion };
   }
   const repositoryVersion = typeof declared.version === "string" ? declared.version : null;
-  const repositoryBundle = await readOrNull(read, path12.join(checkoutPath, "runtime", "server.mjs"));
+  const repositoryBundle = await readOrNull(read, path13.join(checkoutPath, "runtime", "server.mjs"));
   const runningBundlePath = deps.runningBundlePath ?? process.argv[1];
-  const runningBundle = runningBundlePath === void 0 || path12.basename(runningBundlePath) !== "server.mjs" ? null : await readOrNull(read, runningBundlePath);
+  const runningBundle = runningBundlePath === void 0 || path13.basename(runningBundlePath) !== "server.mjs" ? null : await readOrNull(read, runningBundlePath);
   const bundleMatches = repositoryBundle === null || runningBundle === null ? null : sha256(repositoryBundle) === sha256(runningBundle);
   return {
     selfHosted: true,
@@ -38331,12 +38800,12 @@ function liveBundleDiagnostic(status) {
 // src/mcp/doctor.ts
 var POSIX_HOME_PATH = /\/(?:Users|home)\/[^/\\\s"']+(?:\/[^/\\\s"']+)*/g;
 var WINDOWS_HOME_PATH = /[A-Za-z]:\\Users\\[^/\\\s"']+(?:\\[^/\\\s"']+)*/gi;
-var CHECKOUT_LOCK_NAME = /^([0-9a-f]{64})\.lock$/;
+var CHECKOUT_LOCK_NAME = CHECKOUT_LOCK_NAME_PATTERN;
 var MAX_CHECKOUT_LOCK_BYTES = 4096;
 var MAX_AUTOPILOT_OWNER_BYTES = 1024;
 var MAX_AUTOPILOT_REGISTRATION_BYTES = 32768;
 var MAX_AUTOPILOT_SCAN_ENTRIES = 1024;
-var NO_FOLLOW3 = constants5.O_NOFOLLOW ?? 0;
+var NO_FOLLOW4 = constants6.O_NOFOLLOW ?? 0;
 var WORKFLOW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 var OID = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
 var AUTOPILOT_ISSUE_ORDER = [
@@ -38373,16 +38842,16 @@ function nodeIsSupported(version2) {
 function gitVersion(stdout) {
   return /^git version ([^\s]+)(?:\s|$)/u.exec(stdout.trim())?.[1] ?? null;
 }
-function errorCode5(error51) {
+function errorCode6(error51) {
   return error51.code;
 }
-function defaultIsProcessAlive(pid) {
+function defaultIsProcessAlive2(pid) {
   try {
-    nodeProcess4.kill(pid, 0);
+    nodeProcess5.kill(pid, 0);
     return true;
   } catch (error51) {
-    if (errorCode5(error51) === "EPERM") return true;
-    if (errorCode5(error51) === "ESRCH") return false;
+    if (errorCode6(error51) === "EPERM") return true;
+    if (errorCode6(error51) === "ESRCH") return false;
     throw error51;
   }
 }
@@ -38418,12 +38887,12 @@ async function readCheckoutLock(handle) {
 }
 async function checkoutLockIssues(stateDir, ps, isProcessAlive2) {
   if (stateDir === void 0) return [];
-  const locksRoot = path13.join(stateDir, "locks");
+  const locksRoot = path14.join(stateDir, "locks");
   let entries;
   try {
-    entries = await readdir3(locksRoot, { withFileTypes: true });
+    entries = await readdir4(locksRoot, { withFileTypes: true });
   } catch (error51) {
-    return errorCode5(error51) === "ENOENT" ? [] : ["checkout-lock-scan-failed"];
+    return errorCode6(error51) === "ENOENT" ? [] : ["checkout-lock-scan-failed"];
   }
   const issues = /* @__PURE__ */ new Set();
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
@@ -38435,7 +38904,7 @@ async function checkoutLockIssues(stateDir, ps, isProcessAlive2) {
     }
     let handle;
     try {
-      handle = await open5(path13.join(locksRoot, entry.name), constants5.O_RDONLY | NO_FOLLOW3);
+      handle = await open6(path14.join(locksRoot, entry.name), constants6.O_RDONLY | NO_FOLLOW4);
       const metadataBeforeRead = await handle.stat();
       if (!metadataBeforeRead.isFile() || metadataBeforeRead.size > MAX_CHECKOUT_LOCK_BYTES) {
         issues.add("checkout-lock-malformed");
@@ -38459,7 +38928,7 @@ async function checkoutLockIssues(stateDir, ps, isProcessAlive2) {
       const liveToken = owner.processToken === null ? null : await ps.getProcessStartToken(owner.pid);
       issues.add(owner.processToken !== null && liveToken !== null && liveToken !== owner.processToken ? "checkout-lock-leaked" : "checkout-lock-held");
     } catch (error51) {
-      if (errorCode5(error51) !== "ENOENT") issues.add("checkout-lock-malformed");
+      if (errorCode6(error51) !== "ENOENT") issues.add("checkout-lock-malformed");
     } finally {
       try {
         await handle?.close();
@@ -38479,9 +38948,9 @@ async function readBoundedRegularFile(filename, maxBytes) {
   let handle;
   let outcome = { status: "malformed" };
   try {
-    handle = await open5(filename, constants5.O_RDONLY | NO_FOLLOW3);
+    handle = await open6(filename, constants6.O_RDONLY | NO_FOLLOW4);
     const before = await handle.stat();
-    const named = await lstat5(filename);
+    const named = await lstat6(filename);
     if (!before.isFile() || before.nlink !== 1 || before.size > maxBytes || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== before.dev || named.ino !== before.ino || named.size !== before.size) return outcome;
     const bytes = Buffer.alloc(before.size);
     let offset = 0;
@@ -38491,11 +38960,11 @@ async function readBoundedRegularFile(filename, maxBytes) {
       offset += bytesRead;
     }
     const after = await handle.stat();
-    const settledNamed = await lstat5(filename);
+    const settledNamed = await lstat6(filename);
     if (offset !== before.size || after.dev !== before.dev || after.ino !== before.ino || after.nlink !== 1 || after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs || settledNamed.dev !== before.dev || settledNamed.ino !== before.ino || settledNamed.nlink !== 1 || settledNamed.size !== before.size) return outcome;
     outcome = { status: "ok", text: bytes.toString("utf8") };
   } catch (error51) {
-    if (errorCode5(error51) === "ENOENT") outcome = { status: "missing" };
+    if (errorCode6(error51) === "ENOENT") outcome = { status: "missing" };
   } finally {
     try {
       await handle?.close();
@@ -38531,7 +39000,7 @@ function parseRegistration(text) {
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const record2 = value;
-  if (record2.ownershipVersion !== "1" || typeof record2.workflowId !== "string" || !WORKFLOW_ID.test(record2.workflowId) || typeof record2.checkoutPath !== "string" || !path13.isAbsolute(record2.checkoutPath) || typeof record2.gitCommonDir !== "string" || !path13.isAbsolute(record2.gitCommonDir) || typeof record2.repositoryIdentity !== "string" || typeof record2.worktreePath !== "string" || !path13.isAbsolute(record2.worktreePath) || typeof record2.worktreeGitDir !== "string" || !path13.isAbsolute(record2.worktreeGitDir) || typeof record2.branch !== "string" || record2.branchRef !== `refs/heads/${record2.branch}` || record2.baseRef !== `refs/claude-architect/autopilot/${record2.workflowId}/base` || typeof record2.baseBranch !== "string" || typeof record2.baseCommitOid !== "string" || !OID.test(record2.baseCommitOid) || record2.remote !== "origin" || typeof record2.remoteUrl !== "string" || typeof record2.ownerRepo !== "string" || !isBootstrapOwner(record2.bootstrapOwner, record2.workflowId)) return null;
+  if (record2.ownershipVersion !== "1" || typeof record2.workflowId !== "string" || !WORKFLOW_ID.test(record2.workflowId) || typeof record2.checkoutPath !== "string" || !path14.isAbsolute(record2.checkoutPath) || typeof record2.gitCommonDir !== "string" || !path14.isAbsolute(record2.gitCommonDir) || typeof record2.repositoryIdentity !== "string" || typeof record2.worktreePath !== "string" || !path14.isAbsolute(record2.worktreePath) || typeof record2.worktreeGitDir !== "string" || !path14.isAbsolute(record2.worktreeGitDir) || typeof record2.branch !== "string" || record2.branchRef !== `refs/heads/${record2.branch}` || record2.baseRef !== `refs/claude-architect/autopilot/${record2.workflowId}/base` || typeof record2.baseBranch !== "string" || typeof record2.baseCommitOid !== "string" || !OID.test(record2.baseCommitOid) || record2.remote !== "origin" || typeof record2.remoteUrl !== "string" || typeof record2.ownerRepo !== "string" || !isBootstrapOwner(record2.bootstrapOwner, record2.workflowId)) return null;
   return record2;
 }
 async function ownerStatus(owner, ps, isProcessAlive2) {
@@ -38555,23 +39024,23 @@ function registrationFilename(workflowId) {
 }
 async function safeDirectoryEntries(directory, issues) {
   try {
-    const metadata = await lstat5(directory);
+    const metadata = await lstat6(directory);
     if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
       issues.add("autopilot-state-malformed");
       return [];
     }
-    const entries = await readdir3(directory, { withFileTypes: true });
+    const entries = await readdir4(directory, { withFileTypes: true });
     if (entries.length > MAX_AUTOPILOT_SCAN_ENTRIES) {
       issues.add("autopilot-state-malformed");
     }
     return entries.sort((left, right) => left.name.localeCompare(right.name)).slice(0, MAX_AUTOPILOT_SCAN_ENTRIES);
   } catch (error51) {
-    if (errorCode5(error51) !== "ENOENT") issues.add("autopilot-state-malformed");
+    if (errorCode6(error51) !== "ENOENT") issues.add("autopilot-state-malformed");
     return [];
   }
 }
 async function scanRegistrations(stateRoot2, issues) {
-  const root = path13.join(stateRoot2, "autopilot-branches");
+  const root = path14.join(stateRoot2, "autopilot-branches");
   const entries = await safeDirectoryEntries(root, issues);
   const registrations = /* @__PURE__ */ new Map();
   const filenames = /* @__PURE__ */ new Set();
@@ -38582,7 +39051,7 @@ async function scanRegistrations(stateRoot2, issues) {
       continue;
     }
     const read = await readBoundedRegularFile(
-      path13.join(root, entry.name),
+      path14.join(root, entry.name),
       MAX_AUTOPILOT_REGISTRATION_BYTES
     );
     if (read.status !== "ok") {
@@ -38609,8 +39078,8 @@ function expectedHead(state, registration) {
 async function observedBranchMatches(registration, state, git2) {
   try {
     const [checkoutMetadata, worktreeMetadata] = await Promise.all([
-      lstat5(registration.checkoutPath),
-      lstat5(registration.worktreePath)
+      lstat6(registration.checkoutPath),
+      lstat6(registration.worktreePath)
     ]);
     if (!checkoutMetadata.isDirectory() || checkoutMetadata.isSymbolicLink() || !worktreeMetadata.isDirectory() || worktreeMetadata.isSymbolicLink()) return false;
     const [checkout, worktree, common] = await Promise.all([
@@ -38646,11 +39115,11 @@ async function observedBranchMatches(registration, state, git2) {
 }
 async function autopilotIssues(stateDir, ps, isProcessAlive2, git2) {
   if (stateDir === void 0) return [];
-  const stateRoot2 = path13.resolve(stateDir);
+  const stateRoot2 = path14.resolve(stateDir);
   const issues = /* @__PURE__ */ new Set();
   let probes = 0;
   const registrationScan = await scanRegistrations(stateRoot2, issues);
-  const workflowsRoot = path13.join(stateRoot2, "workflows");
+  const workflowsRoot = path14.join(stateRoot2, "workflows");
   const workflowEntries = await safeDirectoryEntries(workflowsRoot, issues);
   const states = /* @__PURE__ */ new Map();
   for (const entry of workflowEntries) {
@@ -38711,11 +39180,11 @@ async function autopilotIssues(stateDir, ps, isProcessAlive2, git2) {
     }
     let worktreeExists = false;
     try {
-      const metadata = await lstat5(state.worktreePath);
+      const metadata = await lstat6(state.worktreePath);
       worktreeExists = metadata.isDirectory() && !metadata.isSymbolicLink();
       if (!worktreeExists) issues.add("autopilot-state-malformed");
     } catch (error51) {
-      if (errorCode5(error51) !== "ENOENT") issues.add("autopilot-state-malformed");
+      if (errorCode6(error51) !== "ENOENT") issues.add("autopilot-state-malformed");
     }
     if (worktreeExists && registrationMissing) {
       issues.add("autopilot-worktree-orphaned");
@@ -38775,24 +39244,24 @@ async function doctor(deps = {}) {
   issues.push(...await checkoutLockIssues(
     stateDir,
     ps,
-    deps.isProcessAlive ?? defaultIsProcessAlive
+    deps.isProcessAlive ?? defaultIsProcessAlive2
   ));
   issues.push(...await autopilotIssues(
     stateDir,
     ps,
-    deps.isProcessAlive ?? defaultIsProcessAlive,
+    deps.isProcessAlive ?? defaultIsProcessAlive2,
     gitRunner
   ));
   let git2 = { version: null, ok: false, path: null };
   try {
     const result = await gitRunner(process.cwd(), ["--version"]);
     const version2 = result.exitCode === 0 && result.truncated?.stdout !== true ? gitVersion(result.stdout) : null;
-    let path33 = null;
+    let path35 = null;
     try {
-      path33 = (await ps.resolveExecutable({ name: "git" })).command;
+      path35 = (await ps.resolveExecutable({ name: "git" })).command;
     } catch {
     }
-    git2 = { version: version2, ok: version2 !== null, path: path33 };
+    git2 = { version: version2, ok: version2 !== null, path: path35 };
   } catch {
   }
   if (!git2.ok) issues.push("git-unavailable");
@@ -38943,10 +39412,10 @@ function gitChangedFiles(checkoutPath, deps = {}) {
 import { createHash as createHash15 } from "node:crypto";
 
 // src/autopilot/autopilot-controller.ts
-import { randomUUID as randomUUID8 } from "node:crypto";
+import { randomUUID as randomUUID10 } from "node:crypto";
 
 // src/protocol/spec-validator.ts
-import path14 from "node:path";
+import path15 from "node:path";
 var schemas = loadSchemas();
 function allowlistCovers(top, glob) {
   return top.some((pattern) => {
@@ -38957,7 +39426,7 @@ function allowlistCovers(top, glob) {
   });
 }
 function isSafeRepositoryGlob(glob) {
-  return glob.length > 0 && !path14.posix.isAbsolute(glob) && !path14.win32.isAbsolute(glob) && !glob.split(/[\\/]/).includes("..");
+  return glob.length > 0 && !path15.posix.isAbsolute(glob) && !path15.win32.isAbsolute(glob) && !glob.split(/[\\/]/).includes("..");
 }
 function sliceDependencyError(sliceIndex, dependencyIndex, message) {
   return {
@@ -39039,8 +39508,8 @@ function validateSpec(input) {
     );
     if (topLevelDeletionError !== null) return topLevelDeletionError;
     for (const [index, command] of spec.verification.entries()) {
-      const normalizedCwd = path14.posix.normalize(command.cwd);
-      if (path14.isAbsolute(command.cwd) || normalizedCwd === ".." || normalizedCwd.startsWith("../")) {
+      const normalizedCwd = path15.posix.normalize(command.cwd);
+      if (path15.isAbsolute(command.cwd) || normalizedCwd === ".." || normalizedCwd.startsWith("../")) {
         return {
           ok: false,
           errors: [{
@@ -39068,8 +39537,8 @@ function validateSpec(input) {
         }
       }
       for (const [commandIndex, command] of slice.verification.entries()) {
-        const normalizedCwd = path14.posix.normalize(command.cwd);
-        if (path14.isAbsolute(command.cwd) || normalizedCwd === ".." || normalizedCwd.startsWith("../")) {
+        const normalizedCwd = path15.posix.normalize(command.cwd);
+        if (path15.isAbsolute(command.cwd) || normalizedCwd === ".." || normalizedCwd.startsWith("../")) {
           return {
             ok: false,
             errors: [{
@@ -39231,9 +39700,9 @@ function sortChangedPaths(changedPaths) {
 function deriveChangedPaths(inputs) {
   const rawEntries = new Map(inputs.rawDiff.map((entry) => [entry.path, entry]));
   const treeEntries = parseTree(inputs.treeOutput);
-  return sortChangedPaths(parseNameStatus(inputs.nameStatusOutput).map(({ path: path33, status }) => {
-    const treeEntry = treeEntries.get(path33);
-    const rawEntry = rawEntries.get(path33);
+  return sortChangedPaths(parseNameStatus(inputs.nameStatusOutput).map(({ path: path35, status }) => {
+    const treeEntry = treeEntries.get(path35);
+    const rawEntry = rawEntries.get(path35);
     if (treeEntry === void 0 && status !== "D") {
       throw new RuntimeError("candidate tree is missing a changed path");
     }
@@ -39241,7 +39710,7 @@ function deriveChangedPaths(inputs) {
       throw new RuntimeError("git diff-tree outputs disagree");
     }
     return {
-      path: path33,
+      path: path35,
       changeType: changeType(status),
       mode: treeEntry?.mode ?? rawEntry.oldMode,
       contentHash: treeEntry?.oid ?? null
@@ -39268,7 +39737,7 @@ function validateChangedPaths(changedPaths) {
 }
 function manifestHashOf(changedPaths) {
   validateChangedPaths(changedPaths);
-  const canonical = changedPaths.map(({ path: path33, changeType: changeType2, mode, contentHash }) => ({ path: path33, changeType: changeType2, mode, contentHash }));
+  const canonical = changedPaths.map(({ path: path35, changeType: changeType2, mode, contentHash }) => ({ path: path35, changeType: changeType2, mode, contentHash }));
   return createHash6("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 function inspectChangedPathManifest(inputs) {
@@ -39682,10 +40151,10 @@ function evaluateAutopilotEligibility(input) {
 }
 
 // src/autopilot/final-branch-reviewer.ts
-import { createHash as createHash11, randomUUID as randomUUID7 } from "node:crypto";
-import { constants as constants11 } from "node:fs";
-import { link as link5, lstat as lstat14, open as open11, readFile as readFile4, rm as rm8 } from "node:fs/promises";
-import path23 from "node:path";
+import { createHash as createHash11, randomUUID as randomUUID9 } from "node:crypto";
+import { constants as constants13 } from "node:fs";
+import { link as link7, lstat as lstat16, open as open13, readFile as readFile6, rm as rm10 } from "node:fs/promises";
+import path25 from "node:path";
 
 // src/util/glob.ts
 function escapeRegex2(character) {
@@ -39716,14 +40185,14 @@ function globMatches(pattern, candidate, caseInsensitive = false) {
 }
 
 // src/runtime/worktree-manager.ts
-import { randomUUID as randomUUID4 } from "node:crypto";
-import { lstat as lstat9, mkdir as mkdir4, readdir as readdir5, realpath as realpath7, rename as rename4 } from "node:fs/promises";
-import path17 from "node:path";
+import { randomUUID as randomUUID6 } from "node:crypto";
+import { lstat as lstat11, mkdir as mkdir5, readdir as readdir6, realpath as realpath7, rename as rename5 } from "node:fs/promises";
+import path19 from "node:path";
 
 // src/platform/bound-directory-cleanup.ts
-import { constants as constants6 } from "node:fs";
-import { access as access4, lstat as lstat6, open as open6, rmdir } from "node:fs/promises";
-import path15 from "node:path";
+import { constants as constants7 } from "node:fs";
+import { access as access4, lstat as lstat7, open as open7, rmdir } from "node:fs/promises";
+import path16 from "node:path";
 var DEFAULT_EMPTY_DIRECTORY_TIMEOUT_MS = 12e4;
 var EMPTY_DIRECTORY_TIMEOUT_ENV = "CLAUDE_ARCHITECT_EMPTY_DIRECTORY_TIMEOUT_MS";
 function resolveEmptyDirectoryTimeoutMs(env = process.env, warn = (message) => console.error(message)) {
@@ -39971,7 +40440,7 @@ async function darwinHandlePath(directory, handle, platformServices) {
       handle.fd.toString(),
       "-F0pn"
     ],
-    cwd: path15.dirname(directory),
+    cwd: path16.dirname(directory),
     env: {},
     timeoutMs: 5e3,
     maxOutputBytes: 16384
@@ -39989,13 +40458,13 @@ async function removeWindowsBoundEmptyDirectory(directory, expectedIdentity, pla
       executable: helper,
       args: [
         "remove",
-        path15.toNamespacedPath(directory),
+        path16.toNamespacedPath(directory),
         expectedIdentity.dev.toString(),
         expectedIdentity.ino.toString(),
         expectedIdentity.birthtimeNs.toString(),
         "true"
       ],
-      cwd: path15.dirname(directory),
+      cwd: path16.dirname(directory),
       env: windowsEssentialEnvironment(),
       timeoutMs: 3e4,
       maxOutputBytes: 16384
@@ -40016,15 +40485,15 @@ async function verifyBoundDirectoryCleanupSupport(platformServices) {
   try {
     if (platformServices.os === "linux") {
       await Promise.all([
-        access4("/proc/self/mountinfo", constants6.R_OK),
-        access4("/proc/self/fd", constants6.R_OK)
+        access4("/proc/self/mountinfo", constants7.R_OK),
+        access4("/proc/self/fd", constants7.R_OK)
       ]);
       return;
     }
     if (platformServices.os === "darwin") {
       await Promise.all([
-        access4("/usr/sbin/lsof", constants6.X_OK),
-        access4("/bin/df", constants6.X_OK)
+        access4("/usr/sbin/lsof", constants7.X_OK),
+        access4("/bin/df", constants7.X_OK)
       ]);
       return;
     }
@@ -40056,21 +40525,21 @@ async function removeBoundEmptyDirectory(directory, expectedIdentity, platformSe
   let handle;
   let primaryError;
   try {
-    const named = await lstat6(directory, { bigint: true });
+    const named = await lstat7(directory, { bigint: true });
     if (!named.isDirectory() || named.isSymbolicLink() || !sameBoundIdentity(named, expectedIdentity)) {
       throw new RuntimeError("directory identity changed before bound removal");
     }
-    handle = await open6(directory, constants6.O_RDONLY | (constants6.O_NOFOLLOW ?? 0));
+    handle = await open7(directory, constants7.O_RDONLY | (constants7.O_NOFOLLOW ?? 0));
     const opened = await handle.stat({ bigint: true });
     if (!opened.isDirectory() || !sameBoundIdentity(opened, expectedIdentity)) {
       throw new RuntimeError("opened directory identity changed before bound removal");
     }
-    const settledNamed = await lstat6(directory, { bigint: true });
+    const settledNamed = await lstat7(directory, { bigint: true });
     if (!settledNamed.isDirectory() || settledNamed.isSymbolicLink() || !sameBoundIdentity(settledNamed, expectedIdentity)) {
       throw new RuntimeError("directory identity changed before final bound removal");
     }
     const darwinPath = platformServices.os === "darwin" ? await darwinHandlePath(directory, handle, platformServices) : void 0;
-    const removalTarget = await lstat6(directory, { bigint: true });
+    const removalTarget = await lstat7(directory, { bigint: true });
     if (!removalTarget.isDirectory() || removalTarget.isSymbolicLink() || !sameBoundIdentity(removalTarget, expectedIdentity)) {
       throw new RuntimeError("directory identity changed at the final removal boundary");
     }
@@ -40132,31 +40601,31 @@ async function emptyBoundDirectory(directory, expectedIdentity, platformServices
 }
 
 // src/runtime/worktree-removal-manifest.ts
-import { randomUUID as randomUUID3 } from "node:crypto";
-import { constants as constants8 } from "node:fs";
+import { randomUUID as randomUUID4 } from "node:crypto";
+import { constants as constants9 } from "node:fs";
 import {
-  link as link2,
-  lstat as lstat8,
-  open as open8,
-  readdir as readdir4,
+  link as link3,
+  lstat as lstat9,
+  open as open9,
+  readdir as readdir5,
   realpath as realpath6,
   rename as rename3,
-  rm as rm4
+  rm as rm5
 } from "node:fs/promises";
-import path16 from "node:path";
+import path17 from "node:path";
 
 // src/util/stable-file.ts
-import { constants as constants7 } from "node:fs";
-import { lstat as lstat7, open as open7 } from "node:fs/promises";
+import { constants as constants8 } from "node:fs";
+import { lstat as lstat8, open as open8 } from "node:fs/promises";
 async function readStableRegularFile(filename, maxBytes, dependencies = {}) {
-  const handle = await (dependencies.open ?? open7)(
+  const handle = await (dependencies.open ?? open8)(
     filename,
-    constants7.O_RDONLY | (constants7.O_NOFOLLOW ?? 0) | (constants7.O_NONBLOCK ?? 0)
+    constants8.O_RDONLY | (constants8.O_NOFOLLOW ?? 0) | (constants8.O_NONBLOCK ?? 0)
   );
   let primaryError;
   try {
     const metadata = await handle.stat({ bigint: true });
-    const named = await (dependencies.lstat ?? lstat7)(filename, { bigint: true });
+    const named = await (dependencies.lstat ?? lstat8)(filename, { bigint: true });
     if (!metadata.isFile() || metadata.nlink !== 1n || metadata.birthtimeNs <= 0n || metadata.size > maxBytes || !named.isFile() || named.isSymbolicLink() || named.birthtimeNs <= 0n || named.nlink !== 1n || named.dev !== metadata.dev || named.ino !== metadata.ino || named.birthtimeNs !== metadata.birthtimeNs || named.size !== metadata.size) return null;
     if (maxBytes < 0n || maxBytes >= BigInt(Number.MAX_SAFE_INTEGER)) return null;
     const limit = Math.min(Number(maxBytes) + 1, Number(metadata.size) + 1);
@@ -40170,7 +40639,7 @@ async function readStableRegularFile(filename, maxBytes, dependencies = {}) {
     if (bytesRead > Number(maxBytes)) return null;
     const contents = buffer.subarray(0, bytesRead);
     const settled = await handle.stat({ bigint: true });
-    const settledNamed = await (dependencies.lstat ?? lstat7)(filename, { bigint: true });
+    const settledNamed = await (dependencies.lstat ?? lstat8)(filename, { bigint: true });
     if (!settled.isFile() || settled.nlink !== 1n || settled.birthtimeNs <= 0n || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs || settled.size !== metadata.size || settled.mtimeNs !== metadata.mtimeNs || settled.ctimeNs !== metadata.ctimeNs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.birthtimeNs <= 0n || settledNamed.nlink !== 1n || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino || settledNamed.birthtimeNs !== metadata.birthtimeNs || settledNamed.size !== metadata.size || settledNamed.mtimeNs !== settled.mtimeNs || settledNamed.ctimeNs !== settled.ctimeNs || BigInt(contents.byteLength) !== metadata.size) return null;
     return contents;
   } catch (error51) {
@@ -40197,14 +40666,14 @@ var HARDLINK_PROBE_NAME = /^\.hardlink-probe-([0-9a-f-]{36})\.(source|linked)$/i
 var MANIFEST_REMOVAL_GUARD = /^\.remove-manifest-([a-z0-9][a-z0-9-]{0,127})\.[0-9a-f-]{36}\.guard$/i;
 var MANIFEST_VERSION = "1";
 var MAX_MANIFEST_BYTES = 32768n;
-function sameIdentity2(metadata, expected) {
+function sameIdentity3(metadata, expected) {
   return metadata.dev === expected.dev && metadata.ino === expected.ino && metadata.birthtimeNs > 0n && metadata.birthtimeNs === expected.birthtimeNs;
 }
-function errorCode6(error51) {
+function errorCode7(error51) {
   return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
 }
 function manifestRoot() {
-  return path16.join(resolveStateDir(), MANIFEST_DIRECTORY);
+  return path17.join(resolveStateDir(), MANIFEST_DIRECTORY);
 }
 async function ensurePrivateDirectory2(directory) {
   return await ensurePrivateDirectory(directory, {
@@ -40212,23 +40681,23 @@ async function ensurePrivateDirectory2(directory) {
   });
 }
 async function assertDirectoryIdentity3(directory, expected) {
-  const metadata = await lstat8(directory, { bigint: true });
-  if (!metadata.isDirectory() || metadata.isSymbolicLink() || !sameIdentity2(metadata, expected)) {
+  const metadata = await lstat9(directory, { bigint: true });
+  if (!metadata.isDirectory() || metadata.isSymbolicLink() || !sameIdentity3(metadata, expected)) {
     throw new RuntimeError("worktree removal manifest directory identity changed");
   }
 }
 async function assertMissing(filename, description) {
   try {
-    await lstat8(filename);
+    await lstat9(filename);
   } catch (error51) {
-    if (errorCode6(error51) === "ENOENT") return;
+    if (errorCode7(error51) === "ENOENT") return;
     throw error51;
   }
   throw new RuntimeError(`${description} unexpectedly remains`);
 }
 async function assertManifestIdentity(manifestPath, expected, expectedLinks) {
-  const metadata = await lstat8(manifestPath, { bigint: true });
-  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== expectedLinks || !sameIdentity2(metadata, expected)) {
+  const metadata = await lstat9(manifestPath, { bigint: true });
+  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== expectedLinks || !sameIdentity3(metadata, expected)) {
     throw new RuntimeError("worktree removal manifest publication identity changed");
   }
 }
@@ -40269,8 +40738,8 @@ async function writeSyncedManifest(handle, manifest) {
 }
 function validateManifestPath(manifestPath, transactionId) {
   const root = manifestRoot();
-  const expected = path16.join(root, `${transactionId}.json`);
-  if (!MANIFEST_NAME.test(path16.basename(manifestPath)) || manifestPath !== expected) {
+  const expected = path17.join(root, `${transactionId}.json`);
+  if (!MANIFEST_NAME.test(path17.basename(manifestPath)) || manifestPath !== expected) {
     throw new RuntimeError("worktree removal manifest path is invalid");
   }
   return root;
@@ -40334,7 +40803,7 @@ function parseManifest(contents, transactionId) {
     record2.registrationPath,
     record2.quarantineRoot,
     record2.quarantinePath
-  ].every((value2) => typeof value2 === "string" && path16.isAbsolute(value2)) || record2.physicalPresent === false && (record2.physicalDev !== "0" || record2.physicalIno !== "0" || record2.physicalBirthtimeNs !== "0")) {
+  ].every((value2) => typeof value2 === "string" && path17.isAbsolute(value2)) || record2.physicalPresent === false && (record2.physicalDev !== "0" || record2.physicalIno !== "0" || record2.physicalBirthtimeNs !== "0")) {
     throw new RuntimeError("worktree removal manifest is malformed");
   }
   return record2;
@@ -40342,16 +40811,16 @@ function parseManifest(contents, transactionId) {
 async function verifyWorktreeRemovalManifestStorage() {
   const root = manifestRoot();
   const rootIdentity = await ensurePrivateDirectory2(root);
-  const token = randomUUID3();
-  const sourcePath = path16.join(root, `.hardlink-probe-${token}.source`);
-  const linkedPath = path16.join(root, `.hardlink-probe-${token}.linked`);
+  const token = randomUUID4();
+  const sourcePath = path17.join(root, `.hardlink-probe-${token}.source`);
+  const linkedPath = path17.join(root, `.hardlink-probe-${token}.linked`);
   let sourceExists = false;
   let linkedExists = false;
   let primaryError;
   try {
-    const handle = await open8(
+    const handle = await open9(
       sourcePath,
-      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | (constants8.O_NOFOLLOW ?? 0),
+      constants9.O_WRONLY | constants9.O_CREAT | constants9.O_EXCL | (constants9.O_NOFOLLOW ?? 0),
       384
     );
     sourceExists = true;
@@ -40372,7 +40841,7 @@ async function verifyWorktreeRemovalManifestStorage() {
       await handle.close();
     }
     await assertDirectoryIdentity3(root, rootIdentity);
-    await link2(sourcePath, linkedPath);
+    await link3(sourcePath, linkedPath);
     linkedExists = true;
     await Promise.all([
       assertManifestIdentity(sourcePath, identity, 2n),
@@ -40384,8 +40853,8 @@ async function verifyWorktreeRemovalManifestStorage() {
   const cleanupErrors = [];
   try {
     await assertDirectoryIdentity3(root, rootIdentity);
-    if (linkedExists) await rm4(linkedPath, { force: false });
-    if (sourceExists) await rm4(sourcePath, { force: false });
+    if (linkedExists) await rm5(linkedPath, { force: false });
+    if (sourceExists) await rm5(sourcePath, { force: false });
     await syncDirectoryMetadata(root);
     await assertDirectoryIdentity3(root, rootIdentity);
   } catch (error51) {
@@ -40413,31 +40882,31 @@ async function persistWorktreeRemovalManifest(manifest) {
   validateManifestForWrite(manifest);
   const root = manifestRoot();
   const rootIdentity = await ensurePrivateDirectory2(root);
-  const manifestPath = path16.join(root, `${manifest.transactionId}.json`);
-  const temporaryPath = path16.join(
+  const manifestPath = path17.join(root, `${manifest.transactionId}.json`);
+  const temporaryPath = path17.join(
     root,
-    `.${manifest.transactionId}.${randomUUID3()}.tmp`
+    `.${manifest.transactionId}.${randomUUID4()}.tmp`
   );
   let temporaryExists = false;
   let manifestExists = false;
   try {
-    const handle = await open8(
+    const handle = await open9(
       temporaryPath,
-      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | (constants8.O_NOFOLLOW ?? 0),
+      constants9.O_WRONLY | constants9.O_CREAT | constants9.O_EXCL | (constants9.O_NOFOLLOW ?? 0),
       384
     );
     temporaryExists = true;
     const temporaryIdentity = await writeSyncedManifest(handle, manifest);
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(temporaryPath, temporaryIdentity, 1n);
-    await link2(temporaryPath, manifestPath);
+    await link3(temporaryPath, manifestPath);
     manifestExists = true;
     await assertDirectoryIdentity3(root, rootIdentity);
     await Promise.all([
       assertManifestIdentity(temporaryPath, temporaryIdentity, 2n),
       assertManifestIdentity(manifestPath, temporaryIdentity, 2n)
     ]);
-    await rm4(temporaryPath);
+    await rm5(temporaryPath);
     temporaryExists = false;
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(manifestPath, temporaryIdentity, 1n);
@@ -40456,14 +40925,14 @@ async function persistWorktreeRemovalManifest(manifest) {
     }
     if (temporaryExists) {
       try {
-        await rm4(temporaryPath, { force: true });
+        await rm5(temporaryPath, { force: true });
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }
     }
     if (manifestExists) {
       try {
-        await rm4(manifestPath, { force: true });
+        await rm5(manifestPath, { force: true });
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }
@@ -40481,16 +40950,16 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
   validateManifestForWrite(manifest);
   const root = validateManifestPath(manifestPath, manifest.transactionId);
   const rootIdentity = await ensurePrivateDirectory2(root);
-  const temporaryPath = path16.join(
+  const temporaryPath = path17.join(
     root,
-    `.${manifest.transactionId}.${randomUUID3()}.tmp`
+    `.${manifest.transactionId}.${randomUUID4()}.tmp`
   );
   let temporaryExists = false;
   let primaryError;
   try {
-    const handle = await open8(
+    const handle = await open9(
       temporaryPath,
-      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | (constants8.O_NOFOLLOW ?? 0),
+      constants9.O_WRONLY | constants9.O_CREAT | constants9.O_EXCL | (constants9.O_NOFOLLOW ?? 0),
       384
     );
     temporaryExists = true;
@@ -40511,7 +40980,7 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
     if (temporaryExists) {
       try {
         await assertDirectoryIdentity3(root, rootIdentity);
-        await rm4(temporaryPath, { force: true });
+        await rm5(temporaryPath, { force: true });
       } catch (cleanupError) {
         if (primaryError === void 0) throw cleanupError;
         throw new AggregateError(
@@ -40525,7 +40994,7 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
 async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
   const root = validateManifestPath(manifestPath, transactionId);
   const rootIdentity = await ensurePrivateDirectory2(root);
-  const manifestMetadata = await lstat8(manifestPath, { bigint: true });
+  const manifestMetadata = await lstat9(manifestPath, { bigint: true });
   if (!manifestMetadata.isFile() || manifestMetadata.isSymbolicLink() || manifestMetadata.nlink !== 1n || manifestMetadata.birthtimeNs <= 0n) {
     throw new RuntimeError("worktree removal manifest identity is ambiguous before removal");
   }
@@ -40534,21 +41003,21 @@ async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
     ino: manifestMetadata.ino,
     birthtimeNs: manifestMetadata.birthtimeNs
   };
-  const guardPath = path16.join(
+  const guardPath = path17.join(
     root,
-    `.remove-manifest-${transactionId}.${randomUUID3()}.guard`
+    `.remove-manifest-${transactionId}.${randomUUID4()}.guard`
   );
   await assertDirectoryIdentity3(root, rootIdentity);
-  await link2(manifestPath, guardPath);
+  await link3(manifestPath, guardPath);
   await Promise.all([
     assertManifestIdentity(manifestPath, identity, 2n),
     assertManifestIdentity(guardPath, identity, 2n)
   ]);
-  await rm4(manifestPath, { force: false });
+  await rm5(manifestPath, { force: false });
   await assertDirectoryIdentity3(root, rootIdentity);
   await assertMissing(manifestPath, "worktree removal manifest");
   await assertManifestIdentity(guardPath, identity, 1n);
-  await rm4(guardPath, { force: false });
+  await rm5(guardPath, { force: false });
   await syncDirectoryMetadata(root);
   await assertDirectoryIdentity3(root, rootIdentity);
   await Promise.all([
@@ -40557,18 +41026,18 @@ async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
   ]);
 }
 async function readLinkedManifest(temporaryPath, manifestPath) {
-  const handle = await open8(
+  const handle = await open9(
     manifestPath,
-    constants8.O_RDONLY | (constants8.O_NOFOLLOW ?? 0)
+    constants9.O_RDONLY | (constants9.O_NOFOLLOW ?? 0)
   );
   let primaryError;
   try {
     const [opened, temporary, published] = await Promise.all([
       handle.stat({ bigint: true }),
-      lstat8(temporaryPath, { bigint: true }),
-      lstat8(manifestPath, { bigint: true })
+      lstat9(temporaryPath, { bigint: true }),
+      lstat9(manifestPath, { bigint: true })
     ]);
-    if (!opened.isFile() || opened.nlink !== 2n || opened.size > MAX_MANIFEST_BYTES || !temporary.isFile() || temporary.isSymbolicLink() || temporary.nlink !== 2n || !published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity2(temporary, opened) || !sameIdentity2(published, opened) || temporary.size !== opened.size || published.size !== opened.size) {
+    if (!opened.isFile() || opened.nlink !== 2n || opened.size > MAX_MANIFEST_BYTES || !temporary.isFile() || temporary.isSymbolicLink() || temporary.nlink !== 2n || !published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity3(temporary, opened) || !sameIdentity3(published, opened) || temporary.size !== opened.size || published.size !== opened.size) {
       throw new RuntimeError("linked worktree removal manifest residue is ambiguous");
     }
     const size = Number(opened.size);
@@ -40581,10 +41050,10 @@ async function readLinkedManifest(temporaryPath, manifestPath) {
     }
     const [settled, settledTemporary, settledPublished] = await Promise.all([
       handle.stat({ bigint: true }),
-      lstat8(temporaryPath, { bigint: true }),
-      lstat8(manifestPath, { bigint: true })
+      lstat9(temporaryPath, { bigint: true }),
+      lstat9(manifestPath, { bigint: true })
     ]);
-    if (offset !== size || !sameIdentity2(settled, opened) || settled.nlink !== 2n || settled.size !== opened.size || settled.mtimeNs !== opened.mtimeNs || settled.ctimeNs !== opened.ctimeNs || !sameIdentity2(settledTemporary, opened) || settledTemporary.nlink !== 2n || !sameIdentity2(settledPublished, opened) || settledPublished.nlink !== 2n) {
+    if (offset !== size || !sameIdentity3(settled, opened) || settled.nlink !== 2n || settled.size !== opened.size || settled.mtimeNs !== opened.mtimeNs || settled.ctimeNs !== opened.ctimeNs || !sameIdentity3(settledTemporary, opened) || settledTemporary.nlink !== 2n || !sameIdentity3(settledPublished, opened) || settledPublished.nlink !== 2n) {
       throw new RuntimeError("linked worktree removal manifest residue changed while reading");
     }
     return contents;
@@ -40605,8 +41074,8 @@ async function readLinkedManifest(temporaryPath, manifestPath) {
 }
 async function settleLinkedWorktreeRemovalManifest(manifestPath, temporaryPath, transactionId) {
   const root = validateManifestPath(manifestPath, transactionId);
-  const temporaryMatch = TEMPORARY_MANIFEST_NAME.exec(path16.basename(temporaryPath));
-  if (temporaryMatch?.[1] !== transactionId || path16.dirname(temporaryPath) !== root) {
+  const temporaryMatch = TEMPORARY_MANIFEST_NAME.exec(path17.basename(temporaryPath));
+  if (temporaryMatch?.[1] !== transactionId || path17.dirname(temporaryPath) !== root) {
     throw new RuntimeError("temporary worktree removal manifest path is invalid");
   }
   const rootIdentity = await ensurePrivateDirectory2(root);
@@ -40614,17 +41083,17 @@ async function settleLinkedWorktreeRemovalManifest(manifestPath, temporaryPath, 
   let published;
   try {
     [temporary, published] = await Promise.all([
-      lstat8(temporaryPath, { bigint: true }),
-      lstat8(manifestPath, { bigint: true })
+      lstat9(temporaryPath, { bigint: true }),
+      lstat9(manifestPath, { bigint: true })
     ]);
   } catch (error51) {
-    if (errorCode6(error51) === "ENOENT") {
-      const remaining = await lstat8(manifestPath, { bigint: true }).catch(() => null);
+    if (errorCode7(error51) === "ENOENT") {
+      const remaining = await lstat9(manifestPath, { bigint: true }).catch(() => null);
       if (remaining !== null && remaining.isFile() && remaining.nlink === 1n) return;
     }
     throw error51;
   }
-  if (!temporary.isFile() || temporary.isSymbolicLink() || temporary.nlink !== 2n || !published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity2(temporary, published)) {
+  if (!temporary.isFile() || temporary.isSymbolicLink() || temporary.nlink !== 2n || !published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity3(temporary, published)) {
     throw new RuntimeError("linked worktree removal manifest residue is ambiguous");
   }
   const publishedIdentity = {
@@ -40633,7 +41102,7 @@ async function settleLinkedWorktreeRemovalManifest(manifestPath, temporaryPath, 
     birthtimeNs: published.birthtimeNs
   };
   await assertDirectoryIdentity3(root, rootIdentity);
-  await rm4(temporaryPath, { force: false });
+  await rm5(temporaryPath, { force: false });
   await assertDirectoryIdentity3(root, rootIdentity);
   await assertManifestIdentity(manifestPath, publishedIdentity, 1n);
   await syncDirectoryMetadata(root);
@@ -40647,7 +41116,7 @@ async function readWorktreeRemovalManifest(manifestPath, transactionId) {
   try {
     contents = await readStableRegularFile(manifestPath, MAX_MANIFEST_BYTES);
   } catch (error51) {
-    if (errorCode6(error51) === "ENOENT") return null;
+    if (errorCode7(error51) === "ENOENT") return null;
     throw error51;
   }
   await assertDirectoryIdentity3(root, rootIdentity);
@@ -40665,9 +41134,9 @@ async function assertNoPendingWorktreeRemovalForRepository(repositoryIdentity) {
       description: "worktree removal manifest root",
       create: false
     });
-    entries = await readdir4(root, { withFileTypes: true });
+    entries = await readdir5(root, { withFileTypes: true });
   } catch (error51) {
-    if (errorCode6(error51) === "ENOENT") return;
+    if (errorCode7(error51) === "ENOENT") return;
     throw error51;
   }
   for (const entry of entries) {
@@ -40678,7 +41147,7 @@ async function assertNoPendingWorktreeRemovalForRepository(repositoryIdentity) {
     if (match === null || !entry.isFile() || entry.isSymbolicLink()) {
       throw new RuntimeError("worktree removal manifest root contains ambiguous residue");
     }
-    const manifestPath = path16.join(root, entry.name);
+    const manifestPath = path17.join(root, entry.name);
     const manifest = await readWorktreeRemovalManifest(manifestPath, match[1]);
     if (manifest === null) {
       throw new RuntimeError("worktree removal manifest changed during lease validation");
@@ -40701,9 +41170,9 @@ async function readPendingWorktreeRemovalManifests() {
   const root = manifestRoot();
   let initialMetadata;
   try {
-    initialMetadata = await lstat8(root, { bigint: true });
+    initialMetadata = await lstat9(root, { bigint: true });
   } catch (error51) {
-    if (errorCode6(error51) === "ENOENT") return { pending: [], issues: [] };
+    if (errorCode7(error51) === "ENOENT") return { pending: [], issues: [] };
     return { pending: [], issues: [{ manifestPath: root, error: error51 }] };
   }
   if (!initialMetadata.isDirectory() || initialMetadata.isSymbolicLink()) {
@@ -40719,7 +41188,7 @@ async function readPendingWorktreeRemovalManifests() {
   let entries;
   try {
     rootIdentity = await ensurePrivateDirectory2(root);
-    entries = await readdir4(root, { withFileTypes: true });
+    entries = await readdir5(root, { withFileTypes: true });
     await assertDirectoryIdentity3(root, rootIdentity);
   } catch (error51) {
     return { pending: [], issues: [{ manifestPath: root, error: error51 }] };
@@ -40731,23 +41200,23 @@ async function readPendingWorktreeRemovalManifests() {
   for (const entry of sortedEntries) {
     const guardMatch = MANIFEST_REMOVAL_GUARD.exec(entry.name);
     if (guardMatch === null) continue;
-    const guardPath = path16.join(root, entry.name);
-    const publishedPath = path16.join(root, `${guardMatch[1]}.json`);
+    const guardPath = path17.join(root, entry.name);
+    const publishedPath = path17.join(root, `${guardMatch[1]}.json`);
     try {
       await assertDirectoryIdentity3(root, rootIdentity);
-      const guard = await lstat8(guardPath, { bigint: true });
+      const guard = await lstat9(guardPath, { bigint: true });
       if (!guard.isFile() || guard.isSymbolicLink() || guard.birthtimeNs <= 0n || guard.nlink !== 1n && guard.nlink !== 2n) {
         throw new RuntimeError("worktree removal manifest guard is malformed");
       }
       if (guard.nlink === 2n) {
-        const published = await lstat8(publishedPath, { bigint: true });
-        if (!published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity2(published, guard)) {
+        const published = await lstat9(publishedPath, { bigint: true });
+        if (!published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity3(published, guard)) {
           throw new RuntimeError("worktree removal manifest guard pair is inconsistent");
         }
       } else {
         await assertMissing(publishedPath, "removed worktree manifest");
       }
-      await rm4(guardPath, { force: false });
+      await rm5(guardPath, { force: false });
       await syncDirectoryMetadata(root);
       await assertDirectoryIdentity3(root, rootIdentity);
     } catch (error51) {
@@ -40759,7 +41228,7 @@ async function readPendingWorktreeRemovalManifests() {
     const match = HARDLINK_PROBE_NAME.exec(entry.name);
     if (match === null) continue;
     const pair = probeEntries.get(match[1]) ?? {};
-    pair[match[2]] = path16.join(root, entry.name);
+    pair[match[2]] = path17.join(root, entry.name);
     probeEntries.set(match[1], pair);
   }
   for (const pair of probeEntries.values()) {
@@ -40768,7 +41237,7 @@ async function readPendingWorktreeRemovalManifests() {
       await assertDirectoryIdentity3(root, rootIdentity);
       const metadata = await Promise.all(paths.map(async (probePath) => ({
         path: probePath,
-        metadata: await lstat8(probePath, { bigint: true })
+        metadata: await lstat9(probePath, { bigint: true })
       })));
       if (metadata.some(({ metadata: value }) => !value.isFile() || value.isSymbolicLink() || value.birthtimeNs <= 0n)) {
         throw new RuntimeError("manifest hard-link probe residue is malformed");
@@ -40777,11 +41246,11 @@ async function readPendingWorktreeRemovalManifests() {
         if (metadata[0].metadata.nlink !== 1n) {
           throw new RuntimeError("manifest hard-link probe residue has an external alias");
         }
-      } else if (metadata.length !== 2 || metadata.some(({ metadata: value }) => value.nlink !== 2n) || !sameIdentity2(metadata[0].metadata, metadata[1].metadata)) {
+      } else if (metadata.length !== 2 || metadata.some(({ metadata: value }) => value.nlink !== 2n) || !sameIdentity3(metadata[0].metadata, metadata[1].metadata)) {
         throw new RuntimeError("manifest hard-link probe pair is inconsistent");
       }
       for (const { path: probePath } of metadata.reverse()) {
-        await rm4(probePath, { force: false });
+        await rm5(probePath, { force: false });
       }
       await syncDirectoryMetadata(root);
       await assertDirectoryIdentity3(root, rootIdentity);
@@ -40792,7 +41261,7 @@ async function readPendingWorktreeRemovalManifests() {
   for (const entry of sortedEntries) {
     const temporaryMatch = TEMPORARY_MANIFEST_NAME.exec(entry.name);
     if (temporaryMatch === null) continue;
-    const temporaryPath = path16.join(root, entry.name);
+    const temporaryPath = path17.join(root, entry.name);
     if (!entry.isFile() || entry.isSymbolicLink()) {
       issues.push({
         manifestPath: temporaryPath,
@@ -40801,16 +41270,16 @@ async function readPendingWorktreeRemovalManifests() {
       continue;
     }
     const transactionId = temporaryMatch[1];
-    const publishedPath = path16.join(root, `${transactionId}.json`);
+    const publishedPath = path17.join(root, `${transactionId}.json`);
     try {
       await assertDirectoryIdentity3(root, rootIdentity);
-      const temporaryMetadata = await lstat8(temporaryPath, { bigint: true });
+      const temporaryMetadata = await lstat9(temporaryPath, { bigint: true });
       if (temporaryMetadata.nlink === 1n) {
         const contents = await readStableRegularFile(temporaryPath, MAX_MANIFEST_BYTES);
         if (contents === null) {
           throw new RuntimeError("unpublished worktree removal manifest is not stable");
         }
-        await rm4(temporaryPath, { force: false });
+        await rm5(temporaryPath, { force: false });
         await syncDirectoryMetadata(root);
         await assertDirectoryIdentity3(root, rootIdentity);
       } else {
@@ -40829,7 +41298,7 @@ async function readPendingWorktreeRemovalManifests() {
   }
   for (const entry of sortedEntries) {
     if (TEMPORARY_MANIFEST_NAME.test(entry.name) || HARDLINK_PROBE_NAME.test(entry.name) || MANIFEST_REMOVAL_GUARD.test(entry.name)) continue;
-    const manifestPath = path16.join(root, entry.name);
+    const manifestPath = path17.join(root, entry.name);
     const match = MANIFEST_NAME.exec(entry.name);
     if (match === null || !entry.isFile() || entry.isSymbolicLink()) {
       issues.push({
@@ -40856,35 +41325,263 @@ async function readPendingWorktreeRemovalManifests() {
   return { pending, issues };
 }
 
-// src/runtime/worktree-mutation-gate.ts
-var WORKTREE_MUTATION_GUARD = /* @__PURE__ */ Symbol("claude-architect.worktree-mutation-guard");
-function guardWorktreeMutations(services3) {
-  if (services3[WORKTREE_MUTATION_GUARD] === true) return services3;
-  const guarded = Object.create(services3);
-  Object.defineProperty(guarded, WORKTREE_MUTATION_GUARD, { value: true });
-  guarded.acquireCheckoutLock = async (checkoutPath, options) => {
-    const lease = await services3.acquireCheckoutLock(checkoutPath, options);
+// src/platform/durable-write.ts
+import { randomUUID as randomUUID5 } from "node:crypto";
+import { constants as constants10 } from "node:fs";
+import { link as link4, lstat as lstat10, mkdir as mkdir4, open as open10, readFile as readFile4, rename as rename4, rm as rm6 } from "node:fs/promises";
+import path18 from "node:path";
+import nodeProcess6 from "node:process";
+var NO_FOLLOW5 = constants10.O_NOFOLLOW ?? 0;
+var SAFE_COMPONENT = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
+function isAlreadyPresent(error51) {
+  return typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "EEXIST";
+}
+function sameIdentity4(left, right) {
+  if (left.dev !== right.dev || left.ino !== right.ino) return false;
+  if (left.birthtimeNs <= 0n || right.birthtimeNs <= 0n) return true;
+  return left.birthtimeNs === right.birthtimeNs;
+}
+var DurableDirectorySession = class {
+  directory;
+  identity;
+  policy;
+  handle;
+  closed = false;
+  constructor(directory, identity, policy = {}, handle) {
+    this.directory = directory;
+    this.identity = identity;
+    this.policy = policy;
+    this.handle = handle;
+  }
+  async assertIdentity() {
+    if (this.closed) {
+      throw new RuntimeError("durable directory session is closed");
+    }
+    const current = await lstat10(this.directory, { bigint: true });
+    if (!current.isDirectory() || current.isSymbolicLink() || !sameIdentity4(current, this.identity)) {
+      throw new RuntimeError("durable directory session identity changed");
+    }
+  }
+  async sync() {
+    if (this.closed) {
+      throw new RuntimeError("durable directory session is closed");
+    }
+    if (this.policy.syncDirectory !== void 0) {
+      await this.policy.syncDirectory(this.directory);
+      return;
+    }
+    if (this.handle !== void 0) {
+      try {
+        await this.handle.sync();
+        return;
+      } catch {
+      }
+    }
+    await syncDirectoryMetadata(this.directory);
+  }
+  async close() {
+    this.closed = true;
+    if (this.handle !== void 0) {
+      try {
+        await this.handle.close();
+      } catch {
+      }
+      this.handle = void 0;
+    }
+  }
+};
+async function openDurableDirectorySession(directory, options = {}) {
+  let identity;
+  if (options.privateDirectory === true) {
+    identity = await ensurePrivateDirectory(directory, {
+      description: options.description ?? "durable directory",
+      create: options.create ?? false,
+      migratePermissions: true,
+      ...options.policy?.syncDirectory === void 0 ? {} : { syncDirectory: options.policy.syncDirectory }
+    });
+  } else {
+    if (options.create !== false) {
+      try {
+        await mkdir4(directory, { recursive: true, mode: 448 });
+      } catch (error51) {
+        if (!isAlreadyPresent(error51)) throw error51;
+      }
+    }
+    const metadata = await lstat10(directory, { bigint: true });
+    if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+      throw new RuntimeError(`${options.description ?? "durable directory"} must be a plain directory`);
+    }
+    identity = {
+      dev: metadata.dev,
+      ino: metadata.ino,
+      birthtimeNs: metadata.birthtimeNs
+    };
+  }
+  let handle;
+  if (options.policy?.platform !== "win32" && nodeProcess6.platform !== "win32") {
     try {
-      await assertNoPendingWorktreeRemovalForRepository(lease.repositoryIdentity);
-      return lease;
+      handle = await open10(directory, constants10.O_RDONLY | NO_FOLLOW5);
+    } catch {
+    }
+  }
+  return new DurableDirectorySession(directory, identity, options.policy, handle);
+}
+async function renameWithRetry(source, destination, platform = nodeProcess6.platform, maxAttempts = 50) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await rename4(source, destination);
+      return;
     } catch (error51) {
-      const gateError = new RuntimeError(
-        "worktree mutation is unavailable while removal recovery remains ambiguous",
-        { classification: "recovery-ambiguous", cause: error51 }
-      );
+      const code = typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
+      const isTransientWin32 = platform === "win32" && (code === "EPERM" || code === "EACCES" || code === "EBUSY");
+      if (isTransientWin32 && attempt < maxAttempts) {
+        await new Promise((resolve2) => setTimeout(resolve2, 50));
+        continue;
+      }
+      throw error51;
+    }
+  }
+}
+async function writeAtomic(session, name, bytes, mode) {
+  if (path18.isAbsolute(name) || path18.basename(name) !== name || !SAFE_COMPONENT.test(name)) {
+    throw new RuntimeError(`atomic write target must be a safe leaf name: ${name}`);
+  }
+  const destination = path18.join(session.directory, name);
+  const temporaryPath = path18.join(session.directory, `.${name}.${randomUUID5()}.tmp`);
+  let handle;
+  let temporaryCreated = false;
+  try {
+    await session.assertIdentity();
+    handle = await open10(
+      temporaryPath,
+      constants10.O_WRONLY | constants10.O_CREAT | constants10.O_EXCL | NO_FOLLOW5,
+      384
+    );
+    temporaryCreated = true;
+    await session.assertIdentity();
+    if (typeof bytes === "string") {
+      await handle.writeFile(bytes, { encoding: "utf8" });
+    } else {
+      await handle.writeFile(bytes);
+    }
+    await handle.sync();
+    await handle.close();
+    handle = void 0;
+    await session.assertIdentity();
+    if (mode === "immutable") {
+      try {
+        await link4(temporaryPath, destination);
+      } catch (error51) {
+        if (!isAlreadyPresent(error51)) throw error51;
+        await session.assertIdentity();
+        const existing = await readFile4(destination);
+        const expected = typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes;
+        if (!existing.equals(expected)) {
+          throw new RuntimeError(`archive entry already exists with different content: ${name}`);
+        }
+      }
+      await rm6(temporaryPath, { force: true });
+      temporaryCreated = false;
+    } else if (mode === "replace") {
+      await renameWithRetry(temporaryPath, destination);
+      temporaryCreated = false;
+    }
+    await session.sync();
+    await session.assertIdentity();
+  } finally {
+    if (handle !== void 0) {
+      try {
+        await handle.close();
+      } catch {
+      }
+    }
+    if (temporaryCreated) {
+      try {
+        await rm6(temporaryPath, { force: true });
+      } catch {
+      }
+    }
+  }
+}
+
+// src/platform/platform-safety.ts
+var PlatformSafety = class {
+  constructor(platformServices = getPlatformServices()) {
+    this.platformServices = platformServices;
+  }
+  platformServices;
+  async withCheckoutLease(checkout, fn, options) {
+    const lease = await this.platformServices.acquireCheckoutLock(checkout, {
+      ...options?.runId === void 0 ? {} : { runId: options.runId }
+    });
+    let primaryError;
+    let result;
+    let completed = false;
+    try {
+      await this.assertAmbiguityGate(lease.repositoryIdentity);
+      result = await fn(lease);
+      completed = true;
+      return result;
+    } catch (error51) {
+      primaryError = error51;
+      throw error51;
+    } finally {
       try {
         await lease.release();
       } catch (releaseError) {
-        throw new AggregateError(
-          [gateError, releaseError],
-          "worktree-removal gate failed and its checkout lease could not be released"
-        );
+        if (completed && options?.onReleaseError !== void 0) {
+          result = options.onReleaseError(releaseError, result);
+        } else if (primaryError !== void 0) {
+          const primaryMessage = primaryError instanceof Error ? primaryError.message : String(primaryError);
+          throw new AggregateError(
+            [primaryError, releaseError],
+            `${primaryMessage}; checkout lock release failed`
+          );
+        } else {
+          throw releaseError;
+        }
       }
-      throw gateError;
     }
-  };
-  return guarded;
-}
+  }
+  async withRecoveryLease(checkout, fn, options) {
+    const lease = await this.platformServices.acquireCheckoutLock(checkout, {
+      ...options?.runId === void 0 ? {} : { runId: options.runId }
+    });
+    let primaryError;
+    try {
+      return await fn(lease);
+    } catch (error51) {
+      primaryError = error51;
+      throw error51;
+    } finally {
+      try {
+        await lease.release();
+      } catch (releaseError) {
+        if (primaryError !== void 0) {
+          throw new AggregateError(
+            [primaryError, releaseError],
+            "recovery lease release failed after operation failure"
+          );
+        }
+        throw releaseError;
+      }
+    }
+  }
+  async writeAtomic(session, name, bytes, mode) {
+    return writeAtomic(session, name, bytes, mode);
+  }
+  async assertAmbiguityGate(repositoryIdentity) {
+    try {
+      await assertNoPendingWorktreeRemovalForRepository(repositoryIdentity);
+    } catch (error51) {
+      throw new RuntimeError(
+        "worktree mutation is unavailable while removal recovery remains ambiguous",
+        { classification: "recovery-ambiguous", cause: error51 }
+      );
+    }
+  }
+};
+var platformSafety = new PlatformSafety();
 
 // src/runtime/worktree-removal-coordinator.ts
 async function rollbackPrecommit(manifestPath, transactionId, staged, primaryError) {
@@ -40981,12 +41678,12 @@ var WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY = "claude-architect-quarantine";
 function delay2(milliseconds) {
   return new Promise((resolve2) => setTimeout(resolve2, milliseconds));
 }
-function errorCode7(error51) {
+function errorCode8(error51) {
   return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
 }
 async function syncChangedDirectories(dependencies, ...directories) {
   const syncDirectory4 = dependencies.syncDirectory ?? syncDirectoryMetadata;
-  for (const directory of new Set(directories.map((value) => path17.resolve(value)))) {
+  for (const directory of new Set(directories.map((value) => path19.resolve(value)))) {
     await syncDirectory4(directory);
   }
 }
@@ -40999,17 +41696,17 @@ function sameDirectoryIdentity(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
 }
 async function quarantinedIdentityRemainsNamed(quarantineRoot, expectedIdentity) {
-  const entries = await readdir5(quarantineRoot, { withFileTypes: true });
+  const entries = await readdir6(quarantineRoot, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const observed = await managedWorktreeDirectoryIdentity(path17.join(quarantineRoot, entry.name));
+    const observed = await managedWorktreeDirectoryIdentity(path19.join(quarantineRoot, entry.name));
     if (observed !== null && sameDirectoryIdentity(observed, expectedIdentity)) return true;
   }
   return false;
 }
 async function managedWorktreeDirectoryIdentity(directory) {
   try {
-    const metadata = await lstat9(directory, { bigint: true });
+    const metadata = await lstat11(directory, { bigint: true });
     if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
       throw new RuntimeError("managed worktree must be a plain directory");
     }
@@ -41022,7 +41719,7 @@ async function managedWorktreeDirectoryIdentity(directory) {
       birthtimeNs: metadata.birthtimeNs
     };
   } catch (error51) {
-    if (errorCode7(error51) === "ENOENT") return null;
+    if (errorCode8(error51) === "ENOENT") return null;
     throw error51;
   }
 }
@@ -41067,28 +41764,28 @@ async function removeQuarantinedDirectory(quarantineRoot, quarantinePath, expect
   }
 }
 async function managedPath(worktreePath) {
-  const root = path17.resolve(resolveStateDir(), "worktrees");
-  const target = path17.resolve(worktreePath);
+  const root = path19.resolve(resolveStateDir(), "worktrees");
+  const target = path19.resolve(worktreePath);
   let canonicalRoot;
   try {
     canonicalRoot = await realpath7(root);
   } catch (error51) {
-    if (errorCode7(error51) !== "ENOENT") throw error51;
-    canonicalRoot = path17.join(await realpath7(path17.dirname(root)), path17.basename(root));
+    if (errorCode8(error51) !== "ENOENT") throw error51;
+    canonicalRoot = path19.join(await realpath7(path19.dirname(root)), path19.basename(root));
   }
   let canonicalTarget;
   try {
     canonicalTarget = await canonicalizeWorktreePath(target, true);
   } catch (error51) {
-    if (errorCode7(error51) !== "ENOENT") throw error51;
-    const targetParent = path17.dirname(target);
-    canonicalTarget = path17.join(
-      await realpath7(path17.dirname(targetParent)),
-      path17.basename(targetParent),
-      path17.basename(target)
+    if (errorCode8(error51) !== "ENOENT") throw error51;
+    const targetParent = path19.dirname(target);
+    canonicalTarget = path19.join(
+      await realpath7(path19.dirname(targetParent)),
+      path19.basename(targetParent),
+      path19.basename(target)
     );
   }
-  if (platformPathsEqual(canonicalTarget, canonicalRoot) || !platformPathsEqual(path17.dirname(canonicalTarget), canonicalRoot)) {
+  if (platformPathsEqual(canonicalTarget, canonicalRoot) || !platformPathsEqual(path19.dirname(canonicalTarget), canonicalRoot)) {
     throw new RuntimeError("refusing to remove unmanaged worktree path");
   }
   return { root: canonicalRoot, target: canonicalTarget };
@@ -41107,18 +41804,18 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   if (!sameDirectoryIdentity(observedIdentity, expectedIdentity)) {
     throw new RuntimeError("managed worktree directory identity changed before quarantine");
   }
-  const quarantineToken = (options.uuid ?? randomUUID4)();
+  const quarantineToken = (options.uuid ?? randomUUID6)();
   if (!SAFE_QUARANTINE_TOKEN.test(quarantineToken)) {
     throw new RuntimeError("invalid managed worktree quarantine token");
   }
-  const quarantinePath = path17.join(
+  const quarantinePath = path19.join(
     quarantineRoot,
     `.remove-${quarantineLabel}-${quarantineToken}`
   );
-  if (path17.dirname(quarantinePath) !== quarantineRoot) {
+  if (path19.dirname(quarantinePath) !== quarantineRoot) {
     throw new RuntimeError("managed worktree quarantine path escaped its root");
   }
-  const move = options.rename ?? rename4;
+  const move = options.rename ?? rename5;
   const wait = options.delay ?? delay2;
   let moveError;
   let moved = false;
@@ -41208,7 +41905,7 @@ async function removeManagedWorktreeDirectory(worktreePath, options = {}) {
   return await removeDirectoryByQuarantine(
     root,
     target,
-    path17.basename(target),
+    path19.basename(target),
     options
   );
 }
@@ -41224,19 +41921,19 @@ async function isRegisteredWorktree(repoRoot, worktreePath, runGit, allowMissing
   ) !== -1;
 }
 async function boundPlainChildDirectory(root, candidate, description) {
-  const resolvedCandidate = path17.resolve(candidate);
-  if (!path17.isAbsolute(candidate) || !platformPathsEqual(path17.dirname(resolvedCandidate), root)) {
+  const resolvedCandidate = path19.resolve(candidate);
+  if (!path19.isAbsolute(candidate) || !platformPathsEqual(path19.dirname(resolvedCandidate), root)) {
     throw new RuntimeError(`${description} escaped its root`);
   }
-  const before = await lstat9(resolvedCandidate, { bigint: true });
+  const before = await lstat11(resolvedCandidate, { bigint: true });
   if (!before.isDirectory() || before.isSymbolicLink() || before.birthtimeNs <= 0n) {
     throw new RuntimeError(`${description} is not a stable plain directory`);
   }
   const canonical = await realpath7(resolvedCandidate);
-  if (!platformPathsEqual(canonical, resolvedCandidate) || !platformPathsEqual(path17.dirname(canonical), root)) {
+  if (!platformPathsEqual(canonical, resolvedCandidate) || !platformPathsEqual(path19.dirname(canonical), root)) {
     throw new RuntimeError(`${description} changed identity during canonicalization`);
   }
-  const after = await lstat9(resolvedCandidate, { bigint: true });
+  const after = await lstat11(resolvedCandidate, { bigint: true });
   if (!after.isDirectory() || after.isSymbolicLink() || after.dev !== before.dev || after.ino !== before.ino || after.birthtimeNs <= 0n || after.birthtimeNs !== before.birthtimeNs) {
     throw new RuntimeError(`${description} changed identity during validation`);
   }
@@ -41252,9 +41949,9 @@ async function boundPlainChildDirectory(root, candidate, description) {
 async function worktreeMarkerRegistrationPath(worktreePath) {
   let contents;
   try {
-    contents = await readStableRegularFile(path17.join(worktreePath, ".git"), 32768n);
+    contents = await readStableRegularFile(path19.join(worktreePath, ".git"), 32768n);
   } catch (error51) {
-    if (errorCode7(error51) === "ENOENT") return null;
+    if (errorCode8(error51) === "ENOENT") return null;
     throw error51;
   }
   if (contents === null) return null;
@@ -41263,10 +41960,10 @@ async function worktreeMarkerRegistrationPath(worktreePath) {
     throw new RuntimeError("managed worktree marker is malformed");
   }
   const registrationPath = marker.slice("gitdir: ".length);
-  if (!path17.isAbsolute(registrationPath)) {
+  if (!path19.isAbsolute(registrationPath)) {
     throw new RuntimeError("managed worktree marker registration is not absolute");
   }
-  return path17.resolve(registrationPath);
+  return path19.resolve(registrationPath);
 }
 async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
   const markerRegistrationPath = await worktreeMarkerRegistrationPath(worktreePath);
@@ -41307,16 +42004,16 @@ async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
     gitDirResult.stdout,
     "worktree administrative directory"
   );
-  if (!path17.isAbsolute(reportedCommonDir) || !path17.isAbsolute(reportedAdministrativePath)) {
+  if (!path19.isAbsolute(reportedCommonDir) || !path19.isAbsolute(reportedAdministrativePath)) {
     throw new RuntimeError("worktree registration lookup returned a non-absolute path");
   }
   const commonDir = await realpath7(reportedCommonDir);
-  const expectedAdministrativeRoot = path17.join(commonDir, "worktrees");
+  const expectedAdministrativeRoot = path19.join(commonDir, "worktrees");
   const administrativeRoot = await realpath7(expectedAdministrativeRoot);
   if (!platformPathsEqual(administrativeRoot, expectedAdministrativeRoot)) {
     throw new RuntimeError("worktree administrative root escaped its repository");
   }
-  if (markerRegistrationPath === null || !platformPathsEqual(path17.resolve(reportedAdministrativePath), markerRegistrationPath)) {
+  if (markerRegistrationPath === null || !platformPathsEqual(path19.resolve(reportedAdministrativePath), markerRegistrationPath)) {
     throw new RuntimeError("worktree marker names a different administrative directory");
   }
   const administrative = await boundPlainChildDirectory(
@@ -41325,7 +42022,7 @@ async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
     "worktree administrative directory"
   );
   const contents = await readStableRegularFile(
-    path17.join(administrative.path, "gitdir"),
+    path19.join(administrative.path, "gitdir"),
     32768n
   );
   if (contents === null) {
@@ -41335,7 +42032,7 @@ async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
     contents.toString("utf8"),
     "worktree registration backlink"
   );
-  if (!path17.isAbsolute(backlink) || await realpath7(backlink) !== await realpath7(path17.join(worktreePath, ".git"))) {
+  if (!path19.isAbsolute(backlink) || await realpath7(backlink) !== await realpath7(path19.join(worktreePath, ".git"))) {
     throw new RuntimeError("worktree registration backlink does not match the managed path");
   }
   return {
@@ -41346,7 +42043,7 @@ async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
   };
 }
 async function registrationQuarantineRoot(commonDir, dependencies) {
-  const quarantineRoot = path17.join(commonDir, WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY);
+  const quarantineRoot = path19.join(commonDir, WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY);
   await ensurePrivateDirectory(quarantineRoot, {
     description: "worktree registration quarantine",
     migratePermissions: true,
@@ -41363,7 +42060,7 @@ async function restoreStagedRegistration(registrationRoot, registrationPath, qua
   if (registrationRootIdentity === null || !sameDirectoryIdentity(registrationRootIdentity, expectedRegistrationRootIdentity) || quarantineRootIdentity === null || !sameDirectoryIdentity(quarantineRootIdentity, expectedQuarantineRootIdentity) || sourceIdentity === null || !sameDirectoryIdentity(sourceIdentity, expectedIdentity) || destinationIdentity !== null) {
     throw new RuntimeError("staged worktree registration rollback is unsafe");
   }
-  const move = dependencies.rename ?? rename4;
+  const move = dependencies.rename ?? rename5;
   const wait = dependencies.delay ?? delay2;
   let moveError;
   let restored = false;
@@ -41391,7 +42088,7 @@ async function restoreStagedRegistration(registrationRoot, registrationPath, qua
   }
 }
 async function stageRegistrationDirectory(repoRoot, registration, worktreePath, quarantineRoot, quarantinePath, transactionId, runGit, dependencies, allowMissingWorktree = false) {
-  const quarantineLabel = `registration-${path17.basename(registration.path)}`;
+  const quarantineLabel = `registration-${path19.basename(registration.path)}`;
   const [registrationRootIdentity, quarantineRootIdentity] = await Promise.all([
     requiredDirectoryIdentity(registration.root, "Git registration root"),
     requiredDirectoryIdentity(quarantineRoot, "Git registration quarantine root")
@@ -41503,11 +42200,11 @@ async function staleWorktreeRegistrationDirectory(repoRoot, worktreePath, worktr
     commonResult.stdout,
     "stale worktree common directory"
   );
-  if (!path17.isAbsolute(reportedCommonDir) || !path17.isAbsolute(worktreeGitDir)) {
+  if (!path19.isAbsolute(reportedCommonDir) || !path19.isAbsolute(worktreeGitDir)) {
     throw new RuntimeError("stale worktree registration paths must be absolute");
   }
   const commonDir = await realpath7(reportedCommonDir);
-  const expectedRegistrationRoot = path17.join(commonDir, "worktrees");
+  const expectedRegistrationRoot = path19.join(commonDir, "worktrees");
   const registrationRoot = await realpath7(expectedRegistrationRoot);
   if (!platformPathsEqual(registrationRoot, expectedRegistrationRoot)) {
     throw new RuntimeError("stale worktree administrative root escaped its repository");
@@ -41518,8 +42215,8 @@ async function staleWorktreeRegistrationDirectory(repoRoot, worktreePath, worktr
     "stale worktree administrative directory"
   );
   const [gitdirContents, headContents] = await Promise.all([
-    readStableRegularFile(path17.join(registration.path, "gitdir"), 32768n),
-    readStableRegularFile(path17.join(registration.path, "HEAD"), 32768n)
+    readStableRegularFile(path19.join(registration.path, "gitdir"), 32768n),
+    readStableRegularFile(path19.join(registration.path, "HEAD"), 32768n)
   ]);
   if (gitdirContents === null || headContents === null) {
     throw new RuntimeError("stale worktree registration files are not stable");
@@ -41529,12 +42226,12 @@ async function staleWorktreeRegistrationDirectory(repoRoot, worktreePath, worktr
     "stale worktree registration backlink"
   );
   const head = gitPathOutput(headContents.toString("utf8"), "stale worktree HEAD");
-  if (!path17.isAbsolute(backlink) || path17.basename(backlink) !== ".git" || (expectedBranchRef === null ? !(/^ref: refs\//u.test(head) || /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u.test(head)) : head !== `ref: ${expectedBranchRef}`)) {
+  if (!path19.isAbsolute(backlink) || path19.basename(backlink) !== ".git" || (expectedBranchRef === null ? !(/^ref: refs\//u.test(head) || /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u.test(head)) : head !== `ref: ${expectedBranchRef}`)) {
     throw new RuntimeError("stale worktree registration identity is inconsistent");
   }
   const { target } = await managedPath(worktreePath);
   const canonicalBacklinkWorktree = await canonicalizeWorktreePath(
-    path17.dirname(path17.resolve(backlink)),
+    path19.dirname(path19.resolve(backlink)),
     true
   );
   const canonicalExpectedWorktree = await canonicalizeWorktreePath(target, true);
@@ -41562,25 +42259,25 @@ async function discoverStaleWorktreeRegistration(repoRoot, worktreePath, runGit,
     commonResult.stdout,
     "missing worktree common directory"
   );
-  if (!path17.isAbsolute(reportedCommonDir)) {
+  if (!path19.isAbsolute(reportedCommonDir)) {
     throw new RuntimeError("missing worktree common directory is not absolute");
   }
   const commonDir = await realpath7(reportedCommonDir);
-  const expectedRegistrationRoot = path17.join(commonDir, "worktrees");
+  const expectedRegistrationRoot = path19.join(commonDir, "worktrees");
   const registrationRoot = await realpath7(expectedRegistrationRoot);
   if (!platformPathsEqual(registrationRoot, expectedRegistrationRoot)) {
     throw new RuntimeError("worktree administrative root escaped its repository");
   }
   const expectedWorktree = await canonicalizeWorktreePath(worktreePath, true);
   const matches = [];
-  for (const entry of await readdir5(registrationRoot, { withFileTypes: true })) {
+  for (const entry of await readdir6(registrationRoot, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const registrationPath = path17.join(registrationRoot, entry.name);
+    const registrationPath = path19.join(registrationRoot, entry.name);
     if (expectedRegistrationPath !== null && !platformPathsEqual(registrationPath, expectedRegistrationPath)) {
       continue;
     }
     const contents = await readStableRegularFile(
-      path17.join(registrationPath, "gitdir"),
+      path19.join(registrationPath, "gitdir"),
       32768n
     );
     if (contents === null) continue;
@@ -41590,10 +42287,10 @@ async function discoverStaleWorktreeRegistration(repoRoot, worktreePath, runGit,
     } catch {
       continue;
     }
-    if (!path17.isAbsolute(backlink) || path17.basename(backlink) !== ".git") continue;
+    if (!path19.isAbsolute(backlink) || path19.basename(backlink) !== ".git") continue;
     let candidateWorktree;
     try {
-      candidateWorktree = await canonicalizeWorktreePath(path17.dirname(backlink), true);
+      candidateWorktree = await canonicalizeWorktreePath(path19.dirname(backlink), true);
     } catch {
       continue;
     }
@@ -41637,21 +42334,21 @@ async function removeStaleWorktreeRegistration(repoRoot, worktreePath, worktreeG
     expectedBranchRef,
     runGit
   );
-  const transactionId = (dependencies.uuid ?? randomUUID4)();
+  const transactionId = (dependencies.uuid ?? randomUUID6)();
   if (!SAFE_QUARANTINE_TOKEN.test(transactionId)) {
     throw new RuntimeError("invalid stale worktree quarantine token");
   }
-  const physicalQuarantinePath = path17.join(
+  const physicalQuarantinePath = path19.join(
     root,
-    `.remove-${path17.basename(target)}-${transactionId}`
+    `.remove-${path19.basename(target)}-${transactionId}`
   );
   const quarantineRoot = await registrationQuarantineRoot(
     registration.commonDir,
     dependencies
   );
-  const quarantinePath = path17.join(
+  const quarantinePath = path19.join(
     quarantineRoot,
-    `.remove-registration-${path17.basename(registration.path)}-${transactionId}`
+    `.remove-registration-${path19.basename(registration.path)}-${transactionId}`
   );
   const [
     commonDirIdentity,
@@ -41764,21 +42461,21 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
     throw new RuntimeError("managed worktree identity changed before removal transaction");
   }
   const { root, target } = await managedPath(worktreePath);
-  const transactionId = (dependencies.uuid ?? randomUUID4)();
+  const transactionId = (dependencies.uuid ?? randomUUID6)();
   if (!SAFE_QUARANTINE_TOKEN.test(transactionId)) {
     throw new RuntimeError("invalid physical worktree quarantine token");
   }
-  const physicalQuarantinePath = path17.join(
+  const physicalQuarantinePath = path19.join(
     root,
-    `.remove-${path17.basename(target)}-${transactionId}`
+    `.remove-${path19.basename(target)}-${transactionId}`
   );
   const quarantineRoot = await registrationQuarantineRoot(
     registration.commonDir,
     dependencies
   );
-  const quarantinePath = path17.join(
+  const quarantinePath = path19.join(
     quarantineRoot,
-    `.remove-registration-${path17.basename(registration.path)}-${transactionId}`
+    `.remove-registration-${path19.basename(registration.path)}-${transactionId}`
   );
   const [
     commonDirIdentity,
@@ -41855,7 +42552,7 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
       const removed = await removeDirectoryByQuarantine(
         root,
         target,
-        path17.basename(target),
+        path19.basename(target),
         {
           ...dependencies,
           uuid: () => transactionId,
@@ -41894,59 +42591,35 @@ var WorktreeManager = class {
   }
   async withCheckoutLease(operation) {
     const platformServices = this.lockingPlatformServices();
-    const canonical = await platformServices.canonicalizePath(this.repoRoot);
-    const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
     const borrowed = this.dependencies.borrowedCheckoutLease;
-    let owned = null;
-    let lease = borrowed;
-    if (lease === void 0) {
-      owned = await guardWorktreeMutations(platformServices).acquireCheckoutLock(
-        canonical.canonical,
-        { runId: this.runId }
-      );
-      lease = owned;
-    }
-    let result;
-    let primaryError;
-    try {
-      if (lease.repositoryIdentity !== repositoryIdentity) {
+    if (borrowed !== void 0) {
+      const canonical = await platformServices.canonicalizePath(this.repoRoot);
+      const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
+      if (borrowed.repositoryIdentity !== repositoryIdentity) {
         throw new RuntimeError("worktree manager checkout lease repository identity mismatch");
       }
       await assertNoPendingWorktreeRemovalForRepository(repositoryIdentity);
-      result = await operation(lease);
-    } catch (error51) {
-      primaryError = error51;
+      return await operation(borrowed);
     }
-    if (owned !== null) {
-      try {
-        await owned.release();
-      } catch (releaseError) {
-        if (primaryError !== void 0) {
-          throw new AggregateError(
-            [primaryError, releaseError],
-            "worktree operation failed and its checkout lease could not be released"
-          );
-        }
-        throw releaseError;
-      }
-    }
-    if (primaryError !== void 0) throw primaryError;
-    return result;
+    const safety = new PlatformSafety(platformServices);
+    return await safety.withCheckoutLease(this.repoRoot, operation, {
+      ...this.runId === void 0 ? {} : { runId: this.runId }
+    });
   }
-  managedWorktreePath(stateRoot2 = path17.resolve(resolveStateDir())) {
+  managedWorktreePath(stateRoot2 = path19.resolve(resolveStateDir())) {
     if (!SAFE_MANAGED_ID.test(this.runId)) {
       throw new RuntimeError("invalid worktree run id");
     }
-    const worktreesRoot = path17.resolve(stateRoot2, "worktrees");
-    const worktreePath = path17.resolve(worktreesRoot, this.runId);
-    if (worktreePath === worktreesRoot || !worktreePath.startsWith(`${worktreesRoot}${path17.sep}`)) {
+    const worktreesRoot = path19.resolve(stateRoot2, "worktrees");
+    const worktreePath = path19.resolve(worktreesRoot, this.runId);
+    if (worktreePath === worktreesRoot || !worktreePath.startsWith(`${worktreesRoot}${path19.sep}`)) {
       throw new RuntimeError("invalid worktree run id");
     }
     return { worktreesRoot, worktreePath };
   }
   async prepareManagedWorktreeRoot() {
     await verifyBoundDirectoryCleanupSupport(this.lockingPlatformServices());
-    const configuredStateRoot = path17.resolve(resolveStateDir());
+    const configuredStateRoot = path19.resolve(resolveStateDir());
     const syncDirectory4 = this.dependencies.syncDirectory ?? syncDirectoryMetadata;
     const stateRootIdentity = await ensurePrivateDirectory(configuredStateRoot, {
       description: "runtime state root",
@@ -41987,22 +42660,22 @@ var WorktreeManager = class {
       commonResult.stdout,
       "worktree creation common directory"
     );
-    if (!path17.isAbsolute(reportedCommonDir)) {
+    if (!path19.isAbsolute(reportedCommonDir)) {
       throw new RuntimeError("worktree creation common directory is not absolute");
     }
     const commonDir = await realpath7(reportedCommonDir);
-    const registrationRoot = path17.join(commonDir, "worktrees");
+    const registrationRoot = path19.join(commonDir, "worktrees");
     let registrationRootCreated = false;
     try {
-      await mkdir4(registrationRoot, { mode: 448 });
+      await mkdir5(registrationRoot, { mode: 448 });
       registrationRootCreated = true;
     } catch (error51) {
-      if (errorCode7(error51) !== "EEXIST") throw error51;
+      if (errorCode8(error51) !== "EEXIST") throw error51;
     }
     if (registrationRootCreated) {
       await (this.dependencies.syncDirectory ?? syncDirectoryMetadata)(commonDir);
     }
-    const registrationMetadata = await lstat9(registrationRoot, { bigint: true });
+    const registrationMetadata = await lstat11(registrationRoot, { bigint: true });
     if (!registrationMetadata.isDirectory() || registrationMetadata.isSymbolicLink() || registrationMetadata.birthtimeNs <= 0n) {
       throw new RuntimeError("Git worktree registration root lacks stable identity");
     }
@@ -42022,21 +42695,21 @@ var WorktreeManager = class {
       registrationRoot,
       registrationRootIdentity
     );
-    const transactionId = (this.dependencies.uuid ?? randomUUID4)();
+    const transactionId = (this.dependencies.uuid ?? randomUUID6)();
     if (!SAFE_QUARANTINE_TOKEN.test(transactionId)) {
       throw new RuntimeError("invalid worktree creation transaction token");
     }
-    const registrationPath = path17.join(
+    const registrationPath = path19.join(
       registrationRoot,
       `.creation-${transactionId}`
     );
-    const quarantinePath = path17.join(
+    const quarantinePath = path19.join(
       quarantineRoot,
       `.remove-registration-creation-${transactionId}`
     );
-    const stagingPath = path17.join(
+    const stagingPath = path19.join(
       worktreesRoot,
-      `.create-${path17.basename(worktreePath)}-${transactionId}`
+      `.create-${path19.basename(worktreePath)}-${transactionId}`
     );
     let manifest = {
       manifestVersion: "1",
@@ -42071,7 +42744,7 @@ var WorktreeManager = class {
     };
     const manifestPath = await persistWorktreeRemovalManifest(manifest);
     await assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root");
-    await mkdir4(stagingPath, { mode: 448 });
+    await mkdir5(stagingPath, { mode: 448 });
     await syncChangedDirectories(this.dependencies, worktreesRoot);
     const physicalIdentity = await requiredDirectoryIdentity(
       stagingPath,
@@ -42087,7 +42760,7 @@ var WorktreeManager = class {
     };
     await replaceWorktreeRemovalManifest(manifestPath, manifest);
     await assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root");
-    await (this.dependencies.rename ?? rename4)(stagingPath, worktreePath);
+    await (this.dependencies.rename ?? rename5)(stagingPath, worktreePath);
     await syncChangedDirectories(this.dependencies, worktreesRoot);
     await Promise.all([
       assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root"),
@@ -42163,14 +42836,14 @@ var WorktreeManager = class {
       commonResult.stdout,
       "worktree registration filesystem"
     );
-    if (!path17.isAbsolute(reported)) {
+    if (!path19.isAbsolute(reported)) {
       throw new RuntimeError("worktree registration filesystem path is not absolute");
     }
     const commonDir = await realpath7(reported);
     if (await managedWorktreeDirectoryIdentity(commonDir) === null) {
       throw new RuntimeError("worktree registration filesystem identity is unavailable");
     }
-    const registrationRoot = path17.join(commonDir, "worktrees");
+    const registrationRoot = path19.join(commonDir, "worktrees");
     const existingRegistrationRoot = await managedWorktreeDirectoryIdentity(registrationRoot);
     if (existingRegistrationRoot !== null && existingRegistrationRoot.birthtimeNs <= 0n) {
       throw new RuntimeError("worktree registration root lacks stable identity");
@@ -42359,11 +43032,11 @@ var WorktreeManager = class {
     try {
       canonicalExpectedPath = await canonicalizeWorktreePath(expectedWorktreePath, true);
     } catch (error51) {
-      if (errorCode7(error51) !== "ENOENT") throw error51;
-      canonicalExpectedPath = path17.join(
-        await realpath7(path17.resolve(resolveStateDir())),
+      if (errorCode8(error51) !== "ENOENT") throw error51;
+      canonicalExpectedPath = path19.join(
+        await realpath7(path19.resolve(resolveStateDir())),
         "worktrees",
-        path17.basename(expectedWorktreePath)
+        path19.basename(expectedWorktreePath)
       );
     }
     if (!platformPathsEqual(canonicalWorktreePath, canonicalExpectedPath)) {
@@ -42391,7 +43064,7 @@ var WorktreeManager = class {
 
 // src/verify/project-verifier.ts
 import { realpath as realpath8 } from "node:fs/promises";
-import path18 from "node:path";
+import path20 from "node:path";
 var MAX_COMMAND_OUTPUT_BYTES = 1e6;
 var MAX_DIAGNOSTIC_LENGTH3 = 2e3;
 var POSIX_ESSENTIAL_ENV2 = [
@@ -42439,12 +43112,12 @@ function commandEnvironment(command, os) {
 }
 function isWithinScope(root, candidate, os) {
   if (os === "win32") return canonicalizeForScope(candidate, root);
-  const relative2 = path18.posix.relative(root, candidate);
-  return relative2 === "" || !path18.posix.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith("../");
+  const relative2 = path20.posix.relative(root, candidate);
+  return relative2 === "" || !path20.posix.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith("../");
 }
 async function resolveCommandCwd(worktreePath, commandCwd, os) {
-  if (path18.isAbsolute(commandCwd)) return null;
-  const lexical = path18.resolve(worktreePath, commandCwd);
+  if (path20.isAbsolute(commandCwd)) return null;
+  const lexical = path20.resolve(worktreePath, commandCwd);
   if (!isWithinScope(worktreePath, lexical, os)) return null;
   try {
     const [canonicalRoot, canonicalCwd] = await Promise.all([
@@ -42494,7 +43167,7 @@ async function executeCommand(args) {
     const environment = commandEnvironment(command, ps.os);
     executable = await ps.resolveExecutable({
       name: command.executable,
-      ...path18.isAbsolute(command.executable) ? { explicitPath: command.executable } : {},
+      ...path20.isAbsolute(command.executable) ? { explicitPath: command.executable } : {},
       searchPath: environment.PATH ?? environment.Path ?? ""
     });
     exit = await supervise(ps, {
@@ -42981,20 +43654,19 @@ var AcceptanceVerifier = class {
 };
 
 // src/runtime/artifact-store.ts
-import { randomUUID as randomUUID5 } from "node:crypto";
-import { constants as constants9 } from "node:fs";
+import { randomUUID as randomUUID7 } from "node:crypto";
+import { constants as constants11 } from "node:fs";
 import {
-  link as link3,
-  lstat as lstat10,
-  mkdir as mkdir5,
-  open as open9,
+  lstat as lstat12,
+  mkdir as mkdir6,
+  open as open11,
   opendir,
-  readdir as readdir6,
+  readdir as readdir7,
   realpath as realpath9,
-  rename as rename5,
-  rm as rm5
+  rename as rename6,
+  rm as rm7
 } from "node:fs/promises";
-import path19 from "node:path";
+import path21 from "node:path";
 
 // src/runtime/run-manifest.ts
 import { createHash as createHash9 } from "node:crypto";
@@ -43173,12 +43845,12 @@ function buildRunManifest(args) {
 }
 
 // src/runtime/artifact-store.ts
-var SAFE_COMPONENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+var SAFE_COMPONENT2 = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 var WINDOWS_RESERVED_COMPONENT = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
 var CANDIDATE_REF_PREFIX = "refs/claude-architect/candidates/";
 var PRUNE_BACKUP_REF_PREFIX = "refs/claude-architect/prune-backups/";
 var CLEANUP_JOURNAL = "cleanup.ndjson";
-var NO_FOLLOW4 = constants9.O_NOFOLLOW ?? 0;
+var NO_FOLLOW6 = constants11.O_NOFOLLOW ?? 0;
 var MAX_ARCHIVE_FILE_BYTES = 8e6;
 var MAX_EVIDENCE_REFERENCES = 4096;
 var MAX_EVIDENCE_DEPTH = 16;
@@ -43191,7 +43863,7 @@ var runStatusSchema = schemas2.runStatus;
 var cleanupJournalTail = Promise.resolve();
 function isSafeComponent(value) {
   const base = value.split(".", 1)[0] ?? value;
-  return SAFE_COMPONENT.test(value) && !value.endsWith(".") && !WINDOWS_RESERVED_COMPONENT.test(base);
+  return SAFE_COMPONENT2.test(value) && !value.endsWith(".") && !WINDOWS_RESERVED_COMPONENT.test(base);
 }
 var STORE_TEMPORARY_RESIDUE = /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/u;
 function validateComponent(value, kind) {
@@ -43199,21 +43871,21 @@ function validateComponent(value, kind) {
     throw new RuntimeError(`invalid ${kind}: ${JSON.stringify(value)}`);
   }
 }
-function errorCode8(error51) {
+function errorCode9(error51) {
   return error51.code;
 }
-function isMissing2(error51) {
-  return errorCode8(error51) === "ENOENT";
+function isMissing3(error51) {
+  return errorCode9(error51) === "ENOENT";
 }
-function isAlreadyPresent(error51) {
-  return errorCode8(error51) === "EEXIST";
+function isAlreadyPresent2(error51) {
+  return errorCode9(error51) === "EEXIST";
 }
 async function pathExists(filename) {
   try {
-    await lstat10(filename);
+    await lstat12(filename);
     return true;
   } catch (error51) {
-    if (isMissing2(error51)) return false;
+    if (isMissing3(error51)) return false;
     throw error51;
   }
 }
@@ -43229,37 +43901,37 @@ function compareEntries(left, right) {
   return left.runId < right.runId ? -1 : left.runId > right.runId ? 1 : 0;
 }
 function isWithin(root, candidate) {
-  const relative2 = path19.relative(root, candidate);
-  return relative2 === "" || !path19.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith(`..${path19.sep}`);
+  const relative2 = path21.relative(root, candidate);
+  return relative2 === "" || !path21.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith(`..${path21.sep}`);
 }
 async function ensurePlainDirectory(directory) {
   let created = false;
   try {
-    await mkdir5(directory, { mode: 448 });
+    await mkdir6(directory, { mode: 448 });
     created = true;
   } catch (error51) {
-    if (!isAlreadyPresent(error51)) throw error51;
+    if (!isAlreadyPresent2(error51)) throw error51;
   }
-  const metadata = await lstat10(directory);
+  const metadata = await lstat12(directory);
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
   }
-  if (created) await syncDirectory3(path19.dirname(directory));
+  if (created) await syncDirectory3(path21.dirname(directory));
   return { dev: metadata.dev, ino: metadata.ino };
 }
 async function ensurePlainDirectoryTree(directory) {
   try {
     return await ensurePlainDirectory(directory);
   } catch (error51) {
-    if (!isMissing2(error51)) throw error51;
-    const parent = path19.dirname(directory);
+    if (!isMissing3(error51)) throw error51;
+    const parent = path21.dirname(directory);
     if (parent === directory) throw error51;
     await ensurePlainDirectoryTree(parent);
     return ensurePlainDirectory(directory);
   }
 }
 async function assertDirectoryIdentity5(directory, expected) {
-  const metadata = await lstat10(directory);
+  const metadata = await lstat12(directory);
   if (metadata.isSymbolicLink() || !metadata.isDirectory() || metadata.dev !== expected.dev || metadata.ino !== expected.ino) {
     throw new RuntimeError("archive directory identity changed during operation");
   }
@@ -43267,24 +43939,24 @@ async function assertDirectoryIdentity5(directory, expected) {
 async function syncDirectory3(directory) {
   let handle;
   try {
-    handle = await open9(directory, constants9.O_RDONLY | NO_FOLLOW4);
+    handle = await open11(directory, constants11.O_RDONLY | NO_FOLLOW6);
     await handle.sync();
   } catch (error51) {
-    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode8(error51) ?? "");
+    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode9(error51) ?? "");
     if (!unsupportedOnWindows) throw error51;
   } finally {
     await handle?.close();
   }
 }
 async function readRegularFile(filename, parentIdentity) {
-  const linkMetadata = await lstat10(filename);
+  const linkMetadata = await lstat12(filename);
   if (linkMetadata.isSymbolicLink()) {
     throw new RuntimeError(`archive entry must not be a symbolic link: ${redact(filename)}`);
   }
-  const handle = await open9(filename, constants9.O_RDONLY | NO_FOLLOW4);
+  const handle = await open11(filename, constants11.O_RDONLY | NO_FOLLOW6);
   try {
     if (parentIdentity !== void 0) {
-      await assertDirectoryIdentity5(path19.dirname(filename), parentIdentity);
+      await assertDirectoryIdentity5(path21.dirname(filename), parentIdentity);
     }
     const metadata = await handle.stat();
     if (!metadata.isFile()) {
@@ -43311,7 +43983,7 @@ async function readRegularFile(filename, parentIdentity) {
       throw new RuntimeError(`archive entry changed while being read: ${redact(filename)}`);
     }
     if (parentIdentity !== void 0) {
-      await assertDirectoryIdentity5(path19.dirname(filename), parentIdentity);
+      await assertDirectoryIdentity5(path21.dirname(filename), parentIdentity);
     }
     return contents.subarray(0, offset).toString("utf8");
   } finally {
@@ -43319,7 +43991,7 @@ async function readRegularFile(filename, parentIdentity) {
   }
 }
 async function directoryBytes(directory, expectedIdentity) {
-  const metadata = await lstat10(directory);
+  const metadata = await lstat12(directory);
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError("archive size accounting requires a plain directory");
   }
@@ -43332,16 +44004,16 @@ async function directoryBytes(directory, expectedIdentity) {
   try {
     entries = await opendir(directory);
   } catch (error51) {
-    if (isMissing2(error51)) return 0;
+    if (isMissing3(error51)) return 0;
     throw error51;
   }
   try {
     await assertDirectoryIdentity5(directory, identity);
     for await (const entry of entries) {
       await assertDirectoryIdentity5(directory, identity);
-      const entryPath = path19.join(directory, entry.name);
+      const entryPath = path21.join(directory, entry.name);
       try {
-        const entryMetadata = await lstat10(entryPath);
+        const entryMetadata = await lstat12(entryPath);
         if (entryMetadata.isSymbolicLink()) {
           throw new RuntimeError("archive size accounting encountered a symbolic link");
         }
@@ -43349,13 +44021,13 @@ async function directoryBytes(directory, expectedIdentity) {
         else if (entryMetadata.isFile()) total += entryMetadata.size;
         await assertDirectoryIdentity5(directory, identity);
       } catch (error51) {
-        if (!isMissing2(error51)) throw error51;
+        if (!isMissing3(error51)) throw error51;
       }
     }
     await assertDirectoryIdentity5(directory, identity);
   } finally {
     await entries.close().catch((error51) => {
-      if (errorCode8(error51) !== "ERR_DIR_CLOSED") throw error51;
+      if (errorCode9(error51) !== "ERR_DIR_CLOSED") throw error51;
     });
   }
   return total;
@@ -43424,7 +44096,7 @@ function preserveNullableIdentity2(value, label) {
 function preserveCandidatePath(value) {
   const candidatePath = preserveIdentity2(value, "candidate path");
   const segments = candidatePath.split("/");
-  if (candidatePath === "" || candidatePath.includes("\\") || candidatePath.includes("\0") || path19.posix.isAbsolute(candidatePath) || path19.win32.isAbsolute(candidatePath) || /^[A-Za-z]:/.test(candidatePath) || segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+  if (candidatePath === "" || candidatePath.includes("\\") || candidatePath.includes("\0") || path21.posix.isAbsolute(candidatePath) || path21.win32.isAbsolute(candidatePath) || /^[A-Za-z]:/.test(candidatePath) || segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
     throw new RuntimeError("candidate path must be a normalized relative Git path");
   }
   return candidatePath;
@@ -43629,11 +44301,11 @@ var ArtifactStore = class _ArtifactStore {
   constructor(runId) {
     validateComponent(runId, "run id");
     this.runId = runId;
-    this.runsRoot = path19.join(resolveStateDir(), "runs");
-    this.runDirectory = path19.join(this.runsRoot, runId);
+    this.runsRoot = path21.join(resolveStateDir(), "runs");
+    this.runDirectory = path21.join(this.runsRoot, runId);
   }
   async ensureRunsRoot() {
-    await ensurePlainDirectoryTree(path19.dirname(this.runsRoot));
+    await ensurePlainDirectoryTree(path21.dirname(this.runsRoot));
     await ensurePlainDirectory(this.runsRoot);
     return realpath9(this.runsRoot);
   }
@@ -43643,12 +44315,12 @@ var ArtifactStore = class _ArtifactStore {
       await ensurePlainDirectory(this.runDirectory);
     } else {
       try {
-        const metadata = await lstat10(this.runDirectory);
+        const metadata = await lstat12(this.runDirectory);
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
           throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(this.runDirectory)}`);
         }
       } catch (error51) {
-        if (isMissing2(error51)) return null;
+        if (isMissing3(error51)) return null;
         throw error51;
       }
     }
@@ -43659,19 +44331,19 @@ var ArtifactStore = class _ArtifactStore {
     return canonicalRunDirectory;
   }
   async ensureArchiveDirectory(relativePath) {
-    if (path19.isAbsolute(relativePath)) throw new RuntimeError("archive path must be relative");
-    const normalized = path19.normalize(relativePath);
-    if (normalized === ".." || normalized.startsWith(`..${path19.sep}`)) {
+    if (path21.isAbsolute(relativePath)) throw new RuntimeError("archive path must be relative");
+    const normalized = path21.normalize(relativePath);
+    if (normalized === ".." || normalized.startsWith(`..${path21.sep}`)) {
       throw new RuntimeError("archive path escapes run directory");
     }
     const canonicalRunDirectory = await this.ensureRunDirectory(true);
     if (canonicalRunDirectory === null) throw new RuntimeError("failed to create archive directory");
-    const relativeDirectory = path19.dirname(normalized);
+    const relativeDirectory = path21.dirname(normalized);
     if (relativeDirectory === ".") return canonicalRunDirectory;
     let current = canonicalRunDirectory;
-    for (const component of relativeDirectory.split(path19.sep)) {
+    for (const component of relativeDirectory.split(path21.sep)) {
       validateComponent(component, "log name");
-      current = path19.join(current, component);
+      current = path21.join(current, component);
       await ensurePlainDirectory(current);
       const canonicalCurrent = await realpath9(current);
       if (!isWithin(canonicalRunDirectory, canonicalCurrent)) {
@@ -43683,44 +44355,11 @@ var ArtifactStore = class _ArtifactStore {
   }
   async writeArchiveFile(relativePath, text) {
     const directory = await this.ensureArchiveDirectory(relativePath);
-    const directoryIdentity = await ensurePlainDirectory(directory);
-    const destination = path19.join(directory, path19.basename(relativePath));
-    const temporaryPath = path19.join(directory, `.${path19.basename(destination)}.${randomUUID5()}.tmp`);
-    let handle;
-    let temporaryCreated = false;
+    const session = await openDurableDirectorySession(directory);
     try {
-      await assertDirectoryIdentity5(directory, directoryIdentity);
-      handle = await open9(
-        temporaryPath,
-        constants9.O_WRONLY | constants9.O_CREAT | constants9.O_EXCL | NO_FOLLOW4,
-        384
-      );
-      temporaryCreated = true;
-      await assertDirectoryIdentity5(directory, directoryIdentity);
-      await handle.writeFile(text, { encoding: "utf8" });
-      await handle.sync();
-      await handle.close();
-      handle = void 0;
-      try {
-        await assertDirectoryIdentity5(directory, directoryIdentity);
-        await link3(temporaryPath, destination);
-        await assertDirectoryIdentity5(directory, directoryIdentity);
-      } catch (error51) {
-        if (!isAlreadyPresent(error51)) throw error51;
-        await assertDirectoryIdentity5(directory, directoryIdentity);
-        const existing = await readRegularFile(destination, directoryIdentity);
-        if (existing !== text) {
-          throw new RuntimeError(`archive entry already exists with different content: ${relativePath}`);
-        }
-      }
+      await platformSafety.writeAtomic(session, path21.basename(relativePath), text, "immutable");
     } finally {
-      await handle?.close();
-      if (temporaryCreated) {
-        await assertDirectoryIdentity5(directory, directoryIdentity);
-        await rm5(temporaryPath, { force: true });
-        await syncDirectory3(directory);
-        await assertDirectoryIdentity5(directory, directoryIdentity);
-      }
+      await session.close();
     }
   }
   async writeJson(relativePath, value) {
@@ -43729,38 +44368,18 @@ var ArtifactStore = class _ArtifactStore {
     await this.writeArchiveFile(relativePath, serialized);
   }
   async replaceJson(relativePath, value) {
-    if (path19.isAbsolute(relativePath) || path19.dirname(relativePath) !== "." || path19.basename(relativePath) !== relativePath || !isSafeComponent(relativePath)) {
+    if (path21.isAbsolute(relativePath) || path21.dirname(relativePath) !== "." || path21.basename(relativePath) !== relativePath || !isSafeComponent(relativePath)) {
       throw new RuntimeError("replacement archive path must be a safe relative leaf");
     }
     const directory = await this.ensureRunDirectory(false);
     if (directory === null) throw new RuntimeError("run archive does not exist");
-    const directoryIdentity = await ensurePlainDirectory(directory);
-    const destination = path19.join(directory, relativePath);
-    const temporaryPath = path19.join(directory, `.${relativePath}.${randomUUID5()}.tmp`);
-    const serialized = `${serializeJson(value, 2)}
-`;
-    let handle;
-    let temporaryCreated = false;
+    const session = await openDurableDirectorySession(directory);
     try {
-      await assertDirectoryIdentity5(directory, directoryIdentity);
-      handle = await open9(
-        temporaryPath,
-        constants9.O_WRONLY | constants9.O_CREAT | constants9.O_EXCL | NO_FOLLOW4,
-        384
-      );
-      temporaryCreated = true;
-      await handle.writeFile(serialized, { encoding: "utf8" });
-      await handle.sync();
-      await handle.close();
-      handle = void 0;
-      await assertDirectoryIdentity5(directory, directoryIdentity);
-      await rename5(temporaryPath, destination);
-      temporaryCreated = false;
-      await syncDirectory3(directory);
-      await assertDirectoryIdentity5(directory, directoryIdentity);
+      const serialized = `${serializeJson(value, 2)}
+`;
+      await platformSafety.writeAtomic(session, relativePath, serialized, "replace");
     } finally {
-      await handle?.close();
-      if (temporaryCreated) await rm5(temporaryPath, { force: true });
+      await session.close();
     }
   }
   async writeRunStatus(status) {
@@ -43780,41 +44399,41 @@ var ArtifactStore = class _ArtifactStore {
   }
   async readRunStatus(runId) {
     validateComponent(runId, "run id");
-    const runDirectory = path19.join(this.runsRoot, runId);
+    const runDirectory = path21.join(this.runsRoot, runId);
     const validated = await this.ensureExistingRunDirectory(runDirectory);
     if (validated === null) return null;
     try {
       const value = JSON.parse(await readRegularFile(
-        path19.join(validated.path, "status.json"),
+        path21.join(validated.path, "status.json"),
         validated.identity
       ));
       if (!runStatusSchema(value)) throw new RuntimeError("archived run status is malformed");
       return value;
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
   async writeLog(name, text) {
     validateComponent(name, "log name");
-    const ref = path19.posix.join("logs", `${name}.log`);
+    const ref = path21.posix.join("logs", `${name}.log`);
     await this.writeArchiveFile(ref, redact(text));
     return ref;
   }
   async writePipelineArtifact(name, value) {
     validateComponent(name, "log name");
     await this.writeJson(
-      path19.posix.join("pipeline", `${name}.json`),
+      path21.posix.join("pipeline", `${name}.json`),
       redactRecord(value)
     );
   }
   async readPipelineArtifact(runId, name) {
     validateComponent(runId, "run id");
     validateComponent(name, "log name");
-    const runDirectory = path19.join(this.runsRoot, runId);
+    const runDirectory = path21.join(this.runsRoot, runId);
     const validatedRun = await this.ensureExistingRunDirectory(runDirectory);
     if (validatedRun === null) return null;
-    const validated = await this.ensureExistingRunDirectory(path19.join(runDirectory, "pipeline"));
+    const validated = await this.ensureExistingRunDirectory(path21.join(runDirectory, "pipeline"));
     if (validated === null) return null;
     if (!isWithin(validatedRun.path, validated.path)) {
       throw new RuntimeError("pipeline archive directory escapes run directory");
@@ -43822,13 +44441,13 @@ var ArtifactStore = class _ArtifactStore {
     await assertDirectoryIdentity5(validatedRun.path, validatedRun.identity);
     try {
       const value = JSON.parse(await readRegularFile(
-        path19.join(validated.path, `${name}.json`),
+        path21.join(validated.path, `${name}.json`),
         validated.identity
       ));
       await assertDirectoryIdentity5(validatedRun.path, validatedRun.identity);
       return value;
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
@@ -43839,7 +44458,7 @@ var ArtifactStore = class _ArtifactStore {
    * caller-supplied reference.
    */
   async readEvidence(reference) {
-    if (typeof reference !== "string" || reference.length < 1 || reference.length > 1024 || path19.posix.isAbsolute(reference) || reference.includes("\\") || /[\0\r\n]/u.test(reference)) {
+    if (typeof reference !== "string" || reference.length < 1 || reference.length > 1024 || path21.posix.isAbsolute(reference) || reference.includes("\\") || /[\0\r\n]/u.test(reference)) {
       throw new RuntimeError("invalid archived evidence reference");
     }
     const components = reference.split("/");
@@ -43853,8 +44472,8 @@ var ArtifactStore = class _ArtifactStore {
     try {
       for (const component of components.slice(0, -1)) {
         await assertDirectoryIdentity5(directory.path, directory.identity);
-        const child = path19.join(directory.path, component);
-        const metadata = await lstat10(child);
+        const child = path21.join(directory.path, component);
+        const metadata = await lstat12(child);
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
           throw new RuntimeError("archived evidence directory is not a plain directory");
         }
@@ -43869,13 +44488,13 @@ var ArtifactStore = class _ArtifactStore {
         await assertDirectoryIdentity5(directory.path, directory.identity);
       }
       const content = await readRegularFile(
-        path19.join(directory.path, components.at(-1)),
+        path21.join(directory.path, components.at(-1)),
         directory.identity
       );
       await assertDirectoryIdentity5(run.path, run.identity);
       return content;
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
@@ -43893,12 +44512,12 @@ var ArtifactStore = class _ArtifactStore {
         throw new RuntimeError("archived evidence nesting exceeds the supported limit");
       }
       await assertDirectoryIdentity5(directory.path, directory.identity);
-      const names = (await readdir6(directory.path)).sort();
+      const names = (await readdir7(directory.path)).sort();
       for (const name of names) {
         if (STORE_TEMPORARY_RESIDUE.test(name)) continue;
         validateComponent(name, "log name");
-        const child = path19.join(directory.path, name);
-        const metadata = await lstat10(child);
+        const child = path21.join(directory.path, name);
+        const metadata = await lstat12(child);
         if (metadata.isSymbolicLink()) {
           throw new RuntimeError("archived evidence must not contain symbolic links");
         }
@@ -43968,26 +44587,26 @@ var ArtifactStore = class _ArtifactStore {
   }
   async readResult(runId) {
     validateComponent(runId, "run id");
-    const runDirectory = path19.join(this.runsRoot, runId);
+    const runDirectory = path21.join(this.runsRoot, runId);
     const validated = await this.ensureExistingRunDirectory(runDirectory);
     if (validated === null) return null;
     try {
       return verifyAttemptResult(
         JSON.parse(await readRegularFile(
-          path19.join(validated.path, "result.json"),
+          path21.join(validated.path, "result.json"),
           validated.identity
         )),
         runId
       );
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
   async ensureExistingRunDirectory(directory) {
     const canonicalRunsRoot = await this.ensureRunsRoot();
     try {
-      const metadata = await lstat10(directory);
+      const metadata = await lstat12(directory);
       if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
         throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
       }
@@ -43999,25 +44618,25 @@ var ArtifactStore = class _ArtifactStore {
       await assertDirectoryIdentity5(directory, identity);
       return { path: canonicalDirectory, identity };
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
   async readManifest(runId) {
     validateComponent(runId, "run id");
-    const runDirectory = path19.join(this.runsRoot, runId);
+    const runDirectory = path21.join(this.runsRoot, runId);
     const validated = await this.ensureExistingRunDirectory(runDirectory);
     if (validated === null) return null;
     try {
       return verifyRunManifest(
         JSON.parse(await readRegularFile(
-          path19.join(validated.path, "manifest.json"),
+          path21.join(validated.path, "manifest.json"),
           validated.identity
         )),
         runId
       );
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
@@ -44028,18 +44647,18 @@ var ArtifactStore = class _ArtifactStore {
    */
   async readRunStartSpecSha256(runId) {
     validateComponent(runId, "run id");
-    const validated = await this.ensureExistingRunDirectory(path19.join(this.runsRoot, runId));
+    const validated = await this.ensureExistingRunDirectory(path21.join(this.runsRoot, runId));
     if (validated === null) return null;
     try {
       const record2 = JSON.parse(await readRegularFile(
-        path19.join(validated.path, "run-start.json"),
+        path21.join(validated.path, "run-start.json"),
         validated.identity
       ));
       if (typeof record2 !== "object" || record2 === null) return null;
       const value = record2.specSha256;
       return typeof value === "string" && /^[0-9a-f]{64}$/u.test(value) ? value : null;
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
@@ -44061,13 +44680,13 @@ var ArtifactStore = class _ArtifactStore {
   }
   async readReviewSnapshot(runId) {
     validateComponent(runId, "run id");
-    const runDirectory = path19.join(this.runsRoot, runId);
+    const runDirectory = path21.join(this.runsRoot, runId);
     const validated = await this.ensureExistingRunDirectory(runDirectory);
     if (validated === null) return null;
     try {
       const snapshot = validateReviewSnapshot(
         JSON.parse(await readRegularFile(
-          path19.join(validated.path, "review-snapshot.json"),
+          path21.join(validated.path, "review-snapshot.json"),
           validated.identity
         )),
         runId
@@ -44075,7 +44694,7 @@ var ArtifactStore = class _ArtifactStore {
       reviewSnapshotHash(snapshot);
       return snapshot;
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
@@ -44148,7 +44767,7 @@ var ArtifactStore = class _ArtifactStore {
       eligibilityRecordHash
     };
     await this.writeJson(
-      path19.posix.join("pipeline", "post-pipeline-autopilot.json"),
+      path21.posix.join("pipeline", "post-pipeline-autopilot.json"),
       artifacts
     );
     return { advisorReportHash: persistedAdvisorHash, eligibilityRecordHash };
@@ -44213,17 +44832,17 @@ var ArtifactStore = class _ArtifactStore {
   }
   async readCandidateDecision(runId) {
     validateComponent(runId, "run id");
-    const runDirectory = path19.join(this.runsRoot, runId);
+    const runDirectory = path21.join(this.runsRoot, runId);
     const validated = await this.ensureExistingRunDirectory(runDirectory);
     if (validated === null) return null;
     try {
       const value = JSON.parse(await readRegularFile(
-        path19.join(validated.path, "decision.json"),
+        path21.join(validated.path, "decision.json"),
         validated.identity
       ));
       return parsePersistedDecision(value);
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
@@ -44238,12 +44857,12 @@ var ArtifactStore = class _ArtifactStore {
   }
   async readPipelineActiveMarker(runId) {
     validateComponent(runId, "run id");
-    const runDirectory = path19.join(this.runsRoot, runId);
+    const runDirectory = path21.join(this.runsRoot, runId);
     const validated = await this.ensureExistingRunDirectory(runDirectory);
     if (validated === null) return null;
     try {
       const value = JSON.parse(await readRegularFile(
-        path19.join(validated.path, "pipeline-active.json"),
+        path21.join(validated.path, "pipeline-active.json"),
         validated.identity
       ));
       if (typeof value !== "object" || value === null || typeof value.pid !== "number" || !Number.isSafeInteger(value.pid) || value.pid <= 1 || value.processToken !== null && typeof value.processToken !== "string" || typeof value.startedAt !== "string" || !Number.isFinite(Date.parse(value.startedAt)) || typeof value.sliced !== "boolean") {
@@ -44251,25 +44870,25 @@ var ArtifactStore = class _ArtifactStore {
       }
       return value;
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing3(error51)) return null;
       throw error51;
     }
   }
   async clearPipelineActiveMarker() {
     const directory = await this.ensureRunDirectory(false);
     if (directory === null) return;
-    await rm5(path19.join(directory, "pipeline-active.json"), { force: true });
+    await rm7(path21.join(directory, "pipeline-active.json"), { force: true });
   }
   async list() {
     await this.ensureRunsRoot();
-    const entries = await readdir6(this.runsRoot, { withFileTypes: true });
+    const entries = await readdir7(this.runsRoot, { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory() && isSafeComponent(entry.name)).map((entry) => entry.name).sort();
   }
   async entries() {
     const entries = await Promise.all((await this.list()).map(async (runId) => {
-      const directory = path19.join(this.runsRoot, runId);
+      const directory = path21.join(this.runsRoot, runId);
       try {
-        const metadata = await lstat10(directory);
+        const metadata = await lstat12(directory);
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) return null;
         return {
           runId,
@@ -44279,7 +44898,7 @@ var ArtifactStore = class _ArtifactStore {
           identity: { dev: metadata.dev, ino: metadata.ino }
         };
       } catch (error51) {
-        if (isMissing2(error51)) return null;
+        if (isMissing3(error51)) return null;
         throw error51;
       }
     }));
@@ -44429,10 +45048,10 @@ var ArtifactStore = class _ArtifactStore {
       try {
         await this.ensureRunsRoot();
         const runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
-        const filename = path19.join(this.runsRoot, CLEANUP_JOURNAL);
-        const handle = await open9(
+        const filename = path21.join(this.runsRoot, CLEANUP_JOURNAL);
+        const handle = await open11(
           filename,
-          constants9.O_WRONLY | constants9.O_CREAT | constants9.O_APPEND | NO_FOLLOW4,
+          constants11.O_WRONLY | constants11.O_CREAT | constants11.O_APPEND | NO_FOLLOW6,
           384
         );
         try {
@@ -44477,11 +45096,11 @@ var ArtifactStore = class _ArtifactStore {
     const runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
     await assertDirectoryIdentity5(entry.directory, entry.identity);
     await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
-    await rename5(entry.directory, quarantinePath);
+    await rename6(entry.directory, quarantinePath);
     await syncDirectory3(this.runsRoot);
     await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
     await assertDirectoryIdentity5(quarantinePath, entry.identity);
-    await rm5(quarantinePath, { recursive: true, force: false });
+    await rm7(quarantinePath, { recursive: true, force: false });
     await syncDirectory3(this.runsRoot);
     await this.appendCleanupRecord({
       event: "prune-cleanup-complete",
@@ -44508,8 +45127,8 @@ var ArtifactStore = class _ArtifactStore {
     const removeEntry = async (entry, reason) => {
       if (attempted.has(entry.runId)) return;
       attempted.add(entry.runId);
-      const quarantineName = `.prune-${entry.runId}-${randomUUID5()}`;
-      const quarantinePath = path19.join(this.runsRoot, quarantineName);
+      const quarantineName = `.prune-${entry.runId}-${randomUUID7()}`;
+      const quarantinePath = path21.join(this.runsRoot, quarantineName);
       let prepared = null;
       let transaction = null;
       let runsRootIdentity = null;
@@ -44530,14 +45149,12 @@ var ArtifactStore = class _ArtifactStore {
           retained.push({ runId: entry.runId, reason: "incomplete-run" });
           return;
         }
-        const platformServices = guardWorktreeMutations(
-          dependencies.platformServices ?? getPlatformServices()
-        );
+        const platformServices = dependencies.platformServices ?? getPlatformServices();
         let canonical;
         try {
           canonical = await platformServices.canonicalizePath(initialManifest.repoRoot);
         } catch (error51) {
-          if (errorCode8(error51) !== "ENOENT") throw error51;
+          if (errorCode9(error51) !== "ENOENT") throw error51;
           await this.reclaimRepoAbsentArchive(
             entry,
             reason,
@@ -44549,79 +45166,84 @@ var ArtifactStore = class _ArtifactStore {
           retainedBytes -= entry.bytes;
           return;
         }
-        const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
-        lease = await platformServices.acquireCheckoutLock(
-          canonical.canonical,
-          { runId: entry.runId }
-        );
-        if (lease.repositoryIdentity !== repositoryIdentity) {
-          throw new RuntimeError("checkout lease repository identity changed before pruning");
-        }
-        await assertDirectoryIdentity5(entry.directory, entry.identity);
-        const currentManifest = await this.readManifest(entry.runId);
-        if (currentManifest === null || serializeJson(currentManifest) !== serializeJson(initialManifest)) {
-          retained.push({ runId: entry.runId, reason: "run identity changed while waiting" });
-          return;
-        }
-        if (await this.readPipelineActiveMarker(entry.runId) !== null) {
-          retained.push({ runId: entry.runId, reason: "active-run" });
-          return;
-        }
-        const result = await this.readResult(entry.runId);
-        if (result === null) {
-          retained.push({ runId: entry.runId, reason: "incomplete-run" });
-          return;
-        }
-        if (serializeJson(result) !== serializeJson(initialResult)) {
-          retained.push({ runId: entry.runId, reason: "terminal authority changed while waiting" });
-          return;
-        }
-        prepared = await this.prepareCandidateAnchorCleanup(
-          entry.runId,
-          result,
-          currentManifest,
-          canonical.canonical
-        );
-        await this.appendCleanupRecord({
-          event: "prune-cleanup-intent",
+        const safety = new PlatformSafety(platformServices);
+        await safety.withCheckoutLease(canonical.canonical, async (acquiredLease) => {
+          lease = acquiredLease;
+          await assertDirectoryIdentity5(entry.directory, entry.identity);
+          const currentManifest = await this.readManifest(entry.runId);
+          if (currentManifest === null || serializeJson(currentManifest) !== serializeJson(initialManifest)) {
+            retained.push({ runId: entry.runId, reason: "run identity changed while waiting" });
+            return;
+          }
+          if (await this.readPipelineActiveMarker(entry.runId) !== null) {
+            retained.push({ runId: entry.runId, reason: "active-run" });
+            return;
+          }
+          const result = await this.readResult(entry.runId);
+          if (result === null) {
+            retained.push({ runId: entry.runId, reason: "incomplete-run" });
+            return;
+          }
+          if (serializeJson(result) !== serializeJson(initialResult)) {
+            retained.push({ runId: entry.runId, reason: "terminal authority changed while waiting" });
+            return;
+          }
+          prepared = await this.prepareCandidateAnchorCleanup(
+            entry.runId,
+            result,
+            currentManifest,
+            canonical.canonical
+          );
+          await this.appendCleanupRecord({
+            event: "prune-cleanup-intent",
+            runId: entry.runId,
+            reason,
+            anchorCleanup: "pending",
+            archiveBytes: entry.bytes,
+            quarantineName,
+            repoRoot: prepared.repoRoot,
+            anchorRef: prepared.anchorRef,
+            backupRef: prepared.backupRef,
+            candidateCommitOid: prepared.candidateCommitOid,
+            recordedAt: (/* @__PURE__ */ new Date()).toISOString()
+          });
+          transaction = await this.beginCandidateAnchorCleanup(prepared, entry.runId);
+          runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
+          await assertDirectoryIdentity5(entry.directory, entry.identity);
+          await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
+          await rename6(entry.directory, quarantinePath);
+          await syncDirectory3(this.runsRoot);
+          await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
+          await assertDirectoryIdentity5(quarantinePath, entry.identity);
+          archiveRemovalCommitted = true;
+          await rm7(quarantinePath, { recursive: true, force: false });
+          await syncDirectory3(this.runsRoot);
+          await transaction.commit();
+          await this.appendCleanupRecord({
+            event: "prune-cleanup-complete",
+            runId: entry.runId,
+            reason,
+            anchorCleanup: transaction.outcome,
+            archiveBytes: entry.bytes,
+            quarantineName,
+            repoRoot: prepared.repoRoot,
+            anchorRef: prepared.anchorRef,
+            backupRef: prepared.backupRef,
+            candidateCommitOid: prepared.candidateCommitOid,
+            recordedAt: (/* @__PURE__ */ new Date()).toISOString()
+          });
+          removed.add(entry.runId);
+          retainedBytes -= entry.bytes;
+        }, {
           runId: entry.runId,
-          reason,
-          anchorCleanup: "pending",
-          archiveBytes: entry.bytes,
-          quarantineName,
-          repoRoot: prepared.repoRoot,
-          anchorRef: prepared.anchorRef,
-          backupRef: prepared.backupRef,
-          candidateCommitOid: prepared.candidateCommitOid,
-          recordedAt: (/* @__PURE__ */ new Date()).toISOString()
+          onReleaseError: (releaseError) => {
+            const reason2 = redact(releaseError instanceof Error ? releaseError.message : String(releaseError));
+            retained.push({
+              runId: entry.runId,
+              reason: archiveRemovalCommitted ? `archive removed; checkout lease release failed: ${reason2}` : reason2
+            });
+          }
         });
-        transaction = await this.beginCandidateAnchorCleanup(prepared, entry.runId);
-        runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
-        await assertDirectoryIdentity5(entry.directory, entry.identity);
-        await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
-        await rename5(entry.directory, quarantinePath);
-        await syncDirectory3(this.runsRoot);
-        await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
-        await assertDirectoryIdentity5(quarantinePath, entry.identity);
-        archiveRemovalCommitted = true;
-        await rm5(quarantinePath, { recursive: true, force: false });
-        await syncDirectory3(this.runsRoot);
-        await transaction.commit();
-        await this.appendCleanupRecord({
-          event: "prune-cleanup-complete",
-          runId: entry.runId,
-          reason,
-          anchorCleanup: transaction.outcome,
-          archiveBytes: entry.bytes,
-          quarantineName,
-          repoRoot: prepared.repoRoot,
-          anchorRef: prepared.anchorRef,
-          backupRef: prepared.backupRef,
-          candidateCommitOid: prepared.candidateCommitOid,
-          recordedAt: (/* @__PURE__ */ new Date()).toISOString()
-        });
-        removed.add(entry.runId);
-        retainedBytes -= entry.bytes;
       } catch (error51) {
         let rollbackError;
         if (!archiveRemovalCommitted) {
@@ -44635,7 +45257,7 @@ var ArtifactStore = class _ArtifactStore {
               const expectedRunsRoot = runsRootIdentity ?? await ensurePlainDirectory(this.runsRoot);
               await assertDirectoryIdentity5(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity5(quarantinePath, entry.identity);
-              await rename5(quarantinePath, entry.directory);
+              await rename6(quarantinePath, entry.directory);
               await syncDirectory3(this.runsRoot);
               await assertDirectoryIdentity5(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity5(entry.directory, entry.identity);
@@ -44675,18 +45297,6 @@ var ArtifactStore = class _ArtifactStore {
             reason: redact(`${primary}${rollback}`)
           });
         }
-      } finally {
-        if (lease !== null) {
-          try {
-            await lease.release();
-          } catch (error51) {
-            const reason2 = redact(error51 instanceof Error ? error51.message : String(error51));
-            retained.push({
-              runId: entry.runId,
-              reason: archiveRemovalCommitted ? `archive removed; checkout lease release failed: ${reason2}` : reason2
-            });
-          }
-        }
       }
     };
     const now = Date.now();
@@ -44709,7 +45319,7 @@ async function pruneRuns(policy = DEFAULT_PRUNE_POLICY, dependencies = {}) {
 }
 
 // src/pipeline/role-runner.ts
-import { rm as rm6 } from "node:fs/promises";
+import { rm as rm8 } from "node:fs/promises";
 
 // src/producers/routing-policy.ts
 function route(preferences, reports) {
@@ -44972,8 +45582,8 @@ function buildRoleSpec(role, base, pkg) {
 }
 
 // src/pipeline/git-writable-roots.ts
-import { lstat as lstat11, mkdir as mkdir6, readFile as readFile3, realpath as realpath10 } from "node:fs/promises";
-import path20 from "node:path";
+import { lstat as lstat13, mkdir as mkdir7, readFile as readFile5, realpath as realpath10 } from "node:fs/promises";
+import path22 from "node:path";
 function invalidWritableRoots(message, cause) {
   return new RuntimeError(message, {
     classification: "sandbox-violation",
@@ -44981,28 +45591,28 @@ function invalidWritableRoots(message, cause) {
   });
 }
 async function requirePlainFile(filename, label) {
-  const stats = await lstat11(filename);
+  const stats = await lstat13(filename);
   if (!stats.isFile() || stats.isSymbolicLink()) {
     throw invalidWritableRoots(`${label} must be a plain regular file`);
   }
   return stats;
 }
 async function requirePlainDirectory(directory, label) {
-  const stats = await lstat11(directory);
+  const stats = await lstat13(directory);
   if (!stats.isDirectory() || stats.isSymbolicLink()) {
     throw invalidWritableRoots(`${label} must be a plain directory`);
   }
 }
 function isContainedBy(parent, candidate) {
-  const relative2 = path20.relative(parent, candidate);
-  return relative2 !== "" && relative2 !== ".." && !relative2.startsWith(`..${path20.sep}`) && !path20.isAbsolute(relative2);
+  const relative2 = path22.relative(parent, candidate);
+  return relative2 !== "" && relative2 !== ".." && !relative2.startsWith(`..${path22.sep}`) && !path22.isAbsolute(relative2);
 }
 function sameFileIdentity(before, after) {
   return before.dev === after.dev && before.ino === after.ino;
 }
 async function readStablePlainFile(filename, label) {
   const before = await requirePlainFile(filename, label);
-  const value = await readFile3(filename, "utf8");
+  const value = await readFile5(filename, "utf8");
   const after = await requirePlainFile(filename, label);
   if (!sameFileIdentity(before, after)) {
     throw invalidWritableRoots(`${label} changed while being read`);
@@ -45010,16 +45620,16 @@ async function readStablePlainFile(filename, label) {
   return value;
 }
 async function resolveLinkedWorktreeWritableRoots(worktreePath) {
-  const dotGit = path20.join(worktreePath, ".git");
+  const dotGit = path22.join(worktreePath, ".git");
   try {
     const pointer = await readStablePlainFile(dotGit, "linked worktree .git entry");
     const match = /^gitdir: (.+)\r?\n?$/.exec(pointer);
     if (match === null) {
       throw invalidWritableRoots("linked worktree .git pointer is malformed");
     }
-    const gitDir = await realpath10(path20.resolve(worktreePath, match[1]));
+    const gitDir = await realpath10(path22.resolve(worktreePath, match[1]));
     await requirePlainDirectory(gitDir, "linked worktree private git directory");
-    const commonDirPointer = path20.join(gitDir, "commondir");
+    const commonDirPointer = path22.join(gitDir, "commondir");
     const commonDirValue = (await readStablePlainFile(
       commonDirPointer,
       "linked worktree commondir entry"
@@ -45027,17 +45637,17 @@ async function resolveLinkedWorktreeWritableRoots(worktreePath) {
     if (commonDirValue === "" || commonDirValue.includes("\0")) {
       throw invalidWritableRoots("linked worktree commondir pointer is malformed");
     }
-    const commonDir = await realpath10(path20.resolve(gitDir, commonDirValue));
+    const commonDir = await realpath10(path22.resolve(gitDir, commonDirValue));
     await requirePlainDirectory(commonDir, "common git directory");
-    const worktreesDir = await realpath10(path20.join(commonDir, "worktrees"));
+    const worktreesDir = await realpath10(path22.join(commonDir, "worktrees"));
     await requirePlainDirectory(worktreesDir, "common git worktrees directory");
     if (!isContainedBy(worktreesDir, gitDir)) {
       throw invalidWritableRoots("linked worktree private git directory escapes common git worktrees");
     }
-    const sharedObjectsDir = await realpath10(path20.join(commonDir, "objects"));
+    const sharedObjectsDir = await realpath10(path22.join(commonDir, "objects"));
     await requirePlainDirectory(sharedObjectsDir, "common git objects directory");
-    const privateObjectsPath = path20.join(gitDir, "private-objects");
-    await mkdir6(privateObjectsPath, { recursive: true, mode: 448 });
+    const privateObjectsPath = path22.join(gitDir, "private-objects");
+    await mkdir7(privateObjectsPath, { recursive: true, mode: 448 });
     await requirePlainDirectory(privateObjectsPath, "private git objects directory");
     const privateObjectsDir = await realpath10(privateObjectsPath);
     if (!isContainedBy(gitDir, privateObjectsDir)) {
@@ -45094,7 +45704,7 @@ async function cleanupProcessAttempt(tempHome, builtEnvironment) {
   }
   if (tempHome !== null) {
     try {
-      await rm6(tempHome, { recursive: true, force: true });
+      await rm8(tempHome, { recursive: true, force: true });
     } catch (error51) {
       failures.push(error51);
     }
@@ -45275,14 +45885,14 @@ async function parseStructuredReport(raw, validate, repair) {
 }
 
 // src/autopilot/branch-manager.ts
-import { createHash as createHash10, randomUUID as randomUUID6 } from "node:crypto";
-import { constants as constants10 } from "node:fs";
-import { chmod, link as link4, lstat as lstat13, mkdir as mkdir7, mkdtemp as mkdtemp2, open as open10, realpath as realpath12, rm as rm7 } from "node:fs/promises";
-import path22 from "node:path";
+import { createHash as createHash10, randomUUID as randomUUID8 } from "node:crypto";
+import { constants as constants12 } from "node:fs";
+import { chmod, link as link6, lstat as lstat15, mkdir as mkdir8, mkdtemp as mkdtemp2, open as open12, realpath as realpath12, rm as rm9 } from "node:fs/promises";
+import path24 from "node:path";
 
 // src/git/repo-preconditions.ts
-import { access as access5, lstat as lstat12, opendir as opendir2, readlink, realpath as realpath11 } from "node:fs/promises";
-import path21 from "node:path";
+import { access as access5, lstat as lstat14, opendir as opendir2, readlink, realpath as realpath11 } from "node:fs/promises";
+import path23 from "node:path";
 var MAX_DETAIL_ENTRIES = 20;
 function boundedDetail(lines) {
   if (lines.length <= MAX_DETAIL_ENTRIES) return lines;
@@ -45321,7 +45931,7 @@ async function checkInProgressOperation(checkoutPath, runGit = git) {
   if (!succeeded(gitDirectoryResult)) return "scan-failed";
   try {
     const gitDirectory = gitPathOutput(gitDirectoryResult.stdout, "Git directory");
-    return (await Promise.all(IN_PROGRESS_PATHS.map((relative2) => exists2(path21.join(gitDirectory, relative2))))).some(Boolean) ? "in-progress" : "clear";
+    return (await Promise.all(IN_PROGRESS_PATHS.map((relative2) => exists2(path23.join(gitDirectory, relative2))))).some(Boolean) ? "in-progress" : "clear";
   } catch {
     return "scan-failed";
   }
@@ -45353,7 +45963,7 @@ function indexPathsWithMode(output, mode) {
   for (const record2 of output.split("\0")) {
     if (!record2.startsWith(`${mode} `)) continue;
     const separator = record2.indexOf("	");
-    if (separator !== -1) paths.add(record2.slice(separator + 1).split(path21.sep).join("/"));
+    if (separator !== -1) paths.add(record2.slice(separator + 1).split(path23.sep).join("/"));
   }
   return paths;
 }
@@ -45361,8 +45971,8 @@ function pathIsWithin(root, candidate) {
   if (getPlatformServices().os === "win32") {
     return canonicalizeForScope(candidate, root);
   }
-  const relative2 = path21.relative(root, candidate);
-  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path21.sep}`) && !path21.isAbsolute(relative2);
+  const relative2 = path23.relative(root, candidate);
+  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path23.sep}`) && !path23.isAbsolute(relative2);
 }
 function pathsIdentifySameLocation(left, right) {
   if (getPlatformServices().os === "win32") {
@@ -45382,10 +45992,10 @@ async function isSafeTrackedFileSymlink(repositoryRoot, symlinkPath, relativePat
     if (hasCode(error51, ["ENOENT", "ENOTDIR", "ELOOP"])) return false;
     throw error51;
   }
-  if (path21.isAbsolute(linkTarget)) return false;
-  const lexicalTarget = path21.resolve(path21.dirname(symlinkPath), linkTarget);
+  if (path23.isAbsolute(linkTarget)) return false;
+  const lexicalTarget = path23.resolve(path23.dirname(symlinkPath), linkTarget);
   if (!pathIsWithin(repositoryRoot, lexicalTarget)) return false;
-  if (pathIsWithin(path21.join(repositoryRoot, ".git"), lexicalTarget)) return false;
+  if (pathIsWithin(path23.join(repositoryRoot, ".git"), lexicalTarget)) return false;
   let target;
   try {
     target = await realpath11(symlinkPath);
@@ -45395,8 +46005,8 @@ async function isSafeTrackedFileSymlink(repositoryRoot, symlinkPath, relativePat
   }
   if (!pathsIdentifySameLocation(lexicalTarget, target)) return false;
   if (!pathIsWithin(repositoryRoot, target)) return false;
-  if (pathIsWithin(path21.join(repositoryRoot, ".git"), target)) return false;
-  return (await lstat12(target)).isFile();
+  if (pathIsWithin(path23.join(repositoryRoot, ".git"), target)) return false;
+  return (await lstat14(target)).isFile();
 }
 async function findNestedRepositories(repositoryRoot, registeredSubmodules, trackedSymlinks, writeAllowlist) {
   const nested = [...registeredSubmodules].filter((submodulePath) => writeAllowlist.some((pattern) => patternOverlapsRepository(pattern, submodulePath)));
@@ -45406,7 +46016,7 @@ async function findNestedRepositories(repositoryRoot, registeredSubmodules, trac
     const directory = pendingDirectories.pop();
     if (directory.relativePath !== "") {
       try {
-        await lstat12(path21.join(directory.path, ".git"));
+        await lstat14(path23.join(directory.path, ".git"));
         nested.push(directory.relativePath);
         continue;
       } catch (error51) {
@@ -45421,8 +46031,8 @@ async function findNestedRepositories(repositoryRoot, registeredSubmodules, trac
         throw new Error("nested repository scan entry budget exceeded");
       }
       if (entry.name === ".git") continue;
-      const child = path21.join(directory.path, entry.name);
-      const relativeChild = path21.relative(repositoryRoot, child).split(path21.sep).join("/");
+      const child = path23.join(directory.path, entry.name);
+      const relativeChild = path23.relative(repositoryRoot, child).split(path23.sep).join("/");
       if (registeredSubmodules.has(relativeChild)) continue;
       if (!writeAllowlist.some((pattern) => patternOverlapsRepository(pattern, relativeChild))) continue;
       if (entry.isSymbolicLink()) {
@@ -45567,14 +46177,14 @@ function createIsolatedRemoteTransport(runGit = git) {
     });
   };
   const createRepository = async () => {
-    const root = path22.join(resolveStateDir(), "autopilot-remote");
-    await mkdir7(root, { recursive: true, mode: 448 });
+    const root = path24.join(resolveStateDir(), "autopilot-remote");
+    await mkdir8(root, { recursive: true, mode: 448 });
     await chmod(root, 448);
-    const repository = await mkdtemp2(path22.join(root, "operation-"));
+    const repository = await mkdtemp2(path24.join(root, "operation-"));
     await chmod(repository, 448);
     const initialized = await runIsolatedGit(repository, ["init", "--bare", "--quiet", "."]);
     if (!succeeded2(initialized)) {
-      await rm7(repository, { recursive: true, force: true });
+      await rm9(repository, { recursive: true, force: true });
       throw new RuntimeError("isolated remote repository initialization failed");
     }
     return repository;
@@ -45591,7 +46201,7 @@ function createIsolatedRemoteTransport(runGit = git) {
       }
       if (repository !== void 0) {
         try {
-          await rm7(repository, { recursive: true });
+          await rm9(repository, { recursive: true });
         } catch {
           return transportFailure("isolated remote repository cleanup");
         }
@@ -45618,7 +46228,7 @@ function createIsolatedRemoteTransport(runGit = git) {
             result = succeeded2(resolved) ? transportFailure("git resolve fetched base") : resolved;
           } else {
             fetchedOid = resolved.stdout.trim();
-            const bundlePath = path22.join(repository, "base.bundle");
+            const bundlePath = path24.join(repository, "base.bundle");
             const bundled = await runIsolatedGit(
               repository,
               ["bundle", "create", bundlePath, quarantineRef]
@@ -45638,7 +46248,7 @@ function createIsolatedRemoteTransport(runGit = git) {
       } finally {
         if (repository !== void 0) {
           try {
-            await rm7(repository, { recursive: true });
+            await rm9(repository, { recursive: true });
           } catch {
             result = transportFailure("isolated remote repository cleanup");
             fetchedOid = void 0;
@@ -45720,7 +46330,7 @@ async function parseWorktreeRegistrations(output, allowMissing = false) {
     const separator = field.indexOf(" ");
     const key = separator === -1 ? field : field.slice(0, separator);
     const value = separator === -1 ? "" : field.slice(separator + 1);
-    if (key === "worktree") registration.worktree = path22.resolve(value);
+    if (key === "worktree") registration.worktree = path24.resolve(value);
     else if (key === "HEAD") registration.head = value;
     else if (key === "branch") registration.branch = value;
   }
@@ -45763,7 +46373,7 @@ function parseRegistration2(value, workflowId) {
     "remoteUrl",
     "ownerRepo",
     "bootstrapOwner"
-  ]) || parsed.ownershipVersion !== OWNERSHIP_VERSION || parsed.workflowId !== workflowId || typeof parsed.checkoutPath !== "string" || !path22.isAbsolute(parsed.checkoutPath) || path22.resolve(parsed.checkoutPath) !== parsed.checkoutPath || typeof parsed.gitCommonDir !== "string" || !path22.isAbsolute(parsed.gitCommonDir) || path22.resolve(parsed.gitCommonDir) !== parsed.gitCommonDir || typeof parsed.repositoryIdentity !== "string" || parsed.repositoryIdentity !== parsed.gitCommonDir || typeof parsed.worktreePath !== "string" || !path22.isAbsolute(parsed.worktreePath) || path22.resolve(parsed.worktreePath) !== parsed.worktreePath || typeof parsed.worktreeGitDir !== "string" || !path22.isAbsolute(parsed.worktreeGitDir) || path22.resolve(parsed.worktreeGitDir) !== parsed.worktreeGitDir || typeof parsed.branch !== "string" || parsed.branchRef !== `refs/heads/${parsed.branch}` || parsed.baseRef !== `refs/claude-architect/autopilot/${workflowId}/base` || typeof parsed.baseBranch !== "string" || !isOid(parsed.baseCommitOid ?? "") || parsed.remote !== "origin" || typeof parsed.remoteUrl !== "string" || typeof parsed.ownerRepo !== "string" || !isBootstrapOwnerRecord(parsed.bootstrapOwner, workflowId)) return null;
+  ]) || parsed.ownershipVersion !== OWNERSHIP_VERSION || parsed.workflowId !== workflowId || typeof parsed.checkoutPath !== "string" || !path24.isAbsolute(parsed.checkoutPath) || path24.resolve(parsed.checkoutPath) !== parsed.checkoutPath || typeof parsed.gitCommonDir !== "string" || !path24.isAbsolute(parsed.gitCommonDir) || path24.resolve(parsed.gitCommonDir) !== parsed.gitCommonDir || typeof parsed.repositoryIdentity !== "string" || parsed.repositoryIdentity !== parsed.gitCommonDir || typeof parsed.worktreePath !== "string" || !path24.isAbsolute(parsed.worktreePath) || path24.resolve(parsed.worktreePath) !== parsed.worktreePath || typeof parsed.worktreeGitDir !== "string" || !path24.isAbsolute(parsed.worktreeGitDir) || path24.resolve(parsed.worktreeGitDir) !== parsed.worktreeGitDir || typeof parsed.branch !== "string" || parsed.branchRef !== `refs/heads/${parsed.branch}` || parsed.baseRef !== `refs/claude-architect/autopilot/${workflowId}/base` || typeof parsed.baseBranch !== "string" || !isOid(parsed.baseCommitOid ?? "") || parsed.remote !== "origin" || typeof parsed.remoteUrl !== "string" || typeof parsed.ownerRepo !== "string" || !isBootstrapOwnerRecord(parsed.bootstrapOwner, workflowId)) return null;
   return parsed;
 }
 async function readRegistrationFile(ownershipPath, expectedWorkflowId) {
@@ -45792,12 +46402,12 @@ async function workflowWorktreeOwnershipClaim(ownershipPath, worktreePath) {
     throw new RuntimeError("workflow ownership record is malformed");
   }
   const ownershipHash = createHash10("sha256").update(registration.workflowId).digest("hex");
-  const expectedOwnershipPath = path22.join(
+  const expectedOwnershipPath = path24.join(
     resolveStateDir(),
     "autopilot-branches",
     `${ownershipHash}.json`
   );
-  if (path22.resolve(ownershipPath) !== path22.resolve(expectedOwnershipPath)) {
+  if (path24.resolve(ownershipPath) !== path24.resolve(expectedOwnershipPath)) {
     throw new RuntimeError("workflow ownership filename does not match its workflow id");
   }
   const [canonicalOwnershipPath, canonicalExpectedOwnershipPath, canonicalWorktreePath] = await Promise.all([
@@ -45816,10 +46426,10 @@ async function workflowWorktreeOwnershipClaim(ownershipPath, worktreePath) {
     throw new RuntimeError("workflow ownership record changed during validation");
   }
   const managedName = `workflow-${ownershipHash.slice(0, 32)}`;
-  const candidateName = path22.basename(canonicalWorktreePath);
+  const candidateName = path24.basename(canonicalWorktreePath);
   const ownsPrimary = candidateName === managedName && canonicalRegisteredWorktreePath === canonicalWorktreePath;
   const legacyFinalName = `final-${createHash10("sha256").update(JSON.stringify(registration.workflowId)).digest("hex").slice(0, 24)}`;
-  const ownsFinalMaterialization = (candidateName === `${managedName}-final` || candidateName === legacyFinalName) && path22.basename(canonicalRegisteredWorktreePath) === managedName && path22.dirname(canonicalRegisteredWorktreePath) === path22.dirname(canonicalWorktreePath);
+  const ownsFinalMaterialization = (candidateName === `${managedName}-final` || candidateName === legacyFinalName) && path24.basename(canonicalRegisteredWorktreePath) === managedName && path24.dirname(canonicalRegisteredWorktreePath) === path24.dirname(canonicalWorktreePath);
   if (canonicalOwnershipPath !== canonicalExpectedOwnershipPath || !ownsPrimary && !ownsFinalMaterialization) {
     throw new RuntimeError("workflow ownership record names a different worktree");
   }
@@ -45845,9 +46455,9 @@ var WorkflowBranchManager = class {
   constructor(dependencies = {}) {
     this.runGit = dependencies.git ?? git;
     this.remoteTransport = dependencies.remoteTransport ?? createIsolatedRemoteTransport(this.runGit);
-    this.removeOwnership = dependencies.removeOwnership ?? ((ownershipPath) => rm7(ownershipPath));
+    this.removeOwnership = dependencies.removeOwnership ?? ((ownershipPath) => rm9(ownershipPath));
     const platformServices = dependencies.platformServices ?? getPlatformServices();
-    this.platformServices = guardWorktreeMutations(platformServices);
+    this.platformServices = platformServices;
     this.getProcessStartToken = platformServices.getProcessStartToken?.bind(platformServices) ?? getPlatformServices().getProcessStartToken.bind(getPlatformServices());
     this.worktreeManagerDependencies = {
       ...dependencies.worktreeManagerDependencies,
@@ -45856,7 +46466,7 @@ var WorkflowBranchManager = class {
   }
   ownershipPath(workflowId) {
     const name = createHash10("sha256").update(workflowId).digest("hex");
-    return path22.join(resolveStateDir(), "autopilot-branches", `${name}.json`);
+    return path24.join(resolveStateDir(), "autopilot-branches", `${name}.json`);
   }
   async readRegistration(workflowId) {
     try {
@@ -45886,7 +46496,7 @@ var WorkflowBranchManager = class {
   }
   async ownershipExists(workflowId) {
     try {
-      await lstat13(this.ownershipPath(workflowId));
+      await lstat15(this.ownershipPath(workflowId));
       return true;
     } catch (error51) {
       if (typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "ENOENT") {
@@ -45897,17 +46507,17 @@ var WorkflowBranchManager = class {
   }
   async persistOwnership(identity, bootstrapOwner) {
     const ownershipPath = this.ownershipPath(identity.workflowId);
-    const directory = path22.dirname(ownershipPath);
-    await mkdir7(directory, { recursive: true });
-    const temporaryPath = path22.join(directory, `.${path22.basename(ownershipPath)}.${randomUUID6()}.tmp`);
+    const directory = path24.dirname(ownershipPath);
+    await mkdir8(directory, { recursive: true });
+    const temporaryPath = path24.join(directory, `.${path24.basename(ownershipPath)}.${randomUUID8()}.tmp`);
     const bytes = Buffer.from(`${JSON.stringify({ ...identity, bootstrapOwner })}
 `);
     let temporaryExists = false;
     let ownershipLinked = false;
     try {
-      const handle = await open10(
+      const handle = await open12(
         temporaryPath,
-        constants10.O_WRONLY | constants10.O_CREAT | constants10.O_EXCL | (constants10.O_NOFOLLOW ?? 0),
+        constants12.O_WRONLY | constants12.O_CREAT | constants12.O_EXCL | (constants12.O_NOFOLLOW ?? 0),
         384
       );
       temporaryExists = true;
@@ -45918,7 +46528,7 @@ var WorkflowBranchManager = class {
         await handle.close();
       }
       try {
-        await link4(temporaryPath, ownershipPath);
+        await link6(temporaryPath, ownershipPath);
         ownershipLinked = true;
       } catch (error51) {
         if (typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "EEXIST") {
@@ -45926,13 +46536,13 @@ var WorkflowBranchManager = class {
         }
         throw error51;
       }
-      await rm7(temporaryPath);
+      await rm9(temporaryPath);
       temporaryExists = false;
       await syncDirectoryMetadata(directory);
       ownershipLinked = false;
     } finally {
-      if (temporaryExists) await rm7(temporaryPath, { force: true });
-      if (ownershipLinked) await rm7(ownershipPath, { force: true });
+      if (temporaryExists) await rm9(temporaryPath, { force: true });
+      if (ownershipLinked) await rm9(ownershipPath, { force: true });
     }
   }
   async resolveRemote(checkoutPath) {
@@ -45971,205 +46581,198 @@ var WorkflowBranchManager = class {
     const branch = `feat/${request.topic}-${request.workflowId.slice(0, 8)}`;
     const branchRef = `refs/heads/${branch}`;
     const baseRef = `refs/claude-architect/autopilot/${request.workflowId}/base`;
-    const fetchedRef = `refs/claude-architect/autopilot/${request.workflowId}/fetch-${randomUUID6()}`;
+    const fetchedRef = `refs/claude-architect/autopilot/${request.workflowId}/fetch-${randomUUID8()}`;
     const initial = await this.platformServices.canonicalizePath(request.checkoutPath);
     if (initial.gitCommonDir === null) fail("not-a-repository");
-    let lock;
-    try {
-      lock = await this.platformServices.acquireCheckoutLock(initial.canonical);
-    } catch (error51) {
-      if (error51 instanceof RuntimeError && error51.detail?.classification === "recovery-ambiguous") {
-        fail("recovery-ambiguous", error51.message);
-      }
-      fail("checkout-locked");
-    }
     let attached;
     let refsCreated = false;
     let fetchedCreated = false;
     let fetchedOidForCleanup;
     let completedIdentity;
     let operationError;
+    const workflowHash = createHash10("sha256").update(request.workflowId).digest("hex");
+    const remoteIdentity = await this.resolveRemote(initial.canonical);
+    const safety = new PlatformSafety(this.platformServices);
     try {
-      const locked = await this.platformServices.canonicalizePath(initial.canonical);
-      if (locked.gitCommonDir === null || locked.gitCommonDir !== initial.gitCommonDir || lock.repositoryIdentity !== initial.gitCommonDir) {
-        fail("repository-identity-mismatch");
-      }
-      if (await this.ownershipExists(request.workflowId)) {
-        fail("workflow-already-owned");
-      }
-      const checkedBranch = await this.runGit(initial.canonical, [
-        "check-ref-format",
-        "--branch",
-        branch
-      ]);
-      if (!succeeded2(checkedBranch)) fail("branch-name-invalid");
-      for (const candidate of [baseRef, fetchedRef]) {
-        const checked2 = await this.runGit(initial.canonical, ["check-ref-format", candidate]);
-        if (!succeeded2(checked2)) fail("branch-name-invalid");
-      }
-      const remoteIdentity = await this.resolveRemote(initial.canonical);
-      const localRefs = await this.runGit(initial.canonical, [
-        "for-each-ref",
-        "--format=%(refname)",
-        "refs/heads/"
-      ]);
-      if (!succeeded2(localRefs)) operationFailure("git local branch scan", localRefs);
-      const localCollision = localRefs.stdout.split("\n").filter(Boolean).some((ref) => ref.toLowerCase() === branchRef.toLowerCase());
-      if (localCollision) fail("local-branch-exists");
-      for (const privateRef of [baseRef, fetchedRef]) {
-        const exists3 = await this.runGit(initial.canonical, ["show-ref", "--verify", "--quiet", privateRef]);
-        if (exists3.exitCode === 0) fail("workflow-ref-exists");
-        if (exists3.exitCode !== 1) operationFailure("git private ref scan", exists3);
-      }
-      const advertised = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
-      if (!succeeded2(advertised)) operationFailure("git remote branch scan", advertised);
-      const remoteHeads = parseRemoteHeads(advertised.stdout);
-      if ([...remoteHeads.keys()].some((name) => name.toLowerCase() === branch.toLowerCase())) {
-        fail("remote-branch-exists");
-      }
-      const advertisedBase = remoteHeads.get(request.baseBranch);
-      if (advertisedBase === void 0 || !isOid(advertisedBase)) fail("remote-base-missing");
-      const fetched = await this.remoteTransport.fetch(
-        initial.canonical,
-        remoteIdentity.url,
-        `refs/heads/${request.baseBranch}`,
-        fetchedRef
-      );
-      if (!succeeded2(fetched)) operationFailure("git fetch base", fetched);
-      fetchedCreated = true;
-      const fetchedOidResult = await this.runGit(initial.canonical, ["rev-parse", "--verify", fetchedRef]);
-      if (!succeeded2(fetchedOidResult)) operationFailure("git resolve fetched base", fetchedOidResult);
-      const fetchedOid = fetchedOidResult.stdout.trim();
-      if (!isOid(fetchedOid)) fail("stale-fetched-base");
-      fetchedOidForCleanup = fetchedOid;
-      if (fetchedOid !== advertisedBase) fail("stale-fetched-base");
-      const commit = await this.runGit(initial.canonical, ["cat-file", "-e", `${fetchedOid}^{commit}`]);
-      if (!succeeded2(commit)) fail("fetched-base-not-commit");
-      const confirmed = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
-      if (!succeeded2(confirmed)) operationFailure("git remote base confirmation", confirmed);
-      const confirmedHeads = parseRemoteHeads(confirmed.stdout);
-      if ([...confirmedHeads.keys()].some((name) => name.toLowerCase() === branch.toLowerCase())) {
-        fail("remote-branch-exists");
-      }
-      if (confirmedHeads.get(request.baseBranch) !== fetchedOid) {
-        fail("remote-base-changed-during-create");
-      }
-      const transaction = await this.runGit(initial.canonical, ["update-ref", "--stdin"], {
-        stdin: [
-          "start",
-          `create ${baseRef} ${fetchedOid}`,
-          `create ${branchRef} ${fetchedOid}`,
-          `delete ${fetchedRef} ${fetchedOid}`,
-          "prepare",
-          "commit",
-          ""
-        ].join("\n")
-      });
-      if (!succeeded2(transaction)) operationFailure("git create workflow refs", transaction);
-      fetchedCreated = false;
-      refsCreated = true;
-      const worktreeManager = new WorktreeManager(
-        initial.canonical,
-        `workflow-${createHash10("sha256").update(request.workflowId).digest("hex").slice(0, 32)}`,
-        { os: this.platformServices.os },
-        { ...this.worktreeManagerDependencies, borrowedCheckoutLease: lock }
-      );
-      attached = await worktreeManager.createAttached(branch, fetchedOid);
-      const worktreePath = await realpath12(attached.path);
-      const worktreeGitDirResult = await this.runGit(worktreePath, [
-        "rev-parse",
-        "--path-format=absolute",
-        "--git-dir"
-      ]);
-      if (!succeeded2(worktreeGitDirResult)) {
-        operationFailure("git resolve worktree administrative directory", worktreeGitDirResult);
-      }
-      const worktreeGitDir = await realpath12(gitPathOutput(
-        worktreeGitDirResult.stdout,
-        "workflow worktree Git directory"
-      ));
-      const identity = {
-        ownershipVersion: OWNERSHIP_VERSION,
-        workflowId: request.workflowId,
-        checkoutPath: initial.canonical,
-        gitCommonDir: initial.gitCommonDir,
-        repositoryIdentity: lock.repositoryIdentity,
-        worktreePath,
-        worktreeGitDir,
-        branch,
-        branchRef,
-        baseRef,
-        baseBranch: request.baseBranch,
-        baseCommitOid: fetchedOid,
-        remote: "origin",
-        remoteUrl: remoteIdentity.url,
-        ownerRepo: remoteIdentity.ownerRepo
-      };
-      const bootstrapOwner = {
-        workflowId: request.workflowId,
-        pid: process.pid,
-        processToken: await this.getProcessStartToken(process.pid).catch(() => null),
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      await this.persistOwnership(identity, bootstrapOwner);
-      completedIdentity = identity;
-    } catch (error51) {
-      const cleanupErrors = [];
-      if (attached !== void 0) {
+      await safety.withCheckoutLease(initial.canonical, async (lock) => {
         try {
-          await attached.cleanup();
-        } catch (cleanupError) {
-          cleanupErrors.push(cleanupError);
+          const locked = await this.platformServices.canonicalizePath(initial.canonical);
+          if (locked.gitCommonDir === null || locked.gitCommonDir !== initial.gitCommonDir || lock.repositoryIdentity !== initial.gitCommonDir) {
+            fail("repository-identity-mismatch");
+          }
+          if (await this.ownershipExists(request.workflowId)) {
+            fail("workflow-already-owned");
+          }
+          const checkedBranch = await this.runGit(initial.canonical, [
+            "check-ref-format",
+            "--branch",
+            branch
+          ]);
+          if (!succeeded2(checkedBranch)) fail("branch-name-invalid");
+          for (const candidate of [baseRef, fetchedRef]) {
+            const checked2 = await this.runGit(initial.canonical, ["check-ref-format", candidate]);
+            if (!succeeded2(checked2)) fail("branch-name-invalid");
+          }
+          const localHeads = await this.runGit(initial.canonical, ["for-each-ref", "--format=%(refname)", "refs/heads/"]);
+          if (!succeeded2(localHeads)) operationFailure("git branch scan", localHeads);
+          const localCollision = localHeads.stdout.split("\n").filter(Boolean).some((ref) => ref.toLowerCase() === branchRef.toLowerCase());
+          if (localCollision) fail("local-branch-exists");
+          for (const privateRef of [baseRef, fetchedRef]) {
+            const exists3 = await this.runGit(initial.canonical, ["show-ref", "--verify", "--quiet", privateRef]);
+            if (exists3.exitCode === 0) fail("workflow-ref-exists");
+            if (exists3.exitCode !== 1) operationFailure("git private ref scan", exists3);
+          }
+          const advertised = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
+          if (!succeeded2(advertised)) operationFailure("git remote branch scan", advertised);
+          const remoteHeads = parseRemoteHeads(advertised.stdout);
+          if ([...remoteHeads.keys()].some((name) => name.toLowerCase() === branch.toLowerCase())) {
+            fail("remote-branch-exists");
+          }
+          const advertisedBase = remoteHeads.get(request.baseBranch);
+          if (advertisedBase === void 0 || !isOid(advertisedBase)) fail("remote-base-missing");
+          const fetched = await this.remoteTransport.fetch(
+            initial.canonical,
+            remoteIdentity.url,
+            `refs/heads/${request.baseBranch}`,
+            fetchedRef
+          );
+          if (!succeeded2(fetched)) operationFailure("git fetch base", fetched);
+          fetchedCreated = true;
+          const fetchedOidResult = await this.runGit(initial.canonical, ["rev-parse", "--verify", fetchedRef]);
+          if (!succeeded2(fetchedOidResult)) operationFailure("git resolve fetched base", fetchedOidResult);
+          const fetchedOid = fetchedOidResult.stdout.trim();
+          if (!isOid(fetchedOid)) fail("stale-fetched-base");
+          fetchedOidForCleanup = fetchedOid;
+          if (fetchedOid !== advertisedBase) fail("stale-fetched-base");
+          const commit = await this.runGit(initial.canonical, ["cat-file", "-e", `${fetchedOid}^{commit}`]);
+          if (!succeeded2(commit)) fail("fetched-base-not-commit");
+          const confirmed = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
+          if (!succeeded2(confirmed)) operationFailure("git remote base confirmation", confirmed);
+          const confirmedHeads = parseRemoteHeads(confirmed.stdout);
+          if ([...confirmedHeads.keys()].some((name) => name.toLowerCase() === branch.toLowerCase())) {
+            fail("remote-branch-exists");
+          }
+          if (confirmedHeads.get(request.baseBranch) !== fetchedOid) {
+            fail("remote-base-changed-during-create");
+          }
+          const transaction = await this.runGit(initial.canonical, ["update-ref", "--stdin"], {
+            stdin: [
+              "start",
+              `create ${baseRef} ${fetchedOid}`,
+              `create ${branchRef} ${fetchedOid}`,
+              `delete ${fetchedRef} ${fetchedOid}`,
+              "prepare",
+              "commit",
+              ""
+            ].join("\n")
+          });
+          if (!succeeded2(transaction)) operationFailure("git create workflow refs", transaction);
+          fetchedCreated = false;
+          refsCreated = true;
+          const worktreeManager = new WorktreeManager(
+            initial.canonical,
+            `workflow-${createHash10("sha256").update(request.workflowId).digest("hex").slice(0, 32)}`,
+            { os: this.platformServices.os },
+            { ...this.worktreeManagerDependencies, borrowedCheckoutLease: lock }
+          );
+          attached = await worktreeManager.createAttached(branch, fetchedOid);
+          const worktreePath = await realpath12(attached.path);
+          const worktreeGitDirResult = await this.runGit(worktreePath, [
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-dir"
+          ]);
+          if (!succeeded2(worktreeGitDirResult)) {
+            operationFailure("git resolve worktree administrative directory", worktreeGitDirResult);
+          }
+          const worktreeGitDir = await realpath12(gitPathOutput(
+            worktreeGitDirResult.stdout,
+            "workflow worktree Git directory"
+          ));
+          const identity = {
+            ownershipVersion: OWNERSHIP_VERSION,
+            workflowId: request.workflowId,
+            checkoutPath: initial.canonical,
+            gitCommonDir: initial.gitCommonDir,
+            repositoryIdentity: lock.repositoryIdentity,
+            worktreePath,
+            worktreeGitDir,
+            branch,
+            branchRef,
+            baseRef,
+            baseBranch: request.baseBranch,
+            baseCommitOid: fetchedOid,
+            remote: "origin",
+            remoteUrl: remoteIdentity.url,
+            ownerRepo: remoteIdentity.ownerRepo
+          };
+          const bootstrapOwner = {
+            workflowId: request.workflowId,
+            pid: process.pid,
+            processToken: await this.getProcessStartToken(process.pid).catch(() => null),
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          };
+          await this.persistOwnership(identity, bootstrapOwner);
+          completedIdentity = identity;
+        } catch (error51) {
+          const cleanupErrors = [];
+          if (attached !== void 0) {
+            try {
+              await attached.cleanup();
+            } catch (cleanupError) {
+              cleanupErrors.push(cleanupError);
+            }
+          }
+          if (refsCreated && fetchedOidForCleanup !== void 0) {
+            const rollback = await this.runGit(initial.canonical, ["update-ref", "--stdin"], {
+              stdin: [
+                `delete ${branchRef} ${fetchedOidForCleanup}`,
+                `delete ${baseRef} ${fetchedOidForCleanup}`,
+                ""
+              ].join("\n")
+            });
+            if (!succeeded2(rollback)) cleanupErrors.push(new RuntimeError("workflow ref rollback failed"));
+          } else if (refsCreated) {
+            cleanupErrors.push(new RuntimeError("workflow ref identity unavailable for safe rollback"));
+          } else if (fetchedCreated && fetchedOidForCleanup !== void 0) {
+            const rollback = await this.runGit(initial.canonical, [
+              "update-ref",
+              "-d",
+              fetchedRef,
+              fetchedOidForCleanup
+            ]);
+            if (!succeeded2(rollback)) cleanupErrors.push(new RuntimeError("fetched ref rollback failed"));
+          } else if (fetchedCreated) {
+            cleanupErrors.push(new RuntimeError("fetched ref identity unavailable for safe rollback"));
+          }
+          if (cleanupErrors.length > 0) {
+            operationError = new AggregateError(
+              [error51, ...cleanupErrors],
+              "workflow branch creation and cleanup failed"
+            );
+          } else {
+            operationError = error51;
+          }
+          throw operationError;
         }
-      }
-      if (refsCreated && fetchedOidForCleanup !== void 0) {
-        const rollback = await this.runGit(initial.canonical, ["update-ref", "--stdin"], {
-          stdin: [
-            `delete ${branchRef} ${fetchedOidForCleanup}`,
-            `delete ${baseRef} ${fetchedOidForCleanup}`,
-            ""
-          ].join("\n")
-        });
-        if (!succeeded2(rollback)) cleanupErrors.push(new RuntimeError("workflow ref rollback failed"));
-      } else if (refsCreated) {
-        cleanupErrors.push(new RuntimeError("workflow ref identity unavailable for safe rollback"));
-      } else if (fetchedCreated && fetchedOidForCleanup !== void 0) {
-        const rollback = await this.runGit(initial.canonical, [
-          "update-ref",
-          "-d",
-          fetchedRef,
-          fetchedOidForCleanup
-        ]);
-        if (!succeeded2(rollback)) cleanupErrors.push(new RuntimeError("fetched ref rollback failed"));
-      } else if (fetchedCreated) {
-        cleanupErrors.push(new RuntimeError("fetched ref identity unavailable for safe rollback"));
-      }
-      if (cleanupErrors.length > 0) {
-        operationError = new AggregateError(
-          [error51, ...cleanupErrors],
-          "workflow branch creation and cleanup failed"
-        );
-      } else {
-        operationError = error51;
-      }
-    }
-    try {
-      await lock.release();
-    } catch (releaseError) {
-      if (completedIdentity === void 0) {
-        operationError = operationError === void 0 ? releaseError : new AggregateError(
-          [operationError, releaseError],
-          "workflow branch creation failed and checkout lock release failed"
-        );
-      } else {
+      });
+    } catch (error51) {
+      if (completedIdentity !== void 0) {
         logger.warn("checkout lock release failed after workflow branch creation", {
           event: "checkout-lock-release-failed",
           workflowId: completedIdentity.workflowId,
-          reason: redact(String(releaseError))
+          reason: redact(String(error51))
         });
+      } else {
+        if (error51 instanceof RuntimeError && error51.detail?.classification === "recovery-ambiguous") {
+          fail("recovery-ambiguous", error51.message);
+        }
+        if (operationError !== void 0) {
+          throw error51;
+        }
+        fail("checkout-locked");
       }
     }
-    if (operationError !== void 0) throw operationError;
     return completedIdentity;
   }
   async validateLocked(identity, expectedHead2, allowStagedBytes = false) {
@@ -46260,31 +46863,29 @@ var WorkflowBranchManager = class {
     return { ok: true };
   }
   async revalidate(identity, expectedHead2 = identity.baseCommitOid) {
-    let lock;
+    const safety = new PlatformSafety(this.platformServices);
     try {
-      lock = await this.platformServices.acquireCheckoutLock(identity.checkoutPath);
+      return await safety.withCheckoutLease(identity.checkoutPath, async (lock) => {
+        if (lock.repositoryIdentity !== identity.repositoryIdentity) {
+          return { ok: false, classification: "repository-identity-changed" };
+        }
+        try {
+          return await this.validateLocked(identity, expectedHead2);
+        } catch {
+          return { ok: false, classification: "git-command-failed" };
+        }
+      }, {
+        onReleaseError: (releaseError, result) => {
+          logger.warn("checkout lock release failed after workflow branch revalidation", {
+            event: "checkout-lock-release-failed",
+            workflowId: identity.workflowId,
+            reason: redact(String(releaseError))
+          });
+          return result;
+        }
+      });
     } catch {
       return { ok: false, classification: "repository-identity-changed" };
-    }
-    try {
-      if (lock.repositoryIdentity !== identity.repositoryIdentity) {
-        return { ok: false, classification: "repository-identity-changed" };
-      }
-      try {
-        return await this.validateLocked(identity, expectedHead2);
-      } catch {
-        return { ok: false, classification: "git-command-failed" };
-      }
-    } finally {
-      try {
-        await lock.release();
-      } catch (releaseError) {
-        logger.warn("checkout lock release failed after workflow branch revalidation", {
-          event: "checkout-lock-release-failed",
-          workflowId: identity.workflowId,
-          reason: redact(String(releaseError))
-        });
-      }
     }
   }
   async revalidateUnderLock(identity, expectedHead2, borrowedCheckoutLock) {
@@ -46466,30 +47067,26 @@ var WorkflowBranchManager = class {
     if (!isOid(expectedHead2) || !isOid(identity.baseCommitOid) || !WORKFLOW_ID2.test(identity.workflowId) || typeof identity.worktreeGitDir !== "string" || identity.branchRef !== `refs/heads/${identity.branch}` || identity.baseRef !== `refs/claude-architect/autopilot/${identity.workflowId}/base`) {
       return { ok: false, classification: "cleanup-failed" };
     }
-    let lock;
+    let result;
+    const safety = new PlatformSafety(this.platformServices);
     try {
-      lock = await this.platformServices.acquireCheckoutLock(identity.checkoutPath);
+      result = await safety.withCheckoutLease(identity.checkoutPath, async (lock) => {
+        if (lock.repositoryIdentity !== identity.repositoryIdentity) {
+          return { ok: false, classification: "cleanup-failed" };
+        }
+        return await this.cleanupLocked(identity, expectedHead2, lock);
+      }, {
+        onReleaseError: (releaseError, res) => {
+          logger.warn("checkout lock release failed after workflow branch cleanup", {
+            event: "checkout-lock-release-failed",
+            workflowId: identity.workflowId,
+            reason: redact(String(releaseError))
+          });
+          return res;
+        }
+      });
     } catch {
       return { ok: false, classification: "cleanup-failed" };
-    }
-    let result;
-    try {
-      if (lock.repositoryIdentity !== identity.repositoryIdentity) {
-        result = { ok: false, classification: "cleanup-failed" };
-      } else {
-        result = await this.cleanupLocked(identity, expectedHead2, lock);
-      }
-    } catch {
-      result = { ok: false, classification: "cleanup-failed" };
-    }
-    try {
-      await lock.release();
-    } catch (releaseError) {
-      logger.warn("checkout lock release failed after workflow branch cleanup", {
-        event: "checkout-lock-release-failed",
-        workflowId: identity.workflowId,
-        reason: redact(String(releaseError))
-      });
     }
     return result;
   }
@@ -46498,7 +47095,7 @@ var WorkflowBranchManager = class {
 // src/autopilot/final-branch-reviewer.ts
 var OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 var SHA2563 = /^[0-9a-f]{64}$/u;
-var NO_FOLLOW5 = constants11.O_NOFOLLOW ?? 0;
+var NO_FOLLOW7 = constants13.O_NOFOLLOW ?? 0;
 var MAX_FINAL_BRANCH_ARTIFACT_BYTES = 64 * 1024 * 1024;
 var MAX_TASK_EVIDENCE_REFS = 4096;
 var MAX_TASK_EVIDENCE_BYTES = 8 * 1024 * 1024;
@@ -46542,7 +47139,7 @@ function normalizedEvidenceRefs(references, allowEmpty = false, maximum = 128) {
   }
   const unique = /* @__PURE__ */ new Set();
   for (const reference of references) {
-    if (typeof reference !== "string" || reference.length < 1 || reference.length > 1024 || path23.posix.isAbsolute(reference) || reference.includes("\\") || reference.split("/").some((component) => component === "" || component === "." || component === "..") || /[\0\r\n]/u.test(reference)) {
+    if (typeof reference !== "string" || reference.length < 1 || reference.length > 1024 || path25.posix.isAbsolute(reference) || reference.includes("\\") || reference.split("/").some((component) => component === "" || component === "." || component === "..") || /[\0\r\n]/u.test(reference)) {
       fail2("missing-task-evidence", "task evidence reference is invalid");
     }
     unique.add(reference);
@@ -46996,16 +47593,16 @@ function freezePackage(value) {
   return value;
 }
 async function persistImmutableJson(workflowDirectory, reference, value) {
-  const destination = path23.join(workflowDirectory, reference);
-  const temporary = path23.join(workflowDirectory, `.${reference}.${randomUUID7()}.tmp`);
+  const destination = path25.join(workflowDirectory, reference);
+  const temporary = path25.join(workflowDirectory, `.${reference}.${randomUUID9()}.tmp`);
   const serialized = `${JSON.stringify(value, null, 2)}
 `;
   let handle;
   let temporaryExists = false;
   try {
-    handle = await open11(
+    handle = await open13(
       temporary,
-      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | NO_FOLLOW5,
+      constants13.O_WRONLY | constants13.O_CREAT | constants13.O_EXCL | NO_FOLLOW7,
       384
     );
     temporaryExists = true;
@@ -47014,18 +47611,18 @@ async function persistImmutableJson(workflowDirectory, reference, value) {
     await handle.close();
     handle = void 0;
     try {
-      await link5(temporary, destination);
+      await link7(temporary, destination);
     } catch (error51) {
       if (error51.code !== "EEXIST") throw error51;
-      const metadata = await lstat14(destination);
-      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1 || await readFile4(destination, "utf8") !== serialized) {
+      const metadata = await lstat16(destination);
+      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1 || await readFile6(destination, "utf8") !== serialized) {
         fail2("artifact-persistence-failed", `a different ${reference} already exists`);
       }
     }
-    await rm8(temporary);
+    await rm10(temporary);
     temporaryExists = false;
     await syncDirectoryMetadata(workflowDirectory);
-    if (await readFile4(destination, "utf8") !== serialized) {
+    if (await readFile6(destination, "utf8") !== serialized) {
       fail2("artifact-persistence-failed", `${reference} was not durably persisted`);
     }
   } catch (error51) {
@@ -47033,23 +47630,23 @@ async function persistImmutableJson(workflowDirectory, reference, value) {
     fail2("artifact-persistence-failed", `failed to persist ${reference}`);
   } finally {
     await handle?.close();
-    if (temporaryExists) await rm8(temporary, { force: true });
+    if (temporaryExists) await rm10(temporary, { force: true });
   }
 }
 async function persistFrozenArtifact(workflowDirectory, artifact) {
-  const destination = path23.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
-  const temporary = path23.join(
+  const destination = path25.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
+  const temporary = path25.join(
     workflowDirectory,
-    `.${FINAL_BRANCH_ARTIFACT_REF}.${randomUUID7()}.tmp`
+    `.${FINAL_BRANCH_ARTIFACT_REF}.${randomUUID9()}.tmp`
   );
   const serialized = `${JSON.stringify(artifact, null, 2)}
 `;
   let handle;
   let temporaryExists = false;
   try {
-    handle = await open11(
+    handle = await open13(
       temporary,
-      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | NO_FOLLOW5,
+      constants13.O_WRONLY | constants13.O_CREAT | constants13.O_EXCL | NO_FOLLOW7,
       384
     );
     temporaryExists = true;
@@ -47058,18 +47655,18 @@ async function persistFrozenArtifact(workflowDirectory, artifact) {
     await handle.close();
     handle = void 0;
     try {
-      await link5(temporary, destination);
+      await link7(temporary, destination);
     } catch (error51) {
       if (error51.code !== "EEXIST") throw error51;
-      const metadata = await lstat14(destination);
-      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1 || await readFile4(destination, "utf8") !== serialized) {
+      const metadata = await lstat16(destination);
+      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1 || await readFile6(destination, "utf8") !== serialized) {
         fail2("artifact-persistence-failed", "a different final branch artifact already exists");
       }
     }
-    await rm8(temporary);
+    await rm10(temporary);
     temporaryExists = false;
     await syncDirectoryMetadata(workflowDirectory);
-    const persisted = JSON.parse(await readFile4(destination, "utf8"));
+    const persisted = JSON.parse(await readFile6(destination, "utf8"));
     const { branchArtifactHash, ...unhashed } = persisted;
     if (branchArtifactHash !== artifact.branchArtifactHash || branchArtifactHashOf(unhashed) !== artifact.branchArtifactHash) {
       fail2("artifact-persistence-failed", "final branch artifact was not durably persisted");
@@ -47079,14 +47676,14 @@ async function persistFrozenArtifact(workflowDirectory, artifact) {
     fail2("artifact-persistence-failed", "failed to persist final branch artifact");
   } finally {
     await handle?.close();
-    if (temporaryExists) await rm8(temporary, { force: true });
+    if (temporaryExists) await rm10(temporary, { force: true });
   }
 }
 async function assertPersistedArtifact(workflowDirectory, artifact) {
   let handle;
   try {
-    const destination = path23.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
-    handle = await open11(destination, constants11.O_RDONLY | NO_FOLLOW5);
+    const destination = path25.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
+    handle = await open13(destination, constants13.O_RDONLY | NO_FOLLOW7);
     const metadata = await handle.stat();
     if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size > MAX_FINAL_BRANCH_ARTIFACT_BYTES) {
       fail2("artifact-persistence-failed", "final branch artifact is not a safe regular file");
@@ -47124,9 +47721,7 @@ var FinalBranchReviewer = class {
       structural: async (args) => await structuralVerifyFinalBranch(args, this.runGit)
     });
     this.roleRunner = dependencies.roleRunner ?? runRole;
-    this.platformServices = guardWorktreeMutations(
-      dependencies.platformServices ?? getPlatformServices()
-    );
+    this.platformServices = dependencies.platformServices ?? getPlatformServices();
     this.producerRegistry = dependencies.producerRegistry ?? registry2;
     this.artifactStore = dependencies.artifactStore ?? ((workflowId) => new ArtifactStore(`final-${canonicalArtifactHash(workflowId).slice(0, 24)}`));
     this.evidenceStore = dependencies.evidenceStore ?? ((runId) => new ArtifactStore(runId));
@@ -47253,34 +47848,14 @@ var FinalBranchReviewer = class {
     });
   }
   async withCheckoutLease(checkoutPath, phase, execute2) {
-    const canonical = await this.platformServices.canonicalizePath(checkoutPath);
-    if (canonical.gitCommonDir === null) {
-      fail2("workflow-state-mismatch", "final review checkout is not a repository");
-    }
-    const lease = await this.platformServices.acquireCheckoutLock(canonical.canonical);
-    let primaryError;
+    const safety = new PlatformSafety(this.platformServices);
     try {
-      if (lease.repositoryIdentity !== canonical.gitCommonDir) {
-        fail2("workflow-state-mismatch", "final review checkout lease repository identity mismatch");
-      }
-      return await execute2(lease);
+      return await safety.withCheckoutLease(checkoutPath, execute2);
     } catch (error51) {
-      primaryError = error51;
-      throw error51;
-    } finally {
-      try {
-        await lease.release();
-      } catch (releaseError) {
-        if (primaryError === void 0) {
-          throw new Error(
-            `${phase} checkout lease release failed: ${errorDiagnostic(releaseError)}`
-          );
-        }
-        throw new AggregateError(
-          [primaryError, releaseError],
-          `${phase} failed and its checkout lease release also failed: ${errorDiagnostic(releaseError)}`
-        );
+      if (error51 instanceof Error && error51.message === "checkout Git common directory could not be resolved") {
+        fail2("workflow-state-mismatch", "final review checkout is not a repository");
       }
+      throw error51;
     }
   }
   async runHeadBoundPhase(artifact, phase, execute2, checkoutPath) {
@@ -47750,7 +48325,7 @@ var AutopilotController = class {
   constructor(dependencies) {
     this.dependencies = dependencies;
     this.validator = dependencies.validator ?? validateAutopilotSpec;
-    this.createWorkflowId = dependencies.workflowId ?? randomUUID8;
+    this.createWorkflowId = dependencies.workflowId ?? randomUUID10;
     this.now = dependencies.now ?? (() => (/* @__PURE__ */ new Date()).toISOString());
     const configuredInterval = dependencies.requiredChecksPollIntervalMs ?? DEFAULT_REQUIRED_CHECKS_POLL_INTERVAL_MS;
     this.pollIntervalMs = Number.isFinite(configuredInterval) ? Math.min(
@@ -48834,24 +49409,16 @@ async function stageCandidateTreeUnderLock(args) {
   return (await stageCandidateTreeWithLock(args, "borrowed")).result;
 }
 async function applyCandidateTree(args) {
-  const ps = guardWorktreeMutations(args.platformServices ?? getPlatformServices());
-  let ownedLock = null;
-  const lock = args.borrowedCheckoutLock ?? await ps.acquireCheckoutLock(args.repoRoot);
-  if (args.borrowedCheckoutLock === void 0) ownedLock = lock;
-  const terminal = { result: null };
-  const finish = (result) => {
-    terminal.result = result;
-    return result;
-  };
-  try {
+  const safety = new PlatformSafety(args.platformServices);
+  const executeWithLock = async (lock, ownership) => {
     const staged = await stageCandidateTreeWithLock({
       repoRoot: args.repoRoot,
       artifact: args.artifact,
       expectedArtifactHash: args.expectedArtifactHash,
       borrowedCheckoutLock: lock,
-      platformServices: ps
-    }, ownedLock === null ? "borrowed" : "owned");
-    if (staged.result.integration !== "applied") return finish(staged.result);
+      ...args.platformServices !== void 0 ? { platformServices: args.platformServices } : {}
+    }, ownership);
+    if (staged.result.integration !== "applied") return staged.result;
     const deleted = await git(staged.canonicalRepoRoot, [
       "update-ref",
       "--no-deref",
@@ -48860,21 +49427,28 @@ async function applyCandidateTree(args) {
       args.artifact.candidateCommitOid
     ]);
     if (!succeeded4(deleted)) {
-      return finish({
+      return {
         integration: "applied",
         detail: "candidate tree applied; candidate anchor delete failed"
-      });
+      };
     }
-    return finish({ integration: "applied", detail: "candidate tree applied" });
-  } finally {
-    if (ownedLock !== null) {
-      try {
-        await ownedLock.release();
-      } catch (error51) {
-        if (terminal.result === null) throw error51;
-        terminal.result.detail = `${terminal.result.detail}; checkout lock release failed`;
-      }
+    return { integration: "applied", detail: "candidate tree applied" };
+  };
+  if (args.borrowedCheckoutLock !== void 0) {
+    return await executeWithLock(args.borrowedCheckoutLock, "borrowed");
+  }
+  let terminalResult = null;
+  try {
+    return await safety.withCheckoutLease(args.repoRoot, async (lock) => {
+      terminalResult = await executeWithLock(lock, "owned");
+      return terminalResult;
+    });
+  } catch (error51) {
+    if (terminalResult !== null) {
+      terminalResult.detail = `${terminalResult.detail}; checkout lock release failed`;
+      return terminalResult;
     }
+    throw error51;
   }
 }
 
@@ -48952,9 +49526,7 @@ var CandidatePromoter = class {
   now;
   constructor(dependencies = {}) {
     this.runGit = dependencies.git ?? git;
-    this.platformServices = guardWorktreeMutations(
-      dependencies.platformServices ?? getPlatformServices()
-    );
+    this.platformServices = dependencies.platformServices ?? getPlatformServices();
     this.branchManager = dependencies.branchManager ?? new WorkflowBranchManager();
     this.workflowStore = dependencies.workflowStore ?? ((workflowId) => new WorkflowStore(workflowId));
     this.artifactStore = dependencies.artifactStore ?? ((runId) => new ArtifactStore(runId));
@@ -49128,135 +49700,164 @@ var CandidatePromoter = class {
     if (identity === null || identity.worktreePath !== request.workflowCheckoutPath || identity.branchRef !== workflow.workflowRef || identity.repositoryIdentity !== workflow.repositoryIdentity) {
       return finishFailure("branch-identity-changed");
     }
-    let lock;
-    try {
-      lock = await this.platformServices.acquireCheckoutLock(request.workflowCheckoutPath);
-    } catch {
-      return finishFailure("branch-identity-changed");
-    }
+    const safety = new PlatformSafety(this.platformServices);
+    let enteredLease = false;
     let terminal;
     try {
-      const completedOid = intent.completion === null ? null : completionCommit(intent.completion.completion);
-      let lockedOutcome;
-      try {
-        lockedOutcome = await workflowStore.withLockedState(workflow.revision, async (locked) => {
-          if (!workflowStillAuthorizes(
-            locked,
-            request,
-            task.id,
-            eligibilityHash,
-            workflow.workflowRef,
-            workflow.repositoryIdentity
-          )) {
-            return {
-              kind: "rejected",
-              classification: "human-decision-required",
-              journalFailure: false
-            };
-          }
-          if (completedOid !== null) {
-            const proven = await this.provePromotedCheckout(
-              identity,
-              lock,
-              completedOid,
-              artifact.candidateTreeOid
-            ) && await this.proveCommit(
-              request.workflowCheckoutPath,
-              completedOid,
-              artifact.candidateTreeOid,
-              request.expectedHead,
-              request.commitMessage
-            );
-            if (proven && !await this.ensureAcceptedDecision(
-              artifactStore,
-              request.runId,
-              artifact,
-              eligibility,
-              eligibilityHash
+      await safety.withCheckoutLease(request.workflowCheckoutPath, async (lock) => {
+        enteredLease = true;
+        const completedOid = intent.completion === null ? null : completionCommit(intent.completion.completion);
+        let lockedOutcome;
+        try {
+          lockedOutcome = await workflowStore.withLockedState(workflow.revision, async (locked) => {
+            if (!workflowStillAuthorizes(
+              locked,
+              request,
+              task.id,
+              eligibilityHash,
+              workflow.workflowRef,
+              workflow.repositoryIdentity
             )) {
               return {
                 kind: "rejected",
-                classification: "decision-conflict",
-                journalFailure: true
+                classification: "human-decision-required",
+                journalFailure: false
               };
             }
-            return proven ? { kind: "committed", commitOid: completedOid, needsJournal: false } : {
-              kind: "rejected",
-              classification: "human-decision-required",
-              journalFailure: false
-            };
-          }
-          const currentHead = await this.runGit(
-            request.workflowCheckoutPath,
-            ["rev-parse", "--verify", "HEAD"]
-          );
-          if (!succeeded5(currentHead)) {
-            return {
-              kind: "rejected",
-              classification: "human-decision-required",
-              journalFailure: false
-            };
-          }
-          if (currentHead.stdout.trim() !== request.expectedHead) {
-            const existingOid = currentHead.stdout.trim();
-            const proven = OBJECT_ID3.test(existingOid) && await this.provePromotedCheckout(
-              identity,
-              lock,
-              existingOid,
-              artifact.candidateTreeOid
-            ) && await this.proveCommit(
+            if (completedOid !== null) {
+              const proven = await this.provePromotedCheckout(
+                identity,
+                lock,
+                completedOid,
+                artifact.candidateTreeOid
+              ) && await this.proveCommit(
+                request.workflowCheckoutPath,
+                completedOid,
+                artifact.candidateTreeOid,
+                request.expectedHead,
+                request.commitMessage
+              );
+              if (proven && !await this.ensureAcceptedDecision(
+                artifactStore,
+                request.runId,
+                artifact,
+                eligibility,
+                eligibilityHash
+              )) {
+                return {
+                  kind: "rejected",
+                  classification: "decision-conflict",
+                  journalFailure: true
+                };
+              }
+              return proven ? { kind: "committed", commitOid: completedOid, needsJournal: false } : {
+                kind: "rejected",
+                classification: "human-decision-required",
+                journalFailure: false
+              };
+            }
+            const currentHead = await this.runGit(
               request.workflowCheckoutPath,
-              existingOid,
-              artifact.candidateTreeOid,
-              request.expectedHead,
-              request.commitMessage
+              ["rev-parse", "--verify", "HEAD"]
             );
-            if (proven && !await this.ensureAcceptedDecision(
-              artifactStore,
-              request.runId,
-              artifact,
-              eligibility,
-              eligibilityHash
-            )) {
+            if (!succeeded5(currentHead)) {
               return {
                 kind: "rejected",
-                classification: "decision-conflict",
-                journalFailure: true
+                classification: "human-decision-required",
+                journalFailure: false
               };
             }
-            return proven ? { kind: "committed", commitOid: existingOid, needsJournal: true } : {
-              kind: "rejected",
-              classification: "human-decision-required",
-              journalFailure: false
-            };
-          }
-          const liveIdentity = await this.branchManager.revalidateForStagedPromotionUnderLock(
-            identity,
-            request.expectedHead,
-            lock
-          );
-          if (!liveIdentity.ok) {
-            return {
-              kind: "rejected",
-              classification: "human-decision-required",
-              journalFailure: false
-            };
-          }
-          const exactStagedRecovery = await this.proveStagedCandidate(identity, artifact);
-          if (!exactStagedRecovery) {
-            const branch = await this.branchManager.revalidateUnderLock(
+            if (currentHead.stdout.trim() !== request.expectedHead) {
+              const existingOid = currentHead.stdout.trim();
+              const proven = OBJECT_ID3.test(existingOid) && await this.provePromotedCheckout(
+                identity,
+                lock,
+                existingOid,
+                artifact.candidateTreeOid
+              ) && await this.proveCommit(
+                request.workflowCheckoutPath,
+                existingOid,
+                artifact.candidateTreeOid,
+                request.expectedHead,
+                request.commitMessage
+              );
+              if (proven && !await this.ensureAcceptedDecision(
+                artifactStore,
+                request.runId,
+                artifact,
+                eligibility,
+                eligibilityHash
+              )) {
+                return {
+                  kind: "rejected",
+                  classification: "decision-conflict",
+                  journalFailure: true
+                };
+              }
+              return proven ? { kind: "committed", commitOid: existingOid, needsJournal: true } : {
+                kind: "rejected",
+                classification: "human-decision-required",
+                journalFailure: false
+              };
+            }
+            const liveIdentity = await this.branchManager.revalidateForStagedPromotionUnderLock(
               identity,
               request.expectedHead,
               lock
             );
-            if (!branch.ok) {
+            if (!liveIdentity.ok) {
               return {
                 kind: "rejected",
                 classification: "human-decision-required",
                 journalFailure: false
               };
             }
-            if (!await this.ensureAcceptedDecision(
+            const exactStagedRecovery = await this.proveStagedCandidate(identity, artifact);
+            if (!exactStagedRecovery) {
+              const branch = await this.branchManager.revalidateUnderLock(
+                identity,
+                request.expectedHead,
+                lock
+              );
+              if (!branch.ok) {
+                return {
+                  kind: "rejected",
+                  classification: "human-decision-required",
+                  journalFailure: false
+                };
+              }
+              if (!await this.ensureAcceptedDecision(
+                artifactStore,
+                request.runId,
+                artifact,
+                eligibility,
+                eligibilityHash
+              )) {
+                return {
+                  kind: "rejected",
+                  classification: "decision-conflict",
+                  journalFailure: true
+                };
+              }
+              const staged = await this.stageCandidate({
+                repoRoot: request.workflowCheckoutPath,
+                artifact,
+                expectedArtifactHash: request.expectedArtifactHash,
+                borrowedCheckoutLock: lock,
+                platformServices: this.platformServices
+              });
+              if (staged.integration !== "applied") {
+                return staged.integration === "conflicted" ? {
+                  kind: "rejected",
+                  classification: "human-decision-required",
+                  journalFailure: false
+                } : {
+                  kind: "rejected",
+                  classification: classifyStage(staged),
+                  journalFailure: true
+                };
+              }
+            } else if (!await this.ensureAcceptedDecision(
               artifactStore,
               request.runId,
               artifact,
@@ -49269,151 +49870,119 @@ var CandidatePromoter = class {
                 journalFailure: true
               };
             }
-            const staged = await this.stageCandidate({
-              repoRoot: request.workflowCheckoutPath,
-              artifact,
-              expectedArtifactHash: request.expectedArtifactHash,
-              borrowedCheckoutLock: lock,
-              platformServices: this.platformServices
-            });
-            if (staged.integration !== "applied") {
-              return staged.integration === "conflicted" ? {
+            if (!await this.proveStagedCandidate(identity, artifact)) {
+              return {
                 kind: "rejected",
                 classification: "human-decision-required",
                 journalFailure: false
-              } : {
+              };
+            }
+            const [author, committer] = await Promise.all([
+              this.runGit(request.workflowCheckoutPath, ["var", "GIT_AUTHOR_IDENT"]),
+              this.runGit(request.workflowCheckoutPath, ["var", "GIT_COMMITTER_IDENT"])
+            ]);
+            if (!succeeded5(author) || !succeeded5(committer)) {
+              return {
                 kind: "rejected",
-                classification: classifyStage(staged),
+                classification: "git-identity-missing",
                 journalFailure: true
               };
             }
-          } else if (!await this.ensureAcceptedDecision(
-            artifactStore,
-            request.runId,
-            artifact,
-            eligibility,
-            eligibilityHash
-          )) {
-            return {
-              kind: "rejected",
-              classification: "decision-conflict",
-              journalFailure: true
-            };
-          }
-          if (!await this.proveStagedCandidate(identity, artifact)) {
-            return {
-              kind: "rejected",
-              classification: "human-decision-required",
-              journalFailure: false
-            };
-          }
-          const [author, committer] = await Promise.all([
-            this.runGit(request.workflowCheckoutPath, ["var", "GIT_AUTHOR_IDENT"]),
-            this.runGit(request.workflowCheckoutPath, ["var", "GIT_COMMITTER_IDENT"])
-          ]);
-          if (!succeeded5(author) || !succeeded5(committer)) {
-            return {
-              kind: "rejected",
-              classification: "git-identity-missing",
-              journalFailure: true
-            };
-          }
-          const created = await this.runGit(request.workflowCheckoutPath, [
-            "commit-tree",
-            artifact.candidateTreeOid,
-            "-p",
-            request.expectedHead,
-            "-m",
-            request.commitMessage
-          ]);
-          const commitOid = created.stdout.trim();
-          if (!succeeded5(created) || !OBJECT_ID3.test(commitOid)) {
-            return {
-              kind: "rejected",
-              classification: "commit-creation-failed",
-              journalFailure: true
-            };
-          }
-          if (!await this.proveCommit(
-            request.workflowCheckoutPath,
-            commitOid,
-            artifact.candidateTreeOid,
-            request.expectedHead,
-            request.commitMessage
-          )) {
-            return {
-              kind: "rejected",
-              classification: "commit-proof-failed",
-              journalFailure: true
-            };
-          }
-          const updated = await this.runGit(request.workflowCheckoutPath, [
-            "update-ref",
-            "--no-deref",
-            identity.branchRef,
-            commitOid,
-            request.expectedHead
-          ]);
-          if (!succeeded5(updated)) {
-            return {
-              kind: "rejected",
-              classification: "human-decision-required",
-              journalFailure: false
-            };
-          }
-          if (!await this.provePromotedCheckout(
-            identity,
-            lock,
-            commitOid,
-            artifact.candidateTreeOid
-          )) {
-            return {
-              kind: "rejected",
-              classification: "human-decision-required",
-              journalFailure: false
-            };
-          }
-          return { kind: "committed", commitOid, needsJournal: true };
-        });
-      } catch (error51) {
-        const toolError = error51.detail?.toolError;
-        if (toolError !== "workflow-revision-conflict") throw error51;
-        lockedOutcome = {
-          kind: "rejected",
-          classification: "human-decision-required",
-          journalFailure: false
-        };
-      }
-      if (lockedOutcome.kind === "rejected") {
-        terminal = lockedOutcome.journalFailure ? await finishFailure(lockedOutcome.classification) : rejected(lockedOutcome.classification);
-      } else {
-        let journaled = !lockedOutcome.needsJournal;
-        if (!journaled) {
-          try {
-            await workflowStore.completeIntent({
-              idempotencyKey,
-              completion: { commitOid: lockedOutcome.commitOid }
-            });
-            journaled = true;
-          } catch {
-            journaled = false;
-          }
-        }
-        terminal = !journaled ? rejected("journal-failed") : await this.deleteAnchor(request.workflowCheckoutPath, artifact) ? { status: "committed", commitOid: lockedOutcome.commitOid } : rejected("anchor-deletion-failed");
-      }
-    } finally {
-      try {
-        await lock.release();
-      } catch (releaseError) {
-        if (terminal?.status === "committed") {
-          logger.warn("checkout lock release failed after candidate promotion", {
-            event: "checkout-lock-release-failed",
-            workflowId: request.workflowId,
-            reason: redact(String(releaseError))
+            const created = await this.runGit(request.workflowCheckoutPath, [
+              "commit-tree",
+              artifact.candidateTreeOid,
+              "-p",
+              request.expectedHead,
+              "-m",
+              request.commitMessage
+            ]);
+            const commitOid = created.stdout.trim();
+            if (!succeeded5(created) || !OBJECT_ID3.test(commitOid)) {
+              return {
+                kind: "rejected",
+                classification: "commit-creation-failed",
+                journalFailure: true
+              };
+            }
+            if (!await this.proveCommit(
+              request.workflowCheckoutPath,
+              commitOid,
+              artifact.candidateTreeOid,
+              request.expectedHead,
+              request.commitMessage
+            )) {
+              return {
+                kind: "rejected",
+                classification: "commit-proof-failed",
+                journalFailure: true
+              };
+            }
+            const updated = await this.runGit(request.workflowCheckoutPath, [
+              "update-ref",
+              "--no-deref",
+              identity.branchRef,
+              commitOid,
+              request.expectedHead
+            ]);
+            if (!succeeded5(updated)) {
+              return {
+                kind: "rejected",
+                classification: "human-decision-required",
+                journalFailure: false
+              };
+            }
+            if (!await this.provePromotedCheckout(
+              identity,
+              lock,
+              commitOid,
+              artifact.candidateTreeOid
+            )) {
+              return {
+                kind: "rejected",
+                classification: "human-decision-required",
+                journalFailure: false
+              };
+            }
+            return { kind: "committed", commitOid, needsJournal: true };
           });
-        } else {
-          terminal = rejected("lock-release-failed");
+        } catch (error51) {
+          const toolError = error51.detail?.toolError;
+          if (toolError !== "workflow-revision-conflict") throw error51;
+          lockedOutcome = {
+            kind: "rejected",
+            classification: "human-decision-required",
+            journalFailure: false
+          };
         }
+        if (lockedOutcome.kind === "rejected") {
+          terminal = lockedOutcome.journalFailure ? await finishFailure(lockedOutcome.classification) : rejected(lockedOutcome.classification);
+        } else {
+          let journaled = !lockedOutcome.needsJournal;
+          if (!journaled) {
+            try {
+              await workflowStore.completeIntent({
+                idempotencyKey,
+                completion: { commitOid: lockedOutcome.commitOid }
+              });
+              journaled = true;
+            } catch {
+              journaled = false;
+            }
+          }
+          terminal = !journaled ? rejected("journal-failed") : await this.deleteAnchor(request.workflowCheckoutPath, artifact) ? { status: "committed", commitOid: lockedOutcome.commitOid } : rejected("anchor-deletion-failed");
+        }
+      });
+    } catch (error51) {
+      if (terminal?.status === "committed") {
+        logger.warn("checkout lock release failed after candidate promotion", {
+          event: "checkout-lock-release-failed",
+          workflowId: request.workflowId,
+          reason: redact(String(error51))
+        });
+      } else if (!enteredLease) {
+        return finishFailure("branch-identity-changed");
+      } else {
+        throw error51;
       }
     }
     return terminal;
@@ -49421,7 +49990,7 @@ var CandidatePromoter = class {
 };
 
 // src/pipeline/pipeline-runtime.ts
-import path28 from "node:path";
+import path30 from "node:path";
 
 // src/protocol/spec-hash.ts
 import { createHash as createHash13 } from "node:crypto";
@@ -49438,13 +50007,13 @@ function specSha256(spec) {
 }
 
 // src/runtime/attempt-runtime.ts
-import { randomUUID as randomUUID10 } from "node:crypto";
-import { rm as rm10 } from "node:fs/promises";
+import { randomUUID as randomUUID12 } from "node:crypto";
+import { rm as rm12 } from "node:fs/promises";
 
 // src/git/candidate-tree.ts
-import { lstat as lstat15, mkdtemp as mkdtemp3, rm as rm9 } from "node:fs/promises";
+import { lstat as lstat17, mkdtemp as mkdtemp3, rm as rm11 } from "node:fs/promises";
 import { tmpdir as tmpdir6 } from "node:os";
-import path24 from "node:path";
+import path26 from "node:path";
 var MAX_DIAGNOSTIC_LENGTH5 = 2e3;
 var MAX_REJECT_PATHS = 25;
 var BINARY_PATCH_PAYLOAD_MARKER = "[[BINARY_PATCH_PAYLOAD_OMITTED]]";
@@ -49509,7 +50078,7 @@ function isAllowed2(pathname, writeAllowlist, forbiddenScope, opaqueDirectory = 
 async function advisoryLstatScan(worktreePath, changedPaths) {
   const symlinkResults = await Promise.all(changedPaths.map(async (changedPath) => {
     try {
-      return (await lstat15(path24.resolve(worktreePath, changedPath))).isSymbolicLink();
+      return (await lstat17(path26.resolve(worktreePath, changedPath))).isSymbolicLink();
     } catch (error51) {
       if (error51.code === "ENOENT") return false;
       throw error51;
@@ -49543,8 +50112,8 @@ async function freezeCandidate(args) {
   if (await advisoryLstatScan(args.worktreePath, inventory.changedPaths)) {
     return { ok: false, reason: "modified-symlink" };
   }
-  const indexDirectory = await mkdtemp3(path24.join(tmpdir6(), "claude-architect-index-"));
-  const indexFile = path24.join(indexDirectory, "index");
+  const indexDirectory = await mkdtemp3(path26.join(tmpdir6(), "claude-architect-index-"));
+  const indexFile = path26.join(indexDirectory, "index");
   try {
     await checkedGit4(args.worktreePath, ["read-tree", args.baseCommitOid], indexFile);
     if (inventory.changedPaths.length > 0) {
@@ -49637,15 +50206,15 @@ async function freezeCandidate(args) {
       }
     };
   } finally {
-    await rm9(indexDirectory, { recursive: true, force: true });
+    await rm11(indexDirectory, { recursive: true, force: true });
   }
 }
 
 // src/verify/baseline-verifier.ts
-import { randomUUID as randomUUID9 } from "node:crypto";
-import { readFile as readFile5 } from "node:fs/promises";
+import { randomUUID as randomUUID11 } from "node:crypto";
+import { readFile as readFile7 } from "node:fs/promises";
 import { basename } from "node:path";
-import path25 from "node:path";
+import path27 from "node:path";
 function throwIfAborted(signal) {
   if (!signal?.aborted) return;
   throw new DOMException("Baseline verification was cancelled", "AbortError");
@@ -49728,7 +50297,7 @@ function shellCommandInvokesVitest(command, scripts, visitedScripts) {
 }
 async function packageScriptInvokesVitest(cwd, scriptName) {
   try {
-    const parsed = JSON.parse(await readFile5(path25.join(cwd, "package.json"), "utf8"));
+    const parsed = JSON.parse(await readFile7(path27.join(cwd, "package.json"), "utf8"));
     if (parsed === null || typeof parsed !== "object" || !("scripts" in parsed)) return false;
     const scripts = parsed.scripts;
     if (scripts === null || typeof scripts !== "object") return false;
@@ -49797,7 +50366,7 @@ async function verifyBaseline(args) {
     // A runId gives recovery a deterministic, reclaimable name; without one
     // (only unit callers), fall back to a unique id so repeated same-commit
     // fixtures cannot collide on a shared worktrees root.
-    `baseline-${args.runId ?? args.verificationId?.() ?? randomUUID9()}`,
+    `baseline-${args.runId ?? args.verificationId?.() ?? randomUUID11()}`,
     ps,
     args.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.borrowedCheckoutLease }
   );
@@ -49902,7 +50471,7 @@ async function verifyBaseline(args) {
 }
 
 // src/runtime/producer-preflight.ts
-import path26 from "node:path";
+import path28 from "node:path";
 var PREFLIGHT_PROBE_FILE = "claude-architect-preflight.txt";
 var PREFLIGHT_TIMEOUT_MS = 18e4;
 var PREFLIGHT_OUTPUT_LIMIT = 256 * 1024;
@@ -50010,7 +50579,7 @@ async function runProducerPreflight(args) {
     let contents;
     try {
       const probeBytes = await readStableRegularFile(
-        path26.join(worktree.path, PREFLIGHT_PROBE_FILE),
+        path28.join(worktree.path, PREFLIGHT_PROBE_FILE),
         BigInt(PROBE_FILE_LIMIT)
       );
       if (probeBytes === null) throw new RuntimeError("the Producer probe file is not stable");
@@ -50062,7 +50631,7 @@ async function runProducerPreflight(args) {
 }
 
 // src/runtime/reproducibility.ts
-import { readFile as readFile6 } from "node:fs/promises";
+import { readFile as readFile8 } from "node:fs/promises";
 var REPOSITORY_INSTRUCTION_PATHS = ["AGENTS.md", "CLAUDE.md"];
 function gitFailure4(action, result) {
   const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, 2e3);
@@ -50120,7 +50689,7 @@ function isMissingModule(error51) {
   return code === "ENOENT" || code === "ENOTDIR";
 }
 async function collectPackagedVerifier(dependencies) {
-  const readModule = dependencies.readModule ?? ((url2) => readFile6(url2));
+  const readModule = dependencies.readModule ?? ((url2) => readFile8(url2));
   const candidates = dependencies.verifierModuleUrls ?? defaultVerifierModuleUrls();
   let lastMissingError;
   for (const candidate of candidates) {
@@ -50341,7 +50910,7 @@ async function cleanupAttemptResources(args) {
   }
   if (args.tempHome !== null) {
     try {
-      await rm10(args.tempHome, { recursive: true, force: true });
+      await rm12(args.tempHome, { recursive: true, force: true });
     } catch (error51) {
       failures.push(error51);
     }
@@ -50357,11 +50926,12 @@ async function cleanupAttemptResources(args) {
 }
 async function runAttempt(checkoutPath, spec, deps) {
   if (hasEnvironmentMarker(deps.env ?? process.env)) throw new NestedDelegationError();
-  const ps = guardWorktreeMutations(deps.ps ?? getPlatformServices());
+  const ps = deps.ps ?? getPlatformServices();
+  const safety = new PlatformSafety(ps);
   const producerRegistry = deps.producerRegistry ?? registry2;
   const now = deps.now ?? Date.now;
   const startedAtMs = now();
-  const runId = (deps.runId ?? randomUUID10)();
+  const runId = (deps.runId ?? randomUUID12)();
   const store = new ArtifactStore(runId);
   const inferredSlices = Array.isArray(spec.slices) ? spec.slices.length : 0;
   const statusContext = deps.runStatus ?? {
@@ -50404,73 +50974,129 @@ async function runAttempt(checkoutPath, spec, deps) {
   };
   const canonical = await ps.canonicalizePath(checkoutPath);
   const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
-  let lock = deps.borrowedCheckoutLease ?? null;
-  let ownedLock = null;
-  let worktree = null;
-  let tempHome = null;
-  let builtEnvironment = null;
-  let primaryError;
-  let archivedResult = null;
-  try {
-    if (lock === null) {
-      ownedLock = await ps.acquireCheckoutLock(canonical.canonical, { runId });
-      lock = ownedLock;
-    }
-    if (lock.repositoryIdentity !== repositoryIdentity) {
-      const ownership = ownedLock === null ? "borrowed" : "owned";
-      throw new RuntimeError(`${ownership} checkout lease repository identity mismatch`);
-    }
-    const preconditions = await checkPreconditions(canonical.canonical, {
-      writeAllowlist: spec.writeAllowlist
-    });
-    if (!preconditions.ok) {
-      const detailSuffix = preconditions.detail === void 0 ? "" : `: ${preconditions.detail.join(", ")}`;
-      throw new RuntimeError(
-        `repository precondition failed (${preconditions.reason})${detailSuffix}`,
-        { reason: preconditions.reason, detail: preconditions.detail ?? [] }
+  const runWithLease = async (lock, ownership) => {
+    let worktree = null;
+    let tempHome = null;
+    let builtEnvironment = null;
+    let primaryError;
+    let archivedResult = null;
+    try {
+      if (lock.repositoryIdentity !== repositoryIdentity) {
+        throw new RuntimeError(`${ownership} checkout lease repository identity mismatch`);
+      }
+      const preconditions = await checkPreconditions(canonical.canonical, {
+        writeAllowlist: spec.writeAllowlist
+      });
+      if (!preconditions.ok) {
+        const detailSuffix = preconditions.detail === void 0 ? "" : `: ${preconditions.detail.join(", ")}`;
+        throw new RuntimeError(
+          `repository precondition failed (${preconditions.reason})${detailSuffix}`,
+          { reason: preconditions.reason, detail: preconditions.detail ?? [] }
+        );
+      }
+      const runStart = {
+        runId,
+        lockKey: lock.key,
+        canonicalCommonDir: preconditions.gitCommonDir,
+        pid: null,
+        processToken: null,
+        startedAt,
+        specSha256: deps.dispatchedSpecSha256 ?? specSha256(spec)
+      };
+      const runStartContext = await initializeRunStart(store, runStart);
+      await deps.onRunStart?.(runStartContext);
+      if (!statusContext.pipelineManaged) await emitStatus("preflight");
+      const collected = deps.repositoryInstructions !== void 0 && deps.packagedVerifier !== void 0 ? null : await (deps.reproducibilityCollector ?? collectReproducibilityInputs)(
+        canonical.canonical,
+        preconditions.baseCommitOid
       );
-    }
-    const runStart = {
-      runId,
-      lockKey: lock.key,
-      canonicalCommonDir: preconditions.gitCommonDir,
-      pid: null,
-      processToken: null,
-      startedAt,
-      specSha256: deps.dispatchedSpecSha256 ?? specSha256(spec)
-    };
-    const runStartContext = await initializeRunStart(store, runStart);
-    await deps.onRunStart?.(runStartContext);
-    if (!statusContext.pipelineManaged) await emitStatus("preflight");
-    const collected = deps.repositoryInstructions !== void 0 && deps.packagedVerifier !== void 0 ? null : await (deps.reproducibilityCollector ?? collectReproducibilityInputs)(
-      canonical.canonical,
-      preconditions.baseCommitOid
-    );
-    const repositoryInstructions = deps.repositoryInstructions ?? collected.repositoryInstructions;
-    const packagedVerifier = deps.packagedVerifier ?? collected.packagedVerifier;
-    const executionMode = spec.executionMode;
-    let baselineEvidence = { baseline: "skipped \u2014 read-only spec" };
-    if (!statusContext.pipelineManaged) {
-      await emitStatus("baseline-verify", {
-        detail: executionMode === "edit" ? null : "skipped for read-only execution"
-      });
-    }
-    if (executionMode === "edit") {
-      await reportPhase(deps, "verifying baseline");
-      let baseline;
-      try {
-        baseline = await (deps.baselineVerifier ?? verifyBaseline)({
-          repoRoot: canonical.canonical,
-          headCommitOid: preconditions.baseCommitOid,
-          commands: spec.verification,
-          ps,
-          runId,
-          store,
-          borrowedCheckoutLease: lock,
-          ...deps.abortSignal === void 0 ? {} : { abortSignal: deps.abortSignal }
+      const repositoryInstructions = deps.repositoryInstructions ?? collected.repositoryInstructions;
+      const packagedVerifier = deps.packagedVerifier ?? collected.packagedVerifier;
+      const executionMode = spec.executionMode;
+      let baselineEvidence = { baseline: "skipped \u2014 read-only spec" };
+      if (!statusContext.pipelineManaged) {
+        await emitStatus("baseline-verify", {
+          detail: executionMode === "edit" ? null : "skipped for read-only execution"
         });
-      } catch (error51) {
-        if (!deps.abortSignal?.aborted) throw error51;
+      }
+      if (executionMode === "edit") {
+        await reportPhase(deps, "verifying baseline");
+        let baseline;
+        try {
+          baseline = await (deps.baselineVerifier ?? verifyBaseline)({
+            repoRoot: canonical.canonical,
+            headCommitOid: preconditions.baseCommitOid,
+            commands: spec.verification,
+            ps,
+            runId,
+            store,
+            borrowedCheckoutLease: lock,
+            ...deps.abortSignal === void 0 ? {} : { abortSignal: deps.abortSignal }
+          });
+        } catch (error51) {
+          if (!deps.abortSignal?.aborted) throw error51;
+          return archiveWithStatus({
+            store,
+            spec,
+            runId,
+            startedAtMs,
+            now,
+            repoRoot: canonical.canonical,
+            baseCommitOid: preconditions.baseCommitOid,
+            signals: { cancelled: true },
+            report: null,
+            profile: null,
+            invocation: null,
+            environment: [],
+            temporaryHomeApplied: false,
+            producerSummary: null,
+            candidate: null,
+            commandOutcomes: [],
+            unresolvedIssues: ["cancelled"],
+            evidence: { baseline: "cancelled" },
+            producerLog: producerLog(null),
+            repositoryInstructions,
+            packagedVerifier
+          });
+        }
+        baselineEvidence = { baseline };
+        const baselineFailed = baseline.commands.some((command) => !command.ok);
+        if (baselineFailed) {
+          return archiveWithStatus({
+            store,
+            spec,
+            runId,
+            startedAtMs,
+            now,
+            repoRoot: canonical.canonical,
+            baseCommitOid: preconditions.baseCommitOid,
+            signals: { "environment-defect": true },
+            report: null,
+            profile: null,
+            invocation: null,
+            environment: [],
+            temporaryHomeApplied: false,
+            producerSummary: null,
+            candidate: null,
+            commandOutcomes: [],
+            unresolvedIssues: ["baseline-verification-failed"],
+            evidence: baselineEvidence,
+            producerLog: producerLog(null),
+            repositoryInstructions,
+            packagedVerifier
+          });
+        }
+      }
+      await reportPhase(deps, "probing producers");
+      const reports = await runtime.probeAll({
+        ps,
+        os: ps.os,
+        arch: process.arch,
+        environmentType: detectEnvironmentType()
+      }, void 0, producerRegistry);
+      const routing = route(spec.producerPreferences, reports);
+      if (routing.producerId === null) {
+        const signals2 = routing.reason === "authentication-required" ? { "authentication-required": true } : { unavailable: true };
         return archiveWithStatus({
           store,
           spec,
@@ -50479,7 +51105,7 @@ async function runAttempt(checkoutPath, spec, deps) {
           now,
           repoRoot: canonical.canonical,
           baseCommitOid: preconditions.baseCommitOid,
-          signals: { cancelled: true },
+          signals: signals2,
           report: null,
           profile: null,
           invocation: null,
@@ -50488,127 +51114,20 @@ async function runAttempt(checkoutPath, spec, deps) {
           producerSummary: null,
           candidate: null,
           commandOutcomes: [],
-          unresolvedIssues: ["cancelled"],
-          evidence: { baseline: "cancelled" },
+          unresolvedIssues: [
+            routing.reason,
+            ...routing.considered.map((candidate2) => `producer ${candidate2.producerId}: ${candidate2.outcome}${candidate2.detail === null ? "" : ` (${candidate2.detail})`}`)
+          ],
+          evidence: { ...baselineEvidence, routing: routing.reason, considered: routing.considered, reports },
           producerLog: producerLog(null),
           repositoryInstructions,
           packagedVerifier
         });
       }
-      baselineEvidence = { baseline };
-      const baselineFailed = baseline.commands.some((command) => !command.ok);
-      if (baselineFailed) {
+      const adapter = producerRegistry.get(routing.producerId);
+      const report = reports.find((candidate2) => candidate2.producerId === routing.producerId) ?? null;
+      if (adapter === void 0 || report?.resolvedExecutable === null || report === null) {
         return archiveWithStatus({
-          store,
-          spec,
-          runId,
-          startedAtMs,
-          now,
-          repoRoot: canonical.canonical,
-          baseCommitOid: preconditions.baseCommitOid,
-          signals: { "environment-defect": true },
-          report: null,
-          profile: null,
-          invocation: null,
-          environment: [],
-          temporaryHomeApplied: false,
-          producerSummary: null,
-          candidate: null,
-          commandOutcomes: [],
-          unresolvedIssues: ["baseline-verification-failed"],
-          evidence: baselineEvidence,
-          producerLog: producerLog(null),
-          repositoryInstructions,
-          packagedVerifier
-        });
-      }
-    }
-    await reportPhase(deps, "probing producers");
-    const reports = await probeAll({
-      ps,
-      os: ps.os,
-      arch: process.arch,
-      environmentType: detectEnvironmentType()
-    }, producerRegistry);
-    const routing = route(spec.producerPreferences, reports);
-    if (routing.producerId === null) {
-      const signals2 = routing.reason === "authentication-required" ? { "authentication-required": true } : { unavailable: true };
-      return archiveWithStatus({
-        store,
-        spec,
-        runId,
-        startedAtMs,
-        now,
-        repoRoot: canonical.canonical,
-        baseCommitOid: preconditions.baseCommitOid,
-        signals: signals2,
-        report: null,
-        profile: null,
-        invocation: null,
-        environment: [],
-        temporaryHomeApplied: false,
-        producerSummary: null,
-        candidate: null,
-        commandOutcomes: [],
-        unresolvedIssues: [
-          routing.reason,
-          ...routing.considered.map((candidate2) => `producer ${candidate2.producerId}: ${candidate2.outcome}${candidate2.detail === null ? "" : ` (${candidate2.detail})`}`)
-        ],
-        evidence: { ...baselineEvidence, routing: routing.reason, considered: routing.considered, reports },
-        producerLog: producerLog(null),
-        repositoryInstructions,
-        packagedVerifier
-      });
-    }
-    const adapter = producerRegistry.get(routing.producerId);
-    const report = reports.find((candidate2) => candidate2.producerId === routing.producerId) ?? null;
-    if (adapter === void 0 || report?.resolvedExecutable === null || report === null) {
-      return archiveWithStatus({
-        store,
-        spec,
-        runId,
-        startedAtMs,
-        now,
-        repoRoot: canonical.canonical,
-        baseCommitOid: preconditions.baseCommitOid,
-        signals: { unavailable: true },
-        report,
-        profile: null,
-        invocation: null,
-        environment: [],
-        temporaryHomeApplied: false,
-        producerSummary: null,
-        candidate: null,
-        commandOutcomes: [],
-        unresolvedIssues: ["selected-producer-contract-invalid"],
-        evidence: { ...baselineEvidence, routing: "selected-producer-contract-invalid" },
-        producerLog: producerLog(null),
-        repositoryInstructions,
-        packagedVerifier
-      });
-    }
-    worktree = await new WorktreeManager(canonical.canonical, runId, ps, {
-      borrowedCheckoutLease: lock
-    }).create(preconditions.baseCommitOid);
-    const profile = adapter.configurationProfile();
-    const launchPlan = await runtime.planLaunch({
-      producerId: report.producerId,
-      adapter,
-      spec,
-      worktreePath: worktree.path,
-      intent: spec.executionMode === "edit" ? "edit" : "read-only",
-      ps,
-      runId,
-      capabilityReport: report
-    });
-    tempHome = launchPlan.tempHome;
-    builtEnvironment = launchPlan.builtEnvironment;
-    let invocation = launchPlan.invocation;
-    let confinement = launchPlan.confinementBackend;
-    if (spec.executionMode === "edit") {
-      const selection = selectSandboxBackend(report);
-      if (selection.backend === null) {
-        return await archiveWithStatus({
           store,
           spec,
           runId,
@@ -50618,235 +51137,287 @@ async function runAttempt(checkoutPath, spec, deps) {
           baseCommitOid: preconditions.baseCommitOid,
           signals: { unavailable: true },
           report,
-          profile,
-          invocation,
+          profile: null,
+          invocation: null,
           environment: [],
-          temporaryHomeApplied: tempHome !== null,
+          temporaryHomeApplied: false,
           producerSummary: null,
           candidate: null,
           commandOutcomes: [],
-          unresolvedIssues: [selection.reason],
-          evidence: { routing: selection.reason },
+          unresolvedIssues: ["selected-producer-contract-invalid"],
+          evidence: { ...baselineEvidence, routing: "selected-producer-contract-invalid" },
           producerLog: producerLog(null),
           repositoryInstructions,
           packagedVerifier
         });
       }
-    }
-    if (spec.executionMode === "edit" && deps.producerPreflight !== false) {
-      if (!statusContext.pipelineManaged) {
-        await emitStatus("preflight", {
-          producerId: report.producerId,
-          detail: "probing producer environment"
-        });
-      }
-      await reportPhase(deps, "probing producer environment");
-      const preflight = await (typeof deps.producerPreflight === "function" ? deps.producerPreflight : runProducerPreflight)({
+      worktree = await new WorktreeManager(canonical.canonical, runId, ps, {
+        borrowedCheckoutLease: lock
+      }).create(preconditions.baseCommitOid);
+      const profile = adapter.configurationProfile();
+      const launchPlan = await runtime.planLaunch({
+        producerId: report.producerId,
         adapter,
-        capabilityReport: report,
         spec,
-        repoRoot: canonical.canonical,
-        baseCommitOid: preconditions.baseCommitOid,
-        runId,
+        worktreePath: worktree.path,
+        intent: spec.executionMode === "edit" ? "edit" : "read-only",
         ps,
-        tempHome,
-        borrowedCheckoutLease: lock,
-        ...deps.abortSignal === void 0 ? {} : { abortSignal: deps.abortSignal }
+        runId,
+        capabilityReport: report
       });
-      baselineEvidence = { ...baselineEvidence, producerPreflight: preflight };
-      if (preflight.status === "environment-defect") {
-        return await archiveWithStatus({
-          store,
+      tempHome = launchPlan.tempHome;
+      builtEnvironment = launchPlan.builtEnvironment;
+      let invocation = launchPlan.invocation;
+      let confinement = launchPlan.confinementBackend;
+      if (spec.executionMode === "edit") {
+        const selection = selectSandboxBackend(report);
+        if (selection.backend === null) {
+          return await archiveWithStatus({
+            store,
+            spec,
+            runId,
+            startedAtMs,
+            now,
+            repoRoot: canonical.canonical,
+            baseCommitOid: preconditions.baseCommitOid,
+            signals: { unavailable: true },
+            report,
+            profile,
+            invocation,
+            environment: [],
+            temporaryHomeApplied: tempHome !== null,
+            producerSummary: null,
+            candidate: null,
+            commandOutcomes: [],
+            unresolvedIssues: [selection.reason],
+            evidence: { routing: selection.reason },
+            producerLog: producerLog(null),
+            repositoryInstructions,
+            packagedVerifier
+          });
+        }
+      }
+      if (spec.executionMode === "edit" && deps.producerPreflight !== false) {
+        if (!statusContext.pipelineManaged) {
+          await emitStatus("preflight", {
+            producerId: report.producerId,
+            detail: "probing producer environment"
+          });
+        }
+        await reportPhase(deps, "probing producer environment");
+        const preflight = await (typeof deps.producerPreflight === "function" ? deps.producerPreflight : runProducerPreflight)({
+          adapter,
+          capabilityReport: report,
           spec,
-          runId,
-          startedAtMs,
-          now,
           repoRoot: canonical.canonical,
           baseCommitOid: preconditions.baseCommitOid,
-          signals: { "environment-defect": true },
-          report,
-          profile,
-          invocation,
-          environment: [],
-          temporaryHomeApplied: tempHome !== null,
-          producerSummary: null,
-          candidate: null,
-          commandOutcomes: [],
-          unresolvedIssues: ["producer-preflight-failed", preflight.reason ?? ""],
-          evidence: baselineEvidence,
-          producerLog: producerLog(null),
-          repositoryInstructions,
-          packagedVerifier
+          runId,
+          ps,
+          tempHome,
+          borrowedCheckoutLease: lock,
+          ...deps.abortSignal === void 0 ? {} : { abortSignal: deps.abortSignal }
+        });
+        baselineEvidence = { ...baselineEvidence, producerPreflight: preflight };
+        if (preflight.status === "environment-defect") {
+          return await archiveWithStatus({
+            store,
+            spec,
+            runId,
+            startedAtMs,
+            now,
+            repoRoot: canonical.canonical,
+            baseCommitOid: preconditions.baseCommitOid,
+            signals: { "environment-defect": true },
+            report,
+            profile,
+            invocation,
+            environment: [],
+            temporaryHomeApplied: tempHome !== null,
+            producerSummary: null,
+            candidate: null,
+            commandOutcomes: [],
+            unresolvedIssues: ["producer-preflight-failed", preflight.reason ?? ""],
+            evidence: baselineEvidence,
+            producerLog: producerLog(null),
+            repositoryInstructions,
+            packagedVerifier
+          });
+        }
+      }
+      if (!statusContext.pipelineManaged) {
+        await emitStatus("implementing", { producerId: report.producerId });
+      }
+      await reportPhase(deps, "producer running");
+      const launchResult = await runtime.launch({
+        producerId: report.producerId,
+        adapter,
+        spec,
+        worktreePath: worktree.path,
+        intent: spec.executionMode === "edit" ? "edit" : "read-only",
+        ps,
+        runId,
+        tempHome,
+        abortSignal: deps.abortSignal,
+        timeoutMs: spec.timeoutMs,
+        runStartContext,
+        capabilityReport: report,
+        plan: launchPlan
+      });
+      invocation = launchResult.invocation;
+      builtEnvironment = launchResult.builtEnvironment;
+      const exit = launchResult.exit;
+      confinement = launchResult.confinementBackend;
+      const signals = {};
+      let producerSummary = null;
+      let candidate = null;
+      let commandOutcomes = [];
+      let unresolvedIssues = [];
+      let evidence = confinement === null ? baselineEvidence : { ...baselineEvidence, confinement };
+      if (exit.spawnError !== void 0) signals["spawn-failure"] = true;
+      if (exit.cancelled) signals.cancelled = true;
+      if (exit.timedOut) signals.timeout = true;
+      if (!hasFailureSignal2(signals)) {
+        producerSummary = launchResult.producerSummary;
+        if (!launchResult.ok) signals["invalid-output"] = true;
+        if (exit.exitCode !== 0) signals["producer-failure"] = true;
+      }
+      if (!hasFailureSignal2(signals)) {
+        if (!statusContext.pipelineManaged) {
+          await emitStatus("freezing", { producerId: report.producerId });
+        }
+        await reportPhase(deps, "freezing candidate");
+        const frozen = await freezeCandidate({
+          repoRoot: canonical.canonical,
+          worktreePath: worktree.path,
+          baseCommitOid: preconditions.baseCommitOid,
+          runId,
+          writeAllowlist: spec.writeAllowlist,
+          forbiddenScope: spec.forbiddenScope
+        });
+        if (!frozen.ok) {
+          if (frozen.reason === "empty-candidate") signals["verification-failure"] = true;
+          else signals["sandbox-violation"] = true;
+          unresolvedIssues = [frozen.reason];
+          evidence = {
+            ...evidence,
+            freezeReject: frozen.reason,
+            ...frozen.paths === void 0 ? {} : { freezeRejectPaths: frozen.paths }
+          };
+        } else {
+          candidate = frozen.artifact;
+          evidence = { ...evidence, ...frozen.evidence };
+          try {
+            if (!statusContext.pipelineManaged) {
+              await emitStatus("verifying", { producerId: report.producerId });
+            }
+            await reportPhase(deps, "verifying candidate");
+            const verification = await deps.verifier.verify({
+              repoRoot: canonical.canonical,
+              worktreePath: worktree.path,
+              baseCommitOid: preconditions.baseCommitOid,
+              artifact: frozen.artifact,
+              spec,
+              ps,
+              artifactStore: store,
+              borrowedCheckoutLease: lock
+            });
+            commandOutcomes = verification.commandOutcomes;
+            unresolvedIssues = verification.failures;
+            evidence = { ...evidence, ...verification.evidence };
+            if (!verification.ok) signals["verification-failure"] = true;
+          } catch {
+            signals["verification-failure"] = true;
+            unresolvedIssues = ["verifier-error"];
+            evidence = { ...evidence, verifierError: true };
+          }
+        }
+      }
+      if (!hasFailureSignal2(signals) && candidate === null) {
+        signals["verification-failure"] = true;
+        unresolvedIssues.push("missing-candidate");
+      }
+      if (candidate === null && worktree !== null && (signals.timeout === true || signals.cancelled === true)) {
+        try {
+          evidence = { ...evidence, worktreeSnapshot: await captureWorktreeSnapshot(worktree.path) };
+        } catch (snapshotError) {
+          evidence = {
+            ...evidence,
+            worktreeSnapshotError: snapshotError instanceof Error ? snapshotError.message : String(snapshotError)
+          };
+        }
+      }
+      await reportPhase(deps, "archiving result");
+      archivedResult = await archiveWithStatus({
+        store,
+        spec,
+        runId,
+        startedAtMs,
+        now,
+        repoRoot: canonical.canonical,
+        baseCommitOid: preconditions.baseCommitOid,
+        signals,
+        report,
+        profile,
+        invocation,
+        environment: builtEnvironment.provenance,
+        temporaryHomeApplied: tempHome !== null,
+        producerSummary,
+        candidate,
+        commandOutcomes,
+        unresolvedIssues,
+        evidence,
+        producerLog: producerLog(exit),
+        repositoryInstructions,
+        packagedVerifier
+      });
+      await reportPhase(deps, `finished: ${archivedResult.status}`);
+      return archivedResult;
+    } catch (error51) {
+      primaryError = error51;
+      if (!statusContext.pipelineManaged) {
+        await emitStatus("failed", {
+          detail: error51 instanceof Error ? error51.message : "attempt failed unexpectedly"
         });
       }
-    }
-    if (!statusContext.pipelineManaged) {
-      await emitStatus("implementing", { producerId: report.producerId });
-    }
-    await reportPhase(deps, "producer running");
-    const launchResult = await runtime.launch({
-      producerId: report.producerId,
-      adapter,
-      spec,
-      worktreePath: worktree.path,
-      intent: spec.executionMode === "edit" ? "edit" : "read-only",
-      ps,
-      runId,
-      tempHome,
-      abortSignal: deps.abortSignal,
-      timeoutMs: spec.timeoutMs,
-      runStartContext,
-      capabilityReport: report,
-      plan: launchPlan
-    });
-    invocation = launchResult.invocation;
-    builtEnvironment = launchResult.builtEnvironment;
-    const exit = launchResult.exit;
-    confinement = launchResult.confinementBackend;
-    const signals = {};
-    let producerSummary = null;
-    let candidate = null;
-    let commandOutcomes = [];
-    let unresolvedIssues = [];
-    let evidence = confinement === null ? baselineEvidence : { ...baselineEvidence, confinement };
-    if (exit.spawnError !== void 0) signals["spawn-failure"] = true;
-    if (exit.cancelled) signals.cancelled = true;
-    if (exit.timedOut) signals.timeout = true;
-    if (!hasFailureSignal2(signals)) {
-      producerSummary = launchResult.producerSummary;
-      if (!launchResult.ok) signals["invalid-output"] = true;
-      if (exit.exitCode !== 0) signals["producer-failure"] = true;
-    }
-    if (!hasFailureSignal2(signals)) {
-      if (!statusContext.pipelineManaged) {
-        await emitStatus("freezing", { producerId: report.producerId });
-      }
-      await reportPhase(deps, "freezing candidate");
-      const frozen = await freezeCandidate({
-        repoRoot: canonical.canonical,
-        worktreePath: worktree.path,
-        baseCommitOid: preconditions.baseCommitOid,
-        runId,
-        writeAllowlist: spec.writeAllowlist,
-        forbiddenScope: spec.forbiddenScope
+      throw error51;
+    } finally {
+      const cleanupError = await cleanupAttemptResources({
+        builtEnvironment,
+        worktree,
+        tempHome,
+        lock: null
       });
-      if (!frozen.ok) {
-        if (frozen.reason === "empty-candidate") signals["verification-failure"] = true;
-        else signals["sandbox-violation"] = true;
-        unresolvedIssues = [frozen.reason];
-        evidence = {
-          ...evidence,
-          freezeReject: frozen.reason,
-          ...frozen.paths === void 0 ? {} : { freezeRejectPaths: frozen.paths }
-        };
-      } else {
-        candidate = frozen.artifact;
-        evidence = { ...evidence, ...frozen.evidence };
-        try {
-          if (!statusContext.pipelineManaged) {
-            await emitStatus("verifying", { producerId: report.producerId });
-          }
-          await reportPhase(deps, "verifying candidate");
-          const verification = await deps.verifier.verify({
-            repoRoot: canonical.canonical,
-            worktreePath: worktree.path,
-            baseCommitOid: preconditions.baseCommitOid,
-            artifact: frozen.artifact,
-            spec,
-            ps,
-            artifactStore: store,
-            borrowedCheckoutLease: lock
-          });
-          commandOutcomes = verification.commandOutcomes;
-          unresolvedIssues = verification.failures;
-          evidence = { ...evidence, ...verification.evidence };
-          if (!verification.ok) signals["verification-failure"] = true;
-        } catch {
-          signals["verification-failure"] = true;
-          unresolvedIssues = ["verifier-error"];
-          evidence = { ...evidence, verifierError: true };
-        }
-      }
-    }
-    if (!hasFailureSignal2(signals) && candidate === null) {
-      signals["verification-failure"] = true;
-      unresolvedIssues.push("missing-candidate");
-    }
-    if (candidate === null && worktree !== null && (signals.timeout === true || signals.cancelled === true)) {
-      try {
-        evidence = { ...evidence, worktreeSnapshot: await captureWorktreeSnapshot(worktree.path) };
-      } catch (snapshotError) {
-        evidence = {
-          ...evidence,
-          worktreeSnapshotError: snapshotError instanceof Error ? snapshotError.message : String(snapshotError)
-        };
-      }
-    }
-    await reportPhase(deps, "archiving result");
-    archivedResult = await archiveWithStatus({
-      store,
-      spec,
-      runId,
-      startedAtMs,
-      now,
-      repoRoot: canonical.canonical,
-      baseCommitOid: preconditions.baseCommitOid,
-      signals,
-      report,
-      profile,
-      invocation,
-      environment: builtEnvironment.provenance,
-      temporaryHomeApplied: tempHome !== null,
-      producerSummary,
-      candidate,
-      commandOutcomes,
-      unresolvedIssues,
-      evidence,
-      producerLog: producerLog(exit),
-      repositoryInstructions,
-      packagedVerifier
-    });
-    await reportPhase(deps, `finished: ${archivedResult.status}`);
-    return archivedResult;
-  } catch (error51) {
-    primaryError = error51;
-    if (!statusContext.pipelineManaged) {
-      await emitStatus("failed", {
-        detail: error51 instanceof Error ? error51.message : "attempt failed unexpectedly"
-      });
-    }
-    throw error51;
-  } finally {
-    const cleanupError = await cleanupAttemptResources({
-      builtEnvironment,
-      worktree,
-      tempHome,
-      lock: ownedLock
-    });
-    if (cleanupError !== null) {
-      const detail = redact(
-        cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
-      );
-      logger.warn("attempt resources could not be cleaned up", { error: detail });
-      if (archivedResult !== null) {
-        archivedResult.evidence = { ...archivedResult.evidence, cleanupFailure: detail };
-        archivedResult.unresolvedIssues = [
-          ...archivedResult.unresolvedIssues,
-          "attempt-cleanup-failed"
-        ];
-        try {
-          await store.writeLog("cleanup-failure", `${detail}
+      if (cleanupError !== null) {
+        const detail = redact(
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        );
+        logger.warn("attempt resources could not be cleaned up", { error: detail });
+        if (archivedResult !== null) {
+          archivedResult.evidence = { ...archivedResult.evidence, cleanupFailure: detail };
+          archivedResult.unresolvedIssues = [
+            ...archivedResult.unresolvedIssues,
+            "attempt-cleanup-failed"
+          ];
+          try {
+            await store.writeLog("cleanup-failure", `${detail}
 `);
-        } catch (writeError) {
-          logger.warn("cleanup failure could not be archived", {
-            error: redact(writeError instanceof Error ? writeError.message : String(writeError))
-          });
+          } catch (writeError) {
+            logger.warn("cleanup failure could not be archived", {
+              error: redact(writeError instanceof Error ? writeError.message : String(writeError))
+            });
+          }
+        } else if (primaryError === void 0) {
+          throw cleanupError;
         }
-      } else if (primaryError === void 0) {
-        throw cleanupError;
       }
     }
+  };
+  if (deps.borrowedCheckoutLease !== void 0 && deps.borrowedCheckoutLease !== null) {
+    return await runWithLease(deps.borrowedCheckoutLease, "borrowed");
   }
+  return await safety.withCheckoutLease(canonical.canonical, async (acquiredLock) => {
+    return await runWithLease(acquiredLock, "owned");
+  }, { runId });
 }
 
 // src/pipeline/consolidator.ts
@@ -50967,9 +51538,9 @@ function evaluateGates(input) {
 }
 
 // src/pipeline/slice-composer.ts
-import { mkdtemp as mkdtemp4, rm as rm11 } from "node:fs/promises";
+import { mkdtemp as mkdtemp4, rm as rm13 } from "node:fs/promises";
 import { tmpdir as tmpdir7 } from "node:os";
-import path27 from "node:path";
+import path29 from "node:path";
 var NULL_OID = "0000000000000000000000000000000000000000";
 function parseRawDiffEntries(raw) {
   const fields = raw.split("\0");
@@ -51023,8 +51594,8 @@ async function composeSliceOntoHead(args) {
       `slice ${args.sliceIndex} changed paths already written by its wave: ${collisions.join(", ")}`
     );
   }
-  const indexRoot = await mkdtemp4(path27.join(tmpdir7(), "ca-compose-"));
-  const indexFile = path27.join(indexRoot, "index");
+  const indexRoot = await mkdtemp4(path29.join(tmpdir7(), "ca-compose-"));
+  const indexFile = path29.join(indexRoot, "index");
   try {
     const options = { ...args.objectReadOptions, indexFile };
     await checked(args.checkoutPath, ["read-tree", args.head], options, runGit);
@@ -51044,7 +51615,7 @@ async function composeSliceOntoHead(args) {
       runGit
     )).trim();
   } finally {
-    await rm11(indexRoot, { recursive: true, force: true });
+    await rm13(indexRoot, { recursive: true, force: true });
   }
 }
 
@@ -51478,7 +52049,7 @@ function privateObjectReadOptions(access6) {
 }
 async function importPromotedObjects(args) {
   const privateObjects = privateObjectReadOptions(args.access);
-  const packPrefix = path28.join(args.access.sharedObjectsDir, "pack", "pack");
+  const packPrefix = path30.join(args.access.sharedObjectsDir, "pack", "pack");
   await checkedGit5(
     args.checkoutPath,
     ["pack-objects", "--revs", packPrefix],
@@ -52222,17 +52793,15 @@ async function verifyCandidate(args) {
   }
 }
 async function runPipeline(checkoutPath, spec, deps) {
-  const ps = guardWorktreeMutations(deps.ps ?? getPlatformServices());
+  const ps = deps.ps ?? getPlatformServices();
   const canonical = await ps.canonicalizePath(checkoutPath);
-  const lock = await ps.acquireCheckoutLock(canonical.canonical);
-  const guardedDependencies = {
-    ...deps,
-    ps,
-    borrowedCheckoutLease: lock
-  };
-  let primaryError;
-  let hasPrimaryError = false;
-  try {
+  const safety = new PlatformSafety(ps);
+  return await safety.withCheckoutLease(canonical.canonical, async (lock) => {
+    const guardedDependencies = {
+      ...deps,
+      ps,
+      borrowedCheckoutLease: lock
+    };
     const result = await runPipelineWithLease(
       checkoutPath,
       spec,
@@ -52252,21 +52821,7 @@ async function runPipeline(checkoutPath, spec, deps) {
       }
     );
     return result;
-  } catch (error51) {
-    primaryError = error51;
-    hasPrimaryError = true;
-    throw error51;
-  } finally {
-    try {
-      await lock.release();
-    } catch (releaseError) {
-      if (!hasPrimaryError) throw releaseError;
-      throw new AggregateError(
-        [primaryError, releaseError],
-        "pipeline failed and its checkout lease could not be released"
-      );
-    }
-  }
+  });
 }
 Object.defineProperty(runPipeline, "advisorStage", {
   value: runAdvisorStage,
@@ -53325,8 +53880,8 @@ var INTEGRABLE_DECISION_AUTHORITIES = [
 ];
 
 // src/ship/github-cli-adapter.ts
-import { chmod as chmod2, rm as rm12 } from "node:fs/promises";
-import path29 from "node:path";
+import { chmod as chmod2, rm as rm14 } from "node:fs/promises";
+import path31 from "node:path";
 var MINIMUM_GH_VERSION = [2, 96, 0];
 var OID2 = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 var REPOSITORY_COMPONENT = /^[A-Za-z0-9_.-]+$/u;
@@ -53392,11 +53947,11 @@ function githubCredentialEnvironment() {
   if (process.env.GH_CONFIG_DIR !== void 0) {
     environment.GH_CONFIG_DIR = process.env.GH_CONFIG_DIR;
   } else if (process.platform === "win32" && process.env.APPDATA !== void 0) {
-    environment.GH_CONFIG_DIR = path29.join(process.env.APPDATA, "GitHub CLI");
+    environment.GH_CONFIG_DIR = path31.join(process.env.APPDATA, "GitHub CLI");
   } else if (process.env.XDG_CONFIG_HOME !== void 0) {
-    environment.GH_CONFIG_DIR = path29.join(process.env.XDG_CONFIG_HOME, "gh");
+    environment.GH_CONFIG_DIR = path31.join(process.env.XDG_CONFIG_HOME, "gh");
   } else if (process.env.HOME !== void 0) {
-    environment.GH_CONFIG_DIR = path29.join(process.env.HOME, ".config", "gh");
+    environment.GH_CONFIG_DIR = path31.join(process.env.HOME, ".config", "gh");
   }
   return environment;
 }
@@ -53732,7 +54287,7 @@ var GitHubCliAdapter = class {
     } catch {
       if (quarantine !== void 0) {
         try {
-          await rm12(quarantine, { recursive: true });
+          await rm14(quarantine, { recursive: true });
         } catch {
           throw new HostingAdapterError(
             "push-quarantine-cleanup-failed",
@@ -53745,7 +54300,7 @@ var GitHubCliAdapter = class {
     const environment = isolatedGitEnvironment(quarantine);
     const remoteEnvironment = isolatedGitEnvironment(quarantine, true);
     const branchRef = `refs/heads/${request.branch}`;
-    const bundlePath = path29.join(quarantine, "branch.bundle");
+    const bundlePath = path31.join(quarantine, "branch.bundle");
     let outcome;
     let failure3;
     try {
@@ -53836,7 +54391,7 @@ var GitHubCliAdapter = class {
       failure3 = error51 instanceof HostingAdapterError ? error51 : new HostingAdapterError("push-command-failed");
     }
     try {
-      await rm12(quarantine, { recursive: true });
+      await rm14(quarantine, { recursive: true });
     } catch {
       throw new HostingAdapterError("push-quarantine-cleanup-failed", failure3?.classification);
     }
@@ -54095,22 +54650,22 @@ var GitHubCliAdapter = class {
 };
 
 // src/mcp/allowlist-sufficiency.ts
-import { readFile as readFile7 } from "node:fs/promises";
-import path30 from "node:path";
+import { readFile as readFile9 } from "node:fs/promises";
+import path32 from "node:path";
 var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 var MAX_GAPS = 25;
 var MAX_FILE_BYTES = 512 * 1024;
 var IMPORT_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["']([^"']+)["']/gu;
 function toPosix(candidate) {
-  return candidate.split(path30.sep).join("/");
+  return candidate.split(path32.sep).join("/");
 }
 function isTestPath(candidate) {
   return /(?:^|\/)tests?\//u.test(candidate) || /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(candidate);
 }
 function resolveImport(fromPath, specifier, tracked) {
   if (!specifier.startsWith(".")) return null;
-  const base = toPosix(path30.posix.normalize(
-    path30.posix.join(path30.posix.dirname(toPosix(fromPath)), specifier)
+  const base = toPosix(path32.posix.normalize(
+    path32.posix.join(path32.posix.dirname(toPosix(fromPath)), specifier)
   ));
   if (base.startsWith("..")) return null;
   const rewrites = [
@@ -54136,14 +54691,14 @@ async function checkAllowlistSufficiency(repoRoot, spec, deps = {}) {
   const inScope = (candidate) => spec.writeAllowlist.some((pattern) => globMatches(pattern, candidate)) && !spec.forbiddenScope.some((pattern) => globMatches(pattern, candidate));
   const allowlisted = new Set([...tracked].filter(inScope));
   if (allowlisted.size === 0) return { allowlisted: 0, gaps: [], omitted: 0 };
-  const read = deps.readFile ?? (async (target) => readFile7(target, "utf8"));
+  const read = deps.readFile ?? (async (target) => readFile9(target, "utf8"));
   const gaps = [];
   for (const candidate of tracked) {
     if (allowlisted.has(candidate)) continue;
-    if (!SOURCE_EXTENSIONS.has(path30.posix.extname(candidate))) continue;
+    if (!SOURCE_EXTENSIONS.has(path32.posix.extname(candidate))) continue;
     let contents;
     try {
-      contents = (await read(path30.join(repoRoot, candidate))).slice(0, MAX_FILE_BYTES);
+      contents = (await read(path32.join(repoRoot, candidate))).slice(0, MAX_FILE_BYTES);
     } catch {
       continue;
     }
@@ -54242,20 +54797,8 @@ function storeFor(runId, deps) {
 function runtimeError(message, error51) {
   return new RuntimeError(message, { toolError: error51 });
 }
-var LifecycleLockReleaseError = class extends AggregateError {
-  constructor(primaryError, releaseError) {
-    const primaryMessage = primaryError instanceof Error ? primaryError.message : String(primaryError);
-    super(
-      [primaryError, releaseError],
-      `${primaryMessage}; checkout lock release failed`
-    );
-    this.primaryError = primaryError;
-    this.name = "LifecycleLockReleaseError";
-  }
-  primaryError;
-};
 function errorResult(error51) {
-  const classified = error51 instanceof LifecycleLockReleaseError ? error51.primaryError : error51;
+  const classified = error51 instanceof AggregateError && error51.errors.length > 0 ? error51.errors[0] : error51;
   const code = classified instanceof RuntimeError && typeof classified.detail?.toolError === "string" ? classified.detail.toolError : "runtime-error";
   const diagnostic = error51 instanceof Error ? error51.message : String(error51);
   return { ok: false, error: code, diagnostic: redact(diagnostic) };
@@ -54453,36 +54996,31 @@ function requireMatchingRepository(run, callerKey) {
 }
 async function withCurrentArchivedRun(checkoutPath, runId, deps, fn, preserveResultOnReleaseFailure) {
   const ps = services2(deps);
-  const lockingServices = guardWorktreeMutations(ps);
+  const safety = new PlatformSafety(ps);
   const canonical = await ps.canonicalizePath(checkoutPath);
   const callerKey = canonical.gitCommonDir ?? canonical.canonical;
   return withRepoLock(callerKey, async () => {
-    const lock = await lockingServices.acquireCheckoutLock(canonical.canonical, { runId });
-    let action;
+    let actionResult = null;
     try {
-      if (lock.repositoryIdentity !== callerKey) {
-        throw runtimeError(
-          "supplied checkout repository identity changed before checkout lease acquisition",
-          "run-checkout-mismatch"
-        );
-      }
-      const run = await loadArchivedRun(runId, deps);
-      requireMatchingRepository(run, lock.repositoryIdentity);
-      action = { ok: true, result: await fn(run, lock, ps) };
+      return await safety.withCheckoutLease(canonical.canonical, async (lock) => {
+        if (lock.repositoryIdentity !== callerKey) {
+          throw runtimeError(
+            "supplied checkout repository identity changed before checkout lease acquisition",
+            "run-checkout-mismatch"
+          );
+        }
+        const run = await loadArchivedRun(runId, deps);
+        requireMatchingRepository(run, lock.repositoryIdentity);
+        const result = await fn(run, lock, ps);
+        actionResult = { ok: true, result };
+        return result;
+      }, { runId });
     } catch (error51) {
-      action = { ok: false, error: error51 };
-    }
-    try {
-      await lock.release();
-    } catch (releaseError) {
-      if (!action.ok) throw new LifecycleLockReleaseError(action.error, releaseError);
-      if (preserveResultOnReleaseFailure !== void 0) {
-        return preserveResultOnReleaseFailure(action.result);
+      if (actionResult !== null && preserveResultOnReleaseFailure !== void 0) {
+        return preserveResultOnReleaseFailure(actionResult.result);
       }
-      throw releaseError;
+      throw error51;
     }
-    if (!action.ok) throw action.error;
-    return action.result;
   });
 }
 async function requireInactivePipeline(run, runId) {
@@ -54923,25 +55461,23 @@ function autonomousEligibility(authority, advisory) {
 }
 
 // src/runtime/recovery-manager.ts
-import { createHash as createHash16, randomUUID as randomUUID11 } from "node:crypto";
-import { constants as constants12 } from "node:fs";
+import { createHash as createHash16, randomUUID as randomUUID13 } from "node:crypto";
+import { constants as constants14 } from "node:fs";
 import {
-  lstat as lstat16,
-  link as link6,
-  mkdir as mkdir8,
-  open as open12,
-  readdir as readdir7,
+  lstat as lstat18,
+  link as link8,
+  mkdir as mkdir9,
+  open as open14,
+  readdir as readdir8,
   realpath as realpath13,
-  rename as rename6,
-  rm as rm13
+  rename as rename7
 } from "node:fs/promises";
-import path31 from "node:path";
-import nodeProcess5 from "node:process";
-var NO_FOLLOW6 = constants12.O_NOFOLLOW ?? 0;
-var MAX_STATE_FILE_BYTES = 8e6;
-var MAX_STATE_FILE_BYTES_BIGINT = BigInt(MAX_STATE_FILE_BYTES);
+import path33 from "node:path";
+import nodeProcess7 from "node:process";
+var NO_FOLLOW8 = constants14.O_NOFOLLOW ?? 0;
+var MAX_STATE_FILE_BYTES2 = 8e6;
+var MAX_STATE_FILE_BYTES_BIGINT2 = BigInt(MAX_STATE_FILE_BYTES2);
 var SAFE_RUN_ID2 = /^[a-z0-9][a-z0-9._-]*$/;
-var LOCK_NAME = /^([0-9a-f]{64})\.lock$/;
 var WORKFLOW_WORKTREE_NAME = /^workflow-([0-9a-f]{32})(?:-final)?$/;
 var LEGACY_FINAL_WORKTREE_NAME = /^final-([0-9a-f]{24})$/;
 var WORKFLOW_OWNERSHIP_NAME = /^([0-9a-f]{64})\.json$/;
@@ -54952,19 +55488,19 @@ var SLICE_REF_PREFIX2 = "refs/claude-architect/slices/";
 var MAX_QUARANTINE_REASON_BYTES = 2e3;
 var MAX_QUARANTINE_RECORD_BYTES = 4096;
 var MAX_WORKTREE_SWEEP_ISSUES = 100;
-function errorCode9(error51) {
+function errorCode10(error51) {
   return error51.code;
 }
-function isMissing3(error51) {
-  return errorCode9(error51) === "ENOENT";
+function isMissing4(error51) {
+  return errorCode10(error51) === "ENOENT";
 }
-function isPlainDirectory2(metadata) {
+function isPlainDirectory3(metadata) {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
 }
 function sameManagedIdentity(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
 }
-function sameIdentity3(metadata, expected) {
+function sameIdentity5(metadata, expected) {
   return metadata.dev === expected.dev && metadata.ino === expected.ino && metadata.birthtimeNs === expected.birthtimeNs;
 }
 function validateRunId(runId) {
@@ -54973,21 +55509,21 @@ function validateRunId(runId) {
   }
 }
 async function stateRoot() {
-  const configured = nodeProcess5.env.CLAUDE_PLUGIN_DATA ?? (nodeProcess5.env.NODE_ENV === "test" ? nodeProcess5.env.CLAUDE_ARCHITECT_STATE_DIR : void 0);
+  const configured = nodeProcess7.env.CLAUDE_PLUGIN_DATA ?? (nodeProcess7.env.NODE_ENV === "test" ? nodeProcess7.env.CLAUDE_ARCHITECT_STATE_DIR : void 0);
   if (configured === void 0) return null;
-  const root = path31.resolve(resolveStateDir());
+  const root = path33.resolve(resolveStateDir());
   try {
-    const metadata = await lstat16(root, { bigint: true });
-    if (!isPlainDirectory2(metadata) || metadata.birthtimeNs <= 0n) {
+    const metadata = await lstat18(root, { bigint: true });
+    if (!isPlainDirectory3(metadata) || metadata.birthtimeNs <= 0n) {
       throw new RuntimeError("plugin data directory must be a stable plain directory during recovery");
     }
     const canonicalRoot = await realpath13(root);
-    const settled = await lstat16(canonicalRoot, { bigint: true });
-    if (!isPlainDirectory2(settled) || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs) {
+    const settled = await lstat18(canonicalRoot, { bigint: true });
+    if (!isPlainDirectory3(settled) || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs) {
       throw new RuntimeError("plugin data directory identity changed during canonicalization");
     }
     const privateIdentity = await assertPrivateRecoveryDirectory(canonicalRoot);
-    if (!sameIdentity3(privateIdentity, {
+    if (!sameIdentity5(privateIdentity, {
       dev: metadata.dev,
       ino: metadata.ino,
       birthtimeNs: metadata.birthtimeNs
@@ -54996,43 +55532,43 @@ async function stateRoot() {
     }
     return canonicalRoot;
   } catch (error51) {
-    if (isMissing3(error51)) return null;
+    if (isMissing4(error51)) return null;
     throw error51;
   }
 }
 async function readBoundedRegularFile2(filename) {
   try {
-    const contents = await readStableRegularFile(filename, MAX_STATE_FILE_BYTES_BIGINT);
+    const contents = await readStableRegularFile(filename, MAX_STATE_FILE_BYTES_BIGINT2);
     if (contents === null) {
       throw new RuntimeError("recovery state entry is not a stable bounded regular file");
     }
     return contents.toString("utf8");
   } catch (error51) {
-    if (isMissing3(error51)) return null;
+    if (isMissing4(error51)) return null;
     throw error51;
   }
 }
 async function readCleanupJournal(filename) {
   let handle;
   try {
-    handle = await open12(filename, constants12.O_RDONLY | NO_FOLLOW6);
+    handle = await open14(filename, constants14.O_RDONLY | NO_FOLLOW8);
   } catch (error51) {
-    if (isMissing3(error51)) return { text: null, tornTail: false };
+    if (isMissing4(error51)) return { text: null, tornTail: false };
     throw error51;
   }
   let result;
   let primaryError;
   try {
     const metadata = await handle.stat({ bigint: true });
-    const namedMetadata = await lstat16(filename, { bigint: true });
-    if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size > MAX_STATE_FILE_BYTES_BIGINT || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || namedMetadata.size !== metadata.size) {
+    const namedMetadata = await lstat18(filename, { bigint: true });
+    if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || namedMetadata.size !== metadata.size) {
       throw new RuntimeError("cleanup journal must be a bounded regular single-link file");
     }
-    const bytes = await readHandleBytes2(handle, Number(metadata.size));
-    const repeatedBytes = await readHandleBytes2(handle, Number(metadata.size));
+    const bytes = await readHandleBytes3(handle, Number(metadata.size));
+    const repeatedBytes = await readHandleBytes3(handle, Number(metadata.size));
     const settledMetadata = await handle.stat({ bigint: true });
-    const settledNamedMetadata = await lstat16(filename, { bigint: true });
-    if (bytes.byteLength > MAX_STATE_FILE_BYTES || settledMetadata.size > MAX_STATE_FILE_BYTES_BIGINT) {
+    const settledNamedMetadata = await lstat18(filename, { bigint: true });
+    if (bytes.byteLength > MAX_STATE_FILE_BYTES2 || settledMetadata.size > MAX_STATE_FILE_BYTES_BIGINT2) {
       throw new RuntimeError("cleanup journal exceeds its size limit during read");
     }
     if (!settledMetadata.isFile() || settledMetadata.nlink !== 1n || settledMetadata.dev !== metadata.dev || settledMetadata.ino !== metadata.ino || settledMetadata.birthtimeNs !== metadata.birthtimeNs || settledMetadata.size !== metadata.size || settledMetadata.mtimeNs !== metadata.mtimeNs || settledMetadata.ctimeNs !== metadata.ctimeNs || !settledNamedMetadata.isFile() || settledNamedMetadata.isSymbolicLink() || settledNamedMetadata.nlink !== 1n || settledNamedMetadata.dev !== metadata.dev || settledNamedMetadata.ino !== metadata.ino || settledNamedMetadata.birthtimeNs !== metadata.birthtimeNs || settledNamedMetadata.size !== metadata.size || settledNamedMetadata.mtimeNs !== metadata.mtimeNs || settledNamedMetadata.ctimeNs !== metadata.ctimeNs || BigInt(bytes.byteLength) !== metadata.size || !repeatedBytes.equals(bytes)) {
@@ -55071,10 +55607,10 @@ async function assertPrivateRecoveryDirectory(directory) {
     migratePermissions: true
   });
 }
-async function plainDirectoryIdentity(directory) {
+async function plainDirectoryIdentity2(directory) {
   try {
-    const metadata = await lstat16(directory, { bigint: true });
-    if (!isPlainDirectory2(metadata)) {
+    const metadata = await lstat18(directory, { bigint: true });
+    if (!isPlainDirectory3(metadata)) {
       throw new RuntimeError("recovery directory must not be a symbolic link");
     }
     return {
@@ -55083,7 +55619,7 @@ async function plainDirectoryIdentity(directory) {
       birthtimeNs: metadata.birthtimeNs
     };
   } catch (error51) {
-    if (isMissing3(error51)) return null;
+    if (isMissing4(error51)) return null;
     throw error51;
   }
 }
@@ -55099,7 +55635,7 @@ function parseRunStart(text, expectedRunId) {
   }
   const record2 = value;
   validateRunId(record2.runId);
-  if (record2.runId !== expectedRunId || typeof record2.lockKey !== "string" || !/^[0-9a-f]{64}$/.test(record2.lockKey) || typeof record2.canonicalCommonDir !== "string" || !path31.isAbsolute(record2.canonicalCommonDir) || record2.pid !== null && (record2.pid === void 0 || !Number.isSafeInteger(record2.pid) || record2.pid <= 1) || record2.processToken !== void 0 && record2.processToken !== null && typeof record2.processToken !== "string" || typeof record2.startedAt !== "string" || !Number.isFinite(Date.parse(record2.startedAt))) {
+  if (record2.runId !== expectedRunId || typeof record2.lockKey !== "string" || !/^[0-9a-f]{64}$/.test(record2.lockKey) || typeof record2.canonicalCommonDir !== "string" || !path33.isAbsolute(record2.canonicalCommonDir) || record2.pid !== null && (record2.pid === void 0 || !Number.isSafeInteger(record2.pid) || record2.pid <= 1) || record2.processToken !== void 0 && record2.processToken !== null && typeof record2.processToken !== "string" || typeof record2.startedAt !== "string" || !Number.isFinite(Date.parse(record2.startedAt))) {
     throw new RuntimeError("run-start recovery record is malformed");
   }
   const expectedLockKey = createHash16("sha256").update(record2.canonicalCommonDir).digest("hex");
@@ -55142,7 +55678,7 @@ async function validateGitCommonDir(commonDir) {
   return canonical;
 }
 async function validateRepositoryRoot(repoRoot) {
-  if (!path31.isAbsolute(repoRoot)) {
+  if (!path33.isAbsolute(repoRoot)) {
     throw new RuntimeError("cleanup journal repository root is not absolute");
   }
   const canonical = await realpath13(repoRoot);
@@ -55322,18 +55858,18 @@ function parseRecoveryQuarantineJournal(bytes) {
   return runIds;
 }
 async function readRecoveryQuarantineJournal(runsRoot) {
-  const rootIdentity = await plainDirectoryIdentity(runsRoot);
+  const rootIdentity = await plainDirectoryIdentity2(runsRoot);
   if (rootIdentity === null) {
     throw new RuntimeError("recovery quarantine journal root disappeared");
   }
-  const filename = path31.join(runsRoot, "recovery-quarantine.ndjson");
+  const filename = path33.join(runsRoot, "recovery-quarantine.ndjson");
   let expectedMetadata;
   try {
-    expectedMetadata = await lstat16(filename, { bigint: true });
+    expectedMetadata = await lstat18(filename, { bigint: true });
   } catch (error51) {
-    if (!isMissing3(error51)) throw error51;
-    const currentRoot = await lstat16(runsRoot, { bigint: true });
-    if (!isPlainDirectory2(currentRoot) || !sameIdentity3(currentRoot, rootIdentity)) {
+    if (!isMissing4(error51)) throw error51;
+    const currentRoot = await lstat18(runsRoot, { bigint: true });
+    if (!isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, rootIdentity)) {
       throw new RuntimeError("recovery quarantine journal root changed during missing read");
     }
     return {
@@ -55343,20 +55879,20 @@ async function readRecoveryQuarantineJournal(runsRoot) {
       journalIdentity: null
     };
   }
-  if (!expectedMetadata.isFile() || expectedMetadata.isSymbolicLink() || expectedMetadata.nlink !== 1n || expectedMetadata.size > MAX_STATE_FILE_BYTES_BIGINT) {
+  if (!expectedMetadata.isFile() || expectedMetadata.isSymbolicLink() || expectedMetadata.nlink !== 1n || expectedMetadata.size > MAX_STATE_FILE_BYTES_BIGINT2) {
     throw new RuntimeError("recovery quarantine journal is not a bounded regular file");
   }
   let handle;
   try {
-    handle = await open12(filename, constants12.O_RDONLY | NO_FOLLOW6);
+    handle = await open14(filename, constants14.O_RDONLY | NO_FOLLOW8);
   } catch (error51) {
-    if (!isMissing3(error51)) throw error51;
+    if (!isMissing4(error51)) throw error51;
     try {
-      await lstat16(filename);
+      await lstat18(filename);
     } catch (namedError) {
-      if (isMissing3(namedError)) {
-        const currentRoot = await lstat16(runsRoot, { bigint: true });
-        if (isPlainDirectory2(currentRoot) && sameIdentity3(currentRoot, rootIdentity)) {
+      if (isMissing4(namedError)) {
+        const currentRoot = await lstat18(runsRoot, { bigint: true });
+        if (isPlainDirectory3(currentRoot) && sameIdentity5(currentRoot, rootIdentity)) {
           return {
             bytes: Buffer.alloc(0),
             runIds: /* @__PURE__ */ new Set(),
@@ -55373,9 +55909,9 @@ async function readRecoveryQuarantineJournal(runsRoot) {
   let primaryError;
   try {
     const metadata = await handle.stat({ bigint: true });
-    const namedMetadata = await lstat16(filename, { bigint: true });
-    const currentRoot = await lstat16(runsRoot, { bigint: true });
-    if (!metadata.isFile() || metadata.size > MAX_STATE_FILE_BYTES_BIGINT || metadata.size !== expectedMetadata.size || metadata.nlink !== 1n || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.size !== metadata.size || namedMetadata.dev !== expectedMetadata.dev || namedMetadata.ino !== expectedMetadata.ino || namedMetadata.birthtimeNs !== expectedMetadata.birthtimeNs || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || !isPlainDirectory2(currentRoot) || !sameIdentity3(currentRoot, rootIdentity)) {
+    const namedMetadata = await lstat18(filename, { bigint: true });
+    const currentRoot = await lstat18(runsRoot, { bigint: true });
+    if (!metadata.isFile() || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || metadata.size !== expectedMetadata.size || metadata.nlink !== 1n || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.size !== metadata.size || namedMetadata.dev !== expectedMetadata.dev || namedMetadata.ino !== expectedMetadata.ino || namedMetadata.birthtimeNs !== expectedMetadata.birthtimeNs || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || !isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, rootIdentity)) {
       throw new RuntimeError("recovery quarantine journal changed during read");
     }
     journalIdentity = {
@@ -55383,11 +55919,11 @@ async function readRecoveryQuarantineJournal(runsRoot) {
       ino: metadata.ino,
       birthtimeNs: metadata.birthtimeNs
     };
-    bytes = await readHandleBytes2(handle, Number(metadata.size));
+    bytes = await readHandleBytes3(handle, Number(metadata.size));
     const settledHandle = await handle.stat({ bigint: true });
-    const settledMetadata = await lstat16(filename, { bigint: true });
-    const settledRoot = await lstat16(runsRoot, { bigint: true });
-    if (!settledHandle.isFile() || settledHandle.nlink !== 1n || settledHandle.size !== metadata.size || settledHandle.dev !== metadata.dev || settledHandle.ino !== metadata.ino || settledHandle.birthtimeNs !== metadata.birthtimeNs || settledHandle.mtimeNs !== metadata.mtimeNs || settledHandle.ctimeNs !== metadata.ctimeNs || !settledMetadata.isFile() || settledMetadata.isSymbolicLink() || settledMetadata.nlink !== 1n || settledMetadata.size !== BigInt(bytes.byteLength) || settledMetadata.dev !== metadata.dev || settledMetadata.ino !== metadata.ino || settledMetadata.birthtimeNs !== metadata.birthtimeNs || settledMetadata.mtimeNs !== metadata.mtimeNs || settledMetadata.ctimeNs !== metadata.ctimeNs || !isPlainDirectory2(settledRoot) || !sameIdentity3(settledRoot, rootIdentity)) {
+    const settledMetadata = await lstat18(filename, { bigint: true });
+    const settledRoot = await lstat18(runsRoot, { bigint: true });
+    if (!settledHandle.isFile() || settledHandle.nlink !== 1n || settledHandle.size !== metadata.size || settledHandle.dev !== metadata.dev || settledHandle.ino !== metadata.ino || settledHandle.birthtimeNs !== metadata.birthtimeNs || settledHandle.mtimeNs !== metadata.mtimeNs || settledHandle.ctimeNs !== metadata.ctimeNs || !settledMetadata.isFile() || settledMetadata.isSymbolicLink() || settledMetadata.nlink !== 1n || settledMetadata.size !== BigInt(bytes.byteLength) || settledMetadata.dev !== metadata.dev || settledMetadata.ino !== metadata.ino || settledMetadata.birthtimeNs !== metadata.birthtimeNs || settledMetadata.mtimeNs !== metadata.mtimeNs || settledMetadata.ctimeNs !== metadata.ctimeNs || !isPlainDirectory3(settledRoot) || !sameIdentity5(settledRoot, rootIdentity)) {
       throw new RuntimeError("recovery quarantine journal changed after read");
     }
   } catch (error51) {
@@ -55419,9 +55955,9 @@ async function syncRecoveryDirectory(directory) {
   await syncDirectoryMetadata(directory);
 }
 async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, nextBytes) {
-  const temporaryPath = path31.join(
+  const temporaryPath = path33.join(
     runsRoot,
-    `.recovery-quarantine-journal-${randomUUID11()}.tmp`
+    `.recovery-quarantine-journal-${randomUUID13()}.tmp`
   );
   let handle;
   let temporaryCreated = false;
@@ -55430,9 +55966,9 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
   let temporaryIdentity;
   let primaryError;
   try {
-    handle = await open12(
+    handle = await open14(
       temporaryPath,
-      constants12.O_RDWR | constants12.O_CREAT | constants12.O_EXCL | NO_FOLLOW6,
+      constants14.O_RDWR | constants14.O_CREAT | constants14.O_EXCL | NO_FOLLOW8,
       384
     );
     temporaryCreated = true;
@@ -55442,9 +55978,9 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
       ino: metadata.ino,
       birthtimeNs: metadata.birthtimeNs
     };
-    const namedMetadata = await lstat16(temporaryPath, { bigint: true });
-    const currentRoot = await lstat16(runsRoot, { bigint: true });
-    if (!metadata.isFile() || metadata.nlink !== 1n || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || metadata.size > MAX_STATE_FILE_BYTES_BIGINT || !isPlainDirectory2(currentRoot) || !sameIdentity3(currentRoot, snapshot.rootIdentity)) {
+    const namedMetadata = await lstat18(temporaryPath, { bigint: true });
+    const currentRoot = await lstat18(runsRoot, { bigint: true });
+    if (!metadata.isFile() || metadata.nlink !== 1n || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || !isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, snapshot.rootIdentity)) {
       throw new RuntimeError("recovery quarantine journal temp changed during creation");
     }
     await handle.writeFile(nextBytes);
@@ -55493,7 +56029,7 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
         throw new RuntimeError("recovery quarantine journal changed before publication");
       }
       if (snapshot.journalIdentity === null) {
-        await link6(temporaryPath, filename);
+        await link8(temporaryPath, filename);
         linkedPublication = true;
         await validatePublishedLock(
           temporaryPath,
@@ -55515,7 +56051,7 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
         }
         temporaryConsumed = true;
       } else {
-        await rename6(temporaryPath, filename);
+        await rename7(temporaryPath, filename);
         temporaryConsumed = true;
       }
     } catch (error51) {
@@ -55564,7 +56100,7 @@ async function appendRecoveryQuarantineRecord(runsRoot, record2) {
   if (lineBytes > MAX_QUARANTINE_RECORD_BYTES) {
     throw new RuntimeError("recovery quarantine record exceeds its size limit");
   }
-  const filename = path31.join(runsRoot, "recovery-quarantine.ndjson");
+  const filename = path33.join(runsRoot, "recovery-quarantine.ndjson");
   const snapshot = await readRecoveryQuarantineJournal(runsRoot);
   if (snapshot.runIds.has(record2.runId)) {
     await syncRecoveryDirectory(runsRoot);
@@ -55575,30 +56111,30 @@ async function appendRecoveryQuarantineRecord(runsRoot, record2) {
     return;
   }
   const nextBytes = Buffer.concat([snapshot.bytes, Buffer.from(line, "utf8")]);
-  if (nextBytes.byteLength > MAX_STATE_FILE_BYTES) {
+  if (nextBytes.byteLength > MAX_STATE_FILE_BYTES2) {
     throw new RuntimeError("recovery quarantine journal exceeds its size limit");
   }
   await publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, nextBytes);
 }
 async function quarantineRun(runsRoot, runId, error51) {
-  const runDirectory = path31.join(runsRoot, runId);
-  const quarantinePath = path31.join(runsRoot, `.poisoned-${runId}`);
-  const runsIdentity = await plainDirectoryIdentity(runsRoot);
+  const runDirectory = path33.join(runsRoot, runId);
+  const quarantinePath = path33.join(runsRoot, `.poisoned-${runId}`);
+  const runsIdentity = await plainDirectoryIdentity2(runsRoot);
   if (runsIdentity === null) throw new RuntimeError("recovery runs root disappeared");
   let runIdentity = null;
   let renamed = false;
   let journaled = false;
   try {
-    runIdentity = await plainDirectoryIdentity(runDirectory);
+    runIdentity = await plainDirectoryIdentity2(runDirectory);
     if (runIdentity === null) throw new RuntimeError("poisoned recovery run disappeared");
-    if (await plainDirectoryIdentity(quarantinePath) !== null) {
+    if (await plainDirectoryIdentity2(quarantinePath) !== null) {
       throw new RuntimeError("poisoned recovery quarantine already exists");
     }
-    await rename6(runDirectory, quarantinePath);
+    await rename7(runDirectory, quarantinePath);
     renamed = true;
-    const quarantineIdentity = await plainDirectoryIdentity(quarantinePath);
-    const currentRoot = await lstat16(runsRoot, { bigint: true });
-    if (quarantineIdentity === null || quarantineIdentity.dev !== runIdentity.dev || quarantineIdentity.ino !== runIdentity.ino || quarantineIdentity.birthtimeNs !== runIdentity.birthtimeNs || !isPlainDirectory2(currentRoot) || !sameIdentity3(currentRoot, runsIdentity)) {
+    const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
+    const currentRoot = await lstat18(runsRoot, { bigint: true });
+    if (quarantineIdentity === null || quarantineIdentity.dev !== runIdentity.dev || quarantineIdentity.ino !== runIdentity.ino || quarantineIdentity.birthtimeNs !== runIdentity.birthtimeNs || !isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, runsIdentity)) {
       throw new RuntimeError("poisoned recovery run identity changed during quarantine");
     }
     const record2 = {
@@ -55617,21 +56153,21 @@ async function quarantineRun(runsRoot, runId, error51) {
     const errors = [error51, quarantineError];
     if (renamed && !journaled && runIdentity !== null) {
       try {
-        const quarantineMetadata = await lstat16(quarantinePath, { bigint: true });
-        const currentRoot = await lstat16(runsRoot, { bigint: true });
-        if (!isPlainDirectory2(quarantineMetadata) || !sameIdentity3(quarantineMetadata, runIdentity) || await plainDirectoryIdentity(runDirectory) !== null || !isPlainDirectory2(currentRoot) || !sameIdentity3(currentRoot, runsIdentity)) {
+        const quarantineMetadata = await lstat18(quarantinePath, { bigint: true });
+        const currentRoot = await lstat18(runsRoot, { bigint: true });
+        if (!isPlainDirectory3(quarantineMetadata) || !sameIdentity5(quarantineMetadata, runIdentity) || await plainDirectoryIdentity2(runDirectory) !== null || !isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, runsIdentity)) {
           throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
         }
-        await rename6(quarantinePath, runDirectory);
-        const restoredMetadata = await lstat16(runDirectory, { bigint: true });
-        const restoredRoot = await lstat16(runsRoot, { bigint: true });
-        if (!isPlainDirectory2(restoredMetadata) || !sameIdentity3(restoredMetadata, runIdentity) || !isPlainDirectory2(restoredRoot) || !sameIdentity3(restoredRoot, runsIdentity)) {
+        await rename7(quarantinePath, runDirectory);
+        const restoredMetadata = await lstat18(runDirectory, { bigint: true });
+        const restoredRoot = await lstat18(runsRoot, { bigint: true });
+        if (!isPlainDirectory3(restoredMetadata) || !sameIdentity5(restoredMetadata, runIdentity) || !isPlainDirectory3(restoredRoot) || !sameIdentity5(restoredRoot, runsIdentity)) {
           throw new RuntimeError("poisoned recovery rollback identity changed");
         }
         await syncRecoveryDirectory(runsRoot);
-        const settledMetadata = await lstat16(runDirectory, { bigint: true });
-        const settledRoot = await lstat16(runsRoot, { bigint: true });
-        if (!isPlainDirectory2(settledMetadata) || !sameIdentity3(settledMetadata, runIdentity) || !isPlainDirectory2(settledRoot) || !sameIdentity3(settledRoot, runsIdentity)) {
+        const settledMetadata = await lstat18(runDirectory, { bigint: true });
+        const settledRoot = await lstat18(runsRoot, { bigint: true });
+        if (!isPlainDirectory3(settledMetadata) || !sameIdentity5(settledMetadata, runIdentity) || !isPlainDirectory3(settledRoot) || !sameIdentity5(settledRoot, runsIdentity)) {
           throw new RuntimeError("poisoned recovery rollback changed after directory sync");
         }
       } catch (rollbackError) {
@@ -55642,8 +56178,8 @@ async function quarantineRun(runsRoot, runId, error51) {
   }
 }
 async function removePlainDirectory(directory, expected, platformServices) {
-  const metadata = await lstat16(directory, { bigint: true });
-  if (!isPlainDirectory2(metadata) || !sameIdentity3(metadata, expected)) {
+  const metadata = await lstat18(directory, { bigint: true });
+  if (!isPlainDirectory3(metadata) || !sameIdentity5(metadata, expected)) {
     throw new RuntimeError("recovery directory identity changed before removal");
   }
   await emptyBoundDirectory(directory, expected, platformServices);
@@ -55662,18 +56198,18 @@ async function createExactRef(repoRoot, ref, oid) {
 async function appendCleanupRecord(runsRoot, record2) {
   const journalLock = await getPlatformServices().acquireCleanupJournalLock();
   try {
-    const identity = await plainDirectoryIdentity(runsRoot);
+    const identity = await plainDirectoryIdentity2(runsRoot);
     if (identity === null) throw new RuntimeError("cleanup journal root disappeared");
-    const filename = path31.join(runsRoot, "cleanup.ndjson");
-    const handle = await open12(
+    const filename = path33.join(runsRoot, "cleanup.ndjson");
+    const handle = await open14(
       filename,
-      constants12.O_WRONLY | constants12.O_CREAT | constants12.O_APPEND | NO_FOLLOW6,
+      constants14.O_WRONLY | constants14.O_CREAT | constants14.O_APPEND | NO_FOLLOW8,
       384
     );
     try {
       const metadata = await handle.stat();
-      const currentRoot2 = await lstat16(runsRoot, { bigint: true });
-      if (!metadata.isFile() || !isPlainDirectory2(currentRoot2) || !sameIdentity3(currentRoot2, identity)) {
+      const currentRoot2 = await lstat18(runsRoot, { bigint: true });
+      if (!metadata.isFile() || !isPlainDirectory3(currentRoot2) || !sameIdentity5(currentRoot2, identity)) {
         throw new RuntimeError("cleanup journal identity changed during recovery");
       }
       await handle.writeFile(`${JSON.stringify(record2)}
@@ -55682,8 +56218,8 @@ async function appendCleanupRecord(runsRoot, record2) {
     } finally {
       await handle.close();
     }
-    const currentRoot = await lstat16(runsRoot, { bigint: true });
-    if (!isPlainDirectory2(currentRoot) || !sameIdentity3(currentRoot, identity)) {
+    const currentRoot = await lstat18(runsRoot, { bigint: true });
+    if (!isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, identity)) {
       throw new RuntimeError("cleanup journal root changed after recovery append");
     }
   } finally {
@@ -55743,7 +56279,7 @@ async function commitCleanupRefs(record2) {
   await deleteExactRef(repoRoot, record2.backupRef, backupOid);
 }
 async function readPendingCleanupRecords(runsRoot) {
-  const { text, tornTail } = await readCleanupJournal(path31.join(runsRoot, "cleanup.ndjson"));
+  const { text, tornTail } = await readCleanupJournal(path33.join(runsRoot, "cleanup.ndjson"));
   const pending = /* @__PURE__ */ new Map();
   if (text === null || text === "") return { pending, tornTail };
   const completeText = text.endsWith("\n") ? text.slice(0, -1) : text;
@@ -55758,22 +56294,22 @@ async function readPendingCleanupRecords(runsRoot) {
 async function truncateCleanupTornTail(filename) {
   let handle;
   try {
-    handle = await open12(filename, constants12.O_RDWR | NO_FOLLOW6);
+    handle = await open14(filename, constants14.O_RDWR | NO_FOLLOW8);
   } catch (error51) {
-    if (isMissing3(error51)) return;
+    if (isMissing4(error51)) return;
     throw error51;
   }
   try {
     const metadata = await handle.stat({ bigint: true });
-    const namedMetadata = await lstat16(filename, { bigint: true });
-    if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size > MAX_STATE_FILE_BYTES_BIGINT || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || namedMetadata.size !== metadata.size) {
+    const namedMetadata = await lstat18(filename, { bigint: true });
+    if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || namedMetadata.size !== metadata.size) {
       throw new RuntimeError("cleanup journal must be a bounded regular single-link file");
     }
-    const bytes = await readHandleBytes2(handle, Number(metadata.size));
+    const bytes = await readHandleBytes3(handle, Number(metadata.size));
     const text = bytes.toString("utf8");
     if (text === "" || text.endsWith("\n")) return;
     const settled = await handle.stat({ bigint: true });
-    const settledNamed = await lstat16(filename, { bigint: true });
+    const settledNamed = await lstat18(filename, { bigint: true });
     if (BigInt(bytes.byteLength) !== metadata.size || !settled.isFile() || settled.nlink !== 1n || settled.size !== metadata.size || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs || settled.mtimeNs !== metadata.mtimeNs || settled.ctimeNs !== metadata.ctimeNs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.nlink !== 1n || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino || settledNamed.birthtimeNs !== metadata.birthtimeNs || settledNamed.size !== metadata.size) {
       throw new RuntimeError("cleanup journal changed during torn-tail repair");
     }
@@ -55786,20 +56322,20 @@ async function truncateCleanupTornTail(filename) {
   }
 }
 async function repositoryRootExists(repoRoot) {
-  if (!path31.isAbsolute(repoRoot)) return true;
+  if (!path33.isAbsolute(repoRoot)) return true;
   try {
     await realpath13(repoRoot);
     return true;
   } catch (error51) {
-    if (isMissing3(error51)) return false;
+    if (isMissing4(error51)) return false;
     throw error51;
   }
 }
 async function reconcileRepoAbsentPrune(runsRoot, record2, platformServices) {
-  const runDirectory = path31.join(runsRoot, record2.runId);
-  const quarantinePath = path31.join(runsRoot, record2.quarantineName);
-  const runIdentity = await plainDirectoryIdentity(runDirectory);
-  const quarantineIdentity = await plainDirectoryIdentity(quarantinePath);
+  const runDirectory = path33.join(runsRoot, record2.runId);
+  const quarantinePath = path33.join(runsRoot, record2.quarantineName);
+  const runIdentity = await plainDirectoryIdentity2(runDirectory);
+  const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
   if (runIdentity !== null && quarantineIdentity !== null) {
     throw new RuntimeError("both retained and quarantined run archives exist during recovery");
   }
@@ -55819,7 +56355,7 @@ async function replayInterruptedPrunes(runsRoot, ps) {
   const journalLock = await getPlatformServices().acquireCleanupJournalLock();
   try {
     const read = await readPendingCleanupRecords(runsRoot);
-    if (read.tornTail) await truncateCleanupTornTail(path31.join(runsRoot, "cleanup.ndjson"));
+    if (read.tornTail) await truncateCleanupTornTail(path33.join(runsRoot, "cleanup.ndjson"));
     pending = read.pending;
   } finally {
     await journalLock.release();
@@ -55843,16 +56379,14 @@ async function replayInterruptedPrunes(runsRoot, ps) {
       commonResult.stdout,
       "cleanup repository identity"
     ));
-    const lease = await ps.acquireCheckoutLock(repoRoot);
-    let primaryError;
-    try {
+    await platformSafety.withRecoveryLease(repoRoot, async (lease) => {
       if (lease.repositoryIdentity !== repositoryIdentity) {
         throw new RuntimeError("checkout lease repository identity changed during prune recovery");
       }
-      const runDirectory = path31.join(runsRoot, record2.runId);
-      const quarantinePath = path31.join(runsRoot, record2.quarantineName);
-      const runIdentity = await plainDirectoryIdentity(runDirectory);
-      const quarantineIdentity = await plainDirectoryIdentity(quarantinePath);
+      const runDirectory = path33.join(runsRoot, record2.runId);
+      const quarantinePath = path33.join(runsRoot, record2.quarantineName);
+      const runIdentity = await plainDirectoryIdentity2(runDirectory);
+      const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
       if (runIdentity !== null && quarantineIdentity !== null) {
         throw new RuntimeError("both retained and quarantined run archives exist during recovery");
       }
@@ -55870,30 +56404,15 @@ async function replayInterruptedPrunes(runsRoot, ps) {
         anchorCleanup: outcome,
         recordedAt: (/* @__PURE__ */ new Date()).toISOString()
       });
-    } catch (error51) {
-      primaryError = error51;
-    } finally {
-      try {
-        await lease.release();
-      } catch (releaseError) {
-        if (primaryError !== void 0) {
-          throw new AggregateError(
-            [primaryError, releaseError],
-            "prune recovery failed and its checkout lease could not be released"
-          );
-        }
-        throw releaseError;
-      }
-    }
-    if (primaryError !== void 0) throw primaryError;
+    });
   }
 }
 async function managedWorktreeMarkerIsPresent(worktreePath) {
   let marker;
   try {
-    marker = await lstat16(path31.join(worktreePath, ".git"), { bigint: true });
+    marker = await lstat18(path33.join(worktreePath, ".git"), { bigint: true });
   } catch (error51) {
-    if (isMissing3(error51)) return false;
+    if (isMissing4(error51)) return false;
     throw error51;
   }
   if (!marker.isFile() || marker.isSymbolicLink() || marker.nlink !== 1n) {
@@ -55923,7 +56442,7 @@ async function removeManagedWorktreeUnderLease(commonDir, worktreePath, expected
       resolved.stdout,
       "managed worktree common directory"
     );
-    if (!path31.isAbsolute(reportedCommonDir) || await realpath13(reportedCommonDir) !== commonDir) {
+    if (!path33.isAbsolute(reportedCommonDir) || await realpath13(reportedCommonDir) !== commonDir) {
       throw new RuntimeError("managed worktree belongs to a different repository");
     }
   }
@@ -55953,13 +56472,13 @@ function mostSpecificKnownRunClaim(knownRunIds, managedId) {
   return owner;
 }
 async function cleanupRunWorktreesUnderLease(root, commonDir, runId, runGit, knownRunIds) {
-  const worktreesRoot = path31.join(root, "worktrees");
-  const worktreesIdentity = await plainDirectoryIdentity(worktreesRoot);
+  const worktreesRoot = path33.join(root, "worktrees");
+  const worktreesIdentity = await plainDirectoryIdentity2(worktreesRoot);
   if (worktreesIdentity !== null) {
-    const entries = await readdir7(worktreesRoot, { withFileTypes: true });
+    const entries = await readdir8(worktreesRoot, { withFileTypes: true });
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (!entry.isDirectory() || entry.isSymbolicLink() || !runClaimsWorktree(runId, entry.name) || mostSpecificKnownRunClaim(knownRunIds, entry.name) !== runId) continue;
-      const worktreePath = path31.join(worktreesRoot, entry.name);
+      const worktreePath = path33.join(worktreesRoot, entry.name);
       const identity = await managedWorktreeDirectoryIdentity(worktreePath);
       if (identity !== null) {
         await removeManagedWorktreeUnderLease(commonDir, worktreePath, identity, runGit);
@@ -55970,23 +56489,23 @@ async function cleanupRunWorktreesUnderLease(root, commonDir, runId, runGit, kno
   if (listed.exitCode !== 0 || listed.truncated?.stdout === true || listed.truncated?.stderr === true) {
     throw runGitError("enumerate missing run worktree registrations", listed);
   }
-  const canonicalWorktreesRoot = worktreesIdentity === null ? path31.join(await realpath13(root), "worktrees") : await realpath13(worktreesRoot);
+  const canonicalWorktreesRoot = worktreesIdentity === null ? path33.join(await realpath13(root), "worktrees") : await realpath13(worktreesRoot);
   for (const field of gitNulRecords(listed.stdout, "missing-run Git worktree list")) {
     if (!field.startsWith("worktree ")) continue;
-    const reportedWorktreePath = path31.resolve(field.slice("worktree ".length));
+    const reportedWorktreePath = path33.resolve(field.slice("worktree ".length));
     let worktreePath;
     try {
       worktreePath = await canonicalizeWorktreePath(reportedWorktreePath, true);
     } catch (error51) {
-      if (!isMissing3(error51) || worktreesIdentity !== null) throw error51;
-      const reportedRoot = path31.dirname(reportedWorktreePath);
-      worktreePath = path31.join(
-        await realpath13(path31.dirname(reportedRoot)),
-        path31.basename(reportedRoot),
-        path31.basename(reportedWorktreePath)
+      if (!isMissing4(error51) || worktreesIdentity !== null) throw error51;
+      const reportedRoot = path33.dirname(reportedWorktreePath);
+      worktreePath = path33.join(
+        await realpath13(path33.dirname(reportedRoot)),
+        path33.basename(reportedRoot),
+        path33.basename(reportedWorktreePath)
       );
     }
-    if (!platformPathsEqual(path31.dirname(worktreePath), canonicalWorktreesRoot) || !runClaimsWorktree(runId, path31.basename(worktreePath)) || mostSpecificKnownRunClaim(knownRunIds, path31.basename(worktreePath)) !== runId || await managedWorktreeDirectoryIdentity(worktreePath) !== null) continue;
+    if (!platformPathsEqual(path33.dirname(worktreePath), canonicalWorktreesRoot) || !runClaimsWorktree(runId, path33.basename(worktreePath)) || mostSpecificKnownRunClaim(knownRunIds, path33.basename(worktreePath)) !== runId || await managedWorktreeDirectoryIdentity(worktreePath) !== null) continue;
     await removeMissingRegisteredWorktree(commonDir, worktreePath, { git: runGit });
   }
 }
@@ -56040,7 +56559,7 @@ async function recoverRun(record2, root, ps, isProcessAlive2, runGit = git, work
   });
   return "recovered";
 }
-async function readHandleBytes2(handle, size) {
+async function readHandleBytes3(handle, size) {
   const contents = Buffer.alloc(size);
   let offset = 0;
   while (offset < size) {
@@ -56055,465 +56574,8 @@ async function readHandleBytes2(handle, size) {
   }
   return contents.subarray(0, offset);
 }
-async function removeLockIfUnchanged(lockPath, handle, expectedIdentity, expectedContents, expectedLinks = 1) {
-  const expectedSize = expectedContents.byteLength;
-  const handleMetadata = await handle.stat({ bigint: true });
-  if (!isExpectedLockMetadata(
-    handleMetadata,
-    expectedIdentity,
-    expectedSize,
-    expectedLinks
-  )) return false;
-  const currentContents = await readHandleBytes2(handle, Number(handleMetadata.size));
-  if (!currentContents.equals(expectedContents)) return false;
-  let pathMetadata;
-  try {
-    pathMetadata = await lstat16(lockPath, { bigint: true });
-  } catch (error51) {
-    if (isMissing3(error51)) return false;
-    throw error51;
-  }
-  if (!isExpectedLockMetadata(
-    pathMetadata,
-    expectedIdentity,
-    expectedSize,
-    expectedLinks
-  )) return false;
-  const settledHandleMetadata = await handle.stat({ bigint: true });
-  if (!isExpectedLockMetadata(
-    settledHandleMetadata,
-    expectedIdentity,
-    expectedSize,
-    expectedLinks
-  )) return false;
-  const settledContents = await readHandleBytes2(handle, Number(settledHandleMetadata.size));
-  if (!settledContents.equals(expectedContents)) return false;
-  let settledPathMetadata;
-  try {
-    settledPathMetadata = await lstat16(lockPath, { bigint: true });
-  } catch (error51) {
-    if (isMissing3(error51)) return false;
-    throw error51;
-  }
-  if (!isExpectedLockMetadata(
-    settledPathMetadata,
-    expectedIdentity,
-    expectedSize,
-    expectedLinks
-  )) return false;
-  try {
-    await rm13(lockPath, { force: false });
-    return true;
-  } catch (error51) {
-    if (isMissing3(error51)) return false;
-    throw error51;
-  }
-}
-async function reclaimDeadLock(lockPath, isProcessAlive2, getProcessStartToken) {
-  let handle;
-  try {
-    handle = await open12(lockPath, constants12.O_RDONLY | NO_FOLLOW6);
-  } catch (error51) {
-    if (isMissing3(error51)) return "contended";
-    throw error51;
-  }
-  try {
-    const metadata = await handle.stat({ bigint: true });
-    if (!metadata.isFile() || metadata.size > MAX_STATE_FILE_BYTES_BIGINT) {
-      throw new RuntimeError("recovery lock must be a bounded regular file");
-    }
-    const contents = await readHandleBytes2(handle, Number(metadata.size));
-    if (BigInt(contents.byteLength) !== metadata.size) return "contended";
-    const owner = parseLockOwner(contents.toString("utf8"));
-    if (owner === null) {
-      logger.warn("startup recovery preserved malformed lock", {
-        event: "recovery-malformed-lock",
-        lockName: path31.basename(lockPath),
-        reason: "invalid-owner-record"
-      });
-      return "malformed";
-    }
-    const ownerStatus2 = await lockOwnerStatus(
-      owner,
-      isProcessAlive2,
-      getProcessStartToken
-    );
-    if (ownerStatus2 === "live") return "live";
-    if (ownerStatus2 === "unverifiable") {
-      logger.warn("startup recovery preserved unverifiable lock", {
-        event: "recovery-unverifiable-lock",
-        lockName: path31.basename(lockPath),
-        reason: "process-token-unavailable"
-      });
-      return "unverifiable";
-    }
-    return await removeLockIfUnchanged(
-      lockPath,
-      handle,
-      {
-        dev: metadata.dev,
-        ino: metadata.ino,
-        birthtimeNs: metadata.birthtimeNs
-      },
-      contents
-    ) ? "reclaimed" : "contended";
-  } finally {
-    await handle.close();
-  }
-}
-async function validateLockParentIdentity(parentPath, expectedIdentity) {
-  const metadata = await lstat16(parentPath, { bigint: true });
-  if (!isPlainDirectory2(metadata) || !sameIdentity3(metadata, expectedIdentity)) {
-    throw new RuntimeError("recovery lock parent identity changed");
-  }
-}
-function isExpectedLockMetadata(metadata, expectedIdentity, expectedSize, expectedLinks) {
-  return metadata.isFile() && !metadata.isSymbolicLink() && metadata.nlink === BigInt(expectedLinks) && sameIdentity3(metadata, expectedIdentity) && metadata.size === BigInt(expectedSize) && metadata.size <= MAX_STATE_FILE_BYTES_BIGINT;
-}
-async function validateOwnedLockState(handle, namedPaths, expectedIdentity, expectedContents, expectedLinks, parentPath, parentIdentity) {
-  const validateHandle = async () => {
-    const metadata = await handle.stat({ bigint: true });
-    if (!isExpectedLockMetadata(
-      metadata,
-      expectedIdentity,
-      expectedContents.byteLength,
-      expectedLinks
-    ) || !(await readHandleBytes2(handle, Number(metadata.size))).equals(expectedContents)) {
-      throw new RuntimeError("recovery lock handle or contents changed");
-    }
-  };
-  await validateLockParentIdentity(parentPath, parentIdentity);
-  await validateHandle();
-  for (const namedPath of namedPaths) {
-    const metadata = await lstat16(namedPath, { bigint: true });
-    if (!isExpectedLockMetadata(
-      metadata,
-      expectedIdentity,
-      expectedContents.byteLength,
-      expectedLinks
-    )) throw new RuntimeError("recovery lock path changed");
-  }
-  await validateHandle();
-  await validateLockParentIdentity(parentPath, parentIdentity);
-}
-async function removeExpectedLockPath(filename, expectedIdentity, expectedContents, expectedLinks) {
-  let handle;
-  try {
-    handle = await open12(filename, constants12.O_RDONLY | NO_FOLLOW6);
-  } catch (error51) {
-    if (isMissing3(error51)) return "absent";
-    throw error51;
-  }
-  let primaryError;
-  let removed = false;
-  try {
-    removed = await removeLockIfUnchanged(
-      filename,
-      handle,
-      expectedIdentity,
-      expectedContents,
-      expectedLinks
-    );
-  } catch (error51) {
-    primaryError = error51;
-  }
-  try {
-    await handle.close();
-  } catch (closeError) {
-    if (primaryError !== void 0) {
-      throw new AggregateError(
-        [primaryError, closeError],
-        "recovery lock cleanup failed and its handle could not be closed"
-      );
-    }
-    throw closeError;
-  }
-  if (primaryError !== void 0) throw primaryError;
-  return removed ? "removed" : "changed";
-}
-async function pathNamesLockIdentity(filename, expectedIdentity) {
-  try {
-    const metadata = await lstat16(filename, { bigint: true });
-    return metadata.isFile() && !metadata.isSymbolicLink() && sameIdentity3(metadata, expectedIdentity);
-  } catch (error51) {
-    if (isMissing3(error51)) return false;
-    throw error51;
-  }
-}
-async function validatePublishedLock(lockPath, expectedIdentity, expectedContents, parentPath, parentIdentity, expectedLinks = 1, namedPaths = [lockPath]) {
-  const handle = await open12(lockPath, constants12.O_RDONLY | NO_FOLLOW6);
-  let primaryError;
-  try {
-    await validateOwnedLockState(
-      handle,
-      namedPaths,
-      expectedIdentity,
-      expectedContents,
-      expectedLinks,
-      parentPath,
-      parentIdentity
-    );
-  } catch (error51) {
-    primaryError = error51;
-  }
-  try {
-    await handle.close();
-  } catch (closeError) {
-    if (primaryError !== void 0) {
-      throw new AggregateError(
-        [primaryError, closeError],
-        "published recovery lock validation failed and its handle could not be closed"
-      );
-    }
-    throw closeError;
-  }
-  if (primaryError !== void 0) throw primaryError;
-}
-function throwLockAcquisitionErrors(errors) {
-  if (errors.length === 1) throw errors[0];
-  throw new AggregateError(errors, "recovery lock acquisition and safe cleanup failed");
-}
-async function cleanupOwnedLockPaths(parentPath, parentIdentity, temporaryPath, lockPath, expectedIdentity, expectedContents, published) {
-  const errors = [];
-  try {
-    await validateLockParentIdentity(parentPath, parentIdentity);
-  } catch (error51) {
-    return [error51];
-  }
-  if (published) {
-    try {
-      const temporaryExists = await pathNamesLockIdentity(temporaryPath, expectedIdentity);
-      const result = await removeExpectedLockPath(
-        lockPath,
-        expectedIdentity,
-        expectedContents,
-        temporaryExists ? 2 : 1
-      );
-      if (result === "changed") {
-        errors.push(new RuntimeError("published recovery lock changed before safe cleanup"));
-      }
-    } catch (error51) {
-      errors.push(error51);
-    }
-  }
-  try {
-    const result = await removeExpectedLockPath(
-      temporaryPath,
-      expectedIdentity,
-      expectedContents,
-      1
-    );
-    if (result === "changed") {
-      errors.push(new RuntimeError("temporary recovery lock changed before safe cleanup"));
-    }
-  } catch (error51) {
-    errors.push(error51);
-  }
-  try {
-    await validateLockParentIdentity(parentPath, parentIdentity);
-  } catch (error51) {
-    errors.push(error51);
-  }
-  return errors;
-}
-async function createOwnedLock(lockPath, contents) {
-  if (contents.byteLength > MAX_STATE_FILE_BYTES) {
-    throw new RuntimeError("new recovery lock exceeds its size limit");
-  }
-  const parentPath = path31.dirname(lockPath);
-  const parentIdentity = await plainDirectoryIdentity(parentPath);
-  if (parentIdentity === null) {
-    throw new RuntimeError("recovery lock parent must remain a plain directory");
-  }
-  const temporaryPath = path31.join(parentPath, `.recovery-lock-${randomUUID11()}.tmp`);
-  let handle;
-  let temporaryIdentity;
-  let temporaryCreated = false;
-  let published = false;
-  let contended = false;
-  const errors = [];
-  try {
-    handle = await open12(
-      temporaryPath,
-      constants12.O_RDWR | constants12.O_CREAT | constants12.O_EXCL | NO_FOLLOW6,
-      384
-    );
-    temporaryCreated = true;
-    const metadata = await handle.stat({ bigint: true });
-    temporaryIdentity = {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs
-    };
-    await handle.writeFile(contents);
-    await handle.sync();
-    await validateOwnedLockState(
-      handle,
-      [temporaryPath],
-      temporaryIdentity,
-      contents,
-      1,
-      parentPath,
-      parentIdentity
-    );
-    try {
-      await link6(temporaryPath, lockPath);
-      published = true;
-    } catch (error51) {
-      if (errorCode9(error51) === "EEXIST") contended = true;
-      else throw error51;
-    }
-    if (published) {
-      await validateOwnedLockState(
-        handle,
-        [temporaryPath, lockPath],
-        temporaryIdentity,
-        contents,
-        2,
-        parentPath,
-        parentIdentity
-      );
-    }
-  } catch (error51) {
-    errors.push(error51);
-  }
-  if (handle !== void 0) {
-    try {
-      await handle.close();
-    } catch (error51) {
-      errors.push(error51);
-    }
-  }
-  if (temporaryCreated && temporaryIdentity === void 0) {
-    errors.push(new RuntimeError("temporary recovery lock identity is unavailable for cleanup"));
-  }
-  if (temporaryIdentity === void 0) throwLockAcquisitionErrors(errors);
-  if (contended) {
-    errors.push(...await cleanupOwnedLockPaths(
-      parentPath,
-      parentIdentity,
-      temporaryPath,
-      lockPath,
-      temporaryIdentity,
-      contents,
-      false
-    ));
-    if (errors.length === 0) return null;
-    throwLockAcquisitionErrors(errors);
-  }
-  if (!published) {
-    if (temporaryCreated) {
-      errors.push(...await cleanupOwnedLockPaths(
-        parentPath,
-        parentIdentity,
-        temporaryPath,
-        lockPath,
-        temporaryIdentity,
-        contents,
-        false
-      ));
-    }
-    throwLockAcquisitionErrors(errors);
-  }
-  if (errors.length === 0) {
-    try {
-      await validateLockParentIdentity(parentPath, parentIdentity);
-      const result = await removeExpectedLockPath(
-        temporaryPath,
-        temporaryIdentity,
-        contents,
-        2
-      );
-      if (result === "changed") {
-        throw new RuntimeError("temporary recovery lock changed before unlink");
-      }
-      await validatePublishedLock(
-        lockPath,
-        temporaryIdentity,
-        contents,
-        parentPath,
-        parentIdentity
-      );
-    } catch (error51) {
-      errors.push(error51);
-    }
-  }
-  if (errors.length === 0) {
-    return { lockPath, identity: temporaryIdentity, contents };
-  }
-  errors.push(...await cleanupOwnedLockPaths(
-    parentPath,
-    parentIdentity,
-    temporaryPath,
-    lockPath,
-    temporaryIdentity,
-    contents,
-    true
-  ));
-  throwLockAcquisitionErrors(errors);
-}
-async function acquireOwnedLock(lockPath, contents, isProcessAlive2, getProcessStartToken) {
-  const created = await createOwnedLock(lockPath, contents);
-  if (created !== null) return created;
-  if (await reclaimDeadLock(lockPath, isProcessAlive2, getProcessStartToken) !== "reclaimed") {
-    return null;
-  }
-  return createOwnedLock(lockPath, contents);
-}
-async function releaseOwnedLock(lock) {
-  let handle;
-  try {
-    handle = await open12(lock.lockPath, constants12.O_RDONLY | NO_FOLLOW6);
-  } catch (error51) {
-    if (isMissing3(error51)) return;
-    throw error51;
-  }
-  try {
-    await removeLockIfUnchanged(lock.lockPath, handle, lock.identity, lock.contents);
-  } finally {
-    await handle.close();
-  }
-}
-function defaultIsProcessAlive2(pid) {
-  if (!Number.isSafeInteger(pid) || pid <= 1) return false;
-  try {
-    nodeProcess5.kill(pid, 0);
-    return true;
-  } catch (error51) {
-    if (errorCode9(error51) === "EPERM") return true;
-    if (errorCode9(error51) === "ESRCH") return false;
-    throw error51;
-  }
-}
-async function reclaimLocks(locksRoot, isProcessAlive2, getProcessStartToken) {
-  let entries;
-  try {
-    const rootIdentity = await plainDirectoryIdentity(locksRoot);
-    if (rootIdentity === null) return;
-    entries = await readdir7(locksRoot, { withFileTypes: true });
-  } catch (error51) {
-    if (isMissing3(error51)) return;
-    throw error51;
-  }
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const match = LOCK_NAME.exec(entry.name);
-    if (match === null) continue;
-    const lockPath = path31.join(locksRoot, entry.name);
-    if (!entry.isFile() || entry.isSymbolicLink()) {
-      throw new RuntimeError("checkout lock must be a regular file during recovery");
-    }
-    await reclaimDeadLock(lockPath, isProcessAlive2, getProcessStartToken);
-  }
-}
-async function lockIsOwnedByLiveProcess(locksRoot, lockKey, isProcessAlive2, getProcessStartToken) {
-  const contents = await readBoundedRegularFile2(path31.join(locksRoot, `${lockKey}.lock`));
-  if (contents === null) return false;
-  const owner = parseLockOwner(contents);
-  if (owner === null) return true;
-  return await lockOwnerStatus(owner, isProcessAlive2, getProcessStartToken) !== "dead";
-}
 async function assertRegistrationBacklink(registrationPath, expectedPhysicalPath) {
-  const backlink = await readStableRegularFile(path31.join(registrationPath, "gitdir"), 32768n);
+  const backlink = await readStableRegularFile(path33.join(registrationPath, "gitdir"), 32768n);
   if (backlink === null) {
     throw new RuntimeError("worktree registration backlink is absent or unstable");
   }
@@ -56521,11 +56583,11 @@ async function assertRegistrationBacklink(registrationPath, expectedPhysicalPath
     backlink.toString("utf8"),
     "worktree registration backlink"
   );
-  if (!path31.isAbsolute(reportedDotGit) || path31.basename(reportedDotGit) !== ".git") {
+  if (!path33.isAbsolute(reportedDotGit) || path33.basename(reportedDotGit) !== ".git") {
     throw new RuntimeError("worktree registration backlink is malformed");
   }
   const [reportedPhysicalPath, canonicalExpectedPhysicalPath] = await Promise.all([
-    canonicalizeWorktreePath(path31.dirname(reportedDotGit), true),
+    canonicalizeWorktreePath(path33.dirname(reportedDotGit), true),
     canonicalizeWorktreePath(expectedPhysicalPath, true)
   ]);
   if (!platformPathsEqual(reportedPhysicalPath, canonicalExpectedPhysicalPath)) {
@@ -56534,11 +56596,11 @@ async function assertRegistrationBacklink(registrationPath, expectedPhysicalPath
 }
 async function findCreationRegistration(registrationRoot, physicalPath) {
   const matches = [];
-  for (const entry of await readdir7(registrationRoot, { withFileTypes: true })) {
+  for (const entry of await readdir8(registrationRoot, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const registrationPath = path31.join(registrationRoot, entry.name);
+    const registrationPath = path33.join(registrationRoot, entry.name);
     const contents = await readStableRegularFile(
-      path31.join(registrationPath, "gitdir"),
+      path33.join(registrationPath, "gitdir"),
       32768n
     );
     if (contents === null) continue;
@@ -56548,7 +56610,7 @@ async function findCreationRegistration(registrationRoot, physicalPath) {
     } catch {
       continue;
     }
-    if (path31.isAbsolute(backlink) && path31.basename(backlink) === ".git" && platformPathsEqual(path31.resolve(path31.dirname(backlink)), physicalPath)) {
+    if (path33.isAbsolute(backlink) && path33.basename(backlink) === ".git" && platformPathsEqual(path33.resolve(path33.dirname(backlink)), physicalPath)) {
       matches.push(registrationPath);
     }
   }
@@ -56559,9 +56621,9 @@ async function findCreationRegistration(registrationRoot, physicalPath) {
 }
 async function findCreationPhysicalRoot(stateDirectory, expected) {
   const matches = [];
-  for (const entry of await readdir7(stateDirectory, { withFileTypes: true })) {
+  for (const entry of await readdir8(stateDirectory, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const candidate = path31.join(stateDirectory, entry.name);
+    const candidate = path33.join(stateDirectory, entry.name);
     const identity = await managedWorktreeDirectoryIdentity(candidate);
     if (identity !== null && sameManagedIdentity(identity, expected)) matches.push(candidate);
   }
@@ -56572,9 +56634,9 @@ async function findCreationPhysicalRoot(stateDirectory, expected) {
 }
 async function findManagedChildByIdentity(root, expected) {
   const matches = [];
-  for (const entry of await readdir7(root, { withFileTypes: true })) {
+  for (const entry of await readdir8(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const candidate = path31.join(root, entry.name);
+    const candidate = path33.join(root, entry.name);
     const identity = await managedWorktreeDirectoryIdentity(candidate);
     if (identity !== null && sameManagedIdentity(identity, expected)) matches.push(candidate);
   }
@@ -56586,14 +56648,14 @@ async function findManagedChildByIdentity(root, expected) {
 async function recoverWorktreeCreationIntent(manifestPath, manifest, platformServices, syncDirectory4, temporaryPath, temporaryKind) {
   const root = await stateRoot();
   if (root === null) throw new RuntimeError("runtime state root is unavailable");
-  const expectedPhysicalRootPath = path31.join(root, "worktrees");
-  if (!path31.isAbsolute(manifest.physicalPath) || path31.resolve(manifest.physicalPath) !== manifest.physicalPath || !platformPathsEqual(path31.dirname(manifest.physicalPath), expectedPhysicalRootPath) || path31.basename(manifest.physicalPath) === "" || !path31.isAbsolute(manifest.physicalQuarantinePath) || path31.resolve(manifest.physicalQuarantinePath) !== manifest.physicalQuarantinePath || !platformPathsEqual(
-    path31.dirname(manifest.physicalQuarantinePath),
+  const expectedPhysicalRootPath = path33.join(root, "worktrees");
+  if (!path33.isAbsolute(manifest.physicalPath) || path33.resolve(manifest.physicalPath) !== manifest.physicalPath || !platformPathsEqual(path33.dirname(manifest.physicalPath), expectedPhysicalRootPath) || path33.basename(manifest.physicalPath) === "" || !path33.isAbsolute(manifest.physicalQuarantinePath) || path33.resolve(manifest.physicalQuarantinePath) !== manifest.physicalQuarantinePath || !platformPathsEqual(
+    path33.dirname(manifest.physicalQuarantinePath),
     expectedPhysicalRootPath
-  ) || path31.basename(manifest.physicalQuarantinePath) !== `.create-${path31.basename(manifest.physicalPath)}-${manifest.transactionId}` || !path31.isAbsolute(manifest.commonDir) || !path31.isAbsolute(manifest.registrationRoot) || !path31.isAbsolute(manifest.quarantineRoot) || !path31.isAbsolute(manifest.quarantinePath) || !platformPathsEqual(
+  ) || path33.basename(manifest.physicalQuarantinePath) !== `.create-${path33.basename(manifest.physicalPath)}-${manifest.transactionId}` || !path33.isAbsolute(manifest.commonDir) || !path33.isAbsolute(manifest.registrationRoot) || !path33.isAbsolute(manifest.quarantineRoot) || !path33.isAbsolute(manifest.quarantinePath) || !platformPathsEqual(
     manifest.registrationRoot,
-    path31.join(manifest.commonDir, "worktrees")
-  ) || !platformPathsEqual(path31.dirname(manifest.quarantinePath), manifest.quarantineRoot) || path31.basename(manifest.quarantinePath) !== `.remove-registration-creation-${manifest.transactionId}`) {
+    path33.join(manifest.commonDir, "worktrees")
+  ) || !platformPathsEqual(path33.dirname(manifest.quarantinePath), manifest.quarantineRoot) || path33.basename(manifest.quarantinePath) !== `.remove-registration-creation-${manifest.transactionId}`) {
     throw new RuntimeError("worktree creation intent paths are inconsistent");
   }
   const expectedCommonDir = {
@@ -56627,9 +56689,7 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
   if (!platformPathsEqual(commonDir, manifest.commonDir) || !platformPathsEqual(registrationRoot, manifest.registrationRoot) || !platformPathsEqual(quarantineRoot, manifest.quarantineRoot) || commonIdentity === null || !sameManagedIdentity(commonIdentity, expectedCommonDir) || registrationRootIdentity === null || !sameManagedIdentity(registrationRootIdentity, expectedRegistrationRoot) || quarantineRootIdentity === null || !sameManagedIdentity(quarantineRootIdentity, expectedQuarantineRoot)) {
     throw new RuntimeError("worktree creation intent repository identity changed");
   }
-  const lease = await platformServices.acquireCheckoutLock(commonDir);
-  let primaryError;
-  try {
+  await platformSafety.withRecoveryLease(commonDir, async (lease) => {
     if (!platformPathsEqual(lease.repositoryIdentity, commonDir)) {
       throw new RuntimeError("worktree creation recovery lease identity mismatch");
     }
@@ -56656,8 +56716,8 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
       ino: BigInt(manifest.physicalIno),
       birthtimeNs: BigInt(manifest.physicalBirthtimeNs)
     } : null;
-    const finalPhysicalPath = physicalRoot === null ? null : path31.join(physicalRoot, path31.basename(manifest.physicalPath));
-    const stagedPhysicalPath = physicalRoot === null ? null : path31.join(physicalRoot, path31.basename(manifest.physicalQuarantinePath));
+    const finalPhysicalPath = physicalRoot === null ? null : path33.join(physicalRoot, path33.basename(manifest.physicalPath));
+    const stagedPhysicalPath = physicalRoot === null ? null : path33.join(physicalRoot, path33.basename(manifest.physicalQuarantinePath));
     const [finalPhysicalIdentity, stagedPhysicalIdentity] = await Promise.all([
       finalPhysicalPath === null ? null : managedWorktreeDirectoryIdentity(finalPhysicalPath),
       stagedPhysicalPath === null ? null : managedWorktreeDirectoryIdentity(stagedPhysicalPath)
@@ -56691,7 +56751,7 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
         throw new RuntimeError("worktree creation registration disappeared");
       }
       await assertRegistrationBacklink(activeRegistration, manifest.physicalPath);
-      await rename6(activeRegistration, manifest.quarantinePath);
+      await rename7(activeRegistration, manifest.quarantinePath);
       await Promise.all([syncDirectory4(registrationRoot), syncDirectory4(quarantineRoot)]);
       if (await managedWorktreeDirectoryIdentity(activeRegistration) !== null) {
         throw new RuntimeError("worktree creation registration reappeared after staging");
@@ -56726,25 +56786,11 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
     }
     await Promise.all([syncDirectory4(registrationRoot), syncDirectory4(quarantineRoot)]);
     await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
-  } catch (error51) {
-    primaryError = error51;
-    throw error51;
-  } finally {
-    try {
-      await lease.release();
-    } catch (releaseError) {
-      if (primaryError === void 0) throw releaseError;
-      throw new AggregateError(
-        [primaryError, releaseError],
-        "worktree creation recovery failed and its checkout lease could not be released"
-      );
-    }
-  }
+  });
 }
 async function recoverPendingWorktreeRemovals(platformServices = getPlatformServices(), syncDirectory4 = syncDirectoryMetadata) {
   const { pending, issues } = await readPendingWorktreeRemovalManifests();
   for (const { manifestPath, manifest, temporaryPath, temporaryKind } of pending) {
-    let lease = null;
     let recoveryError;
     let repositoryIdentity;
     try {
@@ -56762,15 +56808,15 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       }
       const commonDir = await realpath13(manifest.commonDir);
       repositoryIdentity = commonDir;
-      const expectedRegistrationRoot = path31.join(commonDir, "worktrees");
+      const expectedRegistrationRoot = path33.join(commonDir, "worktrees");
       const registrationRoot = await realpath13(expectedRegistrationRoot);
-      const expectedQuarantineRoot = path31.join(
+      const expectedQuarantineRoot = path33.join(
         commonDir,
         WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY
       );
       const quarantineRoot = await realpath13(expectedQuarantineRoot);
-      const quarantineMetadata = await lstat16(quarantineRoot, { bigint: true });
-      const physicalRoot = await realpath13(path31.resolve(resolveStateDir(), "worktrees"));
+      const quarantineMetadata = await lstat18(quarantineRoot, { bigint: true });
+      const physicalRoot = await realpath13(path33.resolve(resolveStateDir(), "worktrees"));
       const commonDirIdentity = await managedWorktreeDirectoryIdentity(commonDir);
       const registrationRootIdentity = await managedWorktreeDirectoryIdentity(registrationRoot);
       const quarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
@@ -56812,9 +56858,9 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
           )
         ]);
       }
-      const manifestPhysicalRoot = await realpath13(path31.dirname(manifest.physicalPath));
+      const manifestPhysicalRoot = await realpath13(path33.dirname(manifest.physicalPath));
       const manifestPhysicalQuarantineRoot = await realpath13(
-        path31.dirname(manifest.physicalQuarantinePath)
+        path33.dirname(manifest.physicalQuarantinePath)
       );
       const assertRemovalRootsUnchanged = async () => {
         const currentCommonDir = await managedWorktreeDirectoryIdentity(commonDir);
@@ -56945,13 +56991,13 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "registrationPath is not absolute",
-        path31.isAbsolute(manifest.registrationPath),
+        path33.isAbsolute(manifest.registrationPath),
         manifest.registrationPath
       );
       checkManifestConsistency(
         "registrationPath is not normalized",
-        path31.resolve(manifest.registrationPath) === manifest.registrationPath,
-        path31.resolve(manifest.registrationPath),
+        path33.resolve(manifest.registrationPath) === manifest.registrationPath,
+        path33.resolve(manifest.registrationPath),
         manifest.registrationPath
       );
       checkManifestConsistency(
@@ -56962,13 +57008,13 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "quarantinePath is not absolute",
-        path31.isAbsolute(manifest.quarantinePath),
+        path33.isAbsolute(manifest.quarantinePath),
         manifest.quarantinePath
       );
       checkManifestConsistency(
         "quarantinePath is not normalized",
-        path31.resolve(manifest.quarantinePath) === manifest.quarantinePath,
-        path31.resolve(manifest.quarantinePath),
+        path33.resolve(manifest.quarantinePath) === manifest.quarantinePath,
+        path33.resolve(manifest.quarantinePath),
         manifest.quarantinePath
       );
       checkManifestConsistency(
@@ -56979,13 +57025,13 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "physicalPath is not absolute",
-        path31.isAbsolute(manifest.physicalPath),
+        path33.isAbsolute(manifest.physicalPath),
         manifest.physicalPath
       );
       checkManifestConsistency(
         "physicalPath is not normalized",
-        path31.resolve(manifest.physicalPath) === manifest.physicalPath,
-        path31.resolve(manifest.physicalPath),
+        path33.resolve(manifest.physicalPath) === manifest.physicalPath,
+        path33.resolve(manifest.physicalPath),
         manifest.physicalPath
       );
       checkManifestConsistency(
@@ -56996,13 +57042,13 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "physicalQuarantinePath is not absolute",
-        path31.isAbsolute(manifest.physicalQuarantinePath),
+        path33.isAbsolute(manifest.physicalQuarantinePath),
         manifest.physicalQuarantinePath
       );
       checkManifestConsistency(
         "physicalQuarantinePath is not normalized",
-        path31.resolve(manifest.physicalQuarantinePath) === manifest.physicalQuarantinePath,
-        path31.resolve(manifest.physicalQuarantinePath),
+        path33.resolve(manifest.physicalQuarantinePath) === manifest.physicalQuarantinePath,
+        path33.resolve(manifest.physicalQuarantinePath),
         manifest.physicalQuarantinePath
       );
       checkManifestConsistency(
@@ -57013,21 +57059,21 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "registrationPath parent mismatch",
-        platformPathsEqual(path31.dirname(manifest.registrationPath), registrationRoot),
-        path31.dirname(manifest.registrationPath),
+        platformPathsEqual(path33.dirname(manifest.registrationPath), registrationRoot),
+        path33.dirname(manifest.registrationPath),
         registrationRoot
       );
       checkManifestConsistency(
         "quarantinePath parent mismatch",
-        platformPathsEqual(path31.dirname(manifest.quarantinePath), quarantineRoot),
-        path31.dirname(manifest.quarantinePath),
+        platformPathsEqual(path33.dirname(manifest.quarantinePath), quarantineRoot),
+        path33.dirname(manifest.quarantinePath),
         quarantineRoot
       );
       checkManifestConsistency(
         "quarantinePath name mismatch",
-        path31.basename(manifest.quarantinePath) === `.remove-registration-${path31.basename(manifest.registrationPath)}-${manifest.transactionId}`,
-        path31.basename(manifest.quarantinePath),
-        `.remove-registration-${path31.basename(manifest.registrationPath)}-${manifest.transactionId}`
+        path33.basename(manifest.quarantinePath) === `.remove-registration-${path33.basename(manifest.registrationPath)}-${manifest.transactionId}`,
+        path33.basename(manifest.quarantinePath),
+        `.remove-registration-${path33.basename(manifest.registrationPath)}-${manifest.transactionId}`
       );
       checkManifestConsistency(
         "physicalPath parent mismatch",
@@ -57043,9 +57089,9 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "physicalQuarantinePath name mismatch",
-        path31.basename(manifest.physicalQuarantinePath) === `.remove-${path31.basename(manifest.physicalPath)}-${manifest.transactionId}`,
-        path31.basename(manifest.physicalQuarantinePath),
-        `.remove-${path31.basename(manifest.physicalPath)}-${manifest.transactionId}`
+        path33.basename(manifest.physicalQuarantinePath) === `.remove-${path33.basename(manifest.physicalPath)}-${manifest.transactionId}`,
+        path33.basename(manifest.physicalQuarantinePath),
+        `.remove-${path33.basename(manifest.physicalPath)}-${manifest.transactionId}`
       );
       if (manifest.phase === "creation-root-changed") {
         throw new RuntimeError("worktree creation root changed and requires manual resolution");
@@ -57060,177 +57106,167 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
         ino: BigInt(manifest.physicalIno),
         birthtimeNs: BigInt(manifest.physicalBirthtimeNs)
       } : null;
-      lease = await platformServices.acquireCheckoutLock(commonDir);
-      if (lease.repositoryIdentity !== commonDir) {
-        throw new RuntimeError("worktree removal recovery lease identity mismatch");
-      }
-      if (temporaryPath !== void 0 && temporaryKind === "linked") {
-        await settleLinkedWorktreeRemovalManifest(
+      await platformSafety.withRecoveryLease(commonDir, async (lease) => {
+        if (lease.repositoryIdentity !== commonDir) {
+          throw new RuntimeError("worktree removal recovery lease identity mismatch");
+        }
+        if (temporaryPath !== void 0 && temporaryKind === "linked") {
+          await settleLinkedWorktreeRemovalManifest(
+            manifestPath,
+            temporaryPath,
+            manifest.transactionId
+          );
+        }
+        const lockedManifest = await readWorktreeRemovalManifest(
           manifestPath,
-          temporaryPath,
           manifest.transactionId
         );
-      }
-      const lockedManifest = await readWorktreeRemovalManifest(
-        manifestPath,
-        manifest.transactionId
-      );
-      if (lockedManifest === null) continue;
-      if (JSON.stringify(lockedManifest) !== JSON.stringify(manifest)) {
-        throw new RuntimeError("worktree removal manifest changed before recovery lease");
-      }
-      const registrationIdentity = await managedWorktreeDirectoryIdentity(
-        manifest.registrationPath
-      );
-      const quarantineIdentity = await managedWorktreeDirectoryIdentity(manifest.quarantinePath);
-      let physicalIdentity = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
-      let physicalQuarantineIdentity = await managedWorktreeDirectoryIdentity(
-        manifest.physicalQuarantinePath
-      );
-      await assertRemovalRootsUnchanged();
-      if (registrationIdentity !== null && quarantineIdentity !== null) {
-        throw new RuntimeError("worktree removal registration exists at two paths");
-      }
-      if (physicalIdentity !== null && physicalQuarantineIdentity !== null) {
-        throw new RuntimeError("physical worktree exists at two paths during removal recovery");
-      }
-      if (registrationIdentity !== null && (registrationIdentity.dev !== expectedRegistrationIdentity.dev || registrationIdentity.ino !== expectedRegistrationIdentity.ino || registrationIdentity.birthtimeNs !== expectedRegistrationIdentity.birthtimeNs)) {
-        throw new RuntimeError("worktree removal registration identity changed");
-      }
-      if (quarantineIdentity !== null && (quarantineIdentity.dev !== expectedRegistrationIdentity.dev || quarantineIdentity.ino !== expectedRegistrationIdentity.ino || quarantineIdentity.birthtimeNs !== expectedRegistrationIdentity.birthtimeNs)) {
-        throw new RuntimeError("worktree removal quarantine identity changed");
-      }
-      if (expectedPhysicalIdentity === null) {
-        if (physicalIdentity !== null || physicalQuarantineIdentity !== null) {
-          throw new RuntimeError("stale worktree physical path reappeared during removal recovery");
+        if (lockedManifest === null) return;
+        if (JSON.stringify(lockedManifest) !== JSON.stringify(manifest)) {
+          throw new RuntimeError("worktree removal manifest changed before recovery lease");
         }
-      } else {
-        if (physicalIdentity !== null && (physicalIdentity.dev !== expectedPhysicalIdentity.dev || physicalIdentity.ino !== expectedPhysicalIdentity.ino || physicalIdentity.birthtimeNs !== expectedPhysicalIdentity.birthtimeNs)) {
-          throw new RuntimeError("physical worktree identity changed during removal recovery");
+        const registrationIdentity = await managedWorktreeDirectoryIdentity(
+          manifest.registrationPath
+        );
+        const quarantineIdentity = await managedWorktreeDirectoryIdentity(manifest.quarantinePath);
+        let physicalIdentity = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
+        let physicalQuarantineIdentity = await managedWorktreeDirectoryIdentity(
+          manifest.physicalQuarantinePath
+        );
+        await assertRemovalRootsUnchanged();
+        if (registrationIdentity !== null && quarantineIdentity !== null) {
+          throw new RuntimeError("worktree removal registration exists at two paths");
         }
-        if (physicalQuarantineIdentity !== null && (physicalQuarantineIdentity.dev !== expectedPhysicalIdentity.dev || physicalQuarantineIdentity.ino !== expectedPhysicalIdentity.ino || physicalQuarantineIdentity.birthtimeNs !== expectedPhysicalIdentity.birthtimeNs)) {
-          throw new RuntimeError("physical worktree quarantine identity changed");
+        if (physicalIdentity !== null && physicalQuarantineIdentity !== null) {
+          throw new RuntimeError("physical worktree exists at two paths during removal recovery");
         }
-        if (physicalIdentity === null && physicalQuarantineIdentity === null) {
-          const displacedPhysicalPath = await findManagedChildByIdentity(
-            physicalRoot,
-            expectedPhysicalIdentity
+        if (registrationIdentity !== null && (registrationIdentity.dev !== expectedRegistrationIdentity.dev || registrationIdentity.ino !== expectedRegistrationIdentity.ino || registrationIdentity.birthtimeNs !== expectedRegistrationIdentity.birthtimeNs)) {
+          throw new RuntimeError("worktree removal registration identity changed");
+        }
+        if (quarantineIdentity !== null && (quarantineIdentity.dev !== expectedRegistrationIdentity.dev || quarantineIdentity.ino !== expectedRegistrationIdentity.ino || quarantineIdentity.birthtimeNs !== expectedRegistrationIdentity.birthtimeNs)) {
+          throw new RuntimeError("worktree removal quarantine identity changed");
+        }
+        if (expectedPhysicalIdentity === null) {
+          if (physicalIdentity !== null || physicalQuarantineIdentity !== null) {
+            throw new RuntimeError("stale worktree physical path reappeared during removal recovery");
+          }
+        } else {
+          if (physicalIdentity !== null && (physicalIdentity.dev !== expectedPhysicalIdentity.dev || physicalIdentity.ino !== expectedPhysicalIdentity.ino || physicalIdentity.birthtimeNs !== expectedPhysicalIdentity.birthtimeNs)) {
+            throw new RuntimeError("physical worktree identity changed during removal recovery");
+          }
+          if (physicalQuarantineIdentity !== null && (physicalQuarantineIdentity.dev !== expectedPhysicalIdentity.dev || physicalQuarantineIdentity.ino !== expectedPhysicalIdentity.ino || physicalQuarantineIdentity.birthtimeNs !== expectedPhysicalIdentity.birthtimeNs)) {
+            throw new RuntimeError("physical worktree quarantine identity changed");
+          }
+          if (physicalIdentity === null && physicalQuarantineIdentity === null) {
+            const displacedPhysicalPath = await findManagedChildByIdentity(
+              physicalRoot,
+              expectedPhysicalIdentity
+            );
+            if (displacedPhysicalPath !== null) {
+              throw new RuntimeError(
+                "physical worktree moved away from both recorded removal paths"
+              );
+            }
+          }
+        }
+        const activeRegistrationPath = quarantineIdentity !== null ? manifest.quarantinePath : registrationIdentity !== null ? manifest.registrationPath : null;
+        if (activeRegistrationPath === null && manifest.phase !== "physical-removed") {
+          throw new RuntimeError("worktree removal registration disappeared before commit");
+        }
+        if (activeRegistrationPath !== null && manifest.phase !== "physical-removed") {
+          await assertRegistrationBacklink(activeRegistrationPath, manifest.physicalPath);
+        }
+        if (manifest.phase === "physical-removed" && (physicalIdentity !== null || physicalQuarantineIdentity !== null)) {
+          throw new RuntimeError("committed physical worktree removal reappeared");
+        }
+        if (manifest.phase === "physical-removal-intent" && manifest.physicalPresent && physicalIdentity === null && physicalQuarantineIdentity === null) {
+          throw new RuntimeError(
+            "intended physical worktree removal has no provable original or quarantine"
           );
-          if (displacedPhysicalPath !== null) {
-            throw new RuntimeError(
-              "physical worktree moved away from both recorded removal paths"
+        }
+        const rollback = manifest.phase === "registration-intent" ? !manifest.physicalPresent || physicalIdentity !== null : manifest.phase === "physical-removal-intent" ? manifest.physicalPresent ? physicalIdentity !== null || physicalQuarantineIdentity !== null : physicalIdentity === null && physicalQuarantineIdentity === null : manifest.phase === "registration-staged" && (manifest.physicalPresent ? physicalIdentity !== null : physicalIdentity === null && physicalQuarantineIdentity === null);
+        if (rollback) {
+          if (manifest.phase === "physical-removal-intent" && physicalQuarantineIdentity !== null) {
+            if (expectedPhysicalIdentity === null || physicalIdentity !== null) {
+              throw new RuntimeError("physical worktree rollback state is inconsistent");
+            }
+            await assertRemovalRootsUnchanged();
+            await rename7(manifest.physicalQuarantinePath, manifest.physicalPath);
+            const restoredPhysical = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
+            const settledPhysicalQuarantine = await managedWorktreeDirectoryIdentity(
+              manifest.physicalQuarantinePath
+            );
+            if (restoredPhysical === null || !sameManagedIdentity(restoredPhysical, expectedPhysicalIdentity) || settledPhysicalQuarantine !== null) {
+              throw new RuntimeError("physical worktree rollback identity changed");
+            }
+            await syncDirectory4(physicalRoot);
+            await assertRemovalRootsUnchanged();
+          }
+          if (quarantineIdentity !== null) {
+            await restoreStagedRegistration(
+              registrationRoot,
+              manifest.registrationPath,
+              quarantineRoot,
+              manifest.quarantinePath,
+              expectedRegistrationIdentity,
+              expectedRegistrationRootIdentity,
+              expectedQuarantineRootIdentity,
+              { processSupervisor: platformServices }
+            );
+          } else if (registrationIdentity === null) {
+            throw new RuntimeError("pre-commit worktree registration disappeared");
+          }
+          await syncRemovalRoots();
+          await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
+        } else {
+          if (manifest.phase === "registration-staged") {
+            throw new RuntimeError("staged worktree removal physical state is inconsistent");
+          }
+          if (manifest.phase === "physical-removal-started" && physicalIdentity !== null) {
+            if (registrationIdentity !== null || expectedPhysicalIdentity === null || physicalQuarantineIdentity !== null) {
+              throw new RuntimeError("started worktree removal state is inconsistent");
+            }
+            await assertRemovalRootsUnchanged();
+            await rename7(manifest.physicalPath, manifest.physicalQuarantinePath);
+            physicalIdentity = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
+            physicalQuarantineIdentity = await managedWorktreeDirectoryIdentity(
+              manifest.physicalQuarantinePath
+            );
+            if (physicalIdentity !== null || physicalQuarantineIdentity === null || !sameManagedIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity)) {
+              throw new RuntimeError("started worktree removal quarantine identity changed");
+            }
+            await syncDirectory4(physicalRoot);
+            await assertRemovalRootsUnchanged();
+          }
+          if (physicalQuarantineIdentity !== null) {
+            if (registrationIdentity !== null || expectedPhysicalIdentity === null) {
+              throw new RuntimeError("quarantined worktree removal state is inconsistent");
+            }
+            await removeQuarantinedDirectory(
+              physicalRoot,
+              manifest.physicalQuarantinePath,
+              expectedPhysicalIdentity,
+              { processSupervisor: platformServices }
+            );
+            physicalQuarantineIdentity = null;
+          }
+          if (registrationIdentity !== null) {
+            throw new RuntimeError("removed physical worktree retained a live registration");
+          }
+          if (quarantineIdentity !== null) {
+            await removeQuarantinedDirectory(
+              quarantineRoot,
+              manifest.quarantinePath,
+              expectedRegistrationIdentity,
+              { processSupervisor: platformServices }
             );
           }
+          await syncRemovalRoots();
+          await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
         }
-      }
-      const activeRegistrationPath = quarantineIdentity !== null ? manifest.quarantinePath : registrationIdentity !== null ? manifest.registrationPath : null;
-      if (activeRegistrationPath === null && manifest.phase !== "physical-removed") {
-        throw new RuntimeError("worktree removal registration disappeared before commit");
-      }
-      if (activeRegistrationPath !== null && manifest.phase !== "physical-removed") {
-        await assertRegistrationBacklink(activeRegistrationPath, manifest.physicalPath);
-      }
-      if (manifest.phase === "physical-removed" && (physicalIdentity !== null || physicalQuarantineIdentity !== null)) {
-        throw new RuntimeError("committed physical worktree removal reappeared");
-      }
-      if (manifest.phase === "physical-removal-intent" && manifest.physicalPresent && physicalIdentity === null && physicalQuarantineIdentity === null) {
-        throw new RuntimeError(
-          "intended physical worktree removal has no provable original or quarantine"
-        );
-      }
-      const rollback = manifest.phase === "registration-intent" ? !manifest.physicalPresent || physicalIdentity !== null : manifest.phase === "physical-removal-intent" ? manifest.physicalPresent ? physicalIdentity !== null || physicalQuarantineIdentity !== null : physicalIdentity === null && physicalQuarantineIdentity === null : manifest.phase === "registration-staged" && (manifest.physicalPresent ? physicalIdentity !== null : physicalIdentity === null && physicalQuarantineIdentity === null);
-      if (rollback) {
-        if (manifest.phase === "physical-removal-intent" && physicalQuarantineIdentity !== null) {
-          if (expectedPhysicalIdentity === null || physicalIdentity !== null) {
-            throw new RuntimeError("physical worktree rollback state is inconsistent");
-          }
-          await assertRemovalRootsUnchanged();
-          await rename6(manifest.physicalQuarantinePath, manifest.physicalPath);
-          const restoredPhysical = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
-          const settledPhysicalQuarantine = await managedWorktreeDirectoryIdentity(
-            manifest.physicalQuarantinePath
-          );
-          if (restoredPhysical === null || !sameManagedIdentity(restoredPhysical, expectedPhysicalIdentity) || settledPhysicalQuarantine !== null) {
-            throw new RuntimeError("physical worktree rollback identity changed");
-          }
-          await syncDirectory4(physicalRoot);
-          await assertRemovalRootsUnchanged();
-        }
-        if (quarantineIdentity !== null) {
-          await restoreStagedRegistration(
-            registrationRoot,
-            manifest.registrationPath,
-            quarantineRoot,
-            manifest.quarantinePath,
-            expectedRegistrationIdentity,
-            expectedRegistrationRootIdentity,
-            expectedQuarantineRootIdentity,
-            { processSupervisor: platformServices }
-          );
-        } else if (registrationIdentity === null) {
-          throw new RuntimeError("pre-commit worktree registration disappeared");
-        }
-        await syncRemovalRoots();
-        await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
-      } else {
-        if (manifest.phase === "registration-staged") {
-          throw new RuntimeError("staged worktree removal physical state is inconsistent");
-        }
-        if (manifest.phase === "physical-removal-started" && physicalIdentity !== null) {
-          if (registrationIdentity !== null || expectedPhysicalIdentity === null || physicalQuarantineIdentity !== null) {
-            throw new RuntimeError("started worktree removal state is inconsistent");
-          }
-          await assertRemovalRootsUnchanged();
-          await rename6(manifest.physicalPath, manifest.physicalQuarantinePath);
-          physicalIdentity = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
-          physicalQuarantineIdentity = await managedWorktreeDirectoryIdentity(
-            manifest.physicalQuarantinePath
-          );
-          if (physicalIdentity !== null || physicalQuarantineIdentity === null || !sameManagedIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity)) {
-            throw new RuntimeError("started worktree removal quarantine identity changed");
-          }
-          await syncDirectory4(physicalRoot);
-          await assertRemovalRootsUnchanged();
-        }
-        if (physicalQuarantineIdentity !== null) {
-          if (registrationIdentity !== null || expectedPhysicalIdentity === null) {
-            throw new RuntimeError("quarantined worktree removal state is inconsistent");
-          }
-          await removeQuarantinedDirectory(
-            physicalRoot,
-            manifest.physicalQuarantinePath,
-            expectedPhysicalIdentity,
-            { processSupervisor: platformServices }
-          );
-          physicalQuarantineIdentity = null;
-        }
-        if (registrationIdentity !== null) {
-          throw new RuntimeError("removed physical worktree retained a live registration");
-        }
-        if (quarantineIdentity !== null) {
-          await removeQuarantinedDirectory(
-            quarantineRoot,
-            manifest.quarantinePath,
-            expectedRegistrationIdentity,
-            { processSupervisor: platformServices }
-          );
-        }
-        await syncRemovalRoots();
-        await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
-      }
+      });
     } catch (error51) {
       recoveryError = error51;
-    } finally {
-      if (lease !== null) {
-        try {
-          await lease.release();
-        } catch (releaseError) {
-          recoveryError = recoveryError === void 0 ? releaseError : new AggregateError(
-            [recoveryError, releaseError],
-            "worktree removal recovery failed and its checkout lease could not be released"
-          );
-        }
-      }
     }
     if (recoveryError !== void 0) {
       issues.push({
@@ -57262,15 +57298,15 @@ function runClaimsWorktree(runId, managedId) {
 }
 var MALFORMED_WORKFLOW_OWNERSHIP = "";
 async function workflowOwnershipRecords(root) {
-  const ownershipRoot = path31.join(root, "autopilot-branches");
-  if (await plainDirectoryIdentity(ownershipRoot) === null) return /* @__PURE__ */ new Map();
+  const ownershipRoot = path33.join(root, "autopilot-branches");
+  if (await plainDirectoryIdentity2(ownershipRoot) === null) return /* @__PURE__ */ new Map();
   const records = /* @__PURE__ */ new Map();
-  for (const entry of await readdir7(ownershipRoot, { withFileTypes: true })) {
+  for (const entry of await readdir8(ownershipRoot, { withFileTypes: true })) {
     const match = WORKFLOW_OWNERSHIP_NAME.exec(entry.name);
     if (match === null || !entry.isFile() || entry.isSymbolicLink()) {
       throw new RuntimeError("workflow ownership directory contains a malformed entry");
     }
-    const ownershipPath = path31.join(ownershipRoot, entry.name);
+    const ownershipPath = path33.join(ownershipRoot, entry.name);
     const filenamePrefix = match[1].slice(0, 32);
     records.set(filenamePrefix, [...records.get(filenamePrefix) ?? [], ownershipPath]);
     let workflowId;
@@ -57338,22 +57374,22 @@ async function finalMaterializationMustBePreserved(root, claim, isProcessAlive2,
 }
 async function sweepOrphanWorktrees(args) {
   const issues = [];
-  const worktreesRoot = path31.join(args.root, "worktrees");
+  const worktreesRoot = path33.join(args.root, "worktrees");
   let entries;
   let stateRootIdentity;
   let worktreesRootIdentity;
   try {
-    if (await plainDirectoryIdentity(worktreesRoot) === null) return issues;
+    if (await plainDirectoryIdentity2(worktreesRoot) === null) return issues;
     [stateRootIdentity, worktreesRootIdentity] = await Promise.all([
       assertPrivateRecoveryDirectory(args.root),
       assertPrivateRecoveryDirectory(worktreesRoot)
     ]);
-    entries = await readdir7(worktreesRoot, { withFileTypes: true });
+    entries = await readdir8(worktreesRoot, { withFileTypes: true });
     const [settledStateRoot, settledWorktreesRoot] = await Promise.all([
-      plainDirectoryIdentity(args.root),
-      plainDirectoryIdentity(worktreesRoot)
+      plainDirectoryIdentity2(args.root),
+      plainDirectoryIdentity2(worktreesRoot)
     ]);
-    if (settledStateRoot === null || settledWorktreesRoot === null || !sameIdentity3(settledStateRoot, stateRootIdentity) || !sameIdentity3(settledWorktreesRoot, worktreesRootIdentity)) {
+    if (settledStateRoot === null || settledWorktreesRoot === null || !sameIdentity5(settledStateRoot, stateRootIdentity) || !sameIdentity5(settledWorktreesRoot, worktreesRootIdentity)) {
       throw new RuntimeError("managed worktree namespace identity changed during sweep setup");
     }
   } catch (error51) {
@@ -57367,7 +57403,7 @@ async function sweepOrphanWorktrees(args) {
     ownershipLookupError = error51;
   }
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const worktreePath = path31.join(worktreesRoot, entry.name);
+    const worktreePath = path33.join(worktreesRoot, entry.name);
     if (!entry.isDirectory() || entry.isSymbolicLink()) {
       issues.push(worktreeSweepIssue(
         worktreePath,
@@ -57457,7 +57493,7 @@ async function sweepOrphanWorktrees(args) {
         resolved.stdout,
         "startup worktree common directory"
       );
-      if (!path31.isAbsolute(reportedCommonDir)) {
+      if (!path33.isAbsolute(reportedCommonDir)) {
         throw new RuntimeError("worktree repository lookup returned a non-absolute path");
       }
       commonDir = await realpath13(reportedCommonDir);
@@ -57470,18 +57506,18 @@ async function sweepOrphanWorktrees(args) {
     let contention;
     try {
       lease = await createOwnedLock(
-        path31.join(args.locksRoot, `${lockKey}.lock`),
+        path33.join(args.locksRoot, `${lockKey}.lock`),
         args.ownerContents
       );
       if (lease === null) {
         contention = await reclaimDeadLock(
-          path31.join(args.locksRoot, `${lockKey}.lock`),
+          path33.join(args.locksRoot, `${lockKey}.lock`),
           args.isProcessAlive,
           args.getProcessStartToken
         );
         if (contention === "reclaimed") {
           lease = await createOwnedLock(
-            path31.join(args.locksRoot, `${lockKey}.lock`),
+            path33.join(args.locksRoot, `${lockKey}.lock`),
             args.ownerContents
           );
         }
@@ -57543,7 +57579,7 @@ async function sweepOrphanWorktrees(args) {
             assertPrivateRecoveryDirectory(args.root),
             assertPrivateRecoveryDirectory(worktreesRoot)
           ]);
-          if (!sameIdentity3(currentStateRoot, stateRootIdentity) || !sameIdentity3(currentWorktreesRoot, worktreesRootIdentity)) {
+          if (!sameIdentity5(currentStateRoot, stateRootIdentity) || !sameIdentity5(currentWorktreesRoot, worktreesRootIdentity)) {
             throw new RuntimeError("managed worktree namespace changed before orphan removal");
           }
           await removeManagedWorktreeUnderLease(
@@ -57601,7 +57637,7 @@ async function observeWorkflowLease(store, isProcessAlive2, getProcessStartToken
 }
 function branchOwnershipPath(root, workflowId) {
   const name = createHash16("sha256").update(workflowId).digest("hex");
-  return path31.join(root, "autopilot-branches", `${name}.json`);
+  return path33.join(root, "autopilot-branches", `${name}.json`);
 }
 async function observeWorkflowBranch(root, workflowId, manager, isProcessAlive2, getProcessStartToken) {
   const registration = await readBoundedRegularFile2(branchOwnershipPath(root, workflowId)).catch(() => void 0);
@@ -57677,10 +57713,10 @@ function cleanupIntent(journal, expectedHead2) {
 }
 async function isAbsent(filename) {
   try {
-    await lstat16(filename);
+    await lstat18(filename);
     return false;
   } catch (error51) {
-    return isMissing3(error51) ? true : null;
+    return isMissing4(error51) ? true : null;
   }
 }
 async function cleanupIsDirectlyObserved(branch, runGit) {
@@ -57770,11 +57806,11 @@ async function activeBranchIsDirectlyObserved(branch, expectedHead2, runGit) {
 }
 async function workflowIds(root, issues) {
   const ids = /* @__PURE__ */ new Set();
-  const workflowsRoot = path31.join(root, "workflows");
+  const workflowsRoot = path33.join(root, "workflows");
   let workflowEntries = [];
   try {
-    const workflowsIdentity = await plainDirectoryIdentity(workflowsRoot);
-    workflowEntries = workflowsIdentity === null ? [] : await readdir7(workflowsRoot, { withFileTypes: true });
+    const workflowsIdentity = await plainDirectoryIdentity2(workflowsRoot);
+    workflowEntries = workflowsIdentity === null ? [] : await readdir8(workflowsRoot, { withFileTypes: true });
   } catch (error51) {
     issues.push(worktreeSweepIssue(workflowsRoot, error51));
   }
@@ -57783,11 +57819,11 @@ async function workflowIds(root, issues) {
       ids.add(entry.name);
     }
   }
-  const branchesRoot = path31.join(root, "autopilot-branches");
+  const branchesRoot = path33.join(root, "autopilot-branches");
   let branchEntries = [];
   try {
-    const branchesIdentity = await plainDirectoryIdentity(branchesRoot);
-    branchEntries = branchesIdentity === null ? [] : await readdir7(branchesRoot, { withFileTypes: true });
+    const branchesIdentity = await plainDirectoryIdentity2(branchesRoot);
+    branchEntries = branchesIdentity === null ? [] : await readdir8(branchesRoot, { withFileTypes: true });
   } catch (error51) {
     issues.push(worktreeSweepIssue(branchesRoot, error51));
   }
@@ -57795,7 +57831,7 @@ async function workflowIds(root, issues) {
     if (!entry.isFile() || entry.isSymbolicLink() || !/^[0-9a-f]{64}\.json$/u.test(entry.name)) {
       continue;
     }
-    const ownershipPath = path31.join(branchesRoot, entry.name);
+    const ownershipPath = path33.join(branchesRoot, entry.name);
     let text;
     let value;
     try {
@@ -57810,7 +57846,7 @@ async function workflowIds(root, issues) {
     }
     if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
     const workflowId = value.workflowId;
-    if (typeof workflowId === "string" && SAFE_WORKFLOW_ID.test(workflowId) && entry.name === path31.basename(branchOwnershipPath(root, workflowId))) {
+    if (typeof workflowId === "string" && SAFE_WORKFLOW_ID.test(workflowId) && entry.name === path33.basename(branchOwnershipPath(root, workflowId))) {
       ids.add(workflowId);
     }
   }
@@ -57975,7 +58011,7 @@ async function reclaimPendingRemovalLocks(locksRoot, isProcessAlive2, getProcess
     if (seen.has(key)) continue;
     seen.add(key);
     await reclaimDeadLock(
-      path31.join(locksRoot, `${key}.lock`),
+      path33.join(locksRoot, `${key}.lock`),
       isProcessAlive2,
       getProcessStartToken
     );
@@ -57998,19 +58034,19 @@ async function recoverStaleRuns(dependencies = {}) {
       value: (checkout) => supplied?.acquireCheckoutLock ? supplied.acquireCheckoutLock(checkout) : selected.acquireCheckoutLock(checkout)
     }
   });
-  const isProcessAlive2 = dependencies.isProcessAlive ?? defaultIsProcessAlive2;
+  const isProcessAlive2 = dependencies.isProcessAlive ?? defaultIsProcessAlive;
   const runGit = dependencies.git ?? git;
   if (root === null) return { recovered: [], quarantined: [] };
-  const locksRoot = path31.join(root, "locks");
-  await mkdir8(locksRoot, { recursive: true });
-  if (await plainDirectoryIdentity(locksRoot) === null) {
+  const locksRoot = path33.join(root, "locks");
+  await mkdir9(locksRoot, { recursive: true });
+  if (await plainDirectoryIdentity2(locksRoot) === null) {
     throw new RuntimeError("recovery locks directory disappeared");
   }
   const ownerContents = Buffer.from(JSON.stringify({
-    pid: nodeProcess5.pid,
-    processToken: await ps.getProcessStartToken(nodeProcess5.pid)
+    pid: nodeProcess7.pid,
+    processToken: await ps.getProcessStartToken(nodeProcess7.pid)
   }));
-  const recoveryLockPath = path31.join(locksRoot, "recovery.lock");
+  const recoveryLockPath = path33.join(locksRoot, "recovery.lock");
   const recoveryLock = await acquireOwnedLock(
     recoveryLockPath,
     ownerContents,
@@ -58029,11 +58065,11 @@ async function recoverStaleRuns(dependencies = {}) {
   }
   let primaryError;
   try {
-    const runsRoot = path31.join(root, "runs");
-    const runsIdentity = await plainDirectoryIdentity(runsRoot);
+    const runsRoot = path33.join(root, "runs");
+    const runsIdentity = await plainDirectoryIdentity2(runsRoot);
     if (runsIdentity !== null) {
       await reclaimDeadLock(
-        path31.join(locksRoot, `${CLEANUP_JOURNAL_LOCK_KEY}.lock`),
+        path33.join(locksRoot, `${CLEANUP_JOURNAL_LOCK_KEY}.lock`),
         isProcessAlive2,
         (pid) => ps.getProcessStartToken(pid)
       );
@@ -58054,7 +58090,7 @@ async function recoverStaleRuns(dependencies = {}) {
     const claimedRunIds = new Set(journaledQuarantines);
     const knownRunIds = new Set(journaledQuarantines);
     if (runsIdentity !== null) {
-      const runEntries = await readdir7(runsRoot, { withFileTypes: true });
+      const runEntries = await readdir8(runsRoot, { withFileTypes: true });
       for (const entry of runEntries) {
         if (entry.isDirectory() && !entry.isSymbolicLink() && SAFE_RUN_ID2.test(entry.name)) {
           knownRunIds.add(entry.name);
@@ -58073,8 +58109,8 @@ async function recoverStaleRuns(dependencies = {}) {
         }
         if (!entry.isDirectory() || entry.isSymbolicLink() || !SAFE_RUN_ID2.test(entry.name)) continue;
         try {
-          const runDirectory = path31.join(runsRoot, entry.name);
-          const runStartText = await readBoundedRegularFile2(path31.join(runDirectory, "run-start.json"));
+          const runDirectory = path33.join(runsRoot, entry.name);
+          const runStartText = await readBoundedRegularFile2(path33.join(runDirectory, "run-start.json"));
           if (runStartText === null) {
             claimedRunIds.add(entry.name);
             continue;
@@ -58101,7 +58137,7 @@ async function recoverStaleRuns(dependencies = {}) {
               continue;
             }
             const checkoutLock = await acquireOwnedLock(
-              path31.join(locksRoot, `${record2.lockKey}.lock`),
+              path33.join(locksRoot, `${record2.lockKey}.lock`),
               ownerContents,
               isProcessAlive2,
               (pid) => ps.getProcessStartToken(pid)
@@ -58115,7 +58151,7 @@ async function recoverStaleRuns(dependencies = {}) {
             let cleanupDeferred = false;
             try {
               const lockedRunStartText = await readBoundedRegularFile2(
-                path31.join(runDirectory, "run-start.json")
+                path33.join(runDirectory, "run-start.json")
               );
               if (lockedRunStartText === null) {
                 throw new RuntimeError("run-start recovery record disappeared during recovery");
@@ -58222,7 +58258,7 @@ async function recoverStaleRuns(dependencies = {}) {
     }
     for (const { record: record2, runStartText } of stale) {
       const checkoutLock = await acquireOwnedLock(
-        path31.join(locksRoot, `${record2.lockKey}.lock`),
+        path33.join(locksRoot, `${record2.lockKey}.lock`),
         ownerContents,
         isProcessAlive2,
         (pid) => ps.getProcessStartToken(pid)
@@ -58237,7 +58273,7 @@ async function recoverStaleRuns(dependencies = {}) {
       let becameLive = false;
       try {
         const lockedRunStartText = await readBoundedRegularFile2(
-          path31.join(runsRoot, record2.runId, "run-start.json")
+          path33.join(runsRoot, record2.runId, "run-start.json")
         );
         if (lockedRunStartText === null) {
           throw new RuntimeError("run-start recovery record disappeared before stale recovery");
@@ -58302,7 +58338,7 @@ async function recoverStaleRuns(dependencies = {}) {
     }, workflowRecoveryIssues);
     const claimedWorkflowPrefixes = /* @__PURE__ */ new Set();
     for (const { workflowId } of workflows) {
-      if (SAFE_WORKFLOW_ID.test(workflowId) && await plainDirectoryIdentity(path31.join(root, "workflows", workflowId)) !== null) {
+      if (SAFE_WORKFLOW_ID.test(workflowId) && await plainDirectoryIdentity2(path33.join(root, "workflows", workflowId)) !== null) {
         claimedWorkflowPrefixes.add(
           createHash16("sha256").update(workflowId).digest("hex").slice(0, 32)
         );
@@ -58327,7 +58363,7 @@ async function recoverStaleRuns(dependencies = {}) {
       ...terminalCleanupIssues,
       ...workflowRecoveryIssues,
       ...orphanWorktreeIssues
-    ], path31.join(root, "worktrees"));
+    ], path33.join(root, "worktrees"));
     const result = workflows.length === 0 ? { recovered, quarantined } : { recovered, quarantined, workflows };
     return worktreeSweepIssues.length === 0 ? result : { ...result, worktreeSweepIssues };
   } catch (error51) {
@@ -58668,7 +58704,7 @@ async function createServer(dependencies = {}) {
       (issue2) => issue2.repositoryIdentity !== void 0
     );
     const unattributedWorktrees = unresolvedSweepIssues.filter(
-      (issue2) => issue2.repositoryIdentity === void 0 && path32.basename(path32.dirname(issue2.worktreePath)) === "worktrees"
+      (issue2) => issue2.repositoryIdentity === void 0 && path34.basename(path34.dirname(issue2.worktreePath)) === "worktrees"
     );
     if (attributed.length === 0 && unattributedWorktrees.length === 0) return;
     const canonical = await (dependencies.ps ?? getPlatformServices()).canonicalizePath(checkoutPath);

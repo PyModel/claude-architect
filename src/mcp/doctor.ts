@@ -34,9 +34,11 @@ import { redact, redactRecord } from "../runtime/redaction.js";
 import { probeCowSupport } from "../verify/dependency-link.js";
 import { checkLiveBundle, type LiveBundleStatus } from "./live-bundle.js";
 
+import { CHECKOUT_LOCK_NAME_PATTERN } from "../platform/lock-ownership.js";
+
 const POSIX_HOME_PATH = /\/(?:Users|home)\/[^/\\\s"']+(?:\/[^/\\\s"']+)*/g;
 const WINDOWS_HOME_PATH = /[A-Za-z]:\\Users\\[^/\\\s"']+(?:\\[^/\\\s"']+)*/gi;
-const CHECKOUT_LOCK_NAME = /^([0-9a-f]{64})\.lock$/;
+const CHECKOUT_LOCK_NAME = CHECKOUT_LOCK_NAME_PATTERN;
 const MAX_CHECKOUT_LOCK_BYTES = 4_096;
 const MAX_AUTOPILOT_OWNER_BYTES = 1_024;
 const MAX_AUTOPILOT_REGISTRATION_BYTES = 32_768;

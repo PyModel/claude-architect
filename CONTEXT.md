@@ -86,6 +86,10 @@ The canonical reason a Delegation Attempt did not produce a verified Candidate A
 
 An internal adapter used by the Attempt Runtime to enforce the execution policy on a supported operating system. Its defining responsibility is write confinement to the attempt worktree; process-tree supervision alone does not satisfy it. Producer-native confinement may satisfy the policy; otherwise a named, tested operating-system mechanism must. A platform without a proven write-confinement path remains operational for diagnostics but ineligible for the implementation Lane.
 
+### PlatformSafety
+
+The trusted orchestration layer for repository mutations, lease management, and crash-resilient file persistence. It wraps raw Platform Services checkout locking to enforce ambiguity checks under the lease (`withCheckoutLease`), provides named recovery lease paths (`withRecoveryLease`), and guarantees atomic disk durability and directory identity validation (`writeAtomic`, `DurableDirectorySession`). Higher runtime layers interact through `PlatformSafety` rather than naked platform locks or unguarded writes.
+
 ### Platform Services
 
 The operating-system seam for executable resolution, supervised process creation, process-tree cancellation, checkout locking, secure temporary directories, and path canonicalization. P0 has distinct POSIX and native Windows implementations.
@@ -302,17 +306,28 @@ Windows     Job Object / helper     Producer-native sandbox or named backend    
 - Stdout and stderr are always drained to prevent deadlock. Persisted output is bounded and includes explicit truncation facts while process supervision continues draining excess bytes.
 - Network access follows the Producer Adapter's declared execution requirements. Acceptance Verification runs without network access unless the Delegation Spec explicitly authorizes it.
 
-The Platform Services contract is:
+The Platform Services contract encapsulates raw operating system operations:
 
 ```ts
 interface PlatformServices {
+  os: "darwin" | "linux" | "win32";
   resolveExecutable(request: ExecutableRequest): Promise<ResolvedExecutable>;
   spawnSupervised(request: SpawnRequest): Promise<SupervisedProcess>;
   requestCooperativeCancellation(process: SupervisedProcess): Promise<void>;
   terminateProcessTree(process: SupervisedProcess): Promise<void>;
-  acquireCheckoutLock(checkout: string): Promise<CheckoutLock>;
+  acquireCheckoutLock(checkout: string, owner?: LockOwnerAnnotation): Promise<CheckoutLock>;
   createSecureTempDirectory(): Promise<string>;
   canonicalizePath(path: string): Promise<CanonicalPath>;
+}
+```
+
+The higher-level `PlatformSafety` contract coordinates repository leases, ambiguity gates, and atomic disk durability:
+
+```ts
+class PlatformSafety {
+  withCheckoutLease<T>(checkout: string, fn: (lease: CheckoutLock) => Promise<T>, options?: CheckoutLeaseOptions<T>): Promise<T>;
+  withRecoveryLease<T>(checkout: string, fn: (lease: CheckoutLock) => Promise<T>, options?: CheckoutLeaseOptions<T>): Promise<T>;
+  writeAtomic(session: DurableDirectorySession, name: string, bytes: Buffer | string, mode: DurableWriteMode): Promise<void>;
 }
 ```
 

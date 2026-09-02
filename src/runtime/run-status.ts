@@ -79,3 +79,44 @@ export async function transitionRunStatusSafely(
     warnStatusFailure(runId, phase, error);
   }
 }
+
+export class StatusEmitter {
+  private lastPhase: RunStatusPhase | null = null;
+  private pendingEphemeral: string | null = null;
+
+  constructor(
+    private readonly store: RunStatusTransitionStore,
+    private readonly runId: string,
+    private readonly onProgress?: ((text: string) => void) | undefined,
+  ) {}
+
+  get currentPhase(): RunStatusPhase | null {
+    return this.lastPhase;
+  }
+
+  /**
+   * Emits a DURABLE lifecycle transition.
+   * Persisted immediately and awaited before the phase begins (lesson d07d031).
+   * Durable write count per phase transition is exactly one.
+   */
+  async transition(
+    phase: RunStatusPhase,
+    fields: Partial<Pick<
+      RunStatus,
+      "sliceIndex" | "sliceCount" | "round" | "role" | "producerId" | "detail"
+    >> = {},
+  ): Promise<void> {
+    this.lastPhase = phase;
+    this.pendingEphemeral = null;
+    await transitionRunStatusSafely(this.store, this.runId, phase, fields);
+  }
+
+  /**
+   * Emits EPHEMERAL progress (text, counters, detail within the current phase).
+   * Coalesced and dispatched to progress listeners without blocking on disk.
+   */
+  async ephemeral(detail: string): Promise<void> {
+    this.pendingEphemeral = detail;
+    this.onProgress?.(detail);
+  }
+}

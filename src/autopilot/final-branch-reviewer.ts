@@ -11,7 +11,7 @@ import { git, type GitResult } from "../git/git-exec.js";
 import { syncDirectoryMetadata } from "../platform/durable-directory.js";
 import { globMatches } from "../util/glob.js";
 import { WorktreeManager } from "../runtime/worktree-manager.js";
-import { guardWorktreeMutations } from "../runtime/worktree-mutation-gate.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import { assertNoPendingWorktreeRemovalForRepository } from "../runtime/worktree-removal-manifest.js";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
@@ -1007,9 +1007,8 @@ export class FinalBranchReviewer {
       structural: async args => await structuralVerifyFinalBranch(args, this.runGit),
     });
     this.roleRunner = dependencies.roleRunner ?? runRole;
-    this.platformServices = guardWorktreeMutations(
-      dependencies.platformServices ?? getPlatformServices(),
-    );
+    this.platformServices = dependencies.platformServices ?? getPlatformServices();
+
     this.producerRegistry = dependencies.producerRegistry ?? defaultRegistry;
     this.artifactStore = dependencies.artifactStore ?? (workflowId =>
       new ArtifactStore(`final-${canonicalArtifactHash(workflowId).slice(0, 24)}`));
@@ -1132,36 +1131,17 @@ export class FinalBranchReviewer {
     phase: string,
     execute: (lease: CheckoutLock) => Promise<T>,
   ): Promise<T> {
-    const canonical = await this.platformServices.canonicalizePath(checkoutPath);
-    if (canonical.gitCommonDir === null) {
-      fail("workflow-state-mismatch", "final review checkout is not a repository");
-    }
-    const lease = await this.platformServices.acquireCheckoutLock(canonical.canonical);
-    let primaryError: unknown;
+    const safety = new PlatformSafety(this.platformServices);
     try {
-      if (lease.repositoryIdentity !== canonical.gitCommonDir) {
-        fail("workflow-state-mismatch", "final review checkout lease repository identity mismatch");
-      }
-      return await execute(lease);
+      return await safety.withCheckoutLease(checkoutPath, execute);
     } catch (error) {
-      primaryError = error;
-      throw error;
-    } finally {
-      try {
-        await lease.release();
-      } catch (releaseError) {
-        if (primaryError === undefined) {
-          throw new Error(
-            `${phase} checkout lease release failed: ${errorDiagnostic(releaseError)}`,
-          );
-        }
-        throw new AggregateError(
-          [primaryError, releaseError],
-          `${phase} failed and its checkout lease release also failed: ${errorDiagnostic(releaseError)}`,
-        );
+      if (error instanceof Error && error.message === "checkout Git common directory could not be resolved") {
+        fail("workflow-state-mismatch", "final review checkout is not a repository");
       }
+      throw error;
     }
   }
+
 
   async runHeadBoundPhase<T>(
     artifact: CumulativeBranchArtifact,

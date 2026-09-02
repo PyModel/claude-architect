@@ -50,7 +50,7 @@ import {
   type ReviewSnapshot,
 } from "../runtime/review-snapshot.js";
 import type { RunManifest } from "../runtime/run-manifest.js";
-import { guardWorktreeMutations } from "../runtime/worktree-mutation-gate.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import { redact } from "../runtime/redaction.js";
 import { NestedDelegationError, RuntimeError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
@@ -223,7 +223,9 @@ class LifecycleLockReleaseError extends AggregateError {
 }
 
 function errorResult(error: unknown): ToolErrorResult {
-  const classified = error instanceof LifecycleLockReleaseError ? error.primaryError : error;
+  const classified = error instanceof AggregateError && error.errors.length > 0
+    ? error.errors[0]
+    : error;
   const code = classified instanceof RuntimeError && typeof classified.detail?.toolError === "string"
     ? classified.detail.toolError
     : "runtime-error";
@@ -474,38 +476,34 @@ async function withCurrentArchivedRun<T>(
   preserveResultOnReleaseFailure?: (result: T) => T,
 ): Promise<T> {
   const ps = services(deps);
-  const lockingServices = guardWorktreeMutations(ps);
+  const safety = new PlatformSafety(ps);
   const canonical = await ps.canonicalizePath(checkoutPath);
   const callerKey = canonical.gitCommonDir ?? canonical.canonical;
   return withRepoLock(callerKey, async () => {
-    const lock = await lockingServices.acquireCheckoutLock(canonical.canonical, { runId });
-    let action: { ok: true; result: T } | { ok: false; error: unknown };
+    let actionResult: { ok: true; result: T } | null = null;
     try {
-      if (lock.repositoryIdentity !== callerKey) {
-        throw runtimeError(
-          "supplied checkout repository identity changed before checkout lease acquisition",
-          "run-checkout-mismatch",
-        );
-      }
-      const run = await loadArchivedRun(runId, deps);
-      requireMatchingRepository(run, lock.repositoryIdentity);
-      action = { ok: true, result: await fn(run, lock, ps) };
+      return await safety.withCheckoutLease(canonical.canonical, async (lock) => {
+        if (lock.repositoryIdentity !== callerKey) {
+          throw runtimeError(
+            "supplied checkout repository identity changed before checkout lease acquisition",
+            "run-checkout-mismatch",
+          );
+        }
+        const run = await loadArchivedRun(runId, deps);
+        requireMatchingRepository(run, lock.repositoryIdentity);
+        const result = await fn(run, lock, ps);
+        actionResult = { ok: true, result };
+        return result;
+      }, { runId });
     } catch (error) {
-      action = { ok: false, error };
-    }
-    try {
-      await lock.release();
-    } catch (releaseError) {
-      if (!action.ok) throw new LifecycleLockReleaseError(action.error, releaseError);
-      if (preserveResultOnReleaseFailure !== undefined) {
-        return preserveResultOnReleaseFailure(action.result);
+      if (actionResult !== null && preserveResultOnReleaseFailure !== undefined) {
+        return preserveResultOnReleaseFailure((actionResult as { ok: true; result: T }).result);
       }
-      throw releaseError;
+      throw error;
     }
-    if (!action.ok) throw action.error;
-    return action.result;
   });
 }
+
 
 async function requireInactivePipeline(run: ArchivedRun, runId: string): Promise<void> {
   if (await run.store.readPipelineActiveMarker(runId) !== null) {

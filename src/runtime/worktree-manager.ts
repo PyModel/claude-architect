@@ -8,7 +8,7 @@ import {
   verifyBoundDirectoryCleanupSupport,
 } from "../platform/bound-directory-cleanup.js";
 import { getPlatformServices } from "../platform/select-platform.js";
-import { guardWorktreeMutations } from "./worktree-mutation-gate.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import { boundedRedactedDiagnostic } from "./redaction.js";
 import { resolveStateDir } from "./state-dir.js";
 import {
@@ -1231,45 +1231,22 @@ export class WorktreeManager {
 
   private async withCheckoutLease<T>(operation: (lease: CheckoutLock) => Promise<T>): Promise<T> {
     const platformServices = this.lockingPlatformServices();
-    const canonical = await platformServices.canonicalizePath(this.repoRoot);
-    const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
     const borrowed = this.dependencies.borrowedCheckoutLease;
-    let owned: CheckoutLock | null = null;
-    let lease = borrowed;
-    if (lease === undefined) {
-      owned = await guardWorktreeMutations(platformServices).acquireCheckoutLock(
-        canonical.canonical,
-        { runId: this.runId },
-      );
-      lease = owned;
-    }
-    let result: T | undefined;
-    let primaryError: unknown;
-    try {
-      if (lease.repositoryIdentity !== repositoryIdentity) {
+    if (borrowed !== undefined) {
+      const canonical = await platformServices.canonicalizePath(this.repoRoot);
+      const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
+      if (borrowed.repositoryIdentity !== repositoryIdentity) {
         throw new RuntimeError("worktree manager checkout lease repository identity mismatch");
       }
       await assertNoPendingWorktreeRemovalForRepository(repositoryIdentity);
-      result = await operation(lease);
-    } catch (error) {
-      primaryError = error;
+      return await operation(borrowed);
     }
-    if (owned !== null) {
-      try {
-        await owned.release();
-      } catch (releaseError) {
-        if (primaryError !== undefined) {
-          throw new AggregateError(
-            [primaryError, releaseError],
-            "worktree operation failed and its checkout lease could not be released",
-          );
-        }
-        throw releaseError;
-      }
-    }
-    if (primaryError !== undefined) throw primaryError;
-    return result as T;
+    const safety = new PlatformSafety(platformServices);
+    return await safety.withCheckoutLease(this.repoRoot, operation, {
+      ...(this.runId === undefined ? {} : { runId: this.runId }),
+    });
   }
+
 
   private managedWorktreePath(
     stateRoot: string = path.resolve(resolveStateDir()),

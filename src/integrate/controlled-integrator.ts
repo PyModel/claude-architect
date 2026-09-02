@@ -1,8 +1,8 @@
 import { git, type GitResult } from "../git/git-exec.js";
 import { checkPreconditions } from "../git/repo-preconditions.js";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import { getPlatformServices } from "../platform/select-platform.js";
-import { guardWorktreeMutations } from "../runtime/worktree-mutation-gate.js";
 import type { CandidateArtifact, ChangedPath } from "../protocol/attempt-result.js";
 import { RuntimeError } from "../util/errors.js";
 import { structuralVerify } from "../verify/structural-verifier.js";
@@ -167,24 +167,16 @@ export async function stageCandidateTreeUnderLock(
 }
 
 export async function applyCandidateTree(args: ApplyCandidateTreeArgs): Promise<IntegrationResult> {
-  const ps = guardWorktreeMutations(args.platformServices ?? getPlatformServices());
-  let ownedLock: CheckoutLock | null = null;
-  const lock = args.borrowedCheckoutLock ?? await ps.acquireCheckoutLock(args.repoRoot);
-  if (args.borrowedCheckoutLock === undefined) ownedLock = lock;
-  const terminal: { result: IntegrationResult | null } = { result: null };
-  const finish = (result: IntegrationResult): IntegrationResult => {
-    terminal.result = result;
-    return result;
-  };
-  try {
+  const safety = new PlatformSafety(args.platformServices);
+  const executeWithLock = async (lock: CheckoutLock, ownership: "borrowed" | "owned"): Promise<IntegrationResult> => {
     const staged = await stageCandidateTreeWithLock({
       repoRoot: args.repoRoot,
       artifact: args.artifact,
       expectedArtifactHash: args.expectedArtifactHash,
       borrowedCheckoutLock: lock,
-      platformServices: ps,
-    }, ownedLock === null ? "borrowed" : "owned");
-    if (staged.result.integration !== "applied") return finish(staged.result);
+      ...(args.platformServices !== undefined ? { platformServices: args.platformServices } : {}),
+    }, ownership);
+    if (staged.result.integration !== "applied") return staged.result;
 
     const deleted = await git(staged.canonicalRepoRoot, [
       "update-ref",
@@ -194,20 +186,31 @@ export async function applyCandidateTree(args: ApplyCandidateTreeArgs): Promise<
       args.artifact.candidateCommitOid,
     ]);
     if (!succeeded(deleted)) {
-      return finish({
-        integration: "applied",
+      return {
+        integration: "applied" as const,
         detail: "candidate tree applied; candidate anchor delete failed",
-      });
+      };
     }
-    return finish({ integration: "applied", detail: "candidate tree applied" });
-  } finally {
-    if (ownedLock !== null) {
-      try {
-        await ownedLock.release();
-      } catch (error) {
-        if (terminal.result === null) throw error;
-        terminal.result.detail = `${terminal.result.detail}; checkout lock release failed`;
-      }
+    return { integration: "applied" as const, detail: "candidate tree applied" };
+  };
+
+  if (args.borrowedCheckoutLock !== undefined) {
+    return await executeWithLock(args.borrowedCheckoutLock, "borrowed");
+  }
+
+  let terminalResult: IntegrationResult | null = null;
+  try {
+    return await safety.withCheckoutLease(args.repoRoot, async (lock) => {
+      terminalResult = await executeWithLock(lock, "owned");
+      return terminalResult;
+    });
+  } catch (error) {
+    if (terminalResult !== null) {
+      (terminalResult as IntegrationResult).detail = `${(terminalResult as IntegrationResult).detail}; checkout lock release failed`;
+      return terminalResult;
     }
+    throw error;
   }
 }
+
+

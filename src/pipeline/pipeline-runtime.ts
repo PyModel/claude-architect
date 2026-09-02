@@ -1,7 +1,7 @@
 import path from "node:path";
 import { git, type GitExecOptions, type GitResult } from "../git/git-exec.js";
 import { WorktreeManager } from "../runtime/worktree-manager.js";
-import { guardWorktreeMutations } from "../runtime/worktree-mutation-gate.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import type {
@@ -1263,17 +1263,15 @@ export async function runPipeline(
   spec: DelegationSpec,
   deps: PipelineDependencies,
 ): Promise<PipelineResult> {
-  const ps = guardWorktreeMutations(deps.ps ?? getPlatformServices());
+  const ps = deps.ps ?? getPlatformServices();
   const canonical = await ps.canonicalizePath(checkoutPath);
-  const lock = await ps.acquireCheckoutLock(canonical.canonical);
-  const guardedDependencies: PipelineDependencies = {
-    ...deps,
-    ps,
-    borrowedCheckoutLease: lock,
-  };
-  let primaryError: unknown;
-  let hasPrimaryError = false;
-  try {
+  const safety = new PlatformSafety(ps);
+  return await safety.withCheckoutLease(canonical.canonical, async (lock) => {
+    const guardedDependencies: PipelineDependencies = {
+      ...deps,
+      ps,
+      borrowedCheckoutLease: lock,
+    };
     const result = await runPipelineWithLease(
       checkoutPath,
       spec,
@@ -1293,22 +1291,9 @@ export async function runPipeline(
       },
     );
     return result;
-  } catch (error) {
-    primaryError = error;
-    hasPrimaryError = true;
-    throw error;
-  } finally {
-    try {
-      await lock.release();
-    } catch (releaseError) {
-      if (!hasPrimaryError) throw releaseError;
-      throw new AggregateError(
-        [primaryError, releaseError],
-        "pipeline failed and its checkout lease could not be released",
-      );
-    }
-  }
+  });
 }
+
 
 // The packaged single-file runtime must retain every trusted pipeline stage,
 // including the separately invoked post-pipeline advisor entrypoint.

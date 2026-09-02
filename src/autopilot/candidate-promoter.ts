@@ -10,7 +10,7 @@ import { getPlatformServices } from "../platform/select-platform.js";
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { CandidateArtifact } from "../protocol/attempt-result.js";
 import { ArtifactStore } from "../runtime/artifact-store.js";
-import { guardWorktreeMutations } from "../runtime/worktree-mutation-gate.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import { redact } from "../runtime/redaction.js";
 import { reviewSnapshotHash } from "../runtime/review-snapshot.js";
 import { logger } from "../util/logger.js";
@@ -190,9 +190,8 @@ export class CandidatePromoter {
 
   constructor(dependencies: CandidatePromoterDependencies = {}) {
     this.runGit = dependencies.git ?? git;
-    this.platformServices = guardWorktreeMutations(
-      dependencies.platformServices ?? getPlatformServices(),
-    );
+    this.platformServices = dependencies.platformServices ?? getPlatformServices();
+
     this.branchManager = dependencies.branchManager ?? new WorkflowBranchManager();
     this.workflowStore = dependencies.workflowStore ?? (workflowId => new WorkflowStore(workflowId));
     this.artifactStore = dependencies.artifactStore ?? (runId => new ArtifactStore(runId));
@@ -423,17 +422,15 @@ export class CandidatePromoter {
       return finishFailure("branch-identity-changed");
     }
 
-    let lock;
-    try {
-      lock = await this.platformServices.acquireCheckoutLock(request.workflowCheckoutPath);
-    } catch {
-      return finishFailure("branch-identity-changed");
-    }
+    const safety = new PlatformSafety(this.platformServices);
+    let enteredLease = false;
     let terminal: PromotionResult | undefined;
     try {
-      const completedOid = intent.completion === null
-        ? null
-        : completionCommit(intent.completion.completion);
+      await safety.withCheckoutLease(request.workflowCheckoutPath, async (lock) => {
+        enteredLease = true;
+        const completedOid = intent.completion === null
+          ? null
+          : completionCommit(intent.completion.completion);
       let lockedOutcome: LockedPromotionOutcome;
       try {
         lockedOutcome = await workflowStore.withLockedState(workflow.revision, async locked => {
@@ -596,50 +593,50 @@ export class CandidatePromoter {
             };
           }
           return { kind: "committed", commitOid, needsJournal: true };
-        });
-      } catch (error) {
-        const toolError = (error as { detail?: { toolError?: unknown } }).detail?.toolError;
-        if (toolError !== "workflow-revision-conflict") throw error;
-        lockedOutcome = {
-          kind: "rejected", classification: "human-decision-required", journalFailure: false,
-        };
-      }
 
-      if (lockedOutcome.kind === "rejected") {
-        terminal = lockedOutcome.journalFailure
-          ? await finishFailure(lockedOutcome.classification)
-          : rejected(lockedOutcome.classification);
-      } else {
-        let journaled = !lockedOutcome.needsJournal;
-        if (!journaled) {
-          try {
-            await workflowStore.completeIntent({
-              idempotencyKey, completion: { commitOid: lockedOutcome.commitOid },
-            });
-            journaled = true;
-          } catch {
-            journaled = false;
-          }
-        }
-        terminal = !journaled
-          ? rejected("journal-failed")
-          : await this.deleteAnchor(request.workflowCheckoutPath, artifact)
-            ? { status: "committed", commitOid: lockedOutcome.commitOid }
-            : rejected("anchor-deletion-failed");
-      }
-    } finally {
-      try {
-        await lock.release();
-      } catch (releaseError) {
-        if (terminal?.status === "committed") {
-          logger.warn("checkout lock release failed after candidate promotion", {
-            event: "checkout-lock-release-failed",
-            workflowId: request.workflowId,
-            reason: redact(String(releaseError)),
           });
-        } else {
-          terminal = rejected("lock-release-failed");
+        } catch (error) {
+          const toolError = (error as { detail?: { toolError?: unknown } }).detail?.toolError;
+          if (toolError !== "workflow-revision-conflict") throw error;
+          lockedOutcome = {
+            kind: "rejected", classification: "human-decision-required", journalFailure: false,
+          };
         }
+
+        if (lockedOutcome.kind === "rejected") {
+          terminal = lockedOutcome.journalFailure
+            ? await finishFailure(lockedOutcome.classification)
+            : rejected(lockedOutcome.classification);
+        } else {
+          let journaled = !lockedOutcome.needsJournal;
+          if (!journaled) {
+            try {
+              await workflowStore.completeIntent({
+                idempotencyKey, completion: { commitOid: lockedOutcome.commitOid },
+              });
+              journaled = true;
+            } catch {
+              journaled = false;
+            }
+          }
+          terminal = !journaled
+            ? rejected("journal-failed")
+            : await this.deleteAnchor(request.workflowCheckoutPath, artifact)
+              ? { status: "committed", commitOid: lockedOutcome.commitOid }
+              : rejected("anchor-deletion-failed");
+        }
+      });
+    } catch (error) {
+      if (terminal?.status === "committed") {
+        logger.warn("checkout lock release failed after candidate promotion", {
+          event: "checkout-lock-release-failed",
+          workflowId: request.workflowId,
+          reason: redact(String(error)),
+        });
+      } else if (!enteredLease) {
+        return finishFailure("branch-identity-changed");
+      } else {
+        throw error;
       }
     }
     return terminal!;

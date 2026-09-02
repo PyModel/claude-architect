@@ -5,7 +5,7 @@ import path from "node:path";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { resolveStateDir } from "../runtime/state-dir.js";
-import { guardWorktreeMutations } from "../runtime/worktree-mutation-gate.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import { syncDirectoryMetadata } from "../platform/durable-directory.js";
 import { RuntimeError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
@@ -555,7 +555,7 @@ export class WorkflowBranchManager {
     this.remoteTransport = dependencies.remoteTransport ?? createIsolatedRemoteTransport(this.runGit);
     this.removeOwnership = dependencies.removeOwnership ?? (ownershipPath => rm(ownershipPath));
     const platformServices = dependencies.platformServices ?? getPlatformServices();
-    this.platformServices = guardWorktreeMutations(platformServices);
+    this.platformServices = platformServices;
     this.getProcessStartToken = platformServices.getProcessStartToken?.bind(platformServices)
       ?? getPlatformServices().getProcessStartToken.bind(getPlatformServices());
     this.worktreeManagerDependencies = {
@@ -691,209 +691,196 @@ export class WorkflowBranchManager {
     const fetchedRef = `refs/claude-architect/autopilot/${request.workflowId}/fetch-${randomUUID()}`;
     const initial = await this.platformServices.canonicalizePath(request.checkoutPath);
     if (initial.gitCommonDir === null) fail("not-a-repository");
-    // Lock acquisition sits before the classified block, so a contended
-    // checkout would otherwise escape as a raw RuntimeError. Windows locks fail
-    // fast where POSIX advisory locks tend to serialize, which made the losing
-    // creator's rejection type platform-dependent. Classify it either way.
-    let lock: CheckoutLock;
-    try {
-      lock = await this.platformServices.acquireCheckoutLock(initial.canonical);
-    } catch (error) {
-      if (error instanceof RuntimeError
-        && error.detail?.classification === "recovery-ambiguous") {
-        fail("recovery-ambiguous", error.message);
-      }
-      fail("checkout-locked");
-    }
     let attached: Awaited<ReturnType<WorktreeManager["createAttached"]>> | undefined;
     let refsCreated = false;
     let fetchedCreated = false;
     let fetchedOidForCleanup: string | undefined;
     let completedIdentity: WorkflowBranchIdentity | undefined;
     let operationError: unknown;
+    const workflowHash = createHash("sha256").update(request.workflowId).digest("hex");
+    const remoteIdentity = await this.resolveRemote(initial.canonical);
+    const safety = new PlatformSafety(this.platformServices as PlatformServices);
     try {
-      const locked = await this.platformServices.canonicalizePath(initial.canonical);
-      if (locked.gitCommonDir === null
-        || locked.gitCommonDir !== initial.gitCommonDir
-        || lock.repositoryIdentity !== initial.gitCommonDir) {
-        fail("repository-identity-mismatch");
-      }
-      if (await this.ownershipExists(request.workflowId)) {
-        fail("workflow-already-owned");
-      }
+      await safety.withCheckoutLease(initial.canonical, async (lock) => {
+        try {
+          const locked = await this.platformServices.canonicalizePath(initial.canonical);
+          if (locked.gitCommonDir === null
+            || locked.gitCommonDir !== initial.gitCommonDir
+            || lock.repositoryIdentity !== initial.gitCommonDir) {
+            fail("repository-identity-mismatch");
+          }
+          if (await this.ownershipExists(request.workflowId)) {
+            fail("workflow-already-owned");
+          }
 
-      const checkedBranch = await this.runGit(initial.canonical, [
-        "check-ref-format", "--branch", branch,
-      ]);
-      if (!succeeded(checkedBranch)) fail("branch-name-invalid");
-      for (const candidate of [baseRef, fetchedRef]) {
-        const checked = await this.runGit(initial.canonical, ["check-ref-format", candidate]);
-        if (!succeeded(checked)) fail("branch-name-invalid");
-      }
+          const checkedBranch = await this.runGit(initial.canonical, [
+            "check-ref-format", "--branch", branch,
+          ]);
+          if (!succeeded(checkedBranch)) fail("branch-name-invalid");
+          for (const candidate of [baseRef, fetchedRef]) {
+            const checked = await this.runGit(initial.canonical, ["check-ref-format", candidate]);
+            if (!succeeded(checked)) fail("branch-name-invalid");
+          }
 
-      const remoteIdentity = await this.resolveRemote(initial.canonical);
-      const localRefs = await this.runGit(initial.canonical, [
-        "for-each-ref", "--format=%(refname)", "refs/heads/",
-      ]);
-      if (!succeeded(localRefs)) operationFailure("git local branch scan", localRefs);
-      const localCollision = localRefs.stdout.split("\n").filter(Boolean)
-        .some(ref => ref.toLowerCase() === branchRef.toLowerCase());
-      if (localCollision) fail("local-branch-exists");
-      for (const privateRef of [baseRef, fetchedRef]) {
-        const exists = await this.runGit(initial.canonical, ["show-ref", "--verify", "--quiet", privateRef]);
-        if (exists.exitCode === 0) fail("workflow-ref-exists");
-        if (exists.exitCode !== 1) operationFailure("git private ref scan", exists);
-      }
+          const localHeads = await this.runGit(initial.canonical, ["for-each-ref", "--format=%(refname)", "refs/heads/"]);
+          if (!succeeded(localHeads)) operationFailure("git branch scan", localHeads);
+          const localCollision = localHeads.stdout.split("\n").filter(Boolean)
+            .some(ref => ref.toLowerCase() === branchRef.toLowerCase());
+          if (localCollision) fail("local-branch-exists");
+          for (const privateRef of [baseRef, fetchedRef]) {
+            const exists = await this.runGit(initial.canonical, ["show-ref", "--verify", "--quiet", privateRef]);
+            if (exists.exitCode === 0) fail("workflow-ref-exists");
+            if (exists.exitCode !== 1) operationFailure("git private ref scan", exists);
+          }
 
-      const advertised = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
-      if (!succeeded(advertised)) operationFailure("git remote branch scan", advertised);
-      const remoteHeads = parseRemoteHeads(advertised.stdout);
-      if ([...remoteHeads.keys()].some(name => name.toLowerCase() === branch.toLowerCase())) {
-        fail("remote-branch-exists");
-      }
-      const advertisedBase = remoteHeads.get(request.baseBranch);
-      if (advertisedBase === undefined || !isOid(advertisedBase)) fail("remote-base-missing");
+          const advertised = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
+          if (!succeeded(advertised)) operationFailure("git remote branch scan", advertised);
+          const remoteHeads = parseRemoteHeads(advertised.stdout);
+          if ([...remoteHeads.keys()].some(name => name.toLowerCase() === branch.toLowerCase())) {
+            fail("remote-branch-exists");
+          }
+          const advertisedBase = remoteHeads.get(request.baseBranch);
+          if (advertisedBase === undefined || !isOid(advertisedBase)) fail("remote-base-missing");
 
-      const fetched = await this.remoteTransport.fetch(
-        initial.canonical,
-        remoteIdentity.url,
-        `refs/heads/${request.baseBranch}`,
-        fetchedRef,
-      );
-      if (!succeeded(fetched)) operationFailure("git fetch base", fetched);
-      fetchedCreated = true;
-      const fetchedOidResult = await this.runGit(initial.canonical, ["rev-parse", "--verify", fetchedRef]);
-      if (!succeeded(fetchedOidResult)) operationFailure("git resolve fetched base", fetchedOidResult);
-      const fetchedOid = fetchedOidResult.stdout.trim();
-      if (!isOid(fetchedOid)) fail("stale-fetched-base");
-      fetchedOidForCleanup = fetchedOid;
-      if (fetchedOid !== advertisedBase) fail("stale-fetched-base");
-      const commit = await this.runGit(initial.canonical, ["cat-file", "-e", `${fetchedOid}^{commit}`]);
-      if (!succeeded(commit)) fail("fetched-base-not-commit");
-
-      const confirmed = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
-      if (!succeeded(confirmed)) operationFailure("git remote base confirmation", confirmed);
-      const confirmedHeads = parseRemoteHeads(confirmed.stdout);
-      if ([...confirmedHeads.keys()].some(name => name.toLowerCase() === branch.toLowerCase())) {
-        fail("remote-branch-exists");
-      }
-      if (confirmedHeads.get(request.baseBranch) !== fetchedOid) {
-        fail("remote-base-changed-during-create");
-      }
-
-      const transaction = await this.runGit(initial.canonical, ["update-ref", "--stdin"], {
-        stdin: [
-          "start",
-          `create ${baseRef} ${fetchedOid}`,
-          `create ${branchRef} ${fetchedOid}`,
-          `delete ${fetchedRef} ${fetchedOid}`,
-          "prepare",
-          "commit",
-          "",
-        ].join("\n"),
-      });
-      if (!succeeded(transaction)) operationFailure("git create workflow refs", transaction);
-      fetchedCreated = false;
-      refsCreated = true;
-
-      const worktreeManager = new WorktreeManager(
-        initial.canonical,
-        `workflow-${createHash("sha256").update(request.workflowId).digest("hex").slice(0, 32)}`,
-        { os: this.platformServices.os },
-        { ...this.worktreeManagerDependencies, borrowedCheckoutLease: lock },
-      );
-      attached = await worktreeManager.createAttached(branch, fetchedOid);
-      const worktreePath = await realpath(attached.path);
-      const worktreeGitDirResult = await this.runGit(worktreePath, [
-        "rev-parse", "--path-format=absolute", "--git-dir",
-      ]);
-      if (!succeeded(worktreeGitDirResult)) {
-        operationFailure("git resolve worktree administrative directory", worktreeGitDirResult);
-      }
-      const worktreeGitDir = await realpath(gitPathOutput(
-        worktreeGitDirResult.stdout,
-        "workflow worktree Git directory",
-      ));
-      const identity: WorkflowBranchIdentity = {
-        ownershipVersion: OWNERSHIP_VERSION,
-        workflowId: request.workflowId,
-        checkoutPath: initial.canonical,
-        gitCommonDir: initial.gitCommonDir,
-        repositoryIdentity: lock.repositoryIdentity,
-        worktreePath,
-        worktreeGitDir,
-        branch,
-        branchRef,
-        baseRef,
-        baseBranch: request.baseBranch,
-        baseCommitOid: fetchedOid,
-        remote: "origin",
-        remoteUrl: remoteIdentity.url,
-        ownerRepo: remoteIdentity.ownerRepo,
-      };
-      const bootstrapOwner: WorkflowBranchBootstrapOwnerRecord = {
-        workflowId: request.workflowId,
-        pid: process.pid,
-        processToken: await this.getProcessStartToken(process.pid).catch(() => null),
-        createdAt: new Date().toISOString(),
-      };
-      await this.persistOwnership(identity, bootstrapOwner);
-      completedIdentity = identity;
-    } catch (error) {
-      const cleanupErrors: unknown[] = [];
-      if (attached !== undefined) {
-        try { await attached.cleanup(); } catch (cleanupError) { cleanupErrors.push(cleanupError); }
-      }
-      if (refsCreated && fetchedOidForCleanup !== undefined) {
-        const rollback = await this.runGit(initial.canonical, ["update-ref", "--stdin"], {
-          stdin: [
-            `delete ${branchRef} ${fetchedOidForCleanup}`,
-            `delete ${baseRef} ${fetchedOidForCleanup}`,
-            "",
-          ].join("\n"),
-        });
-        if (!succeeded(rollback)) cleanupErrors.push(new RuntimeError("workflow ref rollback failed"));
-      } else if (refsCreated) {
-        cleanupErrors.push(new RuntimeError("workflow ref identity unavailable for safe rollback"));
-      } else if (fetchedCreated && fetchedOidForCleanup !== undefined) {
-        const rollback = await this.runGit(initial.canonical, [
-          "update-ref", "-d", fetchedRef, fetchedOidForCleanup,
-        ]);
-        if (!succeeded(rollback)) cleanupErrors.push(new RuntimeError("fetched ref rollback failed"));
-      } else if (fetchedCreated) {
-        cleanupErrors.push(new RuntimeError("fetched ref identity unavailable for safe rollback"));
-      }
-      if (cleanupErrors.length > 0) {
-        operationError = new AggregateError(
-          [error, ...cleanupErrors],
-          "workflow branch creation and cleanup failed",
-        );
-      } else {
-        operationError = error;
-      }
-    }
-    try {
-      await lock.release();
-    } catch (releaseError) {
-      if (completedIdentity === undefined) {
-        operationError = operationError === undefined
-          ? releaseError
-          : new AggregateError(
-            [operationError, releaseError],
-            "workflow branch creation failed and checkout lock release failed",
+          const fetched = await this.remoteTransport.fetch(
+            initial.canonical,
+            remoteIdentity.url,
+            `refs/heads/${request.baseBranch}`,
+            fetchedRef,
           );
-      } else {
-        // The branch was created, so the primary outcome stands — but the
-        // checkout lease may still be held, which blocks every later operation
-        // on this repository. Surface it rather than dropping it on the floor.
+          if (!succeeded(fetched)) operationFailure("git fetch base", fetched);
+          fetchedCreated = true;
+          const fetchedOidResult = await this.runGit(initial.canonical, ["rev-parse", "--verify", fetchedRef]);
+          if (!succeeded(fetchedOidResult)) operationFailure("git resolve fetched base", fetchedOidResult);
+          const fetchedOid = fetchedOidResult.stdout.trim();
+          if (!isOid(fetchedOid)) fail("stale-fetched-base");
+          fetchedOidForCleanup = fetchedOid;
+          if (fetchedOid !== advertisedBase) fail("stale-fetched-base");
+          const commit = await this.runGit(initial.canonical, ["cat-file", "-e", `${fetchedOid}^{commit}`]);
+          if (!succeeded(commit)) fail("fetched-base-not-commit");
+
+          const confirmed = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
+          if (!succeeded(confirmed)) operationFailure("git remote base confirmation", confirmed);
+          const confirmedHeads = parseRemoteHeads(confirmed.stdout);
+          if ([...confirmedHeads.keys()].some(name => name.toLowerCase() === branch.toLowerCase())) {
+            fail("remote-branch-exists");
+          }
+          if (confirmedHeads.get(request.baseBranch) !== fetchedOid) {
+            fail("remote-base-changed-during-create");
+          }
+
+          const transaction = await this.runGit(initial.canonical, ["update-ref", "--stdin"], {
+            stdin: [
+              "start",
+              `create ${baseRef} ${fetchedOid}`,
+              `create ${branchRef} ${fetchedOid}`,
+              `delete ${fetchedRef} ${fetchedOid}`,
+              "prepare",
+              "commit",
+              "",
+            ].join("\n"),
+          });
+          if (!succeeded(transaction)) operationFailure("git create workflow refs", transaction);
+          fetchedCreated = false;
+          refsCreated = true;
+
+          const worktreeManager = new WorktreeManager(
+            initial.canonical,
+            `workflow-${createHash("sha256").update(request.workflowId).digest("hex").slice(0, 32)}`,
+            { os: this.platformServices.os },
+            { ...this.worktreeManagerDependencies, borrowedCheckoutLease: lock },
+          );
+          attached = await worktreeManager.createAttached(branch, fetchedOid);
+          const worktreePath = await realpath(attached.path);
+          const worktreeGitDirResult = await this.runGit(worktreePath, [
+            "rev-parse", "--path-format=absolute", "--git-dir",
+          ]);
+          if (!succeeded(worktreeGitDirResult)) {
+            operationFailure("git resolve worktree administrative directory", worktreeGitDirResult);
+          }
+          const worktreeGitDir = await realpath(gitPathOutput(
+            worktreeGitDirResult.stdout,
+            "workflow worktree Git directory",
+          ));
+          const identity: WorkflowBranchIdentity = {
+            ownershipVersion: OWNERSHIP_VERSION,
+            workflowId: request.workflowId,
+            checkoutPath: initial.canonical,
+            gitCommonDir: initial.gitCommonDir,
+            repositoryIdentity: lock.repositoryIdentity,
+            worktreePath,
+            worktreeGitDir,
+            branch,
+            branchRef,
+            baseRef,
+            baseBranch: request.baseBranch,
+            baseCommitOid: fetchedOid,
+            remote: "origin",
+            remoteUrl: remoteIdentity.url,
+            ownerRepo: remoteIdentity.ownerRepo,
+          };
+          const bootstrapOwner: WorkflowBranchBootstrapOwnerRecord = {
+            workflowId: request.workflowId,
+            pid: process.pid,
+            processToken: await this.getProcessStartToken(process.pid).catch(() => null),
+            createdAt: new Date().toISOString(),
+          };
+          await this.persistOwnership(identity, bootstrapOwner);
+          completedIdentity = identity;
+        } catch (error) {
+          const cleanupErrors: unknown[] = [];
+          if (attached !== undefined) {
+            try { await attached.cleanup(); } catch (cleanupError) { cleanupErrors.push(cleanupError); }
+          }
+          if (refsCreated && fetchedOidForCleanup !== undefined) {
+            const rollback = await this.runGit(initial.canonical, ["update-ref", "--stdin"], {
+              stdin: [
+                `delete ${branchRef} ${fetchedOidForCleanup}`,
+                `delete ${baseRef} ${fetchedOidForCleanup}`,
+                "",
+              ].join("\n"),
+            });
+            if (!succeeded(rollback)) cleanupErrors.push(new RuntimeError("workflow ref rollback failed"));
+          } else if (refsCreated) {
+            cleanupErrors.push(new RuntimeError("workflow ref identity unavailable for safe rollback"));
+          } else if (fetchedCreated && fetchedOidForCleanup !== undefined) {
+            const rollback = await this.runGit(initial.canonical, [
+              "update-ref", "-d", fetchedRef, fetchedOidForCleanup,
+            ]);
+            if (!succeeded(rollback)) cleanupErrors.push(new RuntimeError("fetched ref rollback failed"));
+          } else if (fetchedCreated) {
+            cleanupErrors.push(new RuntimeError("fetched ref identity unavailable for safe rollback"));
+          }
+          if (cleanupErrors.length > 0) {
+            operationError = new AggregateError(
+              [error, ...cleanupErrors],
+              "workflow branch creation and cleanup failed",
+            );
+          } else {
+            operationError = error;
+          }
+          throw operationError;
+        }
+      });
+    } catch (error) {
+      if (completedIdentity !== undefined) {
         logger.warn("checkout lock release failed after workflow branch creation", {
           event: "checkout-lock-release-failed",
           workflowId: completedIdentity.workflowId,
-          reason: redact(String(releaseError)),
+          reason: redact(String(error)),
         });
+      } else {
+        if (error instanceof RuntimeError
+          && error.detail?.classification === "recovery-ambiguous") {
+          fail("recovery-ambiguous", error.message);
+        }
+        if (operationError !== undefined) {
+          throw error;
+        }
+        fail("checkout-locked");
       }
     }
-    if (operationError !== undefined) throw operationError;
+
     return completedIdentity!;
   }
 
@@ -991,33 +978,32 @@ export class WorkflowBranchManager {
     identity: WorkflowBranchIdentity,
     expectedHead = identity.baseCommitOid,
   ): Promise<BranchRevalidationResult> {
-    let lock;
+    const safety = new PlatformSafety(this.platformServices as PlatformServices);
     try {
-      lock = await this.platformServices.acquireCheckoutLock(identity.checkoutPath);
+      return await safety.withCheckoutLease(identity.checkoutPath, async (lock) => {
+        if (lock.repositoryIdentity !== identity.repositoryIdentity) {
+          return { ok: false, classification: "repository-identity-changed" };
+        }
+        try {
+          return await this.validateLocked(identity, expectedHead);
+        } catch {
+          return { ok: false, classification: "git-command-failed" };
+        }
+      }, {
+        onReleaseError: (releaseError, result) => {
+          logger.warn("checkout lock release failed after workflow branch revalidation", {
+            event: "checkout-lock-release-failed",
+            workflowId: identity.workflowId,
+            reason: redact(String(releaseError)),
+          });
+          return result;
+        },
+      });
     } catch {
       return { ok: false, classification: "repository-identity-changed" };
     }
-    try {
-      if (lock.repositoryIdentity !== identity.repositoryIdentity) {
-        return { ok: false, classification: "repository-identity-changed" };
-      }
-      try {
-        return await this.validateLocked(identity, expectedHead);
-      } catch {
-        return { ok: false, classification: "git-command-failed" };
-      }
-    } finally {
-      try {
-        await lock.release();
-      } catch (releaseError) {
-        logger.warn("checkout lock release failed after workflow branch revalidation", {
-          event: "checkout-lock-release-failed",
-          workflowId: identity.workflowId,
-          reason: redact(String(releaseError)),
-        });
-      }
-    }
   }
+
 
   async revalidateUnderLock(
     identity: WorkflowBranchIdentity,
@@ -1214,32 +1200,28 @@ export class WorkflowBranchManager {
       || identity.baseRef !== `refs/claude-architect/autopilot/${identity.workflowId}/base`) {
       return { ok: false, classification: "cleanup-failed" };
     }
-    let lock;
+    let result: BranchCleanupResult;
+    const safety = new PlatformSafety(this.platformServices as PlatformServices);
     try {
-      lock = await this.platformServices.acquireCheckoutLock(identity.checkoutPath);
+      result = await safety.withCheckoutLease(identity.checkoutPath, async (lock) => {
+        if (lock.repositoryIdentity !== identity.repositoryIdentity) {
+          return { ok: false, classification: "cleanup-failed" };
+        }
+        return await this.cleanupLocked(identity, expectedHead, lock);
+      }, {
+        onReleaseError: (releaseError, res) => {
+          logger.warn("checkout lock release failed after workflow branch cleanup", {
+            event: "checkout-lock-release-failed",
+            workflowId: identity.workflowId,
+            reason: redact(String(releaseError)),
+          });
+          return res;
+        },
+      });
     } catch {
       return { ok: false, classification: "cleanup-failed" };
     }
-    let result: BranchCleanupResult;
-    try {
-      if (lock.repositoryIdentity !== identity.repositoryIdentity) {
-        result = { ok: false, classification: "cleanup-failed" };
-      } else {
-        result = await this.cleanupLocked(identity, expectedHead, lock);
-      }
-    } catch {
-      result = { ok: false, classification: "cleanup-failed" };
-    }
-    try {
-      await lock.release();
-    } catch (releaseError) {
-      // Cleanup reports the observed cleanup state; lock-release reporting cannot change it.
-      logger.warn("checkout lock release failed after workflow branch cleanup", {
-        event: "checkout-lock-release-failed",
-        workflowId: identity.workflowId,
-        reason: redact(String(releaseError)),
-      });
-    }
     return result;
+
   }
 }
