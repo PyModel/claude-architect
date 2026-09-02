@@ -58,7 +58,7 @@ function resolvePythinkerHome(
   const configuredHome = deps.env.PYTHINKER_SHARE_DIR;
   return configuredHome !== undefined && configuredHome.length > 0
     ? configuredHome
-    : join(deps.homeDirectory, ".pythinker");
+    : join(deps.env.HOME ?? deps.env.USERPROFILE ?? deps.homeDirectory, ".pythinker");
 }
 
 function defaultPythinkerEnv(

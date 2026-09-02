@@ -15,7 +15,7 @@ import { supervise } from "../../src/platform/process-supervisor.js";
 import { wrapInvocationWithSeatbelt } from "../../src/platform/sandbox/seatbelt.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import { ClaudeAdapter } from "../../src/producers/claude-adapter.js";
-import { renderProducerPrompt } from "../../src/producers/plain-text.js";
+import { renderProducerPrompt, selectOsWriteConfinementBackend } from "../../src/producers/plain-text.js";
 import { renderSkillBootstrap } from "../../src/producers/skill-bootstrap.js";
 import type {
   CapabilityReport,
@@ -31,6 +31,15 @@ const executable: ResolvedExecutable = {
   prefixArgs: [],
   resolvedFrom: "test",
 };
+
+const supportedHelp = `
+Usage: claude [options] [prompt]
+
+Options:
+  --no-session-persistence       Do not save session history
+  --strict-mcp-config            Strict MCP configuration
+  --setting-sources <sources>    Comma-separated list of setting sources
+`;
 
 function exit(overrides: Partial<SupervisedExit> = {}): SupervisedExit {
   return {
@@ -79,6 +88,7 @@ function versionPlatformServices(
   resolvedExecutable: ResolvedExecutable,
   spawned: ResolvedExecutable[] = [],
   stdout = "2.1.250 (Claude Code)\n",
+  helpResult: SupervisedExit = exit({ stdout: supportedHelp }),
 ): PlatformServices {
   return {
     os: "darwin",
@@ -91,7 +101,9 @@ function versionPlatformServices(
         pid: 42,
         stdout: Readable.from([]),
         stderr: Readable.from([]),
-        done: Promise.resolve(exit({ stdout })),
+        done: Promise.resolve(
+          request.args.includes("--help") ? helpResult : exit({ stdout }),
+        ),
       };
     },
     async requestCooperativeCancellation() {},
@@ -238,15 +250,34 @@ describe("ClaudeAdapter", () => {
   });
 
   it("parses the Claude Code version banner and honestly gates edit eligibility", async () => {
-    const report = await testAdapter().probe(probeContext(versionPlatformServices(executable)));
+    const ctx = probeContext(versionPlatformServices(executable));
+    const report = await testAdapter().probe(ctx);
 
     expect(report.available).toBe(true);
     expect(report.version).toBe("2.1.250");
     expect(report.structuredOutput).toBe(true);
-    expect(report.writeConfinementBackend).toBe(
-      process.platform === "darwin" && process.arch === "arm64" ? "macos-seatbelt" : null,
-    );
+    expect(report.writeConfinementBackend).toBe(selectOsWriteConfinementBackend(ctx));
     expect(report.laneEligibility).toEqual({ edit: report.writeConfinementBackend !== null });
+  });
+
+  it("reports unsupported-cli-surface when --help lacks a required flag", async () => {
+    const fakeHelp = `
+Usage: claude [options]
+Options:
+  --no-session-persistence
+  --setting-sources <sources>
+`; // Missing --strict-mcp-config
+    const ps = versionPlatformServices(
+      executable,
+      [],
+      "2.1.250 (Claude Code)\n",
+      exit({ stdout: fakeHelp }),
+    );
+    const report = await testAdapter().probe(probeContext(ps));
+
+    expect(report.available).toBe(false);
+    expect(report.reason).toBe("unsupported-cli-surface");
+    expect(report.resolvedExecutable).toEqual(executable);
   });
 
   it("reports probe-failed when version output cannot be parsed", async () => {
@@ -270,7 +301,7 @@ describe("ClaudeAdapter", () => {
     const report = await adapter.probe(probeContext(versionPlatformServices(executable)));
 
     expect(report.authState).toBe("authenticated");
-    expect(checked).toEqual(["/Users/test/.claude.json"]);
+    expect(checked).toEqual([join("/Users/test", ".claude.json")]);
   });
 
   it("reads the account record from CLAUDE_CONFIG_DIR when the host relocated it", async () => {
@@ -285,7 +316,7 @@ describe("ClaudeAdapter", () => {
     const report = await adapter.probe(probeContext(versionPlatformServices(executable)));
 
     expect(report.authState).toBe("unauthenticated");
-    expect(checked).toEqual(["/Users/test/relocated/.claude.json"]);
+    expect(checked).toEqual([join("/Users/test/relocated", ".claude.json")]);
   });
 
   it("reports authenticated from ANTHROPIC_API_KEY without reading the account file", async () => {
@@ -378,8 +409,8 @@ describe("ClaudeAdapter", () => {
       .buildInvocation(sampleSpec(), invocationContext());
 
     expect(invocation.inheritedStateWritablePaths).toEqual([
-      "/Users/real/.claude",
-      "/Users/real/.claude.json",
+      join("/Users/real", ".claude"),
+      join("/Users/real", ".claude.json"),
     ]);
   });
 
@@ -389,7 +420,7 @@ describe("ClaudeAdapter", () => {
 
     expect(invocation.inheritedStateWritablePaths).toEqual([
       "/Users/test/relocated",
-      "/Users/test/relocated/.claude.json",
+      join("/Users/test/relocated", ".claude.json"),
     ]);
   });
 
@@ -401,11 +432,13 @@ describe("ClaudeAdapter", () => {
       allowNetwork: true,
     });
     const profile = wrapped.args[1] ?? "";
+    const configDir = join("/Users/test", ".claude");
+    const accountFile = join("/Users/test", ".claude.json");
 
     expect(wrapped.executable.command).toBe("/usr/bin/sandbox-exec");
     expect(profile).toContain('(allow file-write* (subpath "/tmp/attempt-worktree"))');
-    expect(profile).toContain('(subpath "/Users/test/.claude")');
-    expect(profile).toContain('(subpath "/Users/test/.claude.json")');
+    expect(profile).toContain(`(subpath "${configDir.replace(/\\/gu, "\\\\")}")`);
+    expect(profile).toContain(`(subpath "${accountFile.replace(/\\/gu, "\\\\")}")`);
     expect(profile).not.toContain('(subpath "/Users/test")');
     expect(profile).not.toContain("(deny network*)");
     expect(wrapped.args.slice(2)).toEqual([executable.command, ...invocation.args]);

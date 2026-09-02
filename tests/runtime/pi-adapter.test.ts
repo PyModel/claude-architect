@@ -445,7 +445,7 @@ describe("PiAdapter", () => {
   it("declares only ~/.pi/agent as inherited writable state, following HOME", () => {
     const adapter = new PiAdapter({ env: { HOME: "/Users/test" }, homeDirectory: "/Users/other" });
     const invocation = adapter.buildInvocation(sampleSpec(), invocationContext());
-    expect(invocation.inheritedStateWritablePaths).toEqual(["/Users/test/.pi/agent"]);
+    expect(invocation.inheritedStateWritablePaths).toEqual([join("/Users/test", ".pi", "agent")]);
   });
 
   it("declares the Pi configuration isolation profile", () => {

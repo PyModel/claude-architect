@@ -14,7 +14,8 @@ changes to `src/pipeline/`, `src/verify/`, or `src/integrate/`.
 
 This change also deepens the Producer seam so the adapter is self-contained
 (see "Seam change" below). Adding this lane touched `src/producers/` and the
-registry only — the sandbox was not edited.
+registry; the Seatbelt sandbox was edited only to add generic fail-closed validation
+for declared writable paths (rejecting root, relative, and non-home/state-root entries).
 
 ## Evidence base
 
@@ -101,8 +102,9 @@ adapter the sandbox did not recognize silently ran with no state access, and
 every new lane had to edit the sandbox.
 
 Now `ProducerInvocation.inheritedStateWritablePaths` is the declaration: each
-adapter states its own auth/config/state paths, and the sandbox grants exactly
-those when no temporary home is in effect. Depth moved to the right side of the
+adapter states its own auth/config/state paths, and the sandbox validates each
+entry (requiring absolute paths under home or a declared state root, never `/`)
+and grants exactly those when no temporary home is in effect. Depth moved to the right side of the
 seam — the sandbox knows nothing about Producers, and the adapter is the single
 place that knows where its CLI keeps state. The four OS-confined CLI probes
 also collapsed into `probeOsConfinedCli` (resolve → `--version` → optional

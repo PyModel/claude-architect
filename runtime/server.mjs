@@ -2236,8 +2236,8 @@ var require_resolve = __commonJS({
       }
       return count;
     }
-    function getFullPath(resolver, id = "", normalize2) {
-      if (normalize2 !== false)
+    function getFullPath(resolver, id = "", normalize3) {
+      if (normalize3 !== false)
         id = normalizeId(id);
       const p = resolver.parse(id);
       return _getFullPath(resolver, p);
@@ -2985,7 +2985,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve.call(this, root, ref);
+      let _sch = resolve2.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3012,7 +3012,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve(root, ref) {
+    function resolve2(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3633,65 +3633,65 @@ var require_fast_uri = __commonJS({
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
-    function normalize2(uri, options) {
+    function normalize3(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
         normalizeString(uri, options);
       } else if (typeof uri === "object") {
         uri = /** @type {T} */
-        parse3(serialize(uri, options), options);
+        parse4(serialize(uri, options), options);
       }
       return uri;
     }
-    function resolve(baseURI, relativeURI, options) {
+    function resolve2(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
-      const resolved = resolveComponent(parse3(baseURI, schemelessOptions), parse3(relativeURI, schemelessOptions), schemelessOptions, true);
+      const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative, options, skipNormalization) {
+    function resolveComponent(base, relative2, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
-        base = parse3(serialize(base, options), options);
-        relative = parse3(serialize(relative, options), options);
+        base = parse4(serialize(base, options), options);
+        relative2 = parse4(serialize(relative2, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative.scheme) {
-        target.scheme = relative.scheme;
-        target.userinfo = relative.userinfo;
-        target.host = relative.host;
-        target.port = relative.port;
-        target.path = removeDotSegments(relative.path || "");
-        target.query = relative.query;
+      if (!options.tolerant && relative2.scheme) {
+        target.scheme = relative2.scheme;
+        target.userinfo = relative2.userinfo;
+        target.host = relative2.host;
+        target.port = relative2.port;
+        target.path = removeDotSegments(relative2.path || "");
+        target.query = relative2.query;
       } else {
-        if (relative.userinfo !== void 0 || relative.host !== void 0 || relative.port !== void 0) {
-          target.userinfo = relative.userinfo;
-          target.host = relative.host;
-          target.port = relative.port;
-          target.path = removeDotSegments(relative.path || "");
-          target.query = relative.query;
+        if (relative2.userinfo !== void 0 || relative2.host !== void 0 || relative2.port !== void 0) {
+          target.userinfo = relative2.userinfo;
+          target.host = relative2.host;
+          target.port = relative2.port;
+          target.path = removeDotSegments(relative2.path || "");
+          target.query = relative2.query;
         } else {
-          if (!relative.path) {
+          if (!relative2.path) {
             target.path = base.path;
-            if (relative.query !== void 0) {
-              target.query = relative.query;
+            if (relative2.query !== void 0) {
+              target.query = relative2.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative.path[0] === "/") {
-              target.path = removeDotSegments(relative.path);
+            if (relative2.path[0] === "/") {
+              target.path = removeDotSegments(relative2.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative.path;
+                target.path = "/" + relative2.path;
               } else if (!base.path) {
-                target.path = relative.path;
+                target.path = relative2.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative2.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative.query;
+            target.query = relative2.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3699,7 +3699,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative.fragment;
+      target.fragment = relative2.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -3882,7 +3882,7 @@ var require_fast_uri = __commonJS({
       }
       return { parsed, malformedAuthorityOrPort };
     }
-    function parse3(uri, opts) {
+    function parse4(uri, opts) {
       return parseWithStatus(uri, opts).parsed;
     }
     function normalizeString(uri, opts) {
@@ -3906,12 +3906,12 @@ var require_fast_uri = __commonJS({
     }
     var fastUri = {
       SCHEMES,
-      normalize: normalize2,
-      resolve,
+      normalize: normalize3,
+      resolve: resolve2,
       resolveComponent,
       equal,
       serialize,
-      parse: parse3
+      parse: parse4
     };
     module.exports = fastUri;
     module.exports.default = fastUri;
@@ -29681,7 +29681,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error51) {
@@ -29698,7 +29698,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       const earlyReject = (error51) => {
         reject(error51);
       };
@@ -29776,7 +29776,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve(parseResult.data);
+            resolve2(parseResult.data);
           }
         } catch (error51) {
           reject(error51);
@@ -30037,12 +30037,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve, interval);
+      const timeoutId = setTimeout(resolve2, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -31133,7 +31133,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -31797,12 +31797,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve) => {
+    return new Promise((resolve2) => {
       const json2 = serializeMessage(message);
       if (this._stdout.write(json2)) {
-        resolve();
+        resolve2();
       } else {
-        this._stdout.once("drain", resolve);
+        this._stdout.once("drain", resolve2);
       }
     });
   }
@@ -31992,7 +31992,7 @@ function errorCode(error51) {
   return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
 }
 function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
 }
 function lockFilePath(key) {
   return path.join(resolveStateDir(), "locks", `${key}.lock`);
@@ -32099,16 +32099,16 @@ async function describeLockContention(key, getProcessStartToken) {
   return `it is held by live pid ${owner.pid}${self}${extras}`;
 }
 function withTimeout(work, ms, fallback) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(fallback), ms);
+  return new Promise((resolve2) => {
+    const timer = setTimeout(() => resolve2(fallback), ms);
     void work.then(
       (value) => {
         clearTimeout(timer);
-        resolve(value);
+        resolve2(value);
       },
       () => {
         clearTimeout(timer);
-        resolve(fallback);
+        resolve2(fallback);
       }
     );
   });
@@ -32125,12 +32125,12 @@ async function withLockContentionDetail(error51, key, getProcessStartToken) {
   return new RuntimeError(`${error51.message} \u2014 ${description}`, { ...error51.detail, key });
 }
 async function gitCommonDir(cwd) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     execFile("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd }, (error51, stdout) => {
       if (error51) reject(error51);
       else {
         try {
-          resolve(gitPathOutput(stdout, "Git common directory"));
+          resolve2(gitPathOutput(stdout, "Git common directory"));
         } catch (parseError) {
           reject(parseError);
         }
@@ -32192,11 +32192,11 @@ var PosixPlatformServices = class {
       child.stdin?.end();
     }
     let settled = false;
-    const done = new Promise((resolve) => {
+    const done = new Promise((resolve2) => {
       const finish = (e) => {
         if (!settled) {
           settled = true;
-          resolve(e);
+          resolve2(e);
         }
       };
       child.on("error", (err) => finish({
@@ -32239,14 +32239,14 @@ var PosixPlatformServices = class {
         return null;
       }
     }
-    return new Promise((resolve) => {
+    return new Promise((resolve2) => {
       try {
         execFile("ps", ["-o", "lstart=", "-p", String(pid)], (error51, stdout) => {
           const line = stdout.trim();
-          resolve(error51 || line.length === 0 ? null : `darwin:${line}`);
+          resolve2(error51 || line.length === 0 ? null : `darwin:${line}`);
         });
       } catch {
-        resolve(null);
+        resolve2(null);
       }
     });
   }
@@ -32497,7 +32497,7 @@ async function assertWindowsDirectoryAcl(command, directory, expectedIdentity, p
       return;
     }
     if (result.exitCode === 3 && attempt < 50) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve2) => setTimeout(resolve2, 200));
       continue;
     }
     throw new RuntimeError(
@@ -32860,12 +32860,12 @@ async function resolveWindowsExecutable(request, deps) {
   throw new RuntimeError("executable was not found", { name: request.name });
 }
 async function gitCommonDir2(cwd) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     execFile2("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd }, (error51, stdout) => {
       if (error51) reject(error51);
       else {
         try {
-          resolve(gitPathOutput(stdout, "Git common directory"));
+          resolve2(gitPathOutput(stdout, "Git common directory"));
         } catch (parseError) {
           reject(parseError);
         }
@@ -32907,13 +32907,13 @@ var WindowsPlatformServices = class {
   }
   async runJobKillHelper(pid) {
     const helper = await this.jobKillHelper();
-    await new Promise((resolve, reject) => {
+    await new Promise((resolve2, reject) => {
       this.tokenExecFile(helper.path, [String(pid)], {
         windowsHide: true,
         shell: false,
         env: windowsEssentialEnvironment()
       }, (error51) => {
-        if (error51 === null || error51.code === 2) resolve();
+        if (error51 === null || error51.code === 2) resolve2();
         else reject(new RuntimeError("windows process-tree termination failed", {
           path: helper.path,
           pid,
@@ -32962,11 +32962,11 @@ var WindowsPlatformServices = class {
       child.stdin?.end();
     }
     let settled = false;
-    const done = new Promise((resolve) => {
+    const done = new Promise((resolve2) => {
       const finish = (e) => {
         if (!settled) {
           settled = true;
-          resolve(e);
+          resolve2(e);
         }
       };
       child.on("error", (err) => finish({
@@ -33012,7 +33012,7 @@ var WindowsPlatformServices = class {
     try {
       const helper = await this.jobKillHelper();
       if (await helper.checkAvailable()) {
-        const nativeToken = await new Promise((resolve) => {
+        const nativeToken = await new Promise((resolve2) => {
           try {
             this.tokenExecFile(
               helper.path,
@@ -33024,13 +33024,13 @@ var WindowsPlatformServices = class {
               },
               (error51, stdout) => {
                 const token = stdout.trim();
-                if (error51 === null && token.length > 0) resolve(`win32:${token}`);
-                else if (error51?.code === 2) resolve(null);
-                else resolve(void 0);
+                if (error51 === null && token.length > 0) resolve2(`win32:${token}`);
+                else if (error51?.code === 2) resolve2(null);
+                else resolve2(void 0);
               }
             );
           } catch {
-            resolve(void 0);
+            resolve2(void 0);
           }
         });
         if (nativeToken !== void 0) {
@@ -36337,7 +36337,8 @@ var AgyAdapter = class {
   }
   /** agy's settings/auth store; the only host state an attempt must write. */
   configDirectory() {
-    return join(this.deps.env.HOME ?? this.deps.homeDirectory, ".gemini", "antigravity-cli");
+    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
+    return join(home, ".gemini", "antigravity-cli");
   }
   buildInvocation(spec, ctx) {
     const args = [
@@ -36451,6 +36452,11 @@ function defaultHasOauthAccount(accountFile) {
     return false;
   }
 }
+var REQUIRED_CLAUDE_FLAGS = [
+  "--no-session-persistence",
+  "--strict-mcp-config",
+  "--setting-sources"
+];
 var ClaudeAdapter = class {
   constructor(deps = {
     env: process.env,
@@ -36466,18 +36472,39 @@ var ClaudeAdapter = class {
   configDirectory() {
     const configured = this.deps.env.CLAUDE_CONFIG_DIR;
     if (configured !== void 0 && configured.length > 0) return configured;
-    return join2(this.deps.env.HOME ?? this.deps.homeDirectory, ".claude");
+    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
+    return join2(home, ".claude");
   }
   /** `~/.claude.json`: the account record the CLI rewrites on every run. */
   accountFile() {
     const configured = this.deps.env.CLAUDE_CONFIG_DIR;
     if (configured !== void 0 && configured.length > 0) return join2(configured, ".claude.json");
-    return join2(this.deps.env.HOME ?? this.deps.homeDirectory, ".claude.json");
+    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
+    return join2(home, ".claude.json");
   }
   isAuthenticated() {
     const apiKey = this.deps.env.ANTHROPIC_API_KEY;
     if (apiKey !== void 0 && apiKey.length > 0) return true;
     return (this.deps.hasOauthAccount ?? defaultHasOauthAccount)(this.accountFile());
+  }
+  async inspectCliSurface(ctx, executable) {
+    let helpResult;
+    try {
+      helpResult = await runVersionProbe(ctx, executable, ["--help"]);
+    } catch {
+      return "unsupported-cli-surface";
+    }
+    if (helpResult.spawnError !== void 0 || helpResult.exitCode !== 0) {
+      return "unsupported-cli-surface";
+    }
+    const helpOutput = `${helpResult.stdout}
+${helpResult.stderr}`;
+    for (const flag of REQUIRED_CLAUDE_FLAGS) {
+      if (!helpOutput.includes(flag)) {
+        return "unsupported-cli-surface";
+      }
+    }
+    return null;
   }
   async probe(ctx) {
     return probeOsConfinedCli(ctx, {
@@ -36485,6 +36512,7 @@ var ClaudeAdapter = class {
       executableName: "claude",
       structuredOutput: this.structuredOutput,
       parseVersion,
+      inspectSurface: (probeCtx, executable) => this.inspectCliSurface(probeCtx, executable),
       isAuthenticated: () => this.isAuthenticated()
     });
   }
@@ -36968,19 +36996,23 @@ var OpenCodeAdapter = class {
   hasAuthStore(directory) {
     return (this.deps.hasAuthStore ?? ((store) => existsSync5(join4(store, "auth.json"))))(directory);
   }
+  /** OpenCode's XDG data directory (where auth.json lives), honoring XDG_DATA_HOME. */
+  dataDirectory() {
+    const dataHome = this.deps.env.XDG_DATA_HOME ?? join4(this.deps.homeDirectory, ".local", "share");
+    return join4(dataHome, "opencode");
+  }
   async probe(ctx) {
     return probeOsConfinedCli(ctx, {
       producerId: this.producerId,
       executableName: "opencode",
       structuredOutput: this.structuredOutput,
-      isAuthenticated: () => this.hasAuthStore(join4(this.deps.homeDirectory, ".local", "share", "opencode"))
+      isAuthenticated: () => this.hasAuthStore(this.dataDirectory())
     });
   }
   /** OpenCode's XDG data (auth) and state directories, honoring host overrides. */
   stateDirectories() {
-    const dataHome = this.deps.env.XDG_DATA_HOME ?? join4(this.deps.homeDirectory, ".local", "share");
     const stateHome = this.deps.env.XDG_STATE_HOME ?? join4(this.deps.homeDirectory, ".local", "state");
-    return [join4(dataHome, "opencode"), join4(stateHome, "opencode")];
+    return [this.dataDirectory(), join4(stateHome, "opencode")];
   }
   buildInvocation(spec, ctx) {
     const args = [
@@ -37062,7 +37094,8 @@ var PiAdapter = class {
   }
   /** Pi's auth + settings store; the only host state an attempt must write. */
   agentStateDirectory() {
-    return join5(this.deps.env.HOME ?? this.deps.homeDirectory, ".pi", "agent");
+    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
+    return join5(home, ".pi", "agent");
   }
   buildInvocation(spec, ctx) {
     if (spec.producerOverrides?.model !== void 0) {
@@ -37127,7 +37160,7 @@ var PYTHINKER_NO_AUTO_UPDATE_ENV = "PYTHINKER_CLI_NO_AUTO_UPDATE";
 var PYTHINKER_REQUIRED_ENV = ["PYTHINKER_SHARE_DIR", PYTHINKER_NO_AUTO_UPDATE_ENV];
 function resolvePythinkerHome(deps) {
   const configuredHome = deps.env.PYTHINKER_SHARE_DIR;
-  return configuredHome !== void 0 && configuredHome.length > 0 ? configuredHome : join6(deps.homeDirectory, ".pythinker");
+  return configuredHome !== void 0 && configuredHome.length > 0 ? configuredHome : join6(deps.env.HOME ?? deps.env.USERPROFILE ?? deps.homeDirectory, ".pythinker");
 }
 function defaultPythinkerEnv(deps) {
   const env = {};
@@ -39212,7 +39245,7 @@ async function removeWindowsBoundEmptyDirectory(directory, expectedIdentity, pla
       return;
     }
     if ((result.exitCode === 3 || result.exitCode === 5) && attempt < 50) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve2) => setTimeout(resolve2, 200));
       continue;
     }
     throw new RuntimeError(
@@ -40187,7 +40220,7 @@ var SAFE_MANAGED_ID = /^[a-z0-9][a-z0-9._-]*$/;
 var SAFE_QUARANTINE_TOKEN = /^[a-z0-9][a-z0-9-]{0,127}$/i;
 var WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY = "claude-architect-quarantine";
 function delay2(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  return new Promise((resolve2) => setTimeout(resolve2, milliseconds));
 }
 function errorCode6(error51) {
   return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
@@ -41819,8 +41852,8 @@ function commandEnvironment(command, os) {
 }
 function isWithinScope(root, candidate, os) {
   if (os === "win32") return canonicalizeForScope(candidate, root);
-  const relative = path16.posix.relative(root, candidate);
-  return relative === "" || !path16.posix.isAbsolute(relative) && relative !== ".." && !relative.startsWith("../");
+  const relative2 = path16.posix.relative(root, candidate);
+  return relative2 === "" || !path16.posix.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith("../");
 }
 async function resolveCommandCwd(worktreePath, commandCwd, os) {
   if (path16.isAbsolute(commandCwd)) return null;
@@ -42609,8 +42642,8 @@ function compareEntries(left, right) {
   return left.runId < right.runId ? -1 : left.runId > right.runId ? 1 : 0;
 }
 function isWithin(root, candidate) {
-  const relative = path17.relative(root, candidate);
-  return relative === "" || !path17.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path17.sep}`);
+  const relative2 = path17.relative(root, candidate);
+  return relative2 === "" || !path17.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith(`..${path17.sep}`);
 }
 async function ensurePlainDirectory(directory) {
   let created = false;
@@ -44093,6 +44126,8 @@ import { rm as rm6 } from "node:fs/promises";
 
 // src/platform/sandbox/seatbelt.ts
 import { realpathSync as realpathSync2 } from "node:fs";
+import { homedir as homedir7 } from "node:os";
+import { isAbsolute, normalize, parse as parse3, relative, resolve } from "node:path";
 function buildReadOnlySeatbeltPolicy(args) {
   return {
     worktreePath: "",
@@ -44121,9 +44156,75 @@ function sbPath(path32) {
   }
   return `"${path32.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
 }
+function isDeclaredStateRoot(normalized, invocation, policy) {
+  const roots = [];
+  const homeCandidates = [
+    invocation.env?.HOME,
+    invocation.env?.USERPROFILE,
+    process.env.HOME,
+    process.env.USERPROFILE
+  ];
+  try {
+    homeCandidates.push(homedir7());
+  } catch {
+  }
+  for (const candidate of homeCandidates) {
+    if (typeof candidate === "string" && candidate.length > 0 && candidate !== "/") {
+      roots.push(resolve(candidate));
+    }
+  }
+  const stateEnvs = [
+    "CLAUDE_CONFIG_DIR",
+    "OPENCODE_CONFIG_DIR",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
+    "XDG_CONFIG_HOME",
+    "PI_CONFIG_DIR",
+    "PYTHINKER_SHARE_DIR",
+    "GEMINI_CLI_HOME"
+  ];
+  for (const envKey of stateEnvs) {
+    const val = invocation.env?.[envKey] ?? process.env[envKey];
+    if (typeof val === "string" && val.length > 0 && val !== "/") {
+      roots.push(resolve(val));
+    }
+  }
+  if (policy.extraWritableRoots) {
+    for (const root of policy.extraWritableRoots) {
+      if (typeof root === "string" && root.length > 0 && root !== "/") {
+        roots.push(resolve(root));
+      }
+    }
+  }
+  for (const root of roots) {
+    if (normalized === root) return true;
+    const rel = relative(root, normalized);
+    if (!rel.startsWith("..") && !isAbsolute(rel)) return true;
+  }
+  const userHomePattern = /^(\/Users\/[^/]+|\/home\/[^/]+|\/root)(?:\/.*)?$/u;
+  const winUserHomePattern = /^[a-zA-Z]:\\Users\\[^\\]+(?:\\.*)?$/u;
+  return userHomePattern.test(normalized) || winUserHomePattern.test(normalized);
+}
+function isValidInheritedStatePath(path32, invocation, policy) {
+  if (typeof path32 !== "string" || path32.trim().length === 0) return false;
+  if (!isAbsolute(path32)) return false;
+  const parsed = parse3(path32);
+  if (path32 === "/" || path32 === parsed.root) return false;
+  const normalized = normalize(path32);
+  if (normalized === "/" || normalized === parsed.root) return false;
+  if (resolve(path32) === "/" || resolve(path32) === parsed.root) return false;
+  return isDeclaredStateRoot(normalized, invocation, policy);
+}
 function inheritedStateWritablePaths(invocation, policy) {
   if (policy.tempHome !== null) return [];
-  return [...invocation.inheritedStateWritablePaths ?? []];
+  const declared = invocation.inheritedStateWritablePaths;
+  if (!declared || declared.length === 0) return [];
+  for (const entry of declared) {
+    if (!isValidInheritedStatePath(entry, invocation, policy)) {
+      return [];
+    }
+  }
+  return [...declared];
 }
 function buildProfile(policy, additionalWritable) {
   const writable = [...new Set([
@@ -44623,8 +44724,8 @@ async function requirePlainDirectory(directory, label) {
   }
 }
 function isContainedBy(parent, candidate) {
-  const relative = path19.relative(parent, candidate);
-  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path19.sep}`) && !path19.isAbsolute(relative);
+  const relative2 = path19.relative(parent, candidate);
+  return relative2 !== "" && relative2 !== ".." && !relative2.startsWith(`..${path19.sep}`) && !path19.isAbsolute(relative2);
 }
 function sameFileIdentity(before, after) {
   return before.dev === after.dev && before.ino === after.ino;
@@ -44996,7 +45097,7 @@ async function checkInProgressOperation(checkoutPath, runGit = git) {
   if (!succeeded(gitDirectoryResult)) return "scan-failed";
   try {
     const gitDirectory = gitPathOutput(gitDirectoryResult.stdout, "Git directory");
-    return (await Promise.all(IN_PROGRESS_PATHS.map((relative) => exists2(path20.join(gitDirectory, relative))))).some(Boolean) ? "in-progress" : "clear";
+    return (await Promise.all(IN_PROGRESS_PATHS.map((relative2) => exists2(path20.join(gitDirectory, relative2))))).some(Boolean) ? "in-progress" : "clear";
   } catch {
     return "scan-failed";
   }
@@ -45036,8 +45137,8 @@ function pathIsWithin(root, candidate) {
   if (getPlatformServices().os === "win32") {
     return canonicalizeForScope(candidate, root);
   }
-  const relative = path20.relative(root, candidate);
-  return relative === "" || relative !== ".." && !relative.startsWith(`..${path20.sep}`) && !path20.isAbsolute(relative);
+  const relative2 = path20.relative(root, candidate);
+  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path20.sep}`) && !path20.isAbsolute(relative2);
 }
 function pathsIdentifySameLocation(left, right) {
   if (getPlatformServices().os === "win32") {
@@ -47433,7 +47534,7 @@ var AutopilotController = class {
       Math.max(MIN_REQUIRED_CHECKS_POLL_INTERVAL_MS, Math.trunc(configuredInterval))
     ) : DEFAULT_REQUIRED_CHECKS_POLL_INTERVAL_MS;
     this.sleep = dependencies.sleep ?? (async (milliseconds) => {
-      await new Promise((resolve) => setTimeout(resolve, milliseconds));
+      await new Promise((resolve2) => setTimeout(resolve2, milliseconds));
     });
   }
   dependencies;
@@ -50550,11 +50651,11 @@ async function runAttempt(checkoutPath, spec, deps) {
 
 // src/pipeline/consolidator.ts
 var SEVERITY_ORDER = { blocker: 0, major: 1, minor: 2, nit: 3 };
-function normalize(text) {
+function normalize2(text) {
   return text.toLowerCase().replace(/\s+/g, " ").trim();
 }
 function dedupeKey(f) {
-  return `${f.location} ${normalize(f.claim)}`;
+  return `${f.location} ${normalize2(f.claim)}`;
 }
 function consolidate(reports) {
   const byKey = /* @__PURE__ */ new Map();
@@ -50574,7 +50675,7 @@ function consolidate(reports) {
       existing.finding.confidence = Math.max(existing.finding.confidence, raw.confidence);
     }
   }
-  const merged = [...byKey.values()].sort((a, b) => SEVERITY_ORDER[a.finding.severity] - SEVERITY_ORDER[b.finding.severity] || a.finding.location.localeCompare(b.finding.location) || normalize(a.finding.claim).localeCompare(normalize(b.finding.claim)));
+  const merged = [...byKey.values()].sort((a, b) => SEVERITY_ORDER[a.finding.severity] - SEVERITY_ORDER[b.finding.severity] || a.finding.location.localeCompare(b.finding.location) || normalize2(a.finding.claim).localeCompare(normalize2(b.finding.claim)));
   const findings = merged.map((entry, index) => ({
     ...entry.finding,
     id: `F-${String(index + 1).padStart(3, "0")}`,
@@ -53880,8 +53981,8 @@ async function withRepoLock(key, fn) {
   }
   const previous = mutex.tail;
   let release;
-  mutex.tail = new Promise((resolve) => {
-    release = resolve;
+  mutex.tail = new Promise((resolve2) => {
+    release = resolve2;
   });
   mutex.pending += 1;
   await previous;

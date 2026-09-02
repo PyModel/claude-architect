@@ -553,7 +553,7 @@ describe("PythinkerAdapter", () => {
       .toEqual(["/Users/test/custom-pythinker-home"]);
     const withDefault = new PythinkerAdapter({ env: {}, homeDirectory: "/Users/test" });
     expect(withDefault.buildInvocation(sampleSpec(), invocationContext()).inheritedStateWritablePaths)
-      .toEqual(["/Users/test/.pythinker"]);
+      .toEqual([join("/Users/test", ".pythinker")]);
   });
 
   it("declares the Pythinker configuration isolation profile", () => {

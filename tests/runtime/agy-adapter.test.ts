@@ -382,7 +382,7 @@ describe("AgyAdapter", () => {
   it("declares only ~/.gemini/antigravity-cli as inherited writable state", () => {
     const adapter = new AgyAdapter({ env: {}, homeDirectory: "/Users/test" });
     const invocation = adapter.buildInvocation(sampleSpec(), invocationContext());
-    expect(invocation.inheritedStateWritablePaths).toEqual(["/Users/test/.gemini/antigravity-cli"]);
+    expect(invocation.inheritedStateWritablePaths).toEqual([join("/Users/test", ".gemini", "antigravity-cli")]);
   });
 
   it("declares the agy configuration isolation profile", () => {

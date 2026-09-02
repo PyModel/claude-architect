@@ -61,7 +61,8 @@ export class PiAdapter implements ProducerAdapter {
 
   /** Pi's auth + settings store; the only host state an attempt must write. */
   private agentStateDirectory(): string {
-    return join(this.deps.env.HOME ?? this.deps.homeDirectory, ".pi", "agent");
+    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
+    return join(home, ".pi", "agent");
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {

@@ -63,7 +63,8 @@ export class AgyAdapter implements ProducerAdapter {
 
   /** agy's settings/auth store; the only host state an attempt must write. */
   private configDirectory(): string {
-    return join(this.deps.env.HOME ?? this.deps.homeDirectory, ".gemini", "antigravity-cli");
+    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
+    return join(home, ".gemini", "antigravity-cli");
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {

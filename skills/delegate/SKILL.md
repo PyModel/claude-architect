@@ -59,7 +59,7 @@ P0-A certifies the MCP implementation path only for Codex on macOS arm64 when it
 
 ### Architect-side Claude subagents
 
-The architect session — whatever model it runs, including Fable — may dispatch Claude subagents through the host's `Agent` tool with a `model` of `opus` or `sonnet` for **non-writing** roles, and it may do so in parallel with a running lane:
+The architect session — whatever model it runs, including Fable — may dispatch Claude subagents through the host's `Agent` tool with a `model` of `opus`, `sonnet`, or `fable` for **non-writing** roles, and it may do so in parallel with a running lane:
 
 - **Scout** (`sonnet`, or `Explore`): read-only reconnaissance before a spec is frozen — call sites, nearby patterns, which files an allowlist must cover.
 - **Spec drafter** (`sonnet`): turn an agreed design into candidate `successCriteria` and verification commands for the architect to review; the architect still owns and freezes the spec.

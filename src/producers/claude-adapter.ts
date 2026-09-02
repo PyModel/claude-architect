@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
-import { probeOsConfinedCli } from "./cli-probe.js";
+import type { ResolvedExecutable } from "../platform/platform-services.js";
+import { parseSemver, probeOsConfinedCli, runVersionProbe } from "./cli-probe.js";
 import { renderProducerPrompt } from "./plain-text.js";
 import type {
   AdapterEvent,
@@ -65,6 +66,12 @@ function defaultHasOauthAccount(accountFile: string): boolean {
   }
 }
 
+const REQUIRED_CLAUDE_FLAGS = [
+  "--no-session-persistence",
+  "--strict-mcp-config",
+  "--setting-sources",
+] as const;
+
 export class ClaudeAdapter implements ProducerAdapter {
   readonly producerId = "claude";
   readonly structuredOutput = true;
@@ -79,14 +86,16 @@ export class ClaudeAdapter implements ProducerAdapter {
   private configDirectory(): string {
     const configured = this.deps.env.CLAUDE_CONFIG_DIR;
     if (configured !== undefined && configured.length > 0) return configured;
-    return join(this.deps.env.HOME ?? this.deps.homeDirectory, ".claude");
+    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
+    return join(home, ".claude");
   }
 
   /** `~/.claude.json`: the account record the CLI rewrites on every run. */
   private accountFile(): string {
     const configured = this.deps.env.CLAUDE_CONFIG_DIR;
     if (configured !== undefined && configured.length > 0) return join(configured, ".claude.json");
-    return join(this.deps.env.HOME ?? this.deps.homeDirectory, ".claude.json");
+    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
+    return join(home, ".claude.json");
   }
 
   private isAuthenticated(): boolean {
@@ -95,12 +104,35 @@ export class ClaudeAdapter implements ProducerAdapter {
     return (this.deps.hasOauthAccount ?? defaultHasOauthAccount)(this.accountFile());
   }
 
+  private async inspectCliSurface(
+    ctx: ProbeContext,
+    executable: ResolvedExecutable,
+  ): Promise<string | null> {
+    let helpResult;
+    try {
+      helpResult = await runVersionProbe(ctx, executable, ["--help"]);
+    } catch {
+      return "unsupported-cli-surface";
+    }
+    if (helpResult.spawnError !== undefined || helpResult.exitCode !== 0) {
+      return "unsupported-cli-surface";
+    }
+    const helpOutput = `${helpResult.stdout}\n${helpResult.stderr}`;
+    for (const flag of REQUIRED_CLAUDE_FLAGS) {
+      if (!helpOutput.includes(flag)) {
+        return "unsupported-cli-surface";
+      }
+    }
+    return null;
+  }
+
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
     return probeOsConfinedCli(ctx, {
       producerId: this.producerId,
       executableName: "claude",
       structuredOutput: this.structuredOutput,
       parseVersion,
+      inspectSurface: (probeCtx, executable) => this.inspectCliSurface(probeCtx, executable),
       isAuthenticated: () => this.isAuthenticated(),
     });
   }

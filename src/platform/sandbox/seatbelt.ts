@@ -1,4 +1,6 @@
 import { realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { isAbsolute, normalize, parse, relative, resolve } from "node:path";
 import type { ProducerInvocation } from "../../producers/producer-adapter.js";
 
 export interface SeatbeltPolicy {
@@ -49,16 +51,101 @@ function sbPath(path: string): string {
   return `"${path.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
 }
 
+function isDeclaredStateRoot(
+  normalized: string,
+  invocation: ProducerInvocation,
+  policy: SeatbeltPolicy,
+): boolean {
+  const roots: string[] = [];
+
+  const homeCandidates = [
+    invocation.env?.HOME,
+    invocation.env?.USERPROFILE,
+    process.env.HOME,
+    process.env.USERPROFILE,
+  ];
+  try {
+    homeCandidates.push(homedir());
+  } catch {}
+
+  for (const candidate of homeCandidates) {
+    if (typeof candidate === "string" && candidate.length > 0 && candidate !== "/") {
+      roots.push(resolve(candidate));
+    }
+  }
+
+  const stateEnvs = [
+    "CLAUDE_CONFIG_DIR",
+    "OPENCODE_CONFIG_DIR",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
+    "XDG_CONFIG_HOME",
+    "PI_CONFIG_DIR",
+    "PYTHINKER_SHARE_DIR",
+    "GEMINI_CLI_HOME",
+  ];
+  for (const envKey of stateEnvs) {
+    const val = invocation.env?.[envKey] ?? process.env[envKey];
+    if (typeof val === "string" && val.length > 0 && val !== "/") {
+      roots.push(resolve(val));
+    }
+  }
+
+  if (policy.extraWritableRoots) {
+    for (const root of policy.extraWritableRoots) {
+      if (typeof root === "string" && root.length > 0 && root !== "/") {
+        roots.push(resolve(root));
+      }
+    }
+  }
+
+  for (const root of roots) {
+    if (normalized === root) return true;
+    const rel = relative(root, normalized);
+    if (!rel.startsWith("..") && !isAbsolute(rel)) return true;
+  }
+
+  const userHomePattern = /^(\/Users\/[^/]+|\/home\/[^/]+|\/root)(?:\/.*)?$/u;
+  const winUserHomePattern = /^[a-zA-Z]:\\Users\\[^\\]+(?:\\.*)?$/u;
+  return userHomePattern.test(normalized) || winUserHomePattern.test(normalized);
+}
+
+function isValidInheritedStatePath(
+  path: string,
+  invocation: ProducerInvocation,
+  policy: SeatbeltPolicy,
+): boolean {
+  if (typeof path !== "string" || path.trim().length === 0) return false;
+  if (!isAbsolute(path)) return false;
+  const parsed = parse(path);
+  if (path === "/" || path === parsed.root) return false;
+  const normalized = normalize(path);
+  if (normalized === "/" || normalized === parsed.root) return false;
+  if (resolve(path) === "/" || resolve(path) === parsed.root) return false;
+  return isDeclaredStateRoot(normalized, invocation, policy);
+}
+
 /**
  * State the Producer declared it must write while running with the real HOME.
  * A temporary home replaces that state wholesale, so the declaration is moot.
+ * Every entry must be absolute, under home or a declared state root, and never root (`/`).
+ * Any invalid entry fails closed: no grants are emitted.
  */
 function inheritedStateWritablePaths(
   invocation: ProducerInvocation,
   policy: SeatbeltPolicy,
 ): string[] {
   if (policy.tempHome !== null) return [];
-  return [...(invocation.inheritedStateWritablePaths ?? [])];
+  const declared = invocation.inheritedStateWritablePaths;
+  if (!declared || declared.length === 0) return [];
+
+  for (const entry of declared) {
+    if (!isValidInheritedStatePath(entry, invocation, policy)) {
+      return [];
+    }
+  }
+
+  return [...declared];
 }
 
 function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): string {

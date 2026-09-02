@@ -17,6 +17,11 @@ All notable changes to Claude Architect are recorded here. The format follows
   takes a thinking level and refuses a model override), and the filesystem
   and cleanup guarantees moved to `docs/operations.md`. The banner names all
   six lanes and no longer carries a stale version.
+- Cross-platform isolation and adapter test hardening:
+  - macOS Seatbelt strictly validates declared `inheritedStateWritablePaths` against filesystem root `/`, relative paths, and traversal escapes, failing closed without grants on invalid paths.
+  - Claude probe confirms required CLI flags `--no-session-persistence`, `--strict-mcp-config`, and `--setting-sources` via `inspectSurface`, failing closed if unsupported.
+  - OpenCode adapter uses a unified helper for `XDG_DATA_HOME` data directory resolution across probing and invocation.
+  - Adapter tests and resolvers support `USERPROFILE` and platform path separators cleanly across macOS, Linux, and Windows.
 
 ### Added
 

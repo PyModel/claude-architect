@@ -269,6 +269,25 @@ describe("OpenCodeAdapter", () => {
     }
   });
 
+  it("reports authenticated when auth.json exists in the store overridden by XDG_DATA_HOME", async () => {
+    const root = await mkdtemp(join(tmpdir(), "claude-architect-opencode-auth-"));
+    const customDataHome = join(root, "custom-data");
+    const store = join(customDataHome, "opencode");
+    await mkdir(store, { recursive: true });
+    await writeFile(join(store, "auth.json"), "fixture contents must not be read");
+
+    try {
+      const report = await new OpenCodeAdapter({
+        env: { XDG_DATA_HOME: customDataHome },
+        homeDirectory: root,
+      }).probe(probeContext(versionPlatformServices(executable)));
+
+      expect(report.authState).toBe("authenticated");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("invokes a Node OpenCode entrypoint with the runtime Node executable", async () => {
     const root = await mkdtemp(join(tmpdir(), "claude-architect-opencode-entrypoint-"));
     const entrypoint = join(root, "opencode");
@@ -473,8 +492,8 @@ describe("OpenCodeAdapter", () => {
     });
     const invocation = adapter.buildInvocation(sampleSpec(), invocationContext());
     expect(invocation.inheritedStateWritablePaths).toEqual([
-      "/Users/test/.local/share/opencode",
-      "/Users/test/.local/state/opencode",
+      join("/Users/test", ".local", "share", "opencode"),
+      join("/Users/test", ".local", "state", "opencode"),
     ]);
   });
 

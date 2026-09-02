@@ -45,23 +45,27 @@ export class OpenCodeAdapter implements ProducerAdapter {
     return (this.deps.hasAuthStore ?? (store => existsSync(join(store, "auth.json"))))(directory);
   }
 
+  /** OpenCode's XDG data directory (where auth.json lives), honoring XDG_DATA_HOME. */
+  private dataDirectory(): string {
+    const dataHome = this.deps.env.XDG_DATA_HOME
+      ?? join(this.deps.homeDirectory, ".local", "share");
+    return join(dataHome, "opencode");
+  }
+
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
     return probeOsConfinedCli(ctx, {
       producerId: this.producerId,
       executableName: "opencode",
       structuredOutput: this.structuredOutput,
-      isAuthenticated: () =>
-        this.hasAuthStore(join(this.deps.homeDirectory, ".local", "share", "opencode")),
+      isAuthenticated: () => this.hasAuthStore(this.dataDirectory()),
     });
   }
 
   /** OpenCode's XDG data (auth) and state directories, honoring host overrides. */
   private stateDirectories(): string[] {
-    const dataHome = this.deps.env.XDG_DATA_HOME
-      ?? join(this.deps.homeDirectory, ".local", "share");
     const stateHome = this.deps.env.XDG_STATE_HOME
       ?? join(this.deps.homeDirectory, ".local", "state");
-    return [join(dataHome, "opencode"), join(stateHome, "opencode")];
+    return [this.dataDirectory(), join(stateHome, "opencode")];
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {

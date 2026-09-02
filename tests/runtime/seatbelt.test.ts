@@ -94,6 +94,48 @@ describe("seatbelt profile", () => {
     expect(profile).not.toContain('(subpath "/Users/test")');
   });
 
+  it("rejects invalid declared paths (root, relative, or not under home/state root) and emits no grants", () => {
+    const rootWrapped = wrapInvocationWithSeatbelt({
+      ...invocation,
+      inheritedStateWritablePaths: ["/"],
+    }, {
+      worktreePath: "/tmp/wt",
+      tempHome: null,
+      allowNetwork: false,
+    });
+    expect(rootWrapped.args[1]).not.toContain('(subpath "/")');
+
+    const relWrapped = wrapInvocationWithSeatbelt({
+      ...invocation,
+      inheritedStateWritablePaths: ["relative/path"],
+    }, {
+      worktreePath: "/tmp/wt",
+      tempHome: null,
+      allowNetwork: false,
+    });
+    expect(relWrapped.args[1]).not.toContain("relative/path");
+
+    const mixedWrapped = wrapInvocationWithSeatbelt({
+      ...invocation,
+      inheritedStateWritablePaths: ["/Users/test/.pi/agent", "/"],
+    }, {
+      worktreePath: "/tmp/wt",
+      tempHome: null,
+      allowNetwork: false,
+    });
+    expect(mixedWrapped.args[1]).not.toContain('(subpath "/Users/test/.pi/agent")');
+
+    const escapeWrapped = wrapInvocationWithSeatbelt({
+      ...invocation,
+      inheritedStateWritablePaths: ["/etc/passwd"],
+    }, {
+      worktreePath: "/tmp/wt",
+      tempHome: null,
+      allowNetwork: false,
+    });
+    expect(escapeWrapped.args[1]).not.toContain("/etc/passwd");
+  });
+
   it("ignores declared inherited-state paths when a temp home replaces the real one", () => {
     const wrapped = wrapInvocationWithSeatbelt({
       ...invocation,

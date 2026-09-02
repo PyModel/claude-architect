@@ -27,7 +27,7 @@ The plugin is designed for macOS, Linux, and Windows process/runtime operation. 
 
 ## Network destinations
 
-There is no plugin-maintained fixed destination list. A cloud Producer CLI contacts the provider configured by that CLI: Codex normally uses its configured OpenAI service; OpenCode, Pi, Pythinker, Antigravity CLI, and headless Claude Code can use various cloud or local endpoints. Claude Code separately contacts its configured Anthropic/model service. Verification commands may contact destinations only when their spec allows network, subject to effective platform enforcement. Codex's coding sandbox is configured with network disabled. Provider authentication, telemetry, transport, and retention are governed by the selected CLI/provider.
+There is no plugin-maintained fixed destination list. A cloud Producer CLI contacts the provider configured by that CLI: Codex normally uses its configured OpenAI service; OpenCode, Pi, Pythinker, and Antigravity CLI can use various cloud or local endpoints; headless Claude Code uses the default Anthropic endpoint (`api.anthropic.com`). Verification commands may contact destinations only when their spec allows network, subject to effective platform enforcement. Codex's coding sandbox is configured with network disabled. Provider authentication, telemetry, transport, and retention are governed by the selected CLI/provider.
 
 ## Persistent state locations
 
