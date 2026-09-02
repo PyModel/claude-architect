@@ -6,7 +6,7 @@
   <a href="#quick-start"><img alt="delegate skill" src="https://img.shields.io/badge/skill-delegate-e6edf3?style=flat-square&labelColor=0b0e14"></a>
   <a href="#direct-codex-cli"><img alt="codex skill" src="https://img.shields.io/badge/skill-codex-e6edf3?style=flat-square&labelColor=0b0e14"></a>
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-plugin-d97757?style=flat-square&labelColor=0b0e14">
-  <img alt="version" src="https://img.shields.io/badge/version-0.50.0-9aa4b2?style=flat-square&labelColor=0b0e14">
+  <img alt="version" src="https://img.shields.io/badge/version-0.52.0-9aa4b2?style=flat-square&labelColor=0b0e14">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-3fb950?style=flat-square&labelColor=0b0e14">
 </p>
 

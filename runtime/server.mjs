@@ -31909,7 +31909,7 @@ import path34 from "node:path";
 var PROTOCOL_VERSION = "2.0.0";
 var DELEGATION_SPEC_VERSION = "1";
 var ATTEMPT_RESULT_VERSION = "1";
-var RUNTIME_VERSION = "0.50.0";
+var RUNTIME_VERSION = "0.52.0";
 
 // src/protocol/attempt-result.ts
 var FAILURE_PRECEDENCE = [
