@@ -6,6 +6,8 @@ All notable changes to Claude Architect are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-09-02
+
 ### Changed
 
 - The repository moved to the `PyModel` GitHub organization. Every homepage,
