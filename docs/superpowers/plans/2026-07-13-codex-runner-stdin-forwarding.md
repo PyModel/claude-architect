@@ -281,7 +281,7 @@ Insert above `0.3.0` in `CHANGELOG.md`:
 Add this link before the existing `0.3.0` link:
 
 ```markdown
-[0.4.0]: https://github.com/Pythoughts-labs/claude-architect/releases/tag/v0.4.0
+[0.4.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.4.0
 ```
 
 - [ ] **Step 3: Run the manifest test**

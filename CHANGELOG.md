@@ -6,6 +6,18 @@ All notable changes to Claude Architect are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The repository moved to the `PyModel` GitHub organization. Every homepage,
+  repository, issue, advisory, and release link now points at
+  `PyModel/claude-architect`, and the install command is
+  `claude plugin marketplace add PyModel/claude-architect`.
+- README trimmed: the lead paragraph absorbs "Why it exists", lane overrides
+  are a per-lane table (Claude Code takes model and reasoning effort only; Pi
+  takes a thinking level and refuses a model override), and the filesystem
+  and cleanup guarantees moved to `docs/operations.md`. The banner names all
+  six lanes and no longer carries a stale version.
+
 ### Added
 
 - `claude-implementer`: a sixth delegation-lane Producer that runs a headless
@@ -1198,7 +1210,7 @@ implemented through `delegatePipeline`.
 
 ### Added
 
-- Added a 3-OS GitHub Actions CI matrix covering macOS 14, Ubuntu, and Windows, with the Windows leg compiling the native helper with MSVC. Evidence: [first fully green run](https://github.com/Pythoughts-labs/claude-architect/actions/runs/29451055892).
+- Added a 3-OS GitHub Actions CI matrix covering macOS 14, Ubuntu, and Windows, with the Windows leg compiling the native helper with MSVC. Evidence: [first fully green run](https://github.com/PyModel/claude-architect/actions/runs/29451055892).
 - Committed `native/bin/win32-job-kill-x64.exe` (SHA-256 `a96636f4d9e564b978172662e005e2a521205dd3b2eaea271b511854a05ccd10`), including its new `token <pid>` creation-FILETIME mode for process-identity tokens without PowerShell.
 - Enabled Windows worktrees with removal retries for transient Windows file locking.
 
@@ -1322,27 +1334,27 @@ Initial public release.
 - Native OpenCode assets under `.opencode/` and `opencode.json`, so the same lanes and skill work outside Claude Code.
 - SVG banner and shields badges for the README.
 
-[Unreleased]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.43.0...HEAD
-[0.43.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.42.0...v0.43.0
-[0.42.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.41.0...v0.42.0
-[0.16.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.15.0...v0.16.0
-[0.15.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.14.0...v0.15.0
-[0.14.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.13.0...v0.14.0
-[0.13.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.12.1...v0.13.0
-[0.12.1]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.12.0...v0.12.1
-[0.12.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.11.1...v0.12.0
-[0.11.1]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.11.0...v0.11.1
-[0.11.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.10.0...v0.11.0
-[0.10.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.9.3...v0.10.0
-[0.9.3]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.9.2...v0.9.3
-[0.9.2]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.9.1...v0.9.2
-[0.9.1]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.9.0...v0.9.1
-[0.9.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/Pythoughts-labs/claude-architect/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/Pythoughts-labs/claude-architect/releases/tag/v0.6.0
-[0.5.0]: https://github.com/Pythoughts-labs/claude-architect/releases/tag/v0.5.0
-[0.4.0]: https://github.com/Pythoughts-labs/claude-architect/releases/tag/v0.4.0
-[0.3.0]: https://github.com/Pythoughts-labs/claude-architect/releases/tag/v0.3.0
-[0.2.0]: https://github.com/Pythoughts-labs/claude-architect/releases/tag/v0.2.0
-[0.1.0]: https://github.com/Pythoughts-labs/claude-architect/releases/tag/v0.1.0
+[Unreleased]: https://github.com/PyModel/claude-architect/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/PyModel/claude-architect/compare/v0.42.0...v0.43.0
+[0.42.0]: https://github.com/PyModel/claude-architect/compare/v0.41.0...v0.42.0
+[0.16.0]: https://github.com/PyModel/claude-architect/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/PyModel/claude-architect/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/PyModel/claude-architect/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/PyModel/claude-architect/compare/v0.12.1...v0.13.0
+[0.12.1]: https://github.com/PyModel/claude-architect/compare/v0.12.0...v0.12.1
+[0.12.0]: https://github.com/PyModel/claude-architect/compare/v0.11.1...v0.12.0
+[0.11.1]: https://github.com/PyModel/claude-architect/compare/v0.11.0...v0.11.1
+[0.11.0]: https://github.com/PyModel/claude-architect/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/PyModel/claude-architect/compare/v0.9.3...v0.10.0
+[0.9.3]: https://github.com/PyModel/claude-architect/compare/v0.9.2...v0.9.3
+[0.9.2]: https://github.com/PyModel/claude-architect/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/PyModel/claude-architect/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/PyModel/claude-architect/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/PyModel/claude-architect/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/PyModel/claude-architect/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.6.0
+[0.5.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.5.0
+[0.4.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.4.0
+[0.3.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.3.0
+[0.2.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.2.0
+[0.1.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.1.0

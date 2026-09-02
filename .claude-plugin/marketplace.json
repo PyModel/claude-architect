@@ -18,8 +18,8 @@
         "name": "elkaix",
         "url": "https://github.com/elkaix"
       },
-      "homepage": "https://github.com/Pythoughts-labs/claude-architect",
-      "repository": "https://github.com/Pythoughts-labs/claude-architect",
+      "homepage": "https://github.com/PyModel/claude-architect",
+      "repository": "https://github.com/PyModel/claude-architect",
       "license": "MIT",
       "category": "workflow",
       "strict": true,

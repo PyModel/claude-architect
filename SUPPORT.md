@@ -2,7 +2,7 @@
 
 ## Ask a question
 
-Use [GitHub Issues](https://github.com/Pythoughts-labs/claude-architect/issues)
+Use [GitHub Issues](https://github.com/PyModel/claude-architect/issues)
 for reproducible bugs and support questions. If GitHub Discussions is enabled
 for the repository, use it for open-ended usage and design questions. Search
 existing issues and discussions before opening a new one.

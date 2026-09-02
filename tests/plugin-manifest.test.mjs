@@ -18,7 +18,7 @@ assert.equal(marketplace.plugins[0].strict, true, "plugin manifest must remain a
 assert.equal(marketplace.renames["claude-master"], manifest.name, "former plugin name must migrate");
 assert.equal(
   manifest.repository,
-  "https://github.com/Pythoughts-labs/claude-architect",
+  "https://github.com/PyModel/claude-architect",
   "plugin repository must use the Claude Architect slug",
 );
 assert.equal(marketplace.plugins[0].repository, manifest.repository, "marketplace repository must match");

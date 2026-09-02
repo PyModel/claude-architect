@@ -1,6 +1,6 @@
 # Marketplace Review Summary
 
-Claude Architect is maintained by Mohamed Elkholy (`elkaix`) and published from `Pythoughts-labs/claude-architect` under the MIT license. It is a Claude Code plugin for delegating bounded implementation tasks to external coding CLIs while keeping review, acceptance, and integration under the trusted Host runtime, Claude architect, and human operator.
+Claude Architect is maintained by Mohamed Elkholy (`elkaix`) and published from `PyModel/claude-architect` under the MIT license. It is a Claude Code plugin for delegating bounded implementation tasks to external coding CLIs while keeping review, acceptance, and integration under the trusted Host runtime, Claude architect, and human operator.
 
 ## What the plugin does
 
