@@ -20,7 +20,7 @@ The kind of work being delegated, such as implementation, review, investigation,
 
 ### Producer
 
-An external CLI runtime that performs delegated work. Codex, OpenCode, Pi, and Pythinker are Producers.
+An external CLI runtime that performs delegated work. Agy, Claude, Codex, OpenCode, Pi, and Pythinker are Producers.
 
 ### Delegation Spec
 
@@ -33,6 +33,14 @@ One execution of a valid Delegation Spec by a selected Producer under an explici
 ### Attempt Runtime
 
 The Producer-neutral module that executes a Delegation Attempt. It owns worktree allocation, environment construction, process supervision, timeout and cancellation, artifact collection, failure classification, and result verification orchestration.
+
+### Producer Descriptor
+
+A declarative specification defining a Producer's identification, executable resolution, CLI argument layout, prompt framing, isolation model, host state requirements, and capabilities. Descriptors parameterize common behavior across adapters, eliminating bespoke duplication.
+
+### Producer Runtime
+
+The unified execution layer for Producers. It coordinates capability probing, probe caching within a run, shared prompt rendering, launch planning (computing sandbox policy, environment, and secure temporary HOME only when isolation profiles mandate it), and process supervision with watchdog protection.
 
 ### Producer Adapter
 
@@ -188,7 +196,12 @@ Claude Code
       |-- SpecValidator
       |-- ProducerRegistry
       |-- RoutingPolicy
-      |-- CapabilityProbe
+      |-- ProducerRuntime
+      |     |-- ProducerDescriptors (agy, claude, codex, opencode, pi, pythinker)
+      |     |-- HostStoreResolver
+      |     |-- SharedPromptRenderer
+      |     |-- CliProbe (with abnormal-termination guard & run-scoped cache)
+      |     `-- LaunchPlanner & Supervisor
       |-- AttemptRuntime
       |     |-- WorktreeManager
       |     |-- EnvironmentPolicy
@@ -198,11 +211,6 @@ Claude Code
       |     |-- ProcessSupervisor
       |     |-- ArtifactStore
       |     `-- RecoveryManager
-      |-- ProducerAdapters
-      |     |-- CodexAdapter
-      |     |-- OpenCodeAdapter
-      |     |-- PiAdapter
-      |     `-- PythinkerAdapter
       |-- AcceptanceVerifier
       |-- ControlledIntegrator
       `-- Doctor
@@ -214,7 +222,7 @@ Claude Code
 - A Delegation Spec must identify its objective, relevant context, positive write allowlist, forbidden scope, success criteria, verification commands, execution mode, timeout, Producer preferences, and expected output.
 - Repository-wide write scope must be explicit rather than implied by an absent allowlist.
 - The Host supplies an ordered Producer preference list. The Attempt Runtime filters it by required capabilities and selects the first available Producer; learned quality, speed, and cost scoring are deferred.
-- Local availability and version probing runs before each P0 attempt, has no intentional side effects, and is not cached across attempts.
+- Local availability and version probing runs before each P0 attempt, has no intentional side effects, and is cached within the process for the duration of a run keyed by (producer id, resolved executable path, host-store root, configuration revision). Probes are never cached across process restarts, and diagnostic checks (such as `doctor`) always probe fresh.
 - Authentication, model availability, and remote capabilities are reported as `unknown` unless the Producer offers a documented local, non-mutating probe. P0 does not contact a remote service merely to complete a Capability Report.
 - Capability Reports identify the operating system, architecture, environment type such as native Windows or WSL, resolved executable form, and Lane-specific eligibility. Unsupported platforms are reported as `available: false` with a machine-readable reason such as `unsupported-platform`.
 - Native Windows and WSL capabilities are probed and certified separately. A Producer's WSL support is not evidence of native Windows support.

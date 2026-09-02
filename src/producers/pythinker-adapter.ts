@@ -4,6 +4,12 @@ import { join } from "node:path";
 import type { ResolvedExecutable } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { parseSemver, probeOsConfinedCli, runVersionProbe } from "./cli-probe.js";
+import {
+  isProducerAuthenticated,
+  resolveDefaultEnv,
+  resolveInheritedWritablePaths,
+  type HostStoreContext,
+} from "./host-store.js";
 import { normalizePlainText, renderProducerPrompt } from "./plain-text.js";
 import type {
   CapabilityReport,
@@ -11,6 +17,7 @@ import type {
   ProbeContext,
   ProducerAdapter,
   ProducerConfigurationProfile,
+  ProducerDescriptor,
   ProducerInvocation,
 } from "./producer-adapter.js";
 
@@ -25,77 +32,56 @@ function parseLongOptionTokens(helpText: string): Set<string> {
   return options;
 }
 
-export interface PythinkerAdapterDeps {
-  env: Record<string, string | undefined>;
-  homeDirectory: string;
-  hasAuthStore?: (directory: string) => boolean;
-}
+export interface PythinkerAdapterDeps extends HostStoreContext {}
 
-// The installed pythinker-code CLI auto-updates itself in the background by default
-// (`pythinker doctor` reports "Auto-update: on (installs in background)"). Disabling it for
-// the duration of a delegated run keeps the binary actually invoked consistent with the one
-// this adapter probed moments earlier (--version/--help); the host may still override this
-// by setting the variable itself, since defaultPythinkerEnv only fills in an absent value.
 const PYTHINKER_NO_AUTO_UPDATE_ENV = "PYTHINKER_CLI_NO_AUTO_UPDATE";
-// Forwarded from the host so a redirected Pythinker Code data directory — used below to
-// resolve the auth store and the default HOME — actually reaches the invoked process.
-// Pythinker's real default data directory is `~/.pythinker` (confirmed live via
-// docs/en/configuration/providers.md's `~/.pythinker/config.toml`, the 0.19.0 and 0.34.0
-// release notes referencing `~/.pythinker/projects/...` and `~/.pythinker/sessions/`, and an
-// upstream commit noting `get_share_dir`/`get_config_file` "materialize ~/.pythinker"), not
-// `~/.pythinker-code` as an earlier version of this adapter assumed. The override variable
-// name follows the same `share.py`/`get_share_dir()` convention as the shared upstream CLI
-// scaffold, whose confirmed override variable is `KIMI_SHARE_DIR` — the Pythinker-branded
-// equivalent is `PYTHINKER_SHARE_DIR`. Without forwarding it, a deployment that sets
-// PYTHINKER_SHARE_DIR to isolate this producer's config would have the adapter report
-// auth/config state from that directory while the real invocation silently fell back to
-// pythinker's own default `~/.pythinker`.
 const PYTHINKER_REQUIRED_ENV = ["PYTHINKER_SHARE_DIR", PYTHINKER_NO_AUTO_UPDATE_ENV] as const;
 
-function resolvePythinkerHome(
-  deps: Required<Pick<PythinkerAdapterDeps, "env" | "homeDirectory">>,
-): string {
+function resolvePythinkerHome(deps: HostStoreContext): string {
   const configuredHome = deps.env.PYTHINKER_SHARE_DIR;
   return configuredHome !== undefined && configuredHome.length > 0
     ? configuredHome
     : join(deps.env.HOME ?? deps.env.USERPROFILE ?? deps.homeDirectory, ".pythinker");
 }
 
-function defaultPythinkerEnv(
-  deps: Required<Pick<PythinkerAdapterDeps, "env" | "homeDirectory">> & {
-    pythinkerHome: string;
-    hasConfigDir: (directory: string) => boolean;
+export const pythinkerDescriptor: ProducerDescriptor = {
+  id: "pythinker",
+  executable: { name: "pythinker" },
+  isolation: "inherited-config-only",
+  hostState: {
+    resolveStore: deps => resolvePythinkerHome(deps),
+    authMarker: join("credentials", "pythinker-code.json"),
+    inheritedWritablePaths: store => [store],
+    defaultEnv: (store, deps) => {
+      const env: Record<string, string> = {};
+      if (deps.env.HOME === undefined) {
+        const hasConfig = (deps.hasConfigDir ?? existsSync)(store);
+        if (hasConfig) env.HOME = deps.homeDirectory;
+      }
+      if (deps.env[PYTHINKER_NO_AUTO_UPDATE_ENV] === undefined) {
+        env[PYTHINKER_NO_AUTO_UPDATE_ENV] = "1";
+      }
+      return env;
+    },
   },
-): Record<string, string> {
-  const env: Record<string, string> = {};
-  if (deps.env.HOME === undefined && deps.hasConfigDir(deps.pythinkerHome)) {
-    env.HOME = deps.homeDirectory;
-  }
-  if (deps.env[PYTHINKER_NO_AUTO_UPDATE_ENV] === undefined) {
-    env[PYTHINKER_NO_AUTO_UPDATE_ENV] = "1";
-  }
-  return env;
-}
+  prompt: {
+    actionPreamble: true,
+    bootstrapPlacement: "before",
+  },
+  structuredOutput: false,
+  executionModes: ["edit"],
+};
 
 export class PythinkerAdapter implements ProducerAdapter {
-  readonly producerId = "pythinker";
-  readonly structuredOutput = false;
-  readonly executionModes = ["edit"];
+  readonly producerId = pythinkerDescriptor.id;
+  readonly structuredOutput = pythinkerDescriptor.structuredOutput!;
+  readonly executionModes = pythinkerDescriptor.executionModes!;
+  readonly descriptor = pythinkerDescriptor;
 
   constructor(private readonly deps: PythinkerAdapterDeps = {
     env: process.env,
     homeDirectory: homedir(),
   }) {}
-
-  private hasAuthStore(directory: string): boolean {
-    return (this.deps.hasAuthStore ?? (store => existsSync(
-      join(store, "credentials", "pythinker-code.json"),
-    )))(directory);
-  }
-
-  private hasConfigDir(directory: string): boolean {
-    return existsSync(directory);
-  }
 
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
     return probeOsConfinedCli(ctx, {
@@ -105,11 +91,10 @@ export class PythinkerAdapter implements ProducerAdapter {
       parseVersion: stdout =>
         parseSemver(stdout) ?? /\d+\.\d+\.\d+(?:[-+][^\s]+)?/u.exec(stdout)?.[0] ?? null,
       inspectSurface: (probeCtx, executable) => this.inspectCliSurface(probeCtx, executable),
-      isAuthenticated: () => this.hasAuthStore(resolvePythinkerHome(this.deps)),
+      isAuthenticated: () => isProducerAuthenticated(pythinkerDescriptor, this.deps),
     });
   }
 
-  /** The installed CLI must expose every long option this adapter emits. */
   private async inspectCliSurface(
     ctx: ProbeContext,
     executable: ResolvedExecutable,
@@ -140,7 +125,10 @@ export class PythinkerAdapter implements ProducerAdapter {
 
     const args = [
       "--prompt",
-      renderProducerPrompt(spec, ctx.readOnly === true),
+      renderProducerPrompt(spec, {
+        readOnly: ctx.readOnly === true,
+        ...pythinkerDescriptor.prompt,
+      }),
     ];
     if (spec.producerOverrides?.model !== undefined) {
       args.push("--model", spec.producerOverrides.model);
@@ -149,14 +137,8 @@ export class PythinkerAdapter implements ProducerAdapter {
       executable: ctx.executable,
       args,
       requiredEnv: [...PYTHINKER_REQUIRED_ENV],
-      inheritedStateWritablePaths: [resolvePythinkerHome(this.deps)],
-      env: defaultPythinkerEnv({
-        env: this.deps.env,
-        homeDirectory: this.deps.homeDirectory,
-        pythinkerHome: resolvePythinkerHome(this.deps),
-        hasConfigDir: directory => this.hasConfigDir(directory),
-      }),
-      // Model sessions must reach the provider API; write-protection remains the confinement goal.
+      inheritedStateWritablePaths: resolveInheritedWritablePaths(pythinkerDescriptor, this.deps),
+      env: resolveDefaultEnv(pythinkerDescriptor, this.deps),
       network: "allowed",
     };
   }

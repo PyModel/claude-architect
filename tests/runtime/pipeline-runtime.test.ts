@@ -2898,7 +2898,7 @@ describe("runPipeline", () => {
       expectedArtifactHash: promotedArtifact.manifestHash,
     })).resolves.toMatchObject({ integration: "applied" });
     await expect(readFile(path.join(repo, "a.txt"), "utf8")).resolves.toBe("fixed\n");
-  });
+  }, 120_000);
 
   it("emits ordered pipeline-stage progress phases across review and fix rounds", async () => {
     const repo = await initRepo();

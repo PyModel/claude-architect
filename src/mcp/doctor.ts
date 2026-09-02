@@ -778,7 +778,7 @@ export async function doctor(deps: DoctorDependencies = {}): Promise<DoctorResul
       os: ps.os,
       arch,
       environmentType,
-    }));
+    }, undefined, { fresh: true }));
     for (const producer of producers) {
       if (!producer.available && producer.reason !== null) {
         issues.push(redact(`producer:${producer.producerId}:${producer.reason}`));

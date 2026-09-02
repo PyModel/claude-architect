@@ -1,9 +1,15 @@
-import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import type { ResolvedExecutable } from "../platform/platform-services.js";
 import { parseSemver, probeOsConfinedCli, runVersionProbe } from "./cli-probe.js";
+import {
+  defaultHasOauthAccount,
+  isProducerAuthenticated,
+  isRecord,
+  resolveInheritedWritablePaths,
+  type HostStoreContext,
+} from "./host-store.js";
 import { renderProducerPrompt } from "./plain-text.js";
 import type {
   AdapterEvent,
@@ -12,31 +18,20 @@ import type {
   ProbeContext,
   ProducerAdapter,
   ProducerConfigurationProfile,
+  ProducerDescriptor,
   ProducerInvocation,
 } from "./producer-adapter.js";
 
-// USER: the CLI resolves its OAuth credential through the login keychain, which
-// it looks up by user name — without it a logged-in host reports "Not logged in".
-// CLAUDE_CONFIG_DIR: relocated config/auth store must reach the process, or the
-// adapter would report auth state from one directory while the CLI read another.
-// ANTHROPIC_API_KEY: the API-key auth path, forwarded by declared policy exactly
-// as the Pi and agy lanes forward theirs.
 const CLAUDE_REQUIRED_ENV = ["USER", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY"] as const;
 const EDIT_TOOLS = "Read,Edit,Write,Bash,Grep,Glob";
 const READ_ONLY_TOOLS = "Read,Grep,Glob";
 const EFFORT_LEVELS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const TEXT_LIMIT = 8_000;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Claude Code emits `--version` as `<semver> (Claude Code)`. */
 function parseVersion(stdout: string): string | null {
   return /^(\d+\.\d+\.\d+(?:[-+][^\s]+)?)\b/u.exec(stdout.trim())?.[1] ?? null;
 }
 
-/** stderr warnings can precede the envelope when both land on one stream. */
 function parseEnvelope(stdout: string): Record<string, unknown> | null {
   const trimmed = stdout.trim();
   const start = trimmed.indexOf("{");
@@ -49,22 +44,44 @@ function parseEnvelope(stdout: string): Record<string, unknown> | null {
   }
 }
 
-export interface ClaudeAdapterDeps {
-  env: Record<string, string | undefined>;
-  homeDirectory: string;
-  /** Whether the account file at the given path records a logged-in OAuth account. */
-  hasOauthAccount?: (accountFile: string) => boolean;
+function resolveClaudeAccountFile(deps: HostStoreContext): string {
+  const configured = deps.env.CLAUDE_CONFIG_DIR;
+  if (configured !== undefined && configured.length > 0) {
+    return join(configured, ".claude.json");
+  }
+  const home = deps.env.HOME ?? deps.env.USERPROFILE ?? deps.homeDirectory;
+  return join(home, ".claude.json");
 }
 
-function defaultHasOauthAccount(accountFile: string): boolean {
-  if (!existsSync(accountFile)) return false;
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(accountFile, "utf8"));
-    return isRecord(parsed) && isRecord(parsed.oauthAccount);
-  } catch {
-    return false;
-  }
-}
+export const claudeDescriptor: ProducerDescriptor = {
+  id: "claude",
+  executable: { name: "claude" },
+  isolation: "inherited-config-only",
+  hostState: {
+    resolveStore: deps => {
+      const configured = deps.env.CLAUDE_CONFIG_DIR;
+      if (configured !== undefined && configured.length > 0) return configured;
+      const home = deps.env.HOME ?? deps.env.USERPROFILE ?? deps.homeDirectory;
+      return join(home, ".claude");
+    },
+    authMarker: (_store, deps) => {
+      const apiKey = deps.env.ANTHROPIC_API_KEY;
+      if (apiKey !== undefined && apiKey.length > 0) return true;
+      const accountFile = resolveClaudeAccountFile(deps);
+      return (deps.hasOauthAccount ?? defaultHasOauthAccount)(accountFile);
+    },
+    inheritedWritablePaths: (store, deps) => [store, resolveClaudeAccountFile(deps)],
+    apiKeyEnv: ["ANTHROPIC_API_KEY"],
+  },
+  prompt: {
+    actionPreamble: true,
+    bootstrapPlacement: "before",
+  },
+  structuredOutput: true,
+  executionModes: ["edit"],
+};
+
+export interface ClaudeAdapterDeps extends HostStoreContext {}
 
 const REQUIRED_CLAUDE_FLAGS = [
   "--no-session-persistence",
@@ -73,36 +90,15 @@ const REQUIRED_CLAUDE_FLAGS = [
 ] as const;
 
 export class ClaudeAdapter implements ProducerAdapter {
-  readonly producerId = "claude";
-  readonly structuredOutput = true;
-  readonly executionModes = ["edit"];
+  readonly producerId = claudeDescriptor.id;
+  readonly structuredOutput = claudeDescriptor.structuredOutput!;
+  readonly executionModes = claudeDescriptor.executionModes!;
+  readonly descriptor = claudeDescriptor;
 
   constructor(private readonly deps: ClaudeAdapterDeps = {
     env: process.env,
     homeDirectory: homedir(),
   }) {}
-
-  /** `~/.claude` (or CLAUDE_CONFIG_DIR): settings, sessions, and local state. */
-  private configDirectory(): string {
-    const configured = this.deps.env.CLAUDE_CONFIG_DIR;
-    if (configured !== undefined && configured.length > 0) return configured;
-    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
-    return join(home, ".claude");
-  }
-
-  /** `~/.claude.json`: the account record the CLI rewrites on every run. */
-  private accountFile(): string {
-    const configured = this.deps.env.CLAUDE_CONFIG_DIR;
-    if (configured !== undefined && configured.length > 0) return join(configured, ".claude.json");
-    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
-    return join(home, ".claude.json");
-  }
-
-  private isAuthenticated(): boolean {
-    const apiKey = this.deps.env.ANTHROPIC_API_KEY;
-    if (apiKey !== undefined && apiKey.length > 0) return true;
-    return (this.deps.hasOauthAccount ?? defaultHasOauthAccount)(this.accountFile());
-  }
 
   private async inspectCliSurface(
     ctx: ProbeContext,
@@ -133,7 +129,7 @@ export class ClaudeAdapter implements ProducerAdapter {
       structuredOutput: this.structuredOutput,
       parseVersion,
       inspectSurface: (probeCtx, executable) => this.inspectCliSurface(probeCtx, executable),
-      isAuthenticated: () => this.isAuthenticated(),
+      isAuthenticated: () => isProducerAuthenticated(claudeDescriptor, this.deps),
     });
   }
 
@@ -149,19 +145,12 @@ export class ClaudeAdapter implements ProducerAdapter {
       "-p",
       "--output-format",
       "json",
-      // Fresh context per attempt is a trust invariant: nothing is resumable.
       "--no-session-persistence",
-      // No MCP servers at all — in particular not this plugin's own runtime,
-      // which would otherwise hand the Producer a nested `delegate` tool.
       "--strict-mcp-config",
-      // Skip user, project, and local settings: their hooks and permission
-      // grants are host-side behavior that must not run inside an attempt.
       "--setting-sources",
       "",
       "--disable-slash-commands",
-      // Write confinement is the host Seatbelt profile, not the permission prompt.
       "--dangerously-skip-permissions",
-      // Built-ins only: no Agent (no nested subagents), no web, no artifacts.
       "--tools",
       readOnly ? READ_ONLY_TOOLS : EDIT_TOOLS,
     ];
@@ -175,10 +164,12 @@ export class ClaudeAdapter implements ProducerAdapter {
     return {
       executable: ctx.executable,
       args,
-      stdin: renderProducerPrompt(spec, readOnly),
+      stdin: renderProducerPrompt(spec, {
+        readOnly,
+        ...claudeDescriptor.prompt,
+      }),
       requiredEnv: [...CLAUDE_REQUIRED_ENV],
-      inheritedStateWritablePaths: [this.configDirectory(), this.accountFile()],
-      // Model sessions must reach the provider API; write-protection remains the confinement goal.
+      inheritedStateWritablePaths: resolveInheritedWritablePaths(claudeDescriptor, this.deps),
       network: "allowed",
     };
   }
@@ -224,8 +215,6 @@ export class ClaudeAdapter implements ProducerAdapter {
       behavioralConfigSources: [
         "explicit invocation argv (user/project/local settings, hooks, MCP servers, and skills are all disabled)",
       ],
-      // `--setting-sources ""` also turns off CLAUDE.md/AGENTS.md discovery
-      // (confirmed live): the Producer sees only the rendered spec.
       repositoryInstructionSources: [],
       environmentDependencies: [...CLAUDE_REQUIRED_ENV],
       temporaryHomeStrategy:

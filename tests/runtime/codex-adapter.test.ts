@@ -19,17 +19,17 @@ import {
   CODEX_REQUIRED_ENV,
   CODEX_SHELL_ENV_EXCLUDE,
   CodexAdapter,
-  defaultCodexEnv,
+  codexDescriptor,
   sandboxSupportWritableRoots,
 } from "../../src/producers/codex-adapter.js";
+import { resolveDefaultEnv } from "../../src/producers/host-store.js";
+import { producerRuntime } from "../../src/producers/producer-runtime.js";
 import { renderSkillBootstrap } from "../../src/producers/skill-bootstrap.js";
 import type {
   CapabilityReport,
   InvocationContext,
   ProbeContext,
 } from "../../src/producers/producer-adapter.js";
-import { buildEnvironment } from "../../src/runtime/environment-policy.js";
-import { supervise } from "../../src/platform/process-supervisor.js";
 import { buildRoleSpec, type RolePackage } from "../../src/pipeline/role-prompts.js";
 
 const execFileAsync = promisify(execFile);
@@ -219,7 +219,7 @@ describe("CodexAdapter", () => {
 
   it("defaults CODEX_HOME to the host auth store when unset and auth.json exists", () => {
     const store = join("/hosthome", ".codex");
-    const values = defaultCodexEnv({
+    const values = resolveDefaultEnv(codexDescriptor, {
       env: {},
       homeDirectory: "/hosthome",
       hasAuthStore: directory => directory === store,
@@ -228,12 +228,12 @@ describe("CodexAdapter", () => {
   });
 
   it("does not default CODEX_HOME when the variable is set or no auth store exists", () => {
-    expect(defaultCodexEnv({
+    expect(resolveDefaultEnv(codexDescriptor, {
       env: { CODEX_HOME: "/custom" },
       homeDirectory: "/hosthome",
       hasAuthStore: () => true,
     })).toEqual({});
-    expect(defaultCodexEnv({
+    expect(resolveDefaultEnv(codexDescriptor, {
       env: {},
       homeDirectory: "/hosthome",
       hasAuthStore: () => false,
@@ -587,7 +587,7 @@ describe("CodexAdapter", () => {
       if (originalCodexHome === undefined) {
         process.env.CODEX_HOME = join(homedir(), ".codex");
       }
-      let builtEnvironment: ReturnType<typeof buildEnvironment> | undefined;
+      let builtEnvironment: { secretRegistration: { dispose(): void } } | undefined;
 
       try {
         await mkdir(worktreePath);
@@ -614,27 +614,19 @@ describe("CodexAdapter", () => {
         spec.writeAllowlist = ["**"];
         spec.forbiddenScope = [];
         spec.producerOverrides = { reasoningEffort: "low" };
-        const invocation = adapter.buildInvocation(spec, {
+        const launchResult = await producerRuntime.launch({
+          producerId: "codex",
+          spec,
           worktreePath,
+          intent: "edit",
+          ps,
           runId: "run-confinement-gate",
           tempHome,
-          capabilityReport: report,
-          executable: report.resolvedExecutable,
-        });
-        builtEnvironment = buildEnvironment({
-          os: "darwin",
-          adapterAllowlist: invocation.requiredEnv,
-          tempHome,
-        });
-        const supervisedExit = await supervise(ps, {
-          executable: invocation.executable,
-          args: invocation.args,
-          cwd: worktreePath,
-          env: builtEnvironment.env,
           timeoutMs: 120_000,
-          ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-          maxOutputBytes: 1_000_000,
-        }, {});
+          capabilityReport: report,
+        });
+        builtEnvironment = launchResult.builtEnvironment;
+        const supervisedExit = launchResult.exit;
 
         await expect(
           readFile(insidePath, "utf8"),
@@ -685,7 +677,7 @@ describe("CodexAdapter", () => {
       if (originalCodexHome === undefined) {
         process.env.CODEX_HOME = join(homedir(), ".codex");
       }
-      let builtEnvironment: ReturnType<typeof buildEnvironment> | undefined;
+      let builtEnvironment: { secretRegistration: { dispose(): void } } | undefined;
 
       try {
         await mkdir(worktreePath);
@@ -712,28 +704,20 @@ describe("CodexAdapter", () => {
         spec.writeAllowlist = ["skill-proof.txt"];
         spec.forbiddenScope = [];
         spec.producerOverrides = { reasoningEffort: "low" };
-        const invocation = adapter.buildInvocation(spec, {
+        const launchResult = await producerRuntime.launch({
+          producerId: "codex",
+          spec,
           worktreePath,
+          intent: "edit",
+          ps,
           runId: "run-skill-gate",
           tempHome,
-          capabilityReport: report,
-          executable: report.resolvedExecutable,
-        });
-        expect(invocation.stdin).toContain(skillPath);
-        builtEnvironment = buildEnvironment({
-          os: "darwin",
-          adapterAllowlist: invocation.requiredEnv,
-          tempHome,
-        });
-        const supervisedExit = await supervise(ps, {
-          executable: invocation.executable,
-          args: invocation.args,
-          cwd: worktreePath,
-          env: builtEnvironment.env,
           timeoutMs: 240_000,
-          ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-          maxOutputBytes: 1_000_000,
-        }, {});
+          capabilityReport: report,
+        });
+        expect(launchResult.invocation.stdin).toContain(skillPath);
+        builtEnvironment = launchResult.builtEnvironment;
+        const supervisedExit = launchResult.exit;
 
         const proof = await readFile(proofPath, "utf8");
         const diagnostic =
@@ -763,7 +747,7 @@ describe("CodexAdapter", () => {
       if (originalCodexHome === undefined) {
         process.env.CODEX_HOME = join(homedir(), ".codex");
       }
-      let builtEnvironment: ReturnType<typeof buildEnvironment> | undefined;
+      let builtEnvironment: { secretRegistration: { dispose(): void } } | undefined;
 
       try {
         await mkdir(worktreePath);
@@ -790,27 +774,20 @@ describe("CodexAdapter", () => {
         spec.writeAllowlist = ["**"];
         spec.forbiddenScope = [];
         spec.producerOverrides = { reasoningEffort: "low" };
-        const invocation = adapter.buildInvocation(spec, {
+        const launchResult = await producerRuntime.launch({
+          producerId: "codex",
+          spec,
           worktreePath,
+          intent: "edit",
+          ps,
           runId: "run-shell-env-gate",
           tempHome,
-          capabilityReport: report,
-          executable: report.resolvedExecutable,
-        });
-        builtEnvironment = buildEnvironment({
-          os,
-          adapterAllowlist: invocation.requiredEnv,
-          tempHome,
-        });
-        const supervisedExit = await supervise(ps, {
-          executable: invocation.executable,
-          args: invocation.args,
-          cwd: worktreePath,
-          env: builtEnvironment.env,
           timeoutMs: 180_000,
-          ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
           maxOutputBytes: 2_000_000,
-        }, {});
+          capabilityReport: report,
+        });
+        builtEnvironment = launchResult.builtEnvironment;
+        const supervisedExit = launchResult.exit;
         const observed = await readFile(join(worktreePath, "probe-env.txt"), "utf8");
         const context =
           `stdout:\n${supervisedExit.stdout}\nstderr:\n${supervisedExit.stderr}`;
@@ -847,7 +824,7 @@ describe("CodexAdapter", () => {
       if (originalCodexHome === undefined) {
         process.env.CODEX_HOME = join(homedir(), ".codex");
       }
-      let builtEnvironment: ReturnType<typeof buildEnvironment> | undefined;
+      let builtEnvironment: { secretRegistration: { dispose(): void } } | undefined;
 
       try {
         await mkdir(worktreePath);
@@ -874,31 +851,23 @@ describe("CodexAdapter", () => {
         spec.writeAllowlist = ["**"];
         spec.forbiddenScope = [];
         spec.producerOverrides = { reasoningEffort: "low" };
-        const invocation = adapter.buildInvocation(spec, {
+        const launchResult = await producerRuntime.launch({
+          producerId: "codex",
+          spec,
           worktreePath,
+          intent: "edit",
+          ps,
           runId: "run-confinement-gate",
           tempHome,
+          timeoutMs: 120_000,
           capabilityReport: {
             ...report,
             writeConfinementBackend: "codex-native-sandbox",
             laneEligibility: { ...report.laneEligibility, edit: true },
           },
-          executable: report.resolvedExecutable,
         });
-        builtEnvironment = buildEnvironment({
-          os: "linux",
-          adapterAllowlist: invocation.requiredEnv,
-          tempHome,
-        });
-        const supervisedExit = await supervise(ps, {
-          executable: invocation.executable,
-          args: invocation.args,
-          cwd: worktreePath,
-          env: builtEnvironment.env,
-          timeoutMs: 120_000,
-          ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-          maxOutputBytes: 1_000_000,
-        }, {});
+        builtEnvironment = launchResult.builtEnvironment;
+        const supervisedExit = launchResult.exit;
 
         await expect(
           readFile(insidePath, "utf8"),

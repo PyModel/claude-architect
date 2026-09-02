@@ -3,6 +3,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { probeOsConfinedCli } from "./cli-probe.js";
+import {
+  isProducerAuthenticated,
+  resolveDefaultEnv,
+  resolveInheritedWritablePaths,
+  type HostStoreContext,
+} from "./host-store.js";
 import { normalizePlainText, renderProducerPrompt } from "./plain-text.js";
 import type {
   CapabilityReport,
@@ -10,62 +16,62 @@ import type {
   ProbeContext,
   ProducerAdapter,
   ProducerConfigurationProfile,
+  ProducerDescriptor,
   ProducerInvocation,
 } from "./producer-adapter.js";
 
 const OPENCODE_REQUIRED_ENV = ["OPENCODE_CONFIG_DIR", "XDG_DATA_HOME"] as const;
 
-export interface OpenCodeAdapterDeps {
-  env: Record<string, string | undefined>;
-  homeDirectory: string;
-  hasAuthStore?: (directory: string) => boolean;
-}
+export const openCodeDescriptor: ProducerDescriptor = {
+  id: "opencode",
+  executable: { name: "opencode" },
+  isolation: "controlled-config-with-copied-credentials",
+  hostState: {
+    resolveStore: deps => {
+      const dataHome = deps.env.XDG_DATA_HOME ?? join(deps.homeDirectory, ".local", "share");
+      return join(dataHome, "opencode");
+    },
+    authMarker: "auth.json",
+    inheritedWritablePaths: (store, deps) => {
+      const stateHome = deps.env.XDG_STATE_HOME ?? join(deps.homeDirectory, ".local", "state");
+      return [store, join(stateHome, "opencode")];
+    },
+    defaultEnv: (_store, deps) => {
+      if (deps.env.XDG_DATA_HOME !== undefined) return {};
+      const dataHome = join(deps.homeDirectory, ".local", "share");
+      const dataDir = join(dataHome, "opencode");
+      const hasAuth = (deps.hasAuthStore ?? (dir => existsSync(join(dir, "auth.json"))))(dataDir);
+      return hasAuth ? { XDG_DATA_HOME: dataHome } : {};
+    },
+  },
+  prompt: {
+    actionPreamble: true,
+    bootstrapPlacement: "before",
+  },
+  structuredOutput: false,
+  executionModes: ["edit"],
+};
 
-function defaultOpenCodeEnv(
-  deps: Required<Pick<OpenCodeAdapterDeps, "env" | "homeDirectory" | "hasAuthStore">>,
-): Record<string, string> {
-  if (deps.env.XDG_DATA_HOME !== undefined) return {};
-  const dataHome = join(deps.homeDirectory, ".local", "share");
-  return deps.hasAuthStore(join(dataHome, "opencode"))
-    ? { XDG_DATA_HOME: dataHome }
-    : {};
-}
+export interface OpenCodeAdapterDeps extends HostStoreContext {}
 
 export class OpenCodeAdapter implements ProducerAdapter {
-  readonly producerId = "opencode";
-  readonly structuredOutput = false;
-  readonly executionModes = ["edit"];
+  readonly producerId = openCodeDescriptor.id;
+  readonly structuredOutput = openCodeDescriptor.structuredOutput!;
+  readonly executionModes = openCodeDescriptor.executionModes!;
+  readonly descriptor = openCodeDescriptor;
 
   constructor(private readonly deps: OpenCodeAdapterDeps = {
     env: process.env,
     homeDirectory: homedir(),
   }) {}
 
-  private hasAuthStore(directory: string): boolean {
-    return (this.deps.hasAuthStore ?? (store => existsSync(join(store, "auth.json"))))(directory);
-  }
-
-  /** OpenCode's XDG data directory (where auth.json lives), honoring XDG_DATA_HOME. */
-  private dataDirectory(): string {
-    const dataHome = this.deps.env.XDG_DATA_HOME
-      ?? join(this.deps.homeDirectory, ".local", "share");
-    return join(dataHome, "opencode");
-  }
-
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
     return probeOsConfinedCli(ctx, {
       producerId: this.producerId,
       executableName: "opencode",
       structuredOutput: this.structuredOutput,
-      isAuthenticated: () => this.hasAuthStore(this.dataDirectory()),
+      isAuthenticated: () => isProducerAuthenticated(openCodeDescriptor, this.deps),
     });
-  }
-
-  /** OpenCode's XDG data (auth) and state directories, honoring host overrides. */
-  private stateDirectories(): string[] {
-    const stateHome = this.deps.env.XDG_STATE_HOME
-      ?? join(this.deps.homeDirectory, ".local", "state");
-    return [this.dataDirectory(), join(stateHome, "opencode")];
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
@@ -86,15 +92,13 @@ export class OpenCodeAdapter implements ProducerAdapter {
     return {
       executable: ctx.executable,
       args,
-      stdin: renderProducerPrompt(spec, ctx.readOnly === true),
-      requiredEnv: [...OPENCODE_REQUIRED_ENV],
-      inheritedStateWritablePaths: this.stateDirectories(),
-      env: defaultOpenCodeEnv({
-        env: this.deps.env,
-        homeDirectory: this.deps.homeDirectory,
-        hasAuthStore: directory => this.hasAuthStore(directory),
+      stdin: renderProducerPrompt(spec, {
+        readOnly: ctx.readOnly === true,
+        ...openCodeDescriptor.prompt,
       }),
-      // Model sessions must reach the provider API; write-protection remains the confinement goal.
+      requiredEnv: [...OPENCODE_REQUIRED_ENV],
+      inheritedStateWritablePaths: resolveInheritedWritablePaths(openCodeDescriptor, this.deps),
+      env: resolveDefaultEnv(openCodeDescriptor, this.deps),
       network: "allowed",
     };
   }

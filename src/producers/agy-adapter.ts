@@ -1,8 +1,14 @@
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { probeOsConfinedCli } from "./cli-probe.js";
+import {
+  isProducerAuthenticated,
+  isRecord,
+  resolveInheritedWritablePaths,
+  stringProperty,
+  type HostStoreContext,
+} from "./host-store.js";
 import { renderProducerPrompt } from "./plain-text.js";
 import type {
   AdapterEvent,
@@ -11,66 +17,67 @@ import type {
   ProbeContext,
   ProducerAdapter,
   ProducerConfigurationProfile,
+  ProducerDescriptor,
   ProducerInvocation,
 } from "./producer-adapter.js";
 
 const AGY_REQUIRED_ENV = ["GEMINI_API_KEY"] as const;
 const TEXT_LIMIT = 8_000;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringProperty(value: unknown, name: string): string | undefined {
-  if (!isRecord(value)) return undefined;
-  const property = value[name];
-  return typeof property === "string" ? property : undefined;
-}
-
-/** Go time.ParseDuration accepts a bare seconds-magnitude unit; keep it simple. */
 function formatPrintTimeout(timeoutMs: number): string {
   return `${Math.ceil(timeoutMs / 1000)}s`;
 }
 
-export interface AgyAdapterDeps {
-  env: Record<string, string | undefined>;
-  homeDirectory: string;
-  hasAuthStore?: (directory: string) => boolean;
-}
+export const agyDescriptor: ProducerDescriptor = {
+  id: "agy",
+  executable: { name: "agy" },
+  isolation: "inherited-config-only",
+  hostState: {
+    resolveStore: deps => {
+      const home = deps.env.HOME ?? deps.env.USERPROFILE ?? deps.homeDirectory;
+      return join(home, ".gemini", "antigravity-cli");
+    },
+    authMarker: "settings.json",
+    inheritedWritablePaths: store => [store],
+    apiKeyEnv: ["GEMINI_API_KEY"],
+  },
+  prompt: {
+    actionPreamble: true,
+    bootstrapPlacement: "before",
+  },
+  structuredOutput: true,
+  executionModes: ["edit"],
+};
+
+export interface AgyAdapterDeps extends HostStoreContext {}
 
 export class AgyAdapter implements ProducerAdapter {
-  readonly producerId = "agy";
-  readonly structuredOutput = true;
-  readonly executionModes = ["edit"];
+  readonly producerId = agyDescriptor.id;
+  readonly structuredOutput = agyDescriptor.structuredOutput!;
+  readonly executionModes = agyDescriptor.executionModes!;
+  readonly descriptor = agyDescriptor;
 
   constructor(private readonly deps: AgyAdapterDeps = {
     env: process.env,
     homeDirectory: homedir(),
   }) {}
 
-  private hasAuthStore(directory: string): boolean {
-    return (this.deps.hasAuthStore ?? (store => existsSync(join(store, "settings.json"))))(directory);
-  }
-
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
     return probeOsConfinedCli(ctx, {
       producerId: this.producerId,
       executableName: "agy",
       structuredOutput: this.structuredOutput,
-      isAuthenticated: () => this.hasAuthStore(this.configDirectory()),
+      isAuthenticated: () => isProducerAuthenticated(agyDescriptor, this.deps),
     });
-  }
-
-  /** agy's settings/auth store; the only host state an attempt must write. */
-  private configDirectory(): string {
-    const home = this.deps.env.HOME ?? this.deps.env.USERPROFILE ?? this.deps.homeDirectory;
-    return join(home, ".gemini", "antigravity-cli");
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
     const args = [
       "-p",
-      renderProducerPrompt(spec, ctx.readOnly === true),
+      renderProducerPrompt(spec, {
+        readOnly: ctx.readOnly === true,
+        ...agyDescriptor.prompt,
+      }),
       "--add-dir",
       ctx.worktreePath,
       "--new-project",
@@ -91,8 +98,7 @@ export class AgyAdapter implements ProducerAdapter {
       executable: ctx.executable,
       args,
       requiredEnv: [...AGY_REQUIRED_ENV],
-      inheritedStateWritablePaths: [this.configDirectory()],
-      // Model sessions must reach the provider API; write-protection remains the confinement goal.
+      inheritedStateWritablePaths: resolveInheritedWritablePaths(agyDescriptor, this.deps),
       network: "allowed",
     };
   }

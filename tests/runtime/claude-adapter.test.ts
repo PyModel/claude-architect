@@ -11,18 +11,16 @@ import type {
   SupervisedExit,
 } from "../../src/platform/platform-services.js";
 import { PosixPlatformServices } from "../../src/platform/posix-platform-services.js";
-import { supervise } from "../../src/platform/process-supervisor.js";
-import { wrapInvocationWithSeatbelt } from "../../src/platform/sandbox/seatbelt.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import { ClaudeAdapter } from "../../src/producers/claude-adapter.js";
 import { renderProducerPrompt, selectOsWriteConfinementBackend } from "../../src/producers/plain-text.js";
+import { producerRuntime } from "../../src/producers/producer-runtime.js";
 import { renderSkillBootstrap } from "../../src/producers/skill-bootstrap.js";
 import type {
   CapabilityReport,
   InvocationContext,
   ProbeContext,
 } from "../../src/producers/producer-adapter.js";
-import { buildEnvironment } from "../../src/runtime/environment-policy.js";
 
 const execFileAsync = promisify(execFile);
 const executable: ResolvedExecutable = {
@@ -424,24 +422,32 @@ Options:
     ]);
   });
 
-  it("wraps a Claude edit invocation with provider network and write confinement", () => {
-    const invocation = testAdapter().buildInvocation(sampleSpec(), invocationContext());
-    const wrapped = wrapInvocationWithSeatbelt(invocation, {
+  it("wraps a Claude edit invocation with provider network and write confinement", async () => {
+    const adapter = testAdapter();
+    const plan = await producerRuntime.planLaunch({
+      adapter,
+      producerId: "claude",
+      spec: sampleSpec(),
       worktreePath: "/tmp/attempt-worktree",
-      tempHome: null,
-      allowNetwork: true,
+      intent: "edit",
+      ps: new PosixPlatformServices(),
+      capabilityReport: {
+        ...invocationContext().capabilityReport,
+        writeConfinementBackend: "macos-seatbelt",
+      },
     });
+    const wrapped = plan.invocation;
     const profile = wrapped.args[1] ?? "";
     const configDir = join("/Users/test", ".claude");
     const accountFile = join("/Users/test", ".claude.json");
 
+    expect(plan.confinementBackend).toBe("macos-seatbelt");
     expect(wrapped.executable.command).toBe("/usr/bin/sandbox-exec");
     expect(profile).toContain('(allow file-write* (subpath "/tmp/attempt-worktree"))');
     expect(profile).toContain(`(subpath "${configDir.replace(/\\/gu, "\\\\")}")`);
     expect(profile).toContain(`(subpath "${accountFile.replace(/\\/gu, "\\\\")}")`);
     expect(profile).not.toContain('(subpath "/Users/test")');
     expect(profile).not.toContain("(deny network*)");
-    expect(wrapped.args.slice(2)).toEqual([executable.command, ...invocation.args]);
   });
 
   it("declares the Claude Code configuration isolation profile", () => {
@@ -586,35 +592,19 @@ describe("ClaudeAdapter macOS smoke", () => {
         spec.successCriteria = ["smoke.txt exists and contains ok."];
         spec.timeoutMs = 300_000;
         spec.producerOverrides = { model: "haiku" };
-        const invocation = wrapInvocationWithSeatbelt(adapter.buildInvocation(spec, {
+        const launchResult = await producerRuntime.launch({
+          adapter,
+          producerId: "claude",
+          spec,
           worktreePath,
+          intent: "edit",
+          ps,
           runId: "run-claude-smoke",
           capabilityReport: report,
-          executable: report.resolvedExecutable,
-        }), {
-          worktreePath,
-          tempHome: null,
-          allowNetwork: true,
         });
-        builtEnvironment = buildEnvironment({
-          os: "darwin",
-          adapterAllowlist: invocation.requiredEnv,
-          ...(invocation.env === undefined ? {} : { adapterValues: invocation.env }),
-        });
-        const supervisedExit = await supervise(ps, {
-          executable: invocation.executable,
-          args: invocation.args,
-          cwd: worktreePath,
-          env: builtEnvironment.env,
-          timeoutMs: 300_000,
-          ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-          maxOutputBytes: 1_000_000,
-        }, {});
-        const normalized = adapter.normalizeEvents({
-          stdout: supervisedExit.stdout,
-          stderr: supervisedExit.stderr,
-          exit: supervisedExit,
-        });
+        builtEnvironment = launchResult.builtEnvironment;
+        const supervisedExit = launchResult.exit;
+        const normalized = { ok: launchResult.ok };
 
         expect(
           normalized.ok,

@@ -12,7 +12,6 @@ import type {
 } from "../platform/platform-services.js";
 import { supervise } from "../platform/process-supervisor.js";
 import { selectSandboxBackend } from "../platform/sandbox/backends.js";
-import { wrapInvocationWithSeatbelt } from "../platform/sandbox/seatbelt.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import type {
   AttemptResult,
@@ -36,6 +35,7 @@ import {
   ProducerRegistry,
   registry,
 } from "../producers/producer-registry.js";
+import { ProducerRuntime, producerRuntime } from "../producers/producer-runtime.js";
 import { route } from "../producers/routing-policy.js";
 import { NestedDelegationError, RuntimeError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
@@ -179,6 +179,7 @@ interface TerminalContext {
   producerLog: string;
   repositoryInstructions: RepositoryInstructionInput[];
   packagedVerifier: PackagedVerifierInput;
+  probeCacheHits?: number;
 }
 
 // Host-facing progress only. Durability belongs to `emitStatus`, which writes
@@ -245,10 +246,6 @@ function preCancelledExit(): SupervisedExit {
   };
 }
 
-function shouldUseTemporaryHome(profile: ProducerConfigurationProfile): boolean {
-  return profile.isolationState === "controlled-config-supported"
-    || profile.isolationState === "controlled-config-with-copied-credentials";
-}
 
 async function archiveTerminal(context: TerminalContext): Promise<AttemptResult> {
   const verificationSecretRegistrations: Array<{ dispose(): void }> = [];
@@ -310,6 +307,7 @@ async function archiveTerminal(context: TerminalContext): Promise<AttemptResult>
         network: context.invocation?.network ?? "not-started",
         writeAllowlist: context.spec.writeAllowlist,
         forbiddenScope: context.spec.forbiddenScope,
+        probeCacheHits: context.probeCacheHits ?? 0,
       },
       environment: context.environment,
       packagedVerifier: context.packagedVerifier,
@@ -400,13 +398,20 @@ export async function runAttempt(
       detail: fields.detail ?? null,
     });
   };
+  const runtime = deps.producerRegistry !== undefined
+    ? new ProducerRuntime(deps.producerRegistry)
+    : producerRuntime;
   const archiveWithStatus = async (context: TerminalContext): Promise<AttemptResult> => {
     // Positive provenance for the decision gate: a plain `delegate` run never
     // enters a pipeline gate, so autonomy over its candidate must key on this
     // recorded marker, never on the mere absence of pipeline evidence.
+    const effectiveContext: TerminalContext = {
+      ...context,
+      probeCacheHits: context.probeCacheHits ?? runtime.probeCacheHits,
+    };
     const result = await archiveTerminal(statusContext.pipelineManaged
-      ? context
-      : { ...context, evidence: { ...context.evidence, plainDelegate: true } });
+      ? effectiveContext
+      : { ...effectiveContext, evidence: { ...context.evidence, plainDelegate: true } });
     if (!statusContext.pipelineManaged) {
       await emitStatus(result.status === "verified-candidate" ? "done" : "failed", {
         producerId: result.producerId,
@@ -598,15 +603,21 @@ export async function runAttempt(
       borrowedCheckoutLease: lock,
     }).create(preconditions.baseCommitOid);
     const profile = adapter.configurationProfile();
-    if (shouldUseTemporaryHome(profile)) tempHome = await ps.createSecureTempDirectory();
-    let invocation = adapter.buildInvocation(spec, {
+    const launchPlan = await runtime.planLaunch({
+      producerId: report.producerId,
+      adapter,
+      spec,
       worktreePath: worktree.path,
+      intent: spec.executionMode === "edit" ? "edit" : "read-only",
+      ps,
       runId,
-      ...(tempHome === null ? {} : { tempHome }),
       capabilityReport: report,
-      executable: report.resolvedExecutable,
     });
-    let confinement: string | null = null;
+    tempHome = launchPlan.tempHome;
+    builtEnvironment = launchPlan.builtEnvironment;
+    let invocation = launchPlan.invocation;
+    let confinement: string | null = launchPlan.confinementBackend;
+
     if (spec.executionMode === "edit") {
       const selection = selectSandboxBackend(report);
       if (selection.backend === null) {
@@ -632,14 +643,6 @@ export async function runAttempt(
           producerLog: producerLog(null),
           repositoryInstructions,
           packagedVerifier,
-        });
-      }
-      confinement = selection.backend.id;
-      if (selection.backend.kind === "os" && selection.backend.id === "macos-seatbelt") {
-        invocation = wrapInvocationWithSeatbelt(invocation, {
-          worktreePath: worktree.path,
-          tempHome,
-          allowNetwork: invocation.network === "allowed",
         });
       }
     }
@@ -695,32 +698,29 @@ export async function runAttempt(
         });
       }
     }
-    builtEnvironment = buildEnvironment({
-      os: ps.os,
-      adapterAllowlist: invocation.requiredEnv,
-      ...(invocation.env === undefined ? {} : { adapterValues: invocation.env }),
-      ...(tempHome === null ? {} : { tempHome }),
-    });
-    const recordingServices = withRunStartPidRecording(ps, runStartContext);
-    const watchdog = await parentDeathWatchdogInvocation(
-      invocation.executable,
-      invocation.args,
-    );
     if (!statusContext.pipelineManaged) {
       await emitStatus("implementing", { producerId: report.producerId });
     }
     await reportPhase(deps, "producer running");
-    const exit = deps.abortSignal?.aborted === true
-      ? preCancelledExit()
-      : await supervise(recordingServices, {
-        executable: watchdog.executable,
-        args: watchdog.args,
-        cwd: worktree.path,
-        env: builtEnvironment.env,
-        timeoutMs: spec.timeoutMs,
-        ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-        maxOutputBytes: MAX_PRODUCER_OUTPUT_BYTES,
-      }, deps.abortSignal === undefined ? {} : { onCancel: deps.abortSignal });
+    const launchResult = await runtime.launch({
+      producerId: report.producerId,
+      adapter,
+      spec,
+      worktreePath: worktree.path,
+      intent: spec.executionMode === "edit" ? "edit" : "read-only",
+      ps,
+      runId,
+      tempHome,
+      abortSignal: deps.abortSignal,
+      timeoutMs: spec.timeoutMs,
+      runStartContext,
+      capabilityReport: report,
+      plan: launchPlan,
+    });
+    invocation = launchResult.invocation;
+    builtEnvironment = launchResult.builtEnvironment;
+    const exit = launchResult.exit;
+    confinement = launchResult.confinementBackend;
 
     const signals: FailureSignals = {};
     let producerSummary: string | null = null;
@@ -735,9 +735,8 @@ export async function runAttempt(
     if (exit.timedOut) signals.timeout = true;
 
     if (!hasFailureSignal(signals)) {
-      const normalized = adapter.normalizeEvents({ stdout: exit.stdout, stderr: exit.stderr, exit });
-      producerSummary = normalized.producerSummary;
-      if (!normalized.ok) signals["invalid-output"] = true;
+      producerSummary = launchResult.producerSummary;
+      if (!launchResult.ok) signals["invalid-output"] = true;
       if (exit.exitCode !== 0) signals["producer-failure"] = true;
     }
 

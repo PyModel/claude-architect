@@ -5,6 +5,7 @@ import type {
   SupervisedExit,
 } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
+import { renderProducerPrompt } from "./prompt-renderer.js";
 
 export type PlatformState = "certified" | "tested" | "conditional" | "unsupported" | "unknown";
 export type EnvironmentType = "native" | "wsl";
@@ -94,6 +95,123 @@ export type ProducerConfigurationProfile = {
   temporaryHomeStrategy: string;
 };
 
+export type ProducerIsolation = ProducerConfigurationProfile["isolationState"];
+
+export interface ProducerDescriptor {
+  readonly id: string;
+  readonly executable: { name: string };
+  readonly isolation: ProducerIsolation;
+  readonly hostState?: import("./host-store.js").HostStateDescriptor;
+  readonly prompt?: {
+    actionPreamble?: boolean;
+    bootstrapPlacement?: "before" | "after";
+  };
+  readonly structuredOutput?: boolean;
+  readonly executionModes?: string[];
+  readonly configurationProfile?: ProducerConfigurationProfile;
+  probe?(ctx: ProbeContext, deps: import("./host-store.js").HostStoreContext): Promise<CapabilityReport>;
+  buildInvocation?(
+    spec: DelegationSpec,
+    ctx: InvocationContext,
+    deps?: import("./host-store.js").HostStoreContext,
+  ): ProducerInvocation;
+  normalizeEvents?(raw: { stdout: string; stderr: string; exit: SupervisedExit }): {
+    events: AdapterEvent[];
+    producerSummary: string | null;
+    ok: boolean;
+  };
+}
+
+export class DescriptorAdapter implements ProducerAdapter {
+  readonly producerId: string;
+  readonly structuredOutput: boolean;
+  readonly executionModes: string[];
+
+  constructor(
+    readonly descriptor: ProducerDescriptor,
+    private readonly deps: import("./host-store.js").HostStoreContext = {
+      env: process.env,
+      homeDirectory: (process.env.HOME ?? process.env.USERPROFILE ?? ""),
+    },
+  ) {
+    this.producerId = descriptor.id;
+    this.structuredOutput = descriptor.structuredOutput ?? false;
+    this.executionModes = descriptor.executionModes ? [...descriptor.executionModes] : ["edit"];
+  }
+
+  async probe(ctx: ProbeContext): Promise<CapabilityReport> {
+    if (this.descriptor.probe) {
+      return this.descriptor.probe(ctx, this.deps);
+    }
+    const { isProducerAuthenticated } = await import("./host-store.js");
+    const resolved = await ctx.ps
+      .resolveExecutable({ name: this.descriptor.executable.name })
+      .catch(() => null);
+    const authState = isProducerAuthenticated(this.descriptor, this.deps)
+      ? "authenticated"
+      : "unauthenticated";
+    return {
+      producerId: this.producerId,
+      available: resolved !== null,
+      reason: resolved !== null ? null : "missing-executable",
+      os: ctx.os,
+      arch: ctx.arch,
+      environmentType: ctx.environmentType,
+      resolvedExecutable: resolved,
+      version: null,
+      authState,
+      executionModes: [...this.executionModes],
+      structuredOutput: this.structuredOutput,
+      writeConfinementBackend: null,
+      laneEligibility: { edit: resolved !== null },
+    };
+  }
+
+  buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
+    if (this.descriptor.buildInvocation) {
+      return this.descriptor.buildInvocation(spec, ctx, this.deps);
+    }
+    return {
+      executable: ctx.executable,
+      args: [],
+      stdin: renderProducerPrompt(spec, {
+        readOnly: ctx.readOnly === true,
+        ...this.descriptor.prompt,
+      }),
+      requiredEnv: [],
+      network: "allowed",
+    };
+  }
+
+  normalizeEvents(raw: { stdout: string; stderr: string; exit: SupervisedExit }): {
+    events: AdapterEvent[];
+    producerSummary: string | null;
+    ok: boolean;
+  } {
+    if (this.descriptor.normalizeEvents) {
+      return this.descriptor.normalizeEvents(raw);
+    }
+    return { events: [], producerSummary: null, ok: raw.exit.exitCode === 0 };
+  }
+
+  configurationProfile(): ProducerConfigurationProfile {
+    if (this.descriptor.configurationProfile) {
+      return this.descriptor.configurationProfile;
+    }
+    return {
+      isolationState: this.descriptor.isolation,
+      credentialSources: [],
+      behavioralConfigSources: [],
+      repositoryInstructionSources: [],
+      environmentDependencies: [],
+      temporaryHomeStrategy:
+        this.descriptor.isolation === "inherited-config-only"
+          ? "inherited-home"
+          : "none",
+    };
+  }
+}
+
 export function detectEnvironmentType(
   readProcVersion: () => string = () => readFileSync("/proc/version", "utf8"),
 ): EnvironmentType {
@@ -106,3 +224,4 @@ export function detectEnvironmentType(
     return "wsl";
   }
 }
+

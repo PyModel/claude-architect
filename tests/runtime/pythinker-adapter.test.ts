@@ -11,13 +11,12 @@ import type {
   SupervisedExit,
 } from "../../src/platform/platform-services.js";
 import { PosixPlatformServices } from "../../src/platform/posix-platform-services.js";
-import { supervise } from "../../src/platform/process-supervisor.js";
-import { wrapInvocationWithSeatbelt } from "../../src/platform/sandbox/seatbelt.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import {
   normalizePlainText,
   renderProducerPrompt,
 } from "../../src/producers/plain-text.js";
+import { producerRuntime } from "../../src/producers/producer-runtime.js";
 import type {
   CapabilityReport,
   InvocationContext,
@@ -25,7 +24,6 @@ import type {
 } from "../../src/producers/producer-adapter.js";
 import { PythinkerAdapter } from "../../src/producers/pythinker-adapter.js";
 import { renderSkillBootstrap } from "../../src/producers/skill-bootstrap.js";
-import { buildEnvironment } from "../../src/runtime/environment-policy.js";
 
 const execFileAsync = promisify(execFile);
 const executable: ResolvedExecutable = {
@@ -622,30 +620,18 @@ describe("PythinkerAdapter", () => {
         spec.forbiddenScope = [];
         spec.successCriteria = ["smoke.txt exists and contains ok."];
         spec.timeoutMs = 300_000;
-        const invocation = wrapInvocationWithSeatbelt(adapter.buildInvocation(spec, {
+        const launchResult = await producerRuntime.launch({
+          adapter,
+          producerId: "pythinker",
+          spec,
           worktreePath,
+          intent: "edit",
+          ps,
           runId: "run-pythinker-smoke",
           capabilityReport: report,
-          executable: report.resolvedExecutable,
-        }), {
-          worktreePath,
-          tempHome: null,
-          allowNetwork: true,
         });
-        builtEnvironment = buildEnvironment({
-          os: "darwin",
-          adapterAllowlist: invocation.requiredEnv,
-          ...(invocation.env === undefined ? {} : { adapterValues: invocation.env }),
-        });
-        const supervisedExit = await supervise(ps, {
-          executable: invocation.executable,
-          args: invocation.args,
-          cwd: worktreePath,
-          env: builtEnvironment.env,
-          timeoutMs: 300_000,
-          ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-          maxOutputBytes: 1_000_000,
-        }, {});
+        builtEnvironment = launchResult.builtEnvironment;
+        const supervisedExit = launchResult.exit;
         const normalized = normalizePlainText({
           stdout: supervisedExit.stdout,
           stderr: supervisedExit.stderr,

@@ -1,13 +1,7 @@
 import { rm } from "node:fs/promises";
 import type { PlatformServices, SupervisedExit } from "../platform/platform-services.js";
-import { supervise } from "../platform/process-supervisor.js";
 import { selectSandboxBackend } from "../platform/sandbox/backends.js";
 import { selectOsWriteConfinementBackend } from "../producers/plain-text.js";
-import {
-  buildReadOnlySeatbeltPolicy,
-  buildWriteSeatbeltPolicy,
-  wrapInvocationWithSeatbelt,
-} from "../platform/sandbox/seatbelt.js";
 import {
   classifyFailure,
   type FailureClassification,
@@ -17,14 +11,11 @@ import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { probeAll } from "../producers/capability-probe.js";
 import { detectEnvironmentType } from "../producers/producer-adapter.js";
 import type { ProducerRegistry } from "../producers/producer-registry.js";
+import { ProducerRuntime, producerRuntime } from "../producers/producer-runtime.js";
 import { route } from "../producers/routing-policy.js";
-import { buildEnvironment } from "../runtime/environment-policy.js";
+import { type BuiltEnvironment } from "../runtime/environment-policy.js";
 import { redact } from "../runtime/redaction.js";
-import {
-  parentDeathWatchdogInvocation,
-  type RunStartContext,
-  withRunStartPidRecording,
-} from "../runtime/run-start.js";
+import type { RunStartContext } from "../runtime/run-start.js";
 import {
   buildRoleSpec,
   type PipelineRole,
@@ -105,7 +96,7 @@ function hasFailureSignal(signals: FailureSignals): boolean {
 
 async function cleanupProcessAttempt(
   tempHome: string | null,
-  builtEnvironment: ReturnType<typeof buildEnvironment> | null,
+  builtEnvironment: BuiltEnvironment | null,
 ): Promise<unknown | null> {
   const failures: unknown[] = [];
   try {
@@ -218,72 +209,30 @@ export async function runRole(args: RoleRunArgs): Promise<RoleRunResult> {
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let tempHome: string | null = null;
-    let builtEnvironment: ReturnType<typeof buildEnvironment> | null = null;
+    let builtEnvironment: BuiltEnvironment | null = null;
     let primaryError: unknown;
     try {
-      tempHome = await args.ps.createSecureTempDirectory();
-      let invocation = adapter.buildInvocation(roleSpec, {
+      const runtime = args.registry !== undefined
+        ? new ProducerRuntime(args.registry)
+        : producerRuntime;
+      const launchResult = await runtime.launch({
+        producerId,
+        spec: roleSpec,
         worktreePath: args.worktreePath,
-        ...(extraWritableRoots.length === 0 ? {} : { extraWritableRoots }),
-        ...(gitObjectAccess === undefined
-          ? {}
-          : {
-            gitObjectDirectory: gitObjectAccess.privateObjectsDir,
-            gitAlternateObjectDirectories: gitObjectAccess.sharedObjectsDir,
-          }),
+        intent: readOnly ? "read-only" : "edit",
+        ps: args.ps,
         runId: args.runId,
-        tempHome,
+        abortSignal: args.abortSignal,
+        timeoutMs: roleSpec.timeoutMs,
+        extraWritableRoots: extraWritableRoots.length > 0 ? extraWritableRoots : undefined,
+        gitObjectAccess,
+        envAdditions: args.env !== undefined ? definedEnvironment(args.env) : undefined,
+        runStartContext: writer && runStart !== undefined ? runStart : undefined,
         capabilityReport: report,
-        executable: report.resolvedExecutable,
-        readOnly: nativeReadOnly,
       });
-      if (readOnly && !nativeReadOnly) {
-        invocation = wrapInvocationWithSeatbelt(
-          invocation,
-          buildReadOnlySeatbeltPolicy({ tempHome }),
-        );
-      } else if (seatbeltWriter) {
-        invocation = wrapInvocationWithSeatbelt(
-          invocation,
-          buildWriteSeatbeltPolicy({
-            worktreePath: args.worktreePath,
-            tempHome,
-            extraWritableRoots,
-          }),
-        );
-      }
-      builtEnvironment = buildEnvironment({
-        os: args.ps.os,
-        adapterAllowlist: invocation.requiredEnv,
-        ...(invocation.env === undefined ? {} : { adapterValues: invocation.env }),
-        specAdditions: {
-          ...definedEnvironment(args.env),
-          ...(gitObjectAccess === undefined
-            ? {}
-            : {
-              GIT_OBJECT_DIRECTORY: gitObjectAccess.privateObjectsDir,
-              GIT_ALTERNATE_OBJECT_DIRECTORIES: gitObjectAccess.sharedObjectsDir,
-            }),
-        },
-        tempHome,
-      });
-      const supervisedInvocation = writer
-        ? await parentDeathWatchdogInvocation(invocation.executable, invocation.args)
-        : { executable: invocation.executable, args: invocation.args };
-      const processServices = writer && runStart !== undefined
-        ? withRunStartPidRecording(args.ps, runStart)
-        : args.ps;
-      const exit = args.abortSignal?.aborted === true
-        ? preCancelledExit()
-        : await supervise(processServices, {
-          executable: supervisedInvocation.executable,
-          args: supervisedInvocation.args,
-          cwd: args.worktreePath,
-          env: builtEnvironment.env,
-          timeoutMs: roleSpec.timeoutMs,
-          ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-          maxOutputBytes: MAX_PRODUCER_OUTPUT_BYTES,
-        }, args.abortSignal === undefined ? {} : { onCancel: args.abortSignal });
+      tempHome = launchResult.tempHome;
+      builtEnvironment = launchResult.builtEnvironment;
+      const exit = launchResult.exit;
 
       const signals = failureSignals(exit);
       let rawOutput = exit.stdout;

@@ -1,5 +1,6 @@
 import { supervise } from "../platform/process-supervisor.js";
-import type { ResolvedExecutable } from "../platform/platform-services.js";
+import type { ResolvedExecutable, SupervisedExit } from "../platform/platform-services.js";
+import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
 import { normalizeNodeShim, selectOsWriteConfinementBackend } from "./plain-text.js";
 import type { CapabilityReport, ProbeContext } from "./producer-adapter.js";
 
@@ -8,12 +9,13 @@ const VERSION_OUTPUT_LIMIT = 64 * 1024;
 
 /**
  * Probe contract for a CLI Producer whose write confinement is supplied by the
- * host OS backend (macOS Seatbelt) rather than by the CLI itself.
+ * host OS backend (macOS Seatbelt) or a dedicated backend (Codex sandbox).
  */
 export interface OsConfinedCliProbe {
   producerId: string;
   executableName: string;
   structuredOutput: boolean;
+  writeConfinementBackend?: string | ((ctx: ProbeContext) => string | null);
   parseVersion?: (stdout: string) => string | null;
   /**
    * Extra surface checks after the version succeeds; return an unavailability
@@ -26,6 +28,17 @@ export interface OsConfinedCliProbe {
 export function parseSemver(stdout: string): string | null {
   const match = /(?:^|\s)(\d+\.\d+\.\d+(?:[-+][^\s]+)?)(?:\s|$)/u.exec(stdout.trim());
   return match?.[1] ?? null;
+}
+
+export function selectConfinementBackend(ctx: ProbeContext, backendId: string): string | null {
+  const backend = SANDBOX_BACKENDS.find(candidate =>
+    candidate.id === backendId
+    && candidate.platforms.some(platform =>
+      platform.os === ctx.os
+      && platform.environmentType === ctx.environmentType
+      && (platform.arch === undefined || platform.arch === ctx.arch)
+      && (platform.state === "certified" || platform.state === "tested")));
+  return backend?.id ?? null;
 }
 
 export function unavailableCapabilityReport(
@@ -56,7 +69,7 @@ export async function runVersionProbe(
   ctx: ProbeContext,
   executable: ResolvedExecutable,
   args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null; spawnError?: unknown }> {
+): Promise<SupervisedExit> {
   return supervise(ctx.ps, {
     executable,
     args,
@@ -69,8 +82,9 @@ export async function runVersionProbe(
 
 /**
  * Shared probe: unsupported on win32; resolve the executable; require a
- * parseable `--version`; optionally inspect the CLI surface; then report edit
- * eligibility honestly from the host confinement backend and auth state.
+ * parseable `--version` with abnormal-termination guards (signal, timeout,
+ * cancelled); optionally inspect the CLI surface; then report edit
+ * eligibility honestly from the confinement backend and auth state.
  */
 export async function probeOsConfinedCli(
   ctx: ProbeContext,
@@ -91,7 +105,12 @@ export async function probeOsConfinedCli(
 
   try {
     const result = await runVersionProbe(ctx, executable, ["--version"]);
-    const version = result.spawnError === undefined && result.exitCode === 0
+    const isCleanExit = result.spawnError === undefined
+      && result.exitCode === 0
+      && result.signal === null
+      && result.timedOut === false
+      && result.cancelled === false;
+    const version = isCleanExit
       ? (probe.parseVersion ?? parseSemver)(result.stdout)
       : null;
     if (version === null) return unavailable("probe-failed", executable);
@@ -101,7 +120,11 @@ export async function probeOsConfinedCli(
       if (reason !== null) return unavailable(reason, executable);
     }
 
-    const writeConfinementBackend = selectOsWriteConfinementBackend(ctx);
+    const writeConfinementBackend = typeof probe.writeConfinementBackend === "function"
+      ? probe.writeConfinementBackend(ctx)
+      : typeof probe.writeConfinementBackend === "string"
+        ? selectConfinementBackend(ctx, probe.writeConfinementBackend)
+        : selectOsWriteConfinementBackend(ctx);
     return {
       producerId: probe.producerId,
       available: true,
@@ -121,3 +144,6 @@ export async function probeOsConfinedCli(
     return unavailable("probe-failed", executable);
   }
 }
+
+export { probeOsConfinedCli as probeCli };
+

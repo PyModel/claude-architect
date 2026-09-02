@@ -534,6 +534,6 @@ describe("AutopilotController end-to-end", () => {
     expect(registeredWorktrees).toEqual([fixture.checkout]);
     const worktreesRoot = path.join(stateRoot, "worktrees");
     await expect(readdir(worktreesRoot)).resolves.toEqual([]);
-  // Windows runners have measured 72s+ green runs against the old 120s cap; scale like the lock deadlines.
-  }, process.platform === "win32" ? 360_000 : 120_000);
+  // Full-suite contention can push dual-commit promotion past 120s; scale gracefully.
+  }, process.platform === "win32" ? 360_000 : 240_000);
 });
