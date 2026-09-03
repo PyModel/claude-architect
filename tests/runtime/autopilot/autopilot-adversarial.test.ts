@@ -594,7 +594,7 @@ describe("autopilot adversarial trust boundaries", () => {
     const result = await harness.controller.start(harness.fixture.checkout, autopilotSpec());
     const runId = result.tasks[0]!.runId!;
     await writeFile(path.join(new ArtifactStore(runId).runDirectory, "decision.json"), "{}\n");
-    await expect(new ArtifactStore(runId).readDecision(runId)).rejects.toBeDefined();
+    await expect(new ArtifactStore(runId).readDecision()).rejects.toBeDefined();
     await writeFile(harness.store.statePath, "{}\n");
     await expect(harness.store.read()).rejects.toBeDefined();
   }, 120_000);

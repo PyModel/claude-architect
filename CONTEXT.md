@@ -78,6 +78,10 @@ A machine-readable observation of a Producer's availability, version, authentica
 
 The reproducibility record for a Delegation Attempt. It identifies the base commit, Producer version and model, effective configuration policy, repository instruction paths and hashes, prompt hash, execution policy, and runtime version.
 
+### Artifact Descriptor
+
+The data record behind one kind of archived artifact in the Artifact Store: its file under the run directory, the validator that proves archived bytes are that kind on the way out, and, for kinds the store writes, the redaction-and-validation step on the way in plus the write mode (immutable, replace, or replace-if-present). Every typed store façade (`readManifest()`, `readDecision()`, …) is one line over the shared `readArtifact`/`writeArtifact` pair. A store is bound to one run at construction; its façades name no run id.
+
 ### Routing Policy
 
 Host-owned rules that order Producer preferences and required capabilities. Routing Policy is distinct from the Producer registry, which contains machine facts rather than preferences.
@@ -212,6 +216,7 @@ Claude Code
       |     `-- LaunchPlanner & Supervisor
       |-- PipelineRuntime
       |     |-- RunContext (run-scoped facts; no shared mutable closure)
+      |     |-- PipelineRunState -> increments -> review rounds -> promote -> gate
       |     `-- SliceRunner
       |           |-- plan wave -> worktree -> launch -> freeze -> verify -> review
       |           `-- compose -> release anchor
@@ -219,7 +224,7 @@ Claude Code
       |     |-- WorktreeManager
       |     |-- EnvironmentPolicy
       |     |-- ProcessSupervisor
-      |     |-- ArtifactStore
+      |     |-- ArtifactStore (run-bound; one ArtifactDescriptor per kind)
       |     `-- RecoveryManager
       |-- RunDecision
       |     |-- RunDecisionSnapshot (one read per decision)

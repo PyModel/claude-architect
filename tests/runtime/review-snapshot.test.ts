@@ -201,7 +201,7 @@ describe("review snapshots", () => {
       ...snapshot,
       evidence: { nested: { x: 3, y: 2 }, z: 1 },
     });
-    await expect(store.readReviewSnapshot(runId)).resolves.toEqual(snapshot);
+    await expect(store.readReviewSnapshot()).resolves.toEqual(snapshot);
 
     await expect(store.writeReviewSnapshot({
       ...snapshot,

@@ -423,7 +423,7 @@ describe("AutopilotController platform-neutral forced-red gate", () => {
     await expect(lstat(store.ownerPath)).rejects.toMatchObject({ code: "ENOENT" });
 
     const runStore = new ArtifactStore(RUN_ID);
-    const attempt = await runStore.readResult(RUN_ID);
+    const attempt = await runStore.readResult();
     expect(attempt).toMatchObject({
       runId: RUN_ID,
       status: "failed",
@@ -434,8 +434,8 @@ describe("AutopilotController platform-neutral forced-red gate", () => {
         },
       },
     });
-    expect(await runStore.readAutopilotEligibility(RUN_ID)).toBeNull();
-    expect(await runStore.readCandidateDecision(RUN_ID)).toBeNull();
+    expect(await runStore.readAutopilotEligibility()).toBeNull();
+    expect(await runStore.readCandidateDecision()).toBeNull();
     await expect(lstat(path.join(store.workflowDirectory, FINAL_BRANCH_ARTIFACT_REF)))
       .rejects.toMatchObject({ code: "ENOENT" });
 

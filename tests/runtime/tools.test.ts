@@ -1008,7 +1008,7 @@ describe("MCP tool handlers", () => {
     await expect(handleDecideCandidate(repoRoot, "run-tools", "accepted", candidate.manifestHash, deps))
       .resolves.toEqual({ recorded: true });
 
-    const recorded = await store.readCandidateDecision("run-tools");
+    const recorded = await store.readCandidateDecision();
     expect(recorded).toMatchObject({
       decision: "accepted",
       authority: "caller-asserted",
@@ -1026,7 +1026,7 @@ describe("MCP tool handlers", () => {
 
     await handleDecideCandidate(repoRoot, "run-tools", "accepted", candidate.manifestHash, deps);
 
-    expect(await store.readCandidateDecision("run-tools"))
+    expect(await store.readCandidateDecision())
       .toMatchObject({ authority: "human" });
   });
 

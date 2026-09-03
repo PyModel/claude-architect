@@ -38,6 +38,8 @@ export interface CreateRunContextOptions {
   runStart?: RunStartContext | undefined;
   onPhase?: ((phase: string) => Promise<void> | void) | undefined;
   sliceCount?: number | null | undefined;
+  /** Default `sliceIndex` for status lines that name no slice of their own. */
+  sliceIndex?: number | null | undefined;
 }
 
 export function createRunContext(options: CreateRunContextOptions): RunContext {
@@ -51,6 +53,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     runStart,
     onPhase,
     sliceCount,
+    sliceIndex,
   } = options;
 
   return {
@@ -63,7 +66,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     ...(runStart === undefined ? {} : { runStart }),
     async emitStatus(phase: RunStatusPhase, fields?: RunStatusFields): Promise<void> {
       await transitionRunStatusSafely(store, runId, phase, {
-        sliceIndex: fields?.sliceIndex ?? null,
+        sliceIndex: fields?.sliceIndex ?? sliceIndex ?? null,
         sliceCount: fields?.sliceCount ?? sliceCount ?? null,
         round: fields?.round ?? null,
         role: fields?.role ?? null,

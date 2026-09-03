@@ -290,10 +290,10 @@ export class CandidatePromoter {
     eligibilityHash: string,
   ): Promise<boolean> {
     try {
-      let decision = await artifactStore.readCandidateDecision(runId);
+      let decision = await artifactStore.readCandidateDecision();
       if (decision === null) {
         await artifactStore.writeAutopilotDecision(artifact, eligibility, this.now());
-        decision = await artifactStore.readCandidateDecision(runId);
+        decision = await artifactStore.readCandidateDecision();
       }
       return decision?.decisionVersion === "2"
         && decision.authority === "autopilot-policy"
@@ -376,9 +376,9 @@ export class CandidatePromoter {
       manifest = decisionSnapshot.manifest;
       snapshot = decisionSnapshot.reviewSnapshot;
       [pipelineResult, advisor, eligibility] = await Promise.all([
-        artifactStore.readPipelineArtifact<PipelineResult>(request.runId, "pipeline-result"),
-        artifactStore.readAdvisorReport(request.runId),
-        artifactStore.readAutopilotEligibility(request.runId),
+        artifactStore.readPipelineArtifact<PipelineResult>("pipeline-result"),
+        artifactStore.readAdvisorReport(),
+        artifactStore.readAutopilotEligibility(),
       ]);
     } catch {
       return finishFailure("evidence-mismatch");

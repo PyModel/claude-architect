@@ -30,8 +30,8 @@ export interface ReviewSnapshot {
 }
 
 export interface ReviewSnapshotStore {
-  readResult(runId: string): Promise<AttemptResult | null>;
-  readManifest(runId: string): Promise<RunManifest | null>;
+  readResult(): Promise<AttemptResult | null>;
+  readManifest(): Promise<RunManifest | null>;
 }
 
 export interface ReviewSnapshotRun {
@@ -226,8 +226,8 @@ export async function createReviewSnapshot(run: ReviewSnapshotRun): Promise<Revi
   // nor the decision. Reading them here would cost three extra files and invert
   // the dependency between an artifact and the policy that judges it.
   const [result, manifest] = await Promise.all([
-    run.store.readResult(run.runId),
-    run.store.readManifest(run.runId),
+    run.store.readResult(),
+    run.store.readManifest(),
   ]);
   if (result === null || manifest === null) {
     throw reviewError("archived run was not found", "run-not-found");

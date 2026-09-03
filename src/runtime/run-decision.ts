@@ -33,11 +33,11 @@ export type RunVerdict =
   | { state: "invalid"; reasons: Reason[] };
 
 export interface RunDecisionStore {
-  readResult(runId: string): Promise<AttemptResult | null>;
-  readManifest(runId: string): Promise<RunManifest | null>;
-  readReviewSnapshot(runId: string): Promise<ReviewSnapshot | null>;
-  readCandidateDecision(runId: string): Promise<CandidateDecision | null>;
-  readPipelineGateCleared?(runId: string): Promise<PipelineGateCleared | null>;
+  readResult(): Promise<AttemptResult | null>;
+  readManifest(): Promise<RunManifest | null>;
+  readReviewSnapshot(): Promise<ReviewSnapshot | null>;
+  readCandidateDecision(): Promise<CandidateDecision | null>;
+  readPipelineGateCleared?(): Promise<PipelineGateCleared | null>;
 }
 
 export interface RunDecisionSnapshot {
@@ -93,28 +93,28 @@ export class RunDecision {
 
     try {
       const readResult = typeof store.readResult === "function"
-        ? store.readResult(runId).catch(err => {
+        ? store.readResult().catch(err => {
             coherenceErrors.push(`failed to read result: ${err instanceof Error ? err.message : String(err)}`);
             return null;
           })
         : Promise.resolve(null);
       const readManifest = typeof store.readManifest === "function"
-        ? store.readManifest(runId).catch(err => {
+        ? store.readManifest().catch(err => {
             coherenceErrors.push(`failed to read manifest: ${err instanceof Error ? err.message : String(err)}`);
             return null;
           })
         : Promise.resolve(null);
       const readSnapshot = typeof store.readReviewSnapshot === "function"
-        ? store.readReviewSnapshot(runId).catch(() => null)
+        ? store.readReviewSnapshot().catch(() => null)
         : Promise.resolve(null);
       const readGateRecord = typeof store.readPipelineGateCleared === "function"
-        ? store.readPipelineGateCleared(runId).catch(err => {
+        ? store.readPipelineGateCleared().catch(err => {
             gateRecordError = `the pipeline gate clearance record is malformed: ${err instanceof Error ? err.message : String(err)}`;
             return null;
           })
         : Promise.resolve(null);
       const readDecision = typeof store.readCandidateDecision === "function"
-        ? store.readCandidateDecision(runId).catch(err => {
+        ? store.readCandidateDecision().catch(err => {
             coherenceErrors.push(`failed to read decision: ${err instanceof Error ? err.message : String(err)}`);
             return null;
           })

@@ -59,7 +59,7 @@ describe("legacy decision provenance", () => {
         }),
         "utf8",
       );
-      await expect(store.readCandidateDecision("decision-authority-roundtrip"))
+      await expect(store.readCandidateDecision())
         .resolves.toMatchObject({ authority: "policy-autonomous" });
     } finally {
       if (previousStateRoot === undefined) {
@@ -296,7 +296,7 @@ describe("decideCandidate authority", () => {
             writeCandidateDecisionRecord: async (record: CandidateDecisionV2) => {
               await persistentStore.writeCandidateDecisionRecord(record);
             },
-            readCandidateDecision: async () => persistentStore.readCandidateDecision("decide-authority"),
+            readCandidateDecision: async () => persistentStore.readCandidateDecision(),
             writeReviewSnapshot: async snapshot => { persistedSnapshot = snapshot; },
             readReviewSnapshot: async () => persistedSnapshot,
             readRunStartSpecSha256: async () => null,
@@ -340,7 +340,7 @@ describe("decideCandidate authority", () => {
         // The archived decision must survive the refused write unchanged, with
         // the authority its recorded provenance maps to. An absent decidedBy is
         // "unknown": the record cannot say a person decided.
-        await expect(persistentStore.readCandidateDecision("decide-authority"))
+        await expect(persistentStore.readCandidateDecision())
           .resolves.toMatchObject({
             decision: "accepted",
             authority: decidedBy ?? "unknown",

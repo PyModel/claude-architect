@@ -79,7 +79,7 @@ describe("legacy decision archives written before decisionVersion existed", () =
       candidateManifestHash: "a".repeat(64),
     });
 
-    const decision = await store.readCandidateDecision("run-legacy-human");
+    const decision = await store.readCandidateDecision();
 
     expect(decision).toEqual({
       decisionVersion: "1",
@@ -99,7 +99,7 @@ describe("legacy decision archives written before decisionVersion existed", () =
       candidateManifestHash: "b".repeat(64),
     });
 
-    const decision = await store.readCandidateDecision("run-legacy-policy");
+    const decision = await store.readCandidateDecision();
 
     expect(decision?.authority).toBe("policy-autonomous");
     expect(INTEGRABLE_DECISION_AUTHORITIES).toContain(decision!.authority);
@@ -114,7 +114,7 @@ describe("legacy decision archives written before decisionVersion existed", () =
       recordedAt: "2026-07-20T09:00:00.000Z",
     });
 
-    const decision = await store.readCandidateDecision("run-legacy-bare");
+    const decision = await store.readCandidateDecision();
 
     expect(decision?.authority).toBe("unknown");
     expect(INTEGRABLE_DECISION_AUTHORITIES).not.toContain(decision!.authority);
@@ -128,7 +128,7 @@ describe("legacy decision archives written before decisionVersion existed", () =
       candidateManifestHash: null,
     });
 
-    const decision = await store.readCandidateDecision("run-legacy-caller");
+    const decision = await store.readCandidateDecision();
 
     expect(decision?.authority).toBe("caller-asserted");
     expect(INTEGRABLE_DECISION_AUTHORITIES).not.toContain(decision!.authority);
@@ -142,7 +142,7 @@ describe("legacy decision archives written before decisionVersion existed", () =
       approvedBy: "someone",
     });
 
-    await expect(store.readCandidateDecision("run-legacy-extra"))
+    await expect(store.readCandidateDecision())
       .rejects.toThrow("archived run decision is malformed");
   });
 
@@ -154,7 +154,7 @@ describe("legacy decision archives written before decisionVersion existed", () =
       candidateManifestHash: "not-a-hash",
     });
 
-    await expect(store.readCandidateDecision("run-legacy-badhash"))
+    await expect(store.readCandidateDecision())
       .rejects.toThrow("archived run decision is malformed");
   });
 
@@ -167,7 +167,7 @@ describe("legacy decision archives written before decisionVersion existed", () =
     };
     const store = await archiveDecisionBytes("run-legacy-immutable", original);
 
-    await store.readCandidateDecision("run-legacy-immutable");
+    await store.readCandidateDecision();
 
     const onDisk: unknown = JSON.parse(
       await readFile(join(store.runDirectory, "decision.json"), "utf8"),

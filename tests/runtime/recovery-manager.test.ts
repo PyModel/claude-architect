@@ -301,7 +301,7 @@ describe("recoverStaleRuns", () => {
       }],
     });
 
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
     await expect(access(worktree.path)).resolves.toBeUndefined();
     expect(await runGit(repo.directory, ["rev-parse", anchorRef])).toBe(repo.head);
     await expect(readFile(recoveryLockPath, "utf8"))
@@ -349,7 +349,7 @@ describe("recoverStaleRuns", () => {
     await expect(readFile(recoveryLockPath)).resolves.toEqual(lockBytes);
     await expect(access(worktree.path)).resolves.toBeUndefined();
     expect(await runGit(repo.directory, ["rev-parse", anchorRef])).toBe(repo.head);
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
   }, 120_000);
 
   // POSIX-only: the release failure is forced by rm-ing the locks directory while
@@ -415,7 +415,7 @@ describe("recoverStaleRuns", () => {
       isProcessAlive: () => false,
     })).resolves.toEqual({ recovered: [runId], quarantined: [] });
 
-    await expect(store.readResult(runId))
+    await expect(store.readResult())
       .resolves.toMatchObject({ status: "cancelled" });
     await expectMissing(recoveryLockPath);
   }, 120_000);
@@ -461,7 +461,7 @@ describe("recoverStaleRuns", () => {
     await expect(readFile(aliasPath)).resolves.toEqual(lockBytes);
     await expect(access(worktree.path)).resolves.toBeUndefined();
     expect(await runGit(repo.directory, ["rev-parse", anchorRef])).toBe(repo.head);
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
   }, 120_000);
 
   it("defers recovery when checkout ownership becomes live before mutation", async () => {
@@ -493,7 +493,7 @@ describe("recoverStaleRuns", () => {
     })).resolves.toEqual({ recovered: [], quarantined: [] });
 
     expect(ownerChecks).toBeGreaterThanOrEqual(2);
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
     await expect(readFile(lockPath, "utf8")).resolves.toBe(lockBytes);
   }, 120_000);
 
@@ -949,7 +949,7 @@ describe("recoverStaleRuns", () => {
       .not.toBe(0);
     expect(await readFile(path.join(store.runDirectory, "logs", "recovery.log"), "utf8"))
       .toBe("startup recovery reclaimed unfinished run\n");
-    await expect(store.readResult(runId)).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       runId,
       status: "cancelled",
       failure: "cancelled",
@@ -1002,7 +1002,7 @@ describe("recoverStaleRuns", () => {
     expect(result).toEqual({ recovered: [runId], quarantined: [] });
     expect(calls).toEqual([]);
     await expectMissing(worktree.path);
-    await expect(store.readResult(runId)).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       runId,
       status: "cancelled",
       evidence: { recovery: "startup-stale-run" },
@@ -1077,7 +1077,7 @@ describe("recoverStaleRuns", () => {
     await expect(lstat(worktree.path)).resolves.toBeDefined();
     expect((await git(repo.directory, ["rev-parse", "--verify", "--quiet", anchorRef])).exitCode)
       .toBe(0);
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
   });
 
   it("preserves a checkout lock whose recorded owner pid is still alive", async () => {
@@ -1134,7 +1134,7 @@ describe("recoverStaleRuns", () => {
     await expect(access(worktree.path)).resolves.toBeUndefined();
     expect(await runGit(repo.directory, ["rev-parse", anchorRef])).toBe(repo.head);
     await expect(readFile(lockPath, "utf8")).resolves.toBe(lockBytes);
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
   });
 
   it("defers recovery when the checkout lock owner is empty", async () => {
@@ -1155,7 +1155,7 @@ describe("recoverStaleRuns", () => {
 
     await expect(recoverStaleRuns()).resolves.toEqual({ recovered: [], quarantined: [] });
 
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
     await expect(access(worktree.path)).resolves.toBeUndefined();
     expect(await runGit(repo.directory, ["rev-parse", anchorRef])).toBe(repo.head);
     await expect(readFile(lockPath, "utf8")).resolves.toBe("");
@@ -1288,7 +1288,7 @@ describe("recoverStaleRuns", () => {
       quarantined: [poisonedRunId],
     });
 
-    await expect(healthyStore.readResult(healthyRunId))
+    await expect(healthyStore.readResult())
       .resolves.toMatchObject({ status: "cancelled" });
     await expectQuarantinedRun(poisonedRunId, poisonedStore.runDirectory, [missingCommonDir]);
   }, 120_000);
@@ -1706,7 +1706,7 @@ describe("recoverStaleRuns", () => {
 
     expect(terminate).not.toHaveBeenCalled();
     await expect(lstat(pipelineWorktree.path)).resolves.toBeDefined();
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
   });
 
   it("preserves a live run whose process token cannot be verified", async () => {
@@ -1727,7 +1727,7 @@ describe("recoverStaleRuns", () => {
     })).resolves.toEqual({ recovered: [], quarantined: [] });
 
     expect(terminate).not.toHaveBeenCalled();
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
   });
 
   it("reclaims token-mismatched live locks and preserves matching live locks", async () => {
@@ -1799,8 +1799,8 @@ describe("recoverStaleRuns", () => {
     await expect(readFile(livePath, "utf8")).resolves.toBe("8002");
     await expect(readFile(nullTokenPath, "utf8"))
       .resolves.toBe(JSON.stringify({ pid: 8003, processToken: null }));
-    await expect(blockedStore.readResult(blockedRunId)).resolves.toBeNull();
-    await expect(healthyStore.readResult(healthyRunId)).resolves.toMatchObject({
+    await expect(blockedStore.readResult()).resolves.toBeNull();
+    await expect(healthyStore.readResult()).resolves.toMatchObject({
       status: "cancelled",
     });
     expect(warn.mock.calls).toEqual(expect.arrayContaining([
@@ -1838,7 +1838,7 @@ describe("recoverStaleRuns", () => {
       isProcessAlive: () => false,
     })).resolves.toEqual({ recovered: [runId], quarantined: [] });
 
-    await expect(store.readResult(runId)).resolves.toMatchObject({ status: "cancelled" });
+    await expect(store.readResult()).resolves.toMatchObject({ status: "cancelled" });
   });
 
   it("rejects a malformed complete cleanup record before torn-tail deferral", async () => {
@@ -1908,7 +1908,7 @@ describe("recoverStaleRuns", () => {
 
     expect(recoveryResult).toEqual({ recovered: [runId], quarantined: [] });
     expect(warnCalls).toEqual([]);
-    await expect(store.readResult(runId)).resolves.toMatchObject({ status: "cancelled" });
+    await expect(store.readResult()).resolves.toMatchObject({ status: "cancelled" });
   });
 
   it("finishes an interrupted prune after the archive was quarantined", async () => {
@@ -2236,7 +2236,7 @@ describe("recoverStaleRuns", () => {
       isProcessAlive: () => false,
     })).resolves.toEqual({ recovered: [], quarantined: [] });
 
-    await expect(store.readResult(runId)).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       status: "failed",
       failure: "verification-failure",
       candidate: expect.any(Object),
@@ -2269,7 +2269,7 @@ describe("recoverStaleRuns", () => {
       isProcessAlive: () => false,
     })).resolves.toEqual({ recovered: [], quarantined: [] });
 
-    await expect(store.readResult(runId)).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       status: "verified-candidate",
       failure: null,
     });
@@ -2391,7 +2391,7 @@ describe("recoverStaleRuns", () => {
       expect((await git(repo.directory, ["rev-parse", "--verify", "--quiet", ref])).exitCode)
         .not.toBe(0);
     }
-    await expect(store.readResult(runId)).resolves.toMatchObject({ status: "cancelled" });
+    await expect(store.readResult()).resolves.toMatchObject({ status: "cancelled" });
     await expect(recoverStaleRuns({
       platformServices: platformServicesDouble({
         os: "darwin",

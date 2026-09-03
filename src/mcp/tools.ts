@@ -80,8 +80,8 @@ export type HumanDecisionRecord = Omit<
 >;
 
 export interface ToolArtifactStore {
-  readResult(runId: string): Promise<AttemptResult | null>;
-  readManifest(runId: string): Promise<RunManifest | null>;
+  readResult(): Promise<AttemptResult | null>;
+  readManifest(): Promise<RunManifest | null>;
   /**
    * Required, not optional, for the same reason as `readRunStartSpecSha256`
    * below: when these could be omitted, `sharedReviewSnapshot` would no-op the
@@ -90,19 +90,19 @@ export interface ToolArtifactStore {
    * persisted, which no later audit could re-verify.
    */
   writeReviewSnapshot(snapshot: ReviewSnapshot): Promise<void>;
-  readReviewSnapshot(runId: string): Promise<ReviewSnapshot | null>;
+  readReviewSnapshot(): Promise<ReviewSnapshot | null>;
   writeHumanDecision(record: HumanDecisionRecord): Promise<void>;
   /** Persist a decision whose authority the lifecycle already resolved. */
   writeCandidateDecisionRecord(record: CandidateDecisionV2): Promise<void>;
-  readCandidateDecision(runId: string): Promise<RunDecision | null>;
-  readPipelineGateCleared?(runId: string): Promise<PipelineGateCleared | null>;
-  readPipelineActiveMarker(runId: string): Promise<PipelineActiveMarker | null>;
+  readCandidateDecision(): Promise<RunDecision | null>;
+  readPipelineGateCleared?(): Promise<PipelineGateCleared | null>;
+  readPipelineActiveMarker(): Promise<PipelineActiveMarker | null>;
   /**
    * The spec hash recorded when the run started. Required, not optional: a store
    * that cannot answer must say so explicitly, because a caller asking to verify
    * a run id against a spec must never be told "verified" by omission.
    */
-  readRunStartSpecSha256(runId: string): Promise<string | null>;
+  readRunStartSpecSha256(): Promise<string | null>;
 }
 
 export interface ToolDependencies {
@@ -516,7 +516,7 @@ async function withCurrentArchivedRun<T>(
 
 
 async function requireInactivePipeline(run: ArchivedRun, runId: string): Promise<void> {
-  if (await run.store.readPipelineActiveMarker(runId) !== null) {
+  if (await run.store.readPipelineActiveMarker() !== null) {
     throw runtimeError(
       "the delegation pipeline for this run is still active",
       "pipeline-active",
@@ -826,7 +826,7 @@ async function requireSpecCorrespondence(
   if (!/^[0-9a-f]{64}$/u.test(expectedSpecSha256)) {
     throw runtimeError("expectedSpecSha256 is not a sha-256 digest", "run-spec-unverifiable");
   }
-  const recorded = await run.store.readRunStartSpecSha256(runId);
+  const recorded = await run.store.readRunStartSpecSha256();
   if (recorded === null) {
     throw runtimeError(
       "this run recorded no spec hash, so it cannot be matched to the dispatched spec",
@@ -872,14 +872,14 @@ async function sharedReviewSnapshot(
     git: deps.git ?? runGit,
     allowMissingAnchor,
   });
-  const persisted = await run.store.readReviewSnapshot(run.result.runId);
+  const persisted = await run.store.readReviewSnapshot();
   if (persisted !== null) {
     requireMatchingSnapshotBytes(regenerated, persisted);
     return persisted;
   }
 
   await run.store.writeReviewSnapshot(regenerated);
-  const newlyPersisted = await run.store.readReviewSnapshot(run.result.runId);
+  const newlyPersisted = await run.store.readReviewSnapshot();
   if (newlyPersisted === null) {
     // The snapshot is what a decision's evidenceHash binds to. If it did not
     // survive the write, fail closed rather than hashing bytes that only ever
@@ -1171,7 +1171,7 @@ export async function handleIntegrateCandidate(
   try {
     return await withCurrentArchivedRun(checkoutPath, runId, deps, async (run, lock, ps) => {
       await requireInactivePipeline(run, runId);
-      const decision = await run.store.readCandidateDecision(runId);
+      const decision = await run.store.readCandidateDecision();
       if (decision?.decision !== "accepted") {
         return { integration: "aborted", detail: "no-accepted-decision" };
       }

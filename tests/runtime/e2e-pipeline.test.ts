@@ -392,7 +392,7 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
     expect(candidateHash).toBeDefined();
     await expect(handleDecideCandidate(repo, runId, "accepted", candidateHash!, lifecycleDeps))
       .resolves.toEqual({ recorded: true });
-    const manifest = await new ArtifactStore(runId).readManifest(runId);
+    const manifest = await new ArtifactStore(runId).readManifest();
     expect(manifest).not.toBeNull();
     expect(manifest?.candidateManifestHash).not.toBeNull();
     // decideCandidate compares the caller's hash against the ARCHIVED manifest,
@@ -454,7 +454,7 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
     // The gate's refusal used to live only in the pipeline-result artifact. The
     // accept path loads the archived attempt, so a candidate the gate rejected
     // was indistinguishable there from one it cleared.
-    const archived = await new ArtifactStore(runId).readResult(runId);
+    const archived = await new ArtifactStore(runId).readResult();
     expect(archived?.evidence.pipelineGateRefused).toMatchObject({
       reasons: expect.arrayContaining([expect.any(String)]),
     });

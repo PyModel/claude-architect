@@ -8012,8 +8012,8 @@ var ZodError = class _ZodError extends Error {
           let i = 0;
           while (i < issue2.path.length) {
             const el = issue2.path[i];
-            const terminal = i === issue2.path.length - 1;
-            if (!terminal) {
+            const terminal2 = i === issue2.path.length - 1;
+            if (!terminal2) {
               curr[el] = curr[el] || { _errors: [] };
             } else {
               curr[el] = curr[el] || { _errors: [] };
@@ -12796,8 +12796,8 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
           let i = 0;
           while (i < fullpath.length) {
             const el = fullpath[i];
-            const terminal = i === fullpath.length - 1;
-            if (!terminal) {
+            const terminal2 = i === fullpath.length - 1;
+            if (!terminal2) {
               curr[el] = curr[el] || { _errors: [] };
             } else {
               curr[el] = curr[el] || { _errors: [] };
@@ -12834,7 +12834,7 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
         let i = 0;
         while (i < fullpath.length) {
           const el = fullpath[i];
-          const terminal = i === fullpath.length - 1;
+          const terminal2 = i === fullpath.length - 1;
           if (typeof el === "string") {
             curr.properties ?? (curr.properties = {});
             (_a3 = curr.properties)[el] ?? (_a3[el] = { errors: [] });
@@ -12844,7 +12844,7 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
             (_b = curr.items)[el] ?? (_b[el] = { errors: [] });
             curr = curr.items[el];
           }
-          if (terminal) {
+          if (terminal2) {
             curr.errors.push(mapper(issue2));
           }
           i++;
@@ -35166,8 +35166,8 @@ function assertSemanticState(state, workflowId) {
   if (taskIds.size !== state.tasks.length) {
     throw workflowError("workflow task ids must be unique", "invalid-workflow-state");
   }
-  const terminal = TERMINAL_PHASES.has(state.phase);
-  if (terminal !== (state.terminal !== null) || state.terminal !== null && state.terminal.classification !== state.phase) {
+  const terminal2 = TERMINAL_PHASES.has(state.phase);
+  if (terminal2 !== (state.terminal !== null) || state.terminal !== null && state.terminal.classification !== state.phase) {
     throw workflowError(
       "workflow terminal record must match the terminal phase",
       "invalid-workflow-state"
@@ -39911,8 +39911,8 @@ function requireCoherentCandidate(runId, result, manifest) {
 }
 async function createReviewSnapshot(run) {
   const [result, manifest] = await Promise.all([
-    run.store.readResult(run.runId),
-    run.store.readManifest(run.runId)
+    run.store.readResult(),
+    run.store.readManifest()
   ]);
   if (result === null || manifest === null) {
     throw reviewError("archived run was not found", "run-not-found");
@@ -43224,8 +43224,8 @@ async function executeCommand(args) {
     const stdout = boundText(redact(exit?.stdout ?? ""));
     const stderr = boundText(redact(exit === null ? failureText : [exit.stderr, exit.spawnError === void 0 ? "" : errorMessage(exit.spawnError)].filter(Boolean).join("\n")));
     const exitCode = exit?.exitCode ?? null;
-    const terminal = exit === null || exit.spawnError !== void 0 ? "spawn-error" : exit.cancelled === true ? "cancelled" : exit.timedOut === true ? "timeout" : exit.exitCode === null ? "signal" : "exited";
-    const failed = terminal !== "exited" || exitCode === null || !command.expectedExitCodes.includes(exitCode);
+    const terminal2 = exit === null || exit.spawnError !== void 0 ? "spawn-error" : exit.cancelled === true ? "cancelled" : exit.timedOut === true ? "timeout" : exit.exitCode === null ? "signal" : "exited";
+    const failed = terminal2 !== "exited" || exitCode === null || !command.expectedExitCodes.includes(exitCode);
     return {
       outcome: {
         id: redact(command.id),
@@ -43255,7 +43255,7 @@ async function executeCommand(args) {
         { name: stderrName, text: stderr.text }
       ],
       failed,
-      terminal
+      terminal: terminal2
     };
   } finally {
     registration.dispose();
@@ -44464,6 +44464,113 @@ function validatePostPipelineAutopilotArtifacts(value, runId) {
     eligibilityRecordHash: expectedEligibilityHash
   };
 }
+function validatePipelineActiveMarker(value, message) {
+  const marker = value;
+  if (typeof marker !== "object" || marker === null || typeof marker.pid !== "number" || !Number.isSafeInteger(marker.pid) || marker.pid <= 1 || marker.processToken !== null && typeof marker.processToken !== "string" || typeof marker.startedAt !== "string" || !Number.isFinite(Date.parse(marker.startedAt)) || typeof marker.sliced !== "boolean") {
+    throw new RuntimeError(message);
+  }
+  return marker;
+}
+var RUN_STATUS = {
+  relativePath: "status.json",
+  parse(value) {
+    if (!runStatusSchema(value)) throw new RuntimeError("archived run status is malformed");
+    return value;
+  },
+  write: {
+    mode: "replace-if-present",
+    prepare(status) {
+      const sanitized = {
+        ...structuredClone(status),
+        detail: status.detail === null ? null : redact(status.detail).slice(0, 200)
+      };
+      if (!runStatusSchema(sanitized)) throw new RuntimeError("run status is invalid");
+      return sanitized;
+    }
+  }
+};
+var RESULT = {
+  relativePath: "result.json",
+  parse: verifyAttemptResult,
+  write: {
+    mode: "immutable",
+    prepare: (result, runId) => verifyAttemptResult(sanitizeAttemptResult(result), runId)
+  }
+};
+var MANIFEST = {
+  relativePath: "manifest.json",
+  parse: verifyRunManifest,
+  write: {
+    mode: "immutable",
+    prepare: (manifest, runId) => verifyRunManifest(sanitizeRunManifest(manifest), runId)
+  }
+};
+var RUN_START_SPEC_SHA256 = {
+  relativePath: "run-start.json",
+  parse(record2) {
+    if (typeof record2 !== "object" || record2 === null) return null;
+    const value = record2.specSha256;
+    return typeof value === "string" && /^[0-9a-f]{64}$/u.test(value) ? value : null;
+  }
+};
+var REVIEW_SNAPSHOT = {
+  relativePath: "review-snapshot.json",
+  parse(value, runId) {
+    const snapshot = validateReviewSnapshot(value, runId);
+    reviewSnapshotHash(snapshot);
+    return snapshot;
+  },
+  write: { mode: "immutable", prepare: validateReviewSnapshot }
+};
+var DECISION = {
+  relativePath: "decision.json",
+  parse: parsePersistedDecision,
+  write: { mode: "immutable", prepare: (decision) => decision }
+};
+var PIPELINE_GATE_CLEARED = {
+  relativePath: "pipeline-gate-cleared.json",
+  parse(value) {
+    if (!pipelineGateClearedSchema(value)) {
+      throw new RuntimeError("the pipeline gate clearance record is malformed");
+    }
+    return parsePipelineGateCleared(value);
+  },
+  write: {
+    mode: "immutable",
+    prepare(cleared) {
+      const validated = parsePipelineGateCleared(cleared);
+      if (!pipelineGateClearedSchema(validated)) {
+        throw new RuntimeError("the pipeline gate clearance record is malformed");
+      }
+      return validated;
+    }
+  }
+};
+var PIPELINE_ACTIVE_MARKER = {
+  relativePath: "pipeline-active.json",
+  parse: (value) => validatePipelineActiveMarker(value, "archived pipeline-active marker is malformed"),
+  write: {
+    mode: "replace",
+    prepare: (marker) => validatePipelineActiveMarker(marker, "pipeline-active marker is invalid")
+  }
+};
+var POST_PIPELINE_AUTOPILOT = {
+  relativePath: "pipeline/post-pipeline-autopilot.json",
+  parse: validatePostPipelineAutopilotArtifacts,
+  write: { mode: "immutable", prepare: (artifacts) => artifacts }
+};
+function pipelineArtifact(name) {
+  validateComponent(name, "log name");
+  return {
+    relativePath: path21.posix.join("pipeline", `${name}.json`),
+    parse: (value) => value,
+    write: { mode: "immutable", prepare: (value) => redactRecord(value) }
+  };
+}
+function logReference(name) {
+  validateComponent(name, "log name");
+  return path21.posix.join("logs", `${name}.log`);
+}
 var ArtifactStore = class _ArtifactStore {
   runDirectory;
   runsRoot;
@@ -44532,94 +44639,66 @@ var ArtifactStore = class _ArtifactStore {
       await session.close();
     }
   }
-  async writeJson(relativePath, value) {
-    const serialized = `${serializeJson(value, 2)}
-`;
-    await this.writeArchiveFile(relativePath, serialized);
+  /**
+   * Read one archived artifact of this run. Traversal, symlinks, and directory
+   * identity are policed by `readEvidence`; the descriptor proves the bytes are
+   * the kind it names. Absent artifacts read as null; malformed ones throw.
+   */
+  async readArtifact(descriptor) {
+    const text = await this.readEvidence(descriptor.relativePath);
+    if (text === null) return null;
+    return descriptor.parse(JSON.parse(text), this.runId);
   }
-  async replaceJson(relativePath, value) {
-    if (path21.isAbsolute(relativePath) || path21.dirname(relativePath) !== "." || path21.basename(relativePath) !== relativePath || !isSafeComponent(relativePath)) {
+  /**
+   * Write one archived artifact of this run. The descriptor's `prepare` step
+   * redacts and validates the value; the write mode decides whether a second
+   * write is refused (`immutable`), replaces the file (`replace`), or is
+   * skipped when the run archive is gone (`replace-if-present`). A caller may
+   * name `replace` explicitly for the one documented promotion path.
+   */
+  async writeArtifact(descriptor, value, mode = descriptor.write.mode) {
+    const serialized = `${serializeJson(descriptor.write.prepare(value, this.runId), 2)}
+`;
+    if (mode === "immutable") {
+      await this.writeArchiveFile(descriptor.relativePath, serialized);
+      return;
+    }
+    const leaf = descriptor.relativePath;
+    if (path21.posix.dirname(leaf) !== "." || !isSafeComponent(leaf)) {
       throw new RuntimeError("replacement archive path must be a safe relative leaf");
     }
     const directory = await this.ensureRunDirectory(false);
-    if (directory === null) throw new RuntimeError("run archive does not exist");
+    if (directory === null) {
+      if (mode === "replace-if-present") return;
+      throw new RuntimeError("run archive does not exist");
+    }
     const session = await openDurableDirectorySession(directory);
     try {
-      const serialized = `${serializeJson(value, 2)}
-`;
-      await platformSafety.writeAtomic(session, relativePath, serialized, "replace");
+      await platformSafety.writeAtomic(session, leaf, serialized, "replace");
     } finally {
       await session.close();
     }
   }
-  async writeRunStatus(status) {
-    if (status.runId !== this.runId) {
-      throw new RuntimeError("run status id does not match artifact store");
-    }
-    const sanitized = {
-      ...structuredClone(status),
-      detail: status.detail === null ? null : redact(status.detail).slice(0, 200)
-    };
-    if (!runStatusSchema(sanitized)) {
-      throw new RuntimeError("run status is invalid");
-    }
-    const directory = await this.ensureRunDirectory(false);
-    if (directory === null) return;
-    await this.replaceJson("status.json", sanitized);
+  assertOwned(runId, what) {
+    if (runId !== this.runId) throw new RuntimeError(`${what} does not match artifact store`);
   }
-  async readRunStatus(runId) {
-    validateComponent(runId, "run id");
-    const runDirectory = path21.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      const value = JSON.parse(await readRegularFile(
-        path21.join(validated.path, "status.json"),
-        validated.identity
-      ));
-      if (!runStatusSchema(value)) throw new RuntimeError("archived run status is malformed");
-      return value;
-    } catch (error51) {
-      if (isMissing3(error51)) return null;
-      throw error51;
-    }
+  async writeRunStatus(status) {
+    this.assertOwned(status.runId, "run status id");
+    await this.writeArtifact(RUN_STATUS, status);
+  }
+  async readRunStatus() {
+    return this.readArtifact(RUN_STATUS);
   }
   async writeLog(name, text) {
-    validateComponent(name, "log name");
-    const ref = path21.posix.join("logs", `${name}.log`);
+    const ref = logReference(name);
     await this.writeArchiveFile(ref, redact(text));
     return ref;
   }
   async writePipelineArtifact(name, value) {
-    validateComponent(name, "log name");
-    await this.writeJson(
-      path21.posix.join("pipeline", `${name}.json`),
-      redactRecord(value)
-    );
+    await this.writeArtifact(pipelineArtifact(name), value);
   }
-  async readPipelineArtifact(runId, name) {
-    validateComponent(runId, "run id");
-    validateComponent(name, "log name");
-    const runDirectory = path21.join(this.runsRoot, runId);
-    const validatedRun = await this.ensureExistingRunDirectory(runDirectory);
-    if (validatedRun === null) return null;
-    const validated = await this.ensureExistingRunDirectory(path21.join(runDirectory, "pipeline"));
-    if (validated === null) return null;
-    if (!isWithin(validatedRun.path, validated.path)) {
-      throw new RuntimeError("pipeline archive directory escapes run directory");
-    }
-    await assertDirectoryIdentity5(validatedRun.path, validatedRun.identity);
-    try {
-      const value = JSON.parse(await readRegularFile(
-        path21.join(validated.path, `${name}.json`),
-        validated.identity
-      ));
-      await assertDirectoryIdentity5(validatedRun.path, validatedRun.identity);
-      return value;
-    } catch (error51) {
-      if (isMissing3(error51)) return null;
-      throw error51;
-    }
+  async readPipelineArtifact(name) {
+    return this.readArtifact(pipelineArtifact(name));
   }
   /**
    * Read immutable evidence bytes from this run without permitting traversal or
@@ -44723,55 +44802,30 @@ var ArtifactStore = class _ArtifactStore {
     return references.sort();
   }
   async writeResult(result) {
-    if (result.runId !== this.runId) {
-      throw new RuntimeError("attempt result run id does not match artifact store");
-    }
-    const sanitized = sanitizeAttemptResult(result);
-    verifyAttemptResult(sanitized, this.runId);
-    await this.writeJson("result.json", sanitized);
+    this.assertOwned(result.runId, "attempt result run id");
+    await this.writeArtifact(RESULT, result);
   }
   async writeManifest(manifest) {
-    if (manifest.runId !== this.runId) {
-      throw new RuntimeError("run manifest id does not match artifact store");
-    }
-    const sanitized = sanitizeRunManifest(manifest);
-    verifyRunManifest(sanitized, this.runId);
-    await this.writeJson("manifest.json", sanitized);
+    this.assertOwned(manifest.runId, "run manifest id");
+    await this.writeArtifact(MANIFEST, manifest);
   }
+  /**
+   * Replace the terminal result and manifest in place. This is the one path
+   * that rewrites an immutable artifact: the pipeline promotes the reviewed
+   * branch over the initial attempt's record. It is refused once a decision
+   * exists, because the decision was made about the earlier bytes.
+   */
   async promoteTerminalArtifacts(args) {
-    if (args.result.runId !== this.runId) {
-      throw new RuntimeError("attempt result run id does not match artifact store");
-    }
-    if (args.manifest.runId !== this.runId) {
-      throw new RuntimeError("run manifest id does not match artifact store");
-    }
-    if (await this.readCandidateDecision(this.runId) !== null) {
+    this.assertOwned(args.result.runId, "attempt result run id");
+    this.assertOwned(args.manifest.runId, "run manifest id");
+    if (await this.readCandidateDecision() !== null) {
       throw new RuntimeError("terminal artifacts cannot be promoted after a decision");
     }
-    const result = sanitizeAttemptResult(args.result);
-    verifyAttemptResult(result, this.runId);
-    const manifest = sanitizeRunManifest(args.manifest);
-    verifyRunManifest(manifest, this.runId);
-    await this.replaceJson("result.json", result);
-    await this.replaceJson("manifest.json", manifest);
+    await this.writeArtifact(RESULT, args.result, "replace");
+    await this.writeArtifact(MANIFEST, args.manifest, "replace");
   }
-  async readResult(runId) {
-    validateComponent(runId, "run id");
-    const runDirectory = path21.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      return verifyAttemptResult(
-        JSON.parse(await readRegularFile(
-          path21.join(validated.path, "result.json"),
-          validated.identity
-        )),
-        runId
-      );
-    } catch (error51) {
-      if (isMissing3(error51)) return null;
-      throw error51;
-    }
+  async readResult() {
+    return this.readArtifact(RESULT);
   }
   async ensureExistingRunDirectory(directory) {
     const canonicalRunsRoot = await this.ensureRunsRoot();
@@ -44792,54 +44846,24 @@ var ArtifactStore = class _ArtifactStore {
       throw error51;
     }
   }
-  async readManifest(runId) {
-    validateComponent(runId, "run id");
-    const runDirectory = path21.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      return verifyRunManifest(
-        JSON.parse(await readRegularFile(
-          path21.join(validated.path, "manifest.json"),
-          validated.identity
-        )),
-        runId
-      );
-    } catch (error51) {
-      if (isMissing3(error51)) return null;
-      throw error51;
-    }
+  async readManifest() {
+    return this.readArtifact(MANIFEST);
   }
   /**
    * The spec hash recorded when this run started, or null when the run or the
    * record is absent. Lets a caller prove a reported run id actually belongs to
    * the spec it dispatched, rather than trusting the reporter's echo of it.
    */
-  async readRunStartSpecSha256(runId) {
-    validateComponent(runId, "run id");
-    const validated = await this.ensureExistingRunDirectory(path21.join(this.runsRoot, runId));
-    if (validated === null) return null;
-    try {
-      const record2 = JSON.parse(await readRegularFile(
-        path21.join(validated.path, "run-start.json"),
-        validated.identity
-      ));
-      if (typeof record2 !== "object" || record2 === null) return null;
-      const value = record2.specSha256;
-      return typeof value === "string" && /^[0-9a-f]{64}$/u.test(value) ? value : null;
-    } catch (error51) {
-      if (isMissing3(error51)) return null;
-      throw error51;
-    }
+  async readRunStartSpecSha256() {
+    return this.readArtifact(RUN_START_SPEC_SHA256);
   }
   async writeReviewSnapshot(snapshot) {
-    const validated = validateReviewSnapshot(snapshot, this.runId);
-    const attemptedHash = reviewSnapshotHash(validated);
+    const attemptedHash = reviewSnapshotHash(validateReviewSnapshot(snapshot, this.runId));
     try {
-      await this.writeJson("review-snapshot.json", validated);
+      await this.writeArtifact(REVIEW_SNAPSHOT, snapshot);
       return;
     } catch (error51) {
-      const existing = await this.readReviewSnapshot(this.runId);
+      const existing = await this.readReviewSnapshot();
       if (existing === null) throw error51;
       if (reviewSnapshotHash(existing) === attemptedHash) return;
       throw new RuntimeError(
@@ -44848,35 +44872,17 @@ var ArtifactStore = class _ArtifactStore {
       );
     }
   }
-  async readReviewSnapshot(runId) {
-    validateComponent(runId, "run id");
-    const runDirectory = path21.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      const snapshot = validateReviewSnapshot(
-        JSON.parse(await readRegularFile(
-          path21.join(validated.path, "review-snapshot.json"),
-          validated.identity
-        )),
-        runId
-      );
-      reviewSnapshotHash(snapshot);
-      return snapshot;
-    } catch (error51) {
-      if (isMissing3(error51)) return null;
-      throw error51;
-    }
+  async readReviewSnapshot() {
+    return this.readArtifact(REVIEW_SNAPSHOT);
   }
-  async readAdvisorReport(runId) {
-    const value = await this.readPipelineArtifact(runId, "post-pipeline-autopilot");
-    return value === null ? null : validatePostPipelineAutopilotArtifacts(value, runId).advisorReport;
+  async readAdvisorReport() {
+    return (await this.readArtifact(POST_PIPELINE_AUTOPILOT))?.advisorReport ?? null;
   }
   async recomputeArchivedEligibility(record2) {
     const [pipelineResult, reviewSnapshot, advisorReport] = await Promise.all([
-      this.readPipelineArtifact(this.runId, "pipeline-result"),
-      this.readReviewSnapshot(this.runId),
-      this.readAdvisorReport(this.runId)
+      this.readPipelineArtifact("pipeline-result"),
+      this.readReviewSnapshot(),
+      this.readAdvisorReport()
     ]);
     if (pipelineResult === null || reviewSnapshot === null || advisorReport === null) return null;
     return evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
@@ -44886,14 +44892,14 @@ var ArtifactStore = class _ArtifactStore {
       evaluatedAt: record2.evaluatedAt
     }));
   }
-  async readAutopilotEligibility(runId) {
-    validateComponent(runId, "run id");
-    const value = await this.readPipelineArtifact(runId, "post-pipeline-autopilot");
-    if (value === null) return null;
-    const record2 = validatePostPipelineAutopilotArtifacts(value, runId).eligibility;
-    if (runId !== this.runId) {
-      return new _ArtifactStore(runId).readAutopilotEligibility(runId);
-    }
+  /**
+   * The archived eligibility record, re-derived from the archived evidence it
+   * claims to summarize. A record that no longer matches its evidence is an
+   * error, not a value.
+   */
+  async readAutopilotEligibility() {
+    const record2 = (await this.readArtifact(POST_PIPELINE_AUTOPILOT))?.eligibility ?? null;
+    if (record2 === null) return null;
     const expected = await this.recomputeArchivedEligibility(record2);
     if (expected === null) return null;
     if (canonicalArtifactHash(expected) !== canonicalArtifactHash(record2)) {
@@ -44903,8 +44909,8 @@ var ArtifactStore = class _ArtifactStore {
   }
   async writePostPipelineAutopilotArtifacts(args) {
     const [archivedPipelineResult, archivedReviewSnapshot] = await Promise.all([
-      this.readPipelineArtifact(this.runId, "pipeline-result"),
-      this.readReviewSnapshot(this.runId)
+      this.readPipelineArtifact("pipeline-result"),
+      this.readReviewSnapshot()
     ]);
     if (archivedPipelineResult === null || archivedReviewSnapshot === null) {
       throw new RuntimeError("post-pipeline artifacts require a durable pipeline result and review snapshot");
@@ -44936,10 +44942,7 @@ var ArtifactStore = class _ArtifactStore {
       advisorReportHash: persistedAdvisorHash,
       eligibilityRecordHash
     };
-    await this.writeJson(
-      path21.posix.join("pipeline", "post-pipeline-autopilot.json"),
-      artifacts
-    );
+    await this.writeArtifact(POST_PIPELINE_AUTOPILOT, artifacts);
     return { advisorReportHash: persistedAdvisorHash, eligibilityRecordHash };
   }
   async writeHumanDecision(record2) {
@@ -44970,7 +44973,7 @@ var ArtifactStore = class _ArtifactStore {
     } catch {
       throw new RuntimeError("autopilot decision eligibility is invalid");
     }
-    const archived = await this.readAutopilotEligibility(this.runId);
+    const archived = await this.readAutopilotEligibility();
     if (archived === null || canonicalArtifactHash(archived) !== canonicalArtifactHash(validated) || candidate.baseCommitOid !== validated.baseCommitOid || candidate.candidateCommitOid !== validated.candidateCommitOid || candidate.candidateTreeOid !== validated.candidateTreeOid || candidate.manifestHash !== validated.candidateManifestHash || candidate.manifestHash !== manifestHashOf(candidate.changedPaths)) {
       throw new RuntimeError("autopilot decision eligibility is invalid");
     }
@@ -44988,10 +44991,10 @@ var ArtifactStore = class _ArtifactStore {
   }
   async writeCandidateDecision(persisted, normalized) {
     try {
-      await this.writeJson("decision.json", persisted);
+      await this.writeArtifact(DECISION, persisted);
       return;
     } catch (error51) {
-      const existing = await this.readCandidateDecision(this.runId);
+      const existing = await this.readCandidateDecision();
       if (existing === null) throw error51;
       if (hasIdenticalDecisionProvenance(existing, normalized)) return;
       throw new RuntimeError(
@@ -45000,81 +45003,28 @@ var ArtifactStore = class _ArtifactStore {
       );
     }
   }
-  async readCandidateDecision(runId) {
-    validateComponent(runId, "run id");
-    const runDirectory = path21.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      const value = JSON.parse(await readRegularFile(
-        path21.join(validated.path, "decision.json"),
-        validated.identity
-      ));
-      return parsePersistedDecision(value);
-    } catch (error51) {
-      if (isMissing3(error51)) return null;
-      throw error51;
-    }
+  async readCandidateDecision() {
+    return this.readArtifact(DECISION);
   }
-  async readDecision(runId) {
-    return this.readCandidateDecision(runId);
+  async readDecision() {
+    return this.readCandidateDecision();
   }
   async writePipelineGateCleared(cleared) {
-    const validated = parsePipelineGateCleared(cleared);
-    if (!pipelineGateClearedSchema(validated)) {
-      throw new RuntimeError("the pipeline gate clearance record is malformed");
-    }
-    await this.writeJson("pipeline-gate-cleared.json", validated);
+    await this.writeArtifact(PIPELINE_GATE_CLEARED, cleared);
   }
-  async readPipelineGateCleared(runId) {
-    validateComponent(runId, "run id");
-    const runDirectory = path21.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    let value;
-    try {
-      value = JSON.parse(await readRegularFile(
-        path21.join(validated.path, "pipeline-gate-cleared.json"),
-        validated.identity
-      ));
-    } catch (error51) {
-      if (isMissing3(error51)) return null;
-      throw error51;
-    }
-    if (!pipelineGateClearedSchema(value)) {
-      throw new RuntimeError("the pipeline gate clearance record is malformed");
-    }
-    return parsePipelineGateCleared(value);
+  async readPipelineGateCleared() {
+    return this.readArtifact(PIPELINE_GATE_CLEARED);
   }
   async writePipelineActiveMarker(marker) {
-    if (typeof marker !== "object" || marker === null || !Number.isSafeInteger(marker.pid) || marker.pid <= 1 || marker.processToken !== null && typeof marker.processToken !== "string" || typeof marker.startedAt !== "string" || !Number.isFinite(Date.parse(marker.startedAt)) || typeof marker.sliced !== "boolean") {
-      throw new RuntimeError("pipeline-active marker is invalid");
-    }
-    await this.replaceJson("pipeline-active.json", marker);
+    await this.writeArtifact(PIPELINE_ACTIVE_MARKER, marker);
   }
-  async readPipelineActiveMarker(runId) {
-    validateComponent(runId, "run id");
-    const runDirectory = path21.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      const value = JSON.parse(await readRegularFile(
-        path21.join(validated.path, "pipeline-active.json"),
-        validated.identity
-      ));
-      if (typeof value !== "object" || value === null || typeof value.pid !== "number" || !Number.isSafeInteger(value.pid) || value.pid <= 1 || value.processToken !== null && typeof value.processToken !== "string" || typeof value.startedAt !== "string" || !Number.isFinite(Date.parse(value.startedAt)) || typeof value.sliced !== "boolean") {
-        throw new RuntimeError("archived pipeline-active marker is malformed");
-      }
-      return value;
-    } catch (error51) {
-      if (isMissing3(error51)) return null;
-      throw error51;
-    }
+  async readPipelineActiveMarker() {
+    return this.readArtifact(PIPELINE_ACTIVE_MARKER);
   }
   async clearPipelineActiveMarker() {
     const directory = await this.ensureRunDirectory(false);
     if (directory === null) return;
-    await rm7(path21.join(directory, "pipeline-active.json"), { force: true });
+    await rm7(path21.join(directory, PIPELINE_ACTIVE_MARKER.relativePath), { force: true });
   }
   async list() {
     await this.ensureRunsRoot();
@@ -45326,22 +45276,23 @@ var ArtifactStore = class _ArtifactStore {
       attempted.add(entry.runId);
       const quarantineName = `.prune-${entry.runId}-${randomUUID7()}`;
       const quarantinePath = path21.join(this.runsRoot, quarantineName);
+      const runStore = new _ArtifactStore(entry.runId);
       let prepared = null;
       let transaction = null;
       let runsRootIdentity = null;
       let archiveRemovalCommitted = false;
       let lease = null;
       try {
-        if (await this.readPipelineActiveMarker(entry.runId) !== null) {
+        if (await runStore.readPipelineActiveMarker() !== null) {
           retained.push({ runId: entry.runId, reason: "active-run" });
           return;
         }
-        const initialManifest = await this.readManifest(entry.runId);
+        const initialManifest = await runStore.readManifest();
         if (initialManifest === null) {
           retained.push({ runId: entry.runId, reason: "incomplete-run" });
           return;
         }
-        const initialResult = await this.readResult(entry.runId);
+        const initialResult = await runStore.readResult();
         if (initialResult === null) {
           retained.push({ runId: entry.runId, reason: "incomplete-run" });
           return;
@@ -45367,16 +45318,16 @@ var ArtifactStore = class _ArtifactStore {
         await safety.withCheckoutLease(canonical.canonical, async (acquiredLease) => {
           lease = acquiredLease;
           await assertDirectoryIdentity5(entry.directory, entry.identity);
-          const currentManifest = await this.readManifest(entry.runId);
+          const currentManifest = await runStore.readManifest();
           if (currentManifest === null || serializeJson(currentManifest) !== serializeJson(initialManifest)) {
             retained.push({ runId: entry.runId, reason: "run identity changed while waiting" });
             return;
           }
-          if (await this.readPipelineActiveMarker(entry.runId) !== null) {
+          if (await runStore.readPipelineActiveMarker() !== null) {
             retained.push({ runId: entry.runId, reason: "active-run" });
             return;
           }
-          const result = await this.readResult(entry.runId);
+          const result = await runStore.readResult();
           if (result === null) {
             retained.push({ runId: entry.runId, reason: "incomplete-run" });
             return;
@@ -45531,20 +45482,20 @@ var RunDecision = class {
     let decision = null;
     const coherenceErrors = [];
     try {
-      const readResult = typeof store.readResult === "function" ? store.readResult(runId).catch((err) => {
+      const readResult = typeof store.readResult === "function" ? store.readResult().catch((err) => {
         coherenceErrors.push(`failed to read result: ${err instanceof Error ? err.message : String(err)}`);
         return null;
       }) : Promise.resolve(null);
-      const readManifest = typeof store.readManifest === "function" ? store.readManifest(runId).catch((err) => {
+      const readManifest = typeof store.readManifest === "function" ? store.readManifest().catch((err) => {
         coherenceErrors.push(`failed to read manifest: ${err instanceof Error ? err.message : String(err)}`);
         return null;
       }) : Promise.resolve(null);
-      const readSnapshot = typeof store.readReviewSnapshot === "function" ? store.readReviewSnapshot(runId).catch(() => null) : Promise.resolve(null);
-      const readGateRecord = typeof store.readPipelineGateCleared === "function" ? store.readPipelineGateCleared(runId).catch((err) => {
+      const readSnapshot = typeof store.readReviewSnapshot === "function" ? store.readReviewSnapshot().catch(() => null) : Promise.resolve(null);
+      const readGateRecord = typeof store.readPipelineGateCleared === "function" ? store.readPipelineGateCleared().catch((err) => {
         gateRecordError = `the pipeline gate clearance record is malformed: ${err instanceof Error ? err.message : String(err)}`;
         return null;
       }) : Promise.resolve(null);
-      const readDecision = typeof store.readCandidateDecision === "function" ? store.readCandidateDecision(runId).catch((err) => {
+      const readDecision = typeof store.readCandidateDecision === "function" ? store.readCandidateDecision().catch((err) => {
         coherenceErrors.push(`failed to read decision: ${err instanceof Error ? err.message : String(err)}`);
         return null;
       }) : Promise.resolve(null);
@@ -47541,9 +47492,9 @@ async function validateArchivedTaskEvidence(task, evidence, context) {
     snapshot = decisionSnapshot.reviewSnapshot;
     decision = decisionSnapshot.decision;
     [pipelineResult, advisor, eligibility] = await Promise.all([
-      store.readPipelineArtifact(evidence.runId, "pipeline-result"),
-      store.readAdvisorReport(evidence.runId),
-      store.readAutopilotEligibility(evidence.runId)
+      store.readPipelineArtifact("pipeline-result"),
+      store.readAdvisorReport(),
+      store.readAutopilotEligibility()
     ]);
   } catch {
     fail2("missing-task-evidence", `task evidence archive is invalid: ${task.id}`);
@@ -49918,10 +49869,10 @@ var CandidatePromoter = class {
   }
   async ensureAcceptedDecision(artifactStore, runId, artifact, eligibility, eligibilityHash) {
     try {
-      let decision = await artifactStore.readCandidateDecision(runId);
+      let decision = await artifactStore.readCandidateDecision();
       if (decision === null) {
         await artifactStore.writeAutopilotDecision(artifact, eligibility, this.now());
-        decision = await artifactStore.readCandidateDecision(runId);
+        decision = await artifactStore.readCandidateDecision();
       }
       return decision?.decisionVersion === "2" && decision.authority === "autopilot-policy" && decision.decision === "accepted" && decision.candidateManifestHash === artifact.manifestHash && decision.evidenceHash === eligibilityHash;
     } catch {
@@ -49988,9 +49939,9 @@ var CandidatePromoter = class {
       manifest = decisionSnapshot.manifest;
       snapshot = decisionSnapshot.reviewSnapshot;
       [pipelineResult, advisor, eligibility] = await Promise.all([
-        artifactStore.readPipelineArtifact(request.runId, "pipeline-result"),
-        artifactStore.readAdvisorReport(request.runId),
-        artifactStore.readAutopilotEligibility(request.runId)
+        artifactStore.readPipelineArtifact("pipeline-result"),
+        artifactStore.readAdvisorReport(),
+        artifactStore.readAutopilotEligibility()
       ]);
     } catch {
       return finishFailure("evidence-mismatch");
@@ -50018,7 +49969,7 @@ var CandidatePromoter = class {
     }
     const safety = new PlatformSafety(this.platformServices);
     let enteredLease = false;
-    let terminal;
+    let terminal2;
     try {
       await safety.withCheckoutLease(request.workflowCheckoutPath, async (lock) => {
         enteredLease = true;
@@ -50271,7 +50222,7 @@ var CandidatePromoter = class {
           };
         }
         if (lockedOutcome.kind === "rejected") {
-          terminal = lockedOutcome.journalFailure ? await finishFailure(lockedOutcome.classification) : rejected(lockedOutcome.classification);
+          terminal2 = lockedOutcome.journalFailure ? await finishFailure(lockedOutcome.classification) : rejected(lockedOutcome.classification);
         } else {
           let journaled = !lockedOutcome.needsJournal;
           if (!journaled) {
@@ -50285,11 +50236,11 @@ var CandidatePromoter = class {
               journaled = false;
             }
           }
-          terminal = !journaled ? rejected("journal-failed") : await this.deleteAnchor(request.workflowCheckoutPath, artifact) ? { status: "committed", commitOid: lockedOutcome.commitOid } : rejected("anchor-deletion-failed");
+          terminal2 = !journaled ? rejected("journal-failed") : await this.deleteAnchor(request.workflowCheckoutPath, artifact) ? { status: "committed", commitOid: lockedOutcome.commitOid } : rejected("anchor-deletion-failed");
         }
       });
     } catch (error51) {
-      if (terminal?.status === "committed") {
+      if (terminal2?.status === "committed") {
         logger.warn("checkout lock release failed after candidate promotion", {
           event: "checkout-lock-release-failed",
           workflowId: request.workflowId,
@@ -50301,7 +50252,7 @@ var CandidatePromoter = class {
         throw error51;
       }
     }
-    return terminal;
+    return terminal2;
   }
 };
 
@@ -51053,7 +51004,7 @@ async function writeRunStatusSafely(store, status) {
 }
 async function transitionRunStatusSafely(store, runId, phase, fields = {}) {
   try {
-    const current = await store.readRunStatus(runId);
+    const current = await store.readRunStatus();
     if (current === null) return;
     await store.writeRunStatus({
       ...current,
@@ -52923,7 +52874,8 @@ function createRunContext(options) {
     borrowedCheckoutLease,
     runStart,
     onPhase,
-    sliceCount
+    sliceCount,
+    sliceIndex
   } = options;
   return {
     runId,
@@ -52935,7 +52887,7 @@ function createRunContext(options) {
     ...runStart === void 0 ? {} : { runStart },
     async emitStatus(phase, fields) {
       await transitionRunStatusSafely(store, runId, phase, {
-        sliceIndex: fields?.sliceIndex ?? null,
+        sliceIndex: fields?.sliceIndex ?? sliceIndex ?? null,
         sliceCount: fields?.sliceCount ?? sliceCount ?? null,
         round: fields?.round ?? null,
         role: fields?.role ?? null,
@@ -53004,9 +52956,9 @@ async function runAdvisorStage(args) {
   });
   try {
     const [archivedPipelineResult, archivedReviewSnapshot, archivedSpec] = await Promise.all([
-      store.readPipelineArtifact(args.runId, "pipeline-result"),
-      store.readReviewSnapshot(args.runId),
-      store.readPipelineArtifact(args.runId, "delegation-spec")
+      store.readPipelineArtifact("pipeline-result"),
+      store.readReviewSnapshot(),
+      store.readPipelineArtifact("delegation-spec")
     ]);
     if (archivedPipelineResult === null) {
       throw new RuntimeError("advisor stage requires a durable archived PipelineResult");
@@ -53216,7 +53168,7 @@ function failedAttemptStatus(failure3) {
 }
 async function archiveSlicedFailure(args) {
   try {
-    const manifest = await args.store.readManifest(args.attempt.runId);
+    const manifest = await args.store.readManifest();
     if (manifest === null) {
       throw new RuntimeError("run manifest is missing while archiving sliced failure");
     }
@@ -53348,7 +53300,7 @@ async function promoteFinalCandidate(args) {
     anchorRef: args.initialCandidate.anchorRef,
     diffText
   });
-  const manifest = await args.store.readManifest(args.attempt.runId);
+  const manifest = await args.store.readManifest();
   if (manifest === null) throw new RuntimeError("run manifest is missing during promotion");
   const finalAttempt = { ...args.attempt, candidate };
   await args.store.promoteTerminalArtifacts({
@@ -53394,35 +53346,587 @@ Object.defineProperty(runPipeline, "advisorStage", {
   configurable: false,
   writable: false
 });
+var CONTINUE = { state: "continue" };
+function terminal(result) {
+  return { state: "terminal", result };
+}
+function failedAtCurrentCandidate(state, reason, failure3) {
+  return failedResult(
+    state.attempt,
+    state.rounds,
+    state.currentCandidateCommit,
+    reason,
+    failure3,
+    state.increments,
+    state.pipelineSlices
+  );
+}
+async function archivePipelineFailure(context, state, args) {
+  const failedAttempt = state.sliced ? await archiveSlicedFailure({
+    checkoutPath: context.checkoutPath,
+    attempt: state.attempt,
+    failure: args.failure,
+    reason: args.reason,
+    store: context.store
+  }) : state.attempt;
+  if (state.sliced) state.authoritySafeToRelease = true;
+  state.finalAttempt = failedAttempt;
+  return failedResult(
+    failedAttempt,
+    state.rounds,
+    state.currentCandidateCommit,
+    args.reason,
+    args.failure,
+    state.increments,
+    args.slices ?? state.pipelineSlices,
+    args.haltedSliceIndex ?? null
+  );
+}
+async function salvagePipelineFailure(context, deps, state, args) {
+  const { checkoutPath, spec, store } = context;
+  const fallback = async () => archivePipelineFailure(context, state, args);
+  if (state.finalAttempt.candidate === null) return await fallback();
+  let salvagedAttempt = state.finalAttempt;
+  let salvagedCommit = state.currentCandidateCommit;
+  if (salvagedCommit !== state.finalAttempt.candidate.candidateCommitOid) {
+    const promoted = await promoteFinalCandidate({
+      checkoutPath,
+      attempt: state.finalAttempt,
+      initialCandidate: state.finalAttempt.candidate,
+      baselineCommit: state.baselineCommit,
+      candidateCommit: salvagedCommit,
+      store,
+      ...state.gitObjectAccess === null ? {} : { privateObjectAccess: state.gitObjectAccess }
+    });
+    if (promoted === null) return await fallback();
+    salvagedAttempt = promoted.attempt;
+    salvagedCommit = promoted.candidateCommit;
+  }
+  if (state.sliced) state.authoritySafeToRelease = true;
+  let verified;
+  try {
+    verified = await verifyCandidate({
+      checkoutPath,
+      spec,
+      deps,
+      attempt: salvagedAttempt,
+      baselineCommit: state.baselineCommit,
+      candidateCommit: salvagedCommit,
+      store,
+      namespace: "salvage"
+    });
+  } catch {
+    return await fallback();
+  }
+  const manifestForArchive = await store.readManifest();
+  if (manifestForArchive === null) return await fallback();
+  if (!verified.verification.pass) {
+    const demoted = {
+      ...salvagedAttempt,
+      status: "failed",
+      failure: "verification-failure",
+      summary: args.reason,
+      unresolvedIssues: [
+        ...salvagedAttempt.unresolvedIssues,
+        args.reason,
+        "salvage re-verification failed"
+      ],
+      evidence: {
+        ...salvagedAttempt.evidence,
+        pipelineFailure: { failure: args.failure, reason: args.reason }
+      }
+    };
+    await store.promoteTerminalArtifacts({ result: demoted, manifest: manifestForArchive });
+    state.finalAttempt = demoted;
+    await store.writePipelineArtifact("verification", verified.verification);
+    const failed = failedResult(
+      demoted,
+      state.rounds,
+      salvagedCommit,
+      args.reason,
+      args.failure,
+      state.increments,
+      state.pipelineSlices
+    );
+    await store.writePipelineArtifact("pipeline-result", failed);
+    return failed;
+  }
+  salvagedAttempt = {
+    ...salvagedAttempt,
+    evidence: {
+      ...salvagedAttempt.evidence,
+      pipelineReviewIncomplete: { failure: args.failure, reason: args.reason }
+    }
+  };
+  await store.promoteTerminalArtifacts({
+    result: salvagedAttempt,
+    manifest: manifestForArchive
+  });
+  state.finalAttempt = salvagedAttempt;
+  await store.writePipelineArtifact("verification", verified.verification);
+  const salvaged = {
+    runId: state.attempt.runId,
+    status: "human-decision-required",
+    attempt: salvagedAttempt,
+    increments: state.increments,
+    slices: state.pipelineSlices,
+    haltedSliceIndex: null,
+    rounds: state.rounds,
+    verification: verified.verification,
+    gate: {
+      decisionReady: false,
+      requiresHumanDecision: true,
+      reasons: [
+        args.reason,
+        "the candidate passed independent verification; the pipeline could not complete its own review, so the whole-branch review is the human's"
+      ]
+    },
+    finalCandidateCommit: salvagedCommit,
+    failure: null
+  };
+  await store.writePipelineArtifact("pipeline-result", salvaged);
+  return salvaged;
+}
+async function resolveHaltedSlicePhase(context, deps, state, phase) {
+  const { checkoutPath, spec, store } = context;
+  const halted = phase.slices.at(-1);
+  const reason = `slice phase halted at slice ${phase.haltedSliceIndex}: ${halted?.reasons.join("; ") ?? "objective gate failed"}`;
+  const archiveHalt = async (haltReason, failure3) => {
+    const failed = await archivePipelineFailure(context, state, {
+      reason: haltReason,
+      failure: failure3,
+      slices: phase.slices,
+      haltedSliceIndex: phase.haltedSliceIndex
+    });
+    await store.writePipelineArtifact("pipeline-result", failed);
+    return failed;
+  };
+  if (state.currentCandidateCommit === state.baselineCommit) {
+    return await archiveHalt(reason, "verification-failure");
+  }
+  const promoted = await promoteFinalCandidate({
+    checkoutPath,
+    attempt: state.attempt,
+    initialCandidate: state.initialCandidate,
+    baselineCommit: state.baselineCommit,
+    candidateCommit: state.currentCandidateCommit,
+    store
+  });
+  if (promoted === null) {
+    return await archiveHalt(
+      "partial halt candidate could not be promoted from the git object store",
+      "sandbox-violation"
+    );
+  }
+  state.finalAttempt = promoted.attempt;
+  state.currentCandidateCommit = promoted.candidateCommit;
+  state.authoritySafeToRelease = true;
+  await context.notePhase("partial halt verification");
+  const verified = await verifyCandidate({
+    checkoutPath,
+    spec,
+    deps,
+    attempt: state.finalAttempt,
+    baselineCommit: state.baselineCommit,
+    candidateCommit: state.currentCandidateCommit,
+    store,
+    namespace: "final"
+  });
+  await store.writePipelineArtifact("verification", verified.verification);
+  const haltResult = {
+    runId: state.attempt.runId,
+    status: "human-decision-required",
+    attempt: state.finalAttempt,
+    increments: state.increments,
+    slices: phase.slices,
+    haltedSliceIndex: phase.haltedSliceIndex,
+    rounds: state.rounds,
+    verification: verified.verification,
+    gate: {
+      decisionReady: false,
+      requiresHumanDecision: true,
+      reasons: [reason]
+    },
+    finalCandidateCommit: state.currentCandidateCommit,
+    failure: null
+  };
+  await store.writePipelineArtifact("pipeline-result", haltResult);
+  return haltResult;
+}
+async function runIncrementPhase(context, deps, state, worktreePath, maxIncrements) {
+  const { checkoutPath, spec, store } = context;
+  try {
+    state.gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
+  } catch {
+    return terminal(failedAtCurrentCandidate(
+      state,
+      "increment git object isolation could not be established",
+      "sandbox-violation"
+    ));
+  }
+  const gitObjectAccess = state.gitObjectAccess;
+  const privateObjects = privateObjectReadOptions(gitObjectAccess);
+  try {
+    for (let increment = 2; increment <= maxIncrements; increment += 1) {
+      if (deps.abortSignal?.aborted === true) {
+        return terminal(failedAtCurrentCandidate(
+          state,
+          `cancelled before increment ${increment}`,
+          "cancelled"
+        ));
+      }
+      await context.notePhase(`increment ${increment}/${maxIncrements}`);
+      const previousCandidateCommit = state.currentCandidateCommit;
+      const diffText = await checkedGit8(worktreePath, [
+        "diff",
+        `${state.baselineCommit}..${state.currentCandidateCommit}`
+      ], privateObjects);
+      const incrementRun = await runIncrement({
+        spec,
+        pkg: {
+          spec,
+          baselineCommit: state.baselineCommit,
+          candidateCommit: state.currentCandidateCommit,
+          candidateDiff: diffText,
+          testEvidence: state.frozenTestEvidence,
+          progress: composeProgressNotes(state.increments.at(-1)?.report ?? state.attempt)
+        },
+        worktreePath,
+        deps,
+        runId: state.attempt.runId,
+        increment,
+        store,
+        gitObjectAccess,
+        ...context.runStart === void 0 ? {} : { runStart: context.runStart }
+      });
+      if (!incrementRun.ok) {
+        return terminal(failedAtCurrentCandidate(
+          state,
+          `increment phase did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
+          incrementRun.failure
+        ));
+      }
+      const report = redactRecord(incrementRun.report);
+      await store.writePipelineArtifact(`increment-${increment}`, report);
+      const provenanceFailure = await validateCandidateProvenance({
+        worktreePath,
+        previousCandidateCommit,
+        candidateCommit: report.candidateCommit,
+        gitObjectAccess
+      });
+      if (provenanceFailure !== null) {
+        return terminal(failedAtCurrentCandidate(
+          state,
+          provenanceFailure.reason,
+          provenanceFailure.failure
+        ));
+      }
+      const [previousTree, candidateTree] = await Promise.all([
+        checkedGit8(worktreePath, ["rev-parse", `${previousCandidateCommit}^{tree}`], privateObjects),
+        checkedGit8(worktreePath, ["rev-parse", `${report.candidateCommit}^{tree}`], privateObjects)
+      ]);
+      const progressed = previousTree.trim() !== candidateTree.trim();
+      if (report.candidateCommit !== previousCandidateCommit) {
+        try {
+          await importPromotedObjects({
+            checkoutPath,
+            baselineCommit: previousCandidateCommit,
+            promotedCommit: report.candidateCommit,
+            access: gitObjectAccess
+          });
+        } catch {
+          return terminal(failedAtCurrentCandidate(
+            state,
+            "increment objects could not be imported into the shared git object store",
+            "sandbox-violation"
+          ));
+        }
+      }
+      state.currentCandidateCommit = report.candidateCommit;
+      state.increments.push({
+        increment,
+        report,
+        roleLogRefs: incrementRun.roleLogRefs
+      });
+      if (report.status === "complete") {
+        state.incrementOutcome = "complete";
+        break;
+      }
+      if (report.status === "blocked") {
+        state.incrementOutcome = "blocked";
+        break;
+      }
+      if (!progressed) {
+        state.incrementOutcome = "stalled";
+        break;
+      }
+    }
+    state.incrementOutcome ??= "budget-exhausted";
+  } catch {
+    return terminal(failedAtCurrentCandidate(
+      state,
+      "increment phase failed unexpectedly",
+      "producer-failure"
+    ));
+  }
+  return CONTINUE;
+}
+async function runReviewRounds(context, deps, state, worktreePath, reviewers, maxRounds) {
+  const { spec, store } = context;
+  for (let round = 1; round <= maxRounds; round += 1) {
+    if (deps.abortSignal?.aborted === true) {
+      return terminal(failedAtCurrentCandidate(
+        state,
+        `cancelled before review round ${round}`,
+        "cancelled"
+      ));
+    }
+    await context.notePhase(`review round ${round}/${maxRounds}`);
+    const diffText = await checkedGit8(worktreePath, [
+      "diff",
+      `${state.baselineCommit}..${state.currentCandidateCommit}`
+    ], state.gitObjectAccess === null ? void 0 : privateObjectReadOptions(state.gitObjectAccess));
+    const pkg = {
+      spec,
+      baselineCommit: state.baselineCommit,
+      candidateCommit: state.currentCandidateCommit,
+      candidateDiff: diffText,
+      testEvidence: state.frozenTestEvidence
+    };
+    const reviewRun = await runReviews({
+      reviewers,
+      spec,
+      pkg,
+      worktreePath,
+      deps,
+      runId: state.attempt.runId,
+      round,
+      store,
+      onReviewer: (role) => context.emitStatus("reviewing", { round, role })
+    });
+    if (!reviewRun.ok) {
+      return terminal(await salvagePipelineFailure(context, deps, state, {
+        reason: `review phase did not produce valid structured output (see ${reviewRun.failedRoleLogRef})`,
+        failure: "producer-failure"
+      }));
+    }
+    const reviews = reviewRun.reviews.map((review) => ({
+      reviewer: review.reviewer,
+      report: review.report
+    }));
+    const consolidated = consolidate(reviews);
+    await Promise.all(reviewRun.reviews.map((review) => store.writePipelineArtifact(
+      `round-${round}-review-${review.reviewer}`,
+      review.report
+    )));
+    await store.writePipelineArtifact(`round-${round}-consolidated`, consolidated);
+    const blocking = consolidated.findings.some(
+      (finding) => finding.severity === "blocker" || finding.severity === "major"
+    );
+    const approved = reviewRun.reviews.every((review) => review.report.verdict === "approve");
+    const roundRecord = {
+      round,
+      reviews,
+      consolidated,
+      fix: null,
+      roleLogRefs: reviewRun.roleLogRefs
+    };
+    state.rounds.push(roundRecord);
+    if (!blocking && approved) break;
+    try {
+      state.gitObjectAccess ??= await resolveLinkedWorktreeWritableRoots(worktreePath);
+    } catch {
+      return terminal(await archivePipelineFailure(context, state, {
+        reason: "fixer git object isolation could not be established",
+        failure: "sandbox-violation"
+      }));
+    }
+    await context.emitStatus("fixing", { round, role: "fixer" });
+    await context.notePhase(`round ${round}: applying fixes`);
+    const fixRun = await runFix({
+      spec,
+      pkg: { ...pkg, findings: consolidated.findings },
+      worktreePath,
+      deps,
+      runId: state.attempt.runId,
+      round,
+      store,
+      gitObjectAccess: state.gitObjectAccess,
+      ...context.runStart === void 0 ? {} : { runStart: context.runStart }
+    });
+    if (!fixRun.ok) {
+      return terminal(await salvagePipelineFailure(context, deps, state, {
+        reason: `fix phase did not produce valid structured output (see ${fixRun.failedRoleLogRef})`,
+        failure: fixRun.failure
+      }));
+    }
+    const { fix } = fixRun;
+    await store.writePipelineArtifact(`round-${round}-fix`, fix);
+    const provenanceFailure = await validateFixProvenance({
+      worktreePath,
+      previousCandidateCommit: state.currentCandidateCommit,
+      fix,
+      gitObjectAccess: state.gitObjectAccess
+    });
+    if (provenanceFailure !== null) {
+      return terminal(await archivePipelineFailure(context, state, {
+        reason: provenanceFailure.reason,
+        failure: provenanceFailure.failure
+      }));
+    }
+    state.currentCandidateCommit = fix.candidateCommit;
+    roundRecord.fix = fix;
+    roundRecord.roleLogRefs = [...reviewRun.roleLogRefs, ...fixRun.roleLogRefs];
+  }
+  return CONTINUE;
+}
+async function promoteReviewedCandidate(context, state) {
+  if (state.currentCandidateCommit === state.initialCandidate.candidateCommitOid) return CONTINUE;
+  if (state.gitObjectAccess === null && !state.sliced) {
+    return terminal(failedAtCurrentCandidate(
+      state,
+      "fixer git object isolation state is missing during promotion",
+      "sandbox-violation"
+    ));
+  }
+  const promoted = await promoteFinalCandidate({
+    checkoutPath: context.checkoutPath,
+    attempt: state.attempt,
+    initialCandidate: state.initialCandidate,
+    baselineCommit: state.baselineCommit,
+    candidateCommit: state.currentCandidateCommit,
+    store: context.store,
+    ...state.gitObjectAccess === null ? {} : { privateObjectAccess: state.gitObjectAccess }
+  });
+  if (promoted === null) {
+    return terminal(await archivePipelineFailure(context, state, {
+      reason: state.sliced ? "sliced candidate could not be promoted from the shared git object store" : "fixer objects could not be imported into the shared git object store",
+      failure: "sandbox-violation"
+    }));
+  }
+  state.finalAttempt = promoted.attempt;
+  state.currentCandidateCommit = promoted.candidateCommit;
+  return CONTINUE;
+}
+async function finalizePipelineGate(context, deps, state, maxRounds) {
+  const { checkoutPath, spec, store } = context;
+  await context.emitStatus("verifying");
+  await context.notePhase("final verification");
+  const verified = await verifyCandidate({
+    checkoutPath,
+    spec,
+    deps,
+    attempt: state.finalAttempt,
+    baselineCommit: state.baselineCommit,
+    candidateCommit: state.currentCandidateCommit,
+    store,
+    ...state.sliced ? { namespace: "final" } : {}
+  });
+  await store.writePipelineArtifact("verification", verified.verification);
+  const lastRound = state.rounds.at(-1);
+  await context.emitStatus("gating");
+  await context.notePhase("evaluating gate");
+  const gate = evaluateGates({
+    findings: lastRound?.consolidated.findings ?? [],
+    dispositions: lastRound?.fix?.dispositions ?? [],
+    verification: verified.verification,
+    roundsUsed: state.rounds.length,
+    maxRounds,
+    finalRoundReviewed: (lastRound?.fix ?? null) === null,
+    artifactsValid: true,
+    baselineDrift: verified.baselineDrift,
+    // Computed over the whole round history, not one round's prose.
+    nonConvergence: detectNonConvergence(state.rounds.map((round) => ({
+      round: round.round,
+      findings: round.consolidated.findings,
+      fixAttempted: round.fix !== null
+    }))),
+    ...state.incrementOutcome === void 0 ? {} : { incrementOutcome: state.incrementOutcome }
+  });
+  const manifestForArchive = await store.readManifest();
+  if (manifestForArchive === null) {
+    if (!gate.decisionReady) {
+      throw new RuntimeError(
+        "pipeline gate refused the candidate and the refusal could not be archived",
+        { reasons: gate.reasons }
+      );
+    }
+    throw new RuntimeError(
+      "pipeline gate cleared the candidate and the clearance could not be archived",
+      {
+        candidateCommitOid: state.currentCandidateCommit,
+        requiresHumanDecision: gate.requiresHumanDecision
+      }
+    );
+  }
+  if (!gate.decisionReady) {
+    state.finalAttempt = {
+      ...state.finalAttempt,
+      evidence: {
+        ...state.finalAttempt.evidence,
+        pipelineGateRefused: {
+          reasons: gate.reasons,
+          requiresHumanDecision: gate.requiresHumanDecision
+        }
+      }
+    };
+  }
+  const gateClearedRecord = !gate.decisionReady ? null : {
+    clearedVersion: "1",
+    candidateCommitOid: state.currentCandidateCommit,
+    requiresHumanDecision: gate.requiresHumanDecision,
+    clearedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  if (gateClearedRecord !== null) {
+    state.finalAttempt = {
+      ...state.finalAttempt,
+      evidence: {
+        ...state.finalAttempt.evidence,
+        pipelineGateCleared: {
+          candidateCommitOid: state.currentCandidateCommit,
+          requiresHumanDecision: gate.requiresHumanDecision
+        }
+      }
+    };
+    await store.writePipelineGateCleared(gateClearedRecord);
+  }
+  await store.promoteTerminalArtifacts({
+    result: state.finalAttempt,
+    manifest: manifestForArchive
+  });
+  const result = {
+    runId: state.attempt.runId,
+    status: gate.decisionReady ? "decision-ready" : "human-decision-required",
+    attempt: state.finalAttempt,
+    increments: state.increments,
+    slices: state.pipelineSlices,
+    haltedSliceIndex: null,
+    rounds: state.rounds,
+    verification: verified.verification,
+    gate,
+    finalCandidateCommit: state.currentCandidateCommit,
+    failure: null,
+    pipelineGateCleared: gateClearedRecord
+  };
+  await store.writePipelineArtifact("pipeline-result", result);
+  await context.notePhase(`finished: ${result.status}`);
+  state.authoritySafeToRelease = true;
+  return result;
+}
 async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedCheckoutLease) {
   const runAttemptFn = deps.runAttempt ?? runAttempt;
   const slices = resolveSlices(spec);
-  const initialSpec = slices.length === 0 ? spec : scopeSpecToSlice(spec, slices[0]);
+  const sliced = slices.length > 0;
+  const sliceCount = sliced ? slices.length : null;
+  const initialSpec = sliced ? scopeSpecToSlice(spec, slices[0]) : spec;
   const activeOwner = {
     pid: process.pid,
     processToken: await ps.getProcessStartToken(process.pid).catch(() => null),
     startedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    sliced: slices.length > 0
+    sliced
   };
   let statusStore = null;
   let statusRunId = null;
-  const emitPipelineStatus = async (phase, fields = {}) => {
-    if (statusStore === null || statusRunId === null) return;
-    await transitionRunStatusSafely(statusStore, statusRunId, phase, {
-      sliceIndex: fields.sliceIndex ?? (slices.length > 0 ? slices.length : null),
-      sliceCount: fields.sliceCount ?? (slices.length > 0 ? slices.length : null),
-      round: fields.round ?? null,
-      role: fields.role ?? null,
-      producerId: fields.producerId ?? null,
-      detail: fields.detail ?? null
-    });
-  };
-  const notePhase = async (phase) => {
-    try {
-      await deps.onPhase?.(phase);
-    } catch {
-    }
-  };
   let runStart;
   let slicedMarkerEstablished = false;
   const inheritedOnRunStart = deps.onRunStart;
@@ -53435,16 +53939,21 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
     dispatchedSpecSha256: specSha256(spec),
     borrowedCheckoutLease,
     runStatus: {
-      mode: slices.length > 0 ? "sliced" : "single",
-      sliceIndex: slices.length > 0 ? 1 : null,
-      sliceCount: slices.length > 0 ? slices.length : null,
+      mode: sliced ? "sliced" : "single",
+      sliceIndex: sliced ? 1 : null,
+      sliceCount,
       pipelineManaged: true
     },
     async onPhase(phase) {
       const mapped = phase === "producer running" ? "implementing" : phase === "freezing candidate" ? "freezing" : phase === "verifying candidate" ? "verifying" : null;
-      if (mapped !== null) {
-        await emitPipelineStatus(mapped, {
-          sliceIndex: slices.length > 0 ? 1 : null
+      if (mapped !== null && statusStore !== null && statusRunId !== null) {
+        await transitionRunStatusSafely(statusStore, statusRunId, mapped, {
+          sliceIndex: sliced ? 1 : null,
+          sliceCount,
+          round: null,
+          role: null,
+          producerId: null,
+          detail: null
         });
       }
       try {
@@ -53452,38 +53961,42 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
       } catch {
       }
     },
-    async onRunStart(context) {
-      runStart = context;
-      statusRunId = context.record.runId;
-      statusStore = new ArtifactStore(context.record.runId);
-      if (slices.length > 0) {
+    async onRunStart(context2) {
+      runStart = context2;
+      statusRunId = context2.record.runId;
+      statusStore = new ArtifactStore(context2.record.runId);
+      if (sliced) {
         await statusStore.writePipelineActiveMarker(activeOwner);
         slicedMarkerEstablished = true;
       }
       await writeRunStatusSafely(statusStore, {
         statusVersion: "1",
-        runId: context.record.runId,
-        mode: slices.length > 0 ? "sliced" : "single",
+        runId: context2.record.runId,
+        mode: sliced ? "sliced" : "single",
         phase: "preflight",
-        sliceIndex: slices.length > 0 ? 1 : null,
-        sliceCount: slices.length > 0 ? slices.length : null,
+        sliceIndex: sliced ? 1 : null,
+        sliceCount,
         round: null,
         role: null,
         producerId: null,
-        startedAt: context.record.startedAt,
+        startedAt: context2.record.startedAt,
         updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
         detail: null
       });
-      await emitPipelineStatus("baseline-verify", {
-        sliceIndex: slices.length > 0 ? 1 : null,
+      await transitionRunStatusSafely(statusStore, context2.record.runId, "baseline-verify", {
+        sliceIndex: sliced ? 1 : null,
+        sliceCount,
+        round: null,
+        role: null,
+        producerId: null,
         detail: spec.executionMode === "edit" ? null : "skipped for read-only execution"
       });
-      await inheritedOnRunStart?.(context);
+      await inheritedOnRunStart?.(context2);
     }
   });
   const store = new ArtifactStore(attempt.runId);
   await store.writePipelineArtifact("delegation-spec", spec);
-  const runContext = createRunContext({
+  const context = createRunContext({
     runId: attempt.runId,
     checkoutPath,
     spec,
@@ -53492,7 +54005,10 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
     borrowedCheckoutLease,
     ...runStart === void 0 ? {} : { runStart },
     ...inheritedOnPhase === void 0 ? {} : { onPhase: inheritedOnPhase },
-    sliceCount: slices.length > 0 ? slices.length : null
+    sliceCount,
+    // Once the slice wave is over, status lines describe the whole branch;
+    // the last slice index is the honest position for them.
+    sliceIndex: sliceCount
   });
   if (attempt.status !== "verified-candidate" || attempt.candidate === null) {
     if (slicedMarkerEstablished) await store.clearPipelineActiveMarker();
@@ -53504,163 +54020,55 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
       attempt.failure ?? "producer-failure"
     );
   }
-  if (slices.length === 0) await store.writePipelineActiveMarker(activeOwner);
+  if (!sliced) await store.writePipelineActiveMarker(activeOwner);
   const temporarySliceRefs2 = [];
-  let finalAttempt = attempt;
-  let authoritySafeToRelease = slices.length === 0;
+  const state = {
+    attempt,
+    initialCandidate: attempt.candidate,
+    baselineCommit: attempt.candidate.baseCommitOid,
+    sliced,
+    rounds: [],
+    increments: [],
+    finalAttempt: attempt,
+    currentCandidateCommit: attempt.candidate.candidateCommitOid,
+    pipelineSlices: [],
+    incrementOutcome: void 0,
+    gitObjectAccess: null,
+    frozenTestEvidence: testEvidence(attempt),
+    authoritySafeToRelease: !sliced
+  };
   let pipelinePrimaryError;
   try {
     const reviewConfig = resolveReviewConfig(spec);
     const { reviewers, maxRounds } = reviewConfig;
-    const maxIncrements = slices.length === 0 ? resolveImplementationConfig(spec).maxIncrements : 1;
-    const increments = [];
-    let incrementOutcome;
-    const rounds = [];
-    const baselineCommit = attempt.candidate.baseCommitOid;
-    let currentCandidateCommit = attempt.candidate.candidateCommitOid;
-    let frozenTestEvidence = testEvidence(attempt);
-    let pipelineSlices = [];
-    const archivePipelineFailure = async (args) => {
-      const failedAttempt = slices.length === 0 ? attempt : await archiveSlicedFailure({
-        checkoutPath,
-        attempt,
-        failure: args.failure,
-        reason: args.reason,
-        store
-      });
-      if (slices.length > 0) authoritySafeToRelease = true;
-      finalAttempt = failedAttempt;
-      return failedResult(
-        failedAttempt,
-        rounds,
-        args.finalCandidateCommit,
-        args.reason,
-        args.failure,
-        increments,
-        args.slices ?? pipelineSlices,
-        args.haltedSliceIndex ?? null
+    const maxIncrements = sliced ? 1 : resolveImplementationConfig(spec).maxIncrements;
+    const failSliceExecution = async (error51, completedSlices) => {
+      const archived = await archiveSliceExecutionError({ checkoutPath, error: error51, attempt, store });
+      state.authoritySafeToRelease = true;
+      state.finalAttempt = archived.failedAttempt;
+      if (error51 !== archived.sliceError) throw error51;
+      const failed = failedResult(
+        archived.failedAttempt,
+        state.rounds,
+        completedSlices.at(-1)?.candidateCommit ?? state.baselineCommit,
+        archived.sliceError.message,
+        archived.sliceError.failure,
+        state.increments,
+        completedSlices
       );
+      await store.writePipelineArtifact("pipeline-result", failed);
+      return failed;
     };
-    const salvagePipelineFailure = async (args) => {
-      const fallback = async () => archivePipelineFailure({
-        finalCandidateCommit: args.finalCandidateCommit,
-        reason: args.reason,
-        failure: args.failure
-      });
-      if (finalAttempt.candidate === null) return await fallback();
-      let salvagedAttempt = finalAttempt;
-      let salvagedCommit = args.finalCandidateCommit;
-      if (salvagedCommit !== finalAttempt.candidate.candidateCommitOid) {
-        const promoted = await promoteFinalCandidate({
-          checkoutPath,
-          attempt: finalAttempt,
-          initialCandidate: finalAttempt.candidate,
-          baselineCommit,
-          candidateCommit: salvagedCommit,
-          store,
-          ...args.gitObjectAccess === null ? {} : { privateObjectAccess: args.gitObjectAccess }
-        });
-        if (promoted === null) return await fallback();
-        salvagedAttempt = promoted.attempt;
-        salvagedCommit = promoted.candidateCommit;
-      }
-      if (slices.length > 0) authoritySafeToRelease = true;
-      let verified2;
-      try {
-        verified2 = await verifyCandidate({
-          checkoutPath,
-          spec,
-          deps,
-          attempt: salvagedAttempt,
-          baselineCommit,
-          candidateCommit: salvagedCommit,
-          store,
-          namespace: "salvage"
-        });
-      } catch {
-        return await fallback();
-      }
-      const manifestForArchive2 = await store.readManifest(attempt.runId);
-      if (!verified2.verification.pass) {
-        if (manifestForArchive2 === null) return await fallback();
-        const demoted = {
-          ...salvagedAttempt,
-          status: "failed",
-          failure: "verification-failure",
-          summary: args.reason,
-          unresolvedIssues: [
-            ...salvagedAttempt.unresolvedIssues,
-            args.reason,
-            "salvage re-verification failed"
-          ],
-          evidence: {
-            ...salvagedAttempt.evidence,
-            pipelineFailure: { failure: args.failure, reason: args.reason }
-          }
-        };
-        await store.promoteTerminalArtifacts({ result: demoted, manifest: manifestForArchive2 });
-        if (slices.length > 0) authoritySafeToRelease = true;
-        finalAttempt = demoted;
-        await store.writePipelineArtifact("verification", verified2.verification);
-        const failed = failedResult(
-          demoted,
-          rounds,
-          salvagedCommit,
-          args.reason,
-          args.failure,
-          increments,
-          pipelineSlices
-        );
-        await store.writePipelineArtifact("pipeline-result", failed);
-        return failed;
-      }
-      if (manifestForArchive2 === null) return await fallback();
-      salvagedAttempt = {
-        ...salvagedAttempt,
-        evidence: {
-          ...salvagedAttempt.evidence,
-          pipelineReviewIncomplete: { failure: args.failure, reason: args.reason }
-        }
-      };
-      await store.promoteTerminalArtifacts({
-        result: salvagedAttempt,
-        manifest: manifestForArchive2
-      });
-      finalAttempt = salvagedAttempt;
-      await store.writePipelineArtifact("verification", verified2.verification);
-      const salvaged = {
-        runId: attempt.runId,
-        status: "human-decision-required",
-        attempt: salvagedAttempt,
-        increments,
-        slices: pipelineSlices,
-        haltedSliceIndex: null,
-        rounds,
-        verification: verified2.verification,
-        gate: {
-          decisionReady: false,
-          requiresHumanDecision: true,
-          reasons: [
-            args.reason,
-            "the candidate passed independent verification; the pipeline could not complete its own review, so the whole-branch review is the human's"
-          ]
-        },
-        finalCandidateCommit: salvagedCommit,
-        failure: null
-      };
-      await store.writePipelineArtifact("pipeline-result", salvaged);
-      return salvaged;
-    };
-    if (slices.length > 0) {
+    if (sliced) {
       const initialNamespace = "slice-1-attempt-0";
-      await emitPipelineStatus("verifying", { sliceIndex: 1 });
+      await context.emitStatus("verifying", { sliceIndex: 1 });
       const initialVerification = await verifyCandidate({
         checkoutPath,
         spec: initialSpec,
         deps,
         attempt,
-        baselineCommit,
-        candidateCommit: currentCandidateCommit,
+        baselineCommit: state.baselineCommit,
+        candidateCommit: state.currentCandidateCommit,
         store,
         namespace: initialNamespace
       });
@@ -53674,8 +54082,8 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
             spec: initialSpec,
             deps,
             runId: attempt.runId,
-            baselineCommit,
-            candidateCommit: currentCandidateCommit,
+            baselineCommit: state.baselineCommit,
+            candidateCommit: state.currentCandidateCommit,
             namespace: initialNamespace,
             reviewers,
             verification: initialVerification.verification,
@@ -53683,25 +54091,7 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
             borrowedCheckoutLease
           });
         } catch (error51) {
-          const archived = await archiveSliceExecutionError({
-            checkoutPath,
-            error: error51,
-            attempt,
-            store
-          });
-          authoritySafeToRelease = true;
-          finalAttempt = archived.failedAttempt;
-          if (error51 !== archived.sliceError) throw error51;
-          const failed = failedResult(
-            archived.failedAttempt,
-            rounds,
-            baselineCommit,
-            archived.sliceError.message,
-            archived.sliceError.failure,
-            increments
-          );
-          await store.writePipelineArtifact("pipeline-result", failed);
-          return failed;
+          return await failSliceExecution(error51, []);
         }
         initialPerSliceReview = reviewed.review;
         initialRoleLogRefs.push(...reviewed.roleLogRefs);
@@ -53718,14 +54108,14 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
           roleRunner: deps.roleRunner
         });
         phase = await sliceRunner.run({
-          context: runContext,
+          context,
           slices,
-          baselineCommit,
+          baselineCommit: state.baselineCommit,
           attempt,
           budgets: { maxRounds },
           concurrency: resolveSliceConcurrency(spec),
           initialAttempt: {
-            candidateCommit: currentCandidateCommit,
+            candidateCommit: state.currentCandidateCommit,
             verification: initialVerification.verification,
             perSliceReview: initialPerSliceReview,
             roleLogRefs: initialRoleLogRefs
@@ -53739,430 +54129,31 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
           }
         });
       } catch (error51) {
-        const archived = await archiveSliceExecutionError({
-          checkoutPath,
-          error: error51,
-          attempt,
-          store
-        });
-        authoritySafeToRelease = true;
-        finalAttempt = archived.failedAttempt;
-        if (error51 !== archived.sliceError) throw error51;
-        const failed = failedResult(
-          archived.failedAttempt,
-          rounds,
-          completedSlices.at(-1)?.candidateCommit ?? baselineCommit,
-          archived.sliceError.message,
-          archived.sliceError.failure,
-          increments,
-          completedSlices
-        );
-        await store.writePipelineArtifact("pipeline-result", failed);
-        return failed;
+        return await failSliceExecution(error51, completedSlices);
       }
-      pipelineSlices = phase.slices;
+      state.pipelineSlices = phase.slices;
       temporarySliceRefs2.push(...phase.temporarySliceRefs ?? []);
-      currentCandidateCommit = phase.finalCandidateCommit;
+      state.currentCandidateCommit = phase.finalCandidateCommit;
       if (phase.haltedSliceIndex !== null) {
-        const halted = phase.slices.at(-1);
-        const reason = `slice phase halted at slice ${phase.haltedSliceIndex}: ${halted?.reasons.join("; ") ?? "objective gate failed"}`;
-        if (currentCandidateCommit === baselineCommit) {
-          const failedAttempt = await archiveSlicedFailure({
-            checkoutPath,
-            attempt,
-            failure: "verification-failure",
-            reason,
-            store
-          });
-          authoritySafeToRelease = true;
-          finalAttempt = failedAttempt;
-          const failed = failedResult(
-            failedAttempt,
-            rounds,
-            currentCandidateCommit,
-            reason,
-            "verification-failure",
-            increments,
-            phase.slices,
-            phase.haltedSliceIndex
-          );
-          await store.writePipelineArtifact("pipeline-result", failed);
-          return failed;
-        }
-        const promoted = await promoteFinalCandidate({
-          checkoutPath,
-          attempt,
-          initialCandidate: attempt.candidate,
-          baselineCommit,
-          candidateCommit: currentCandidateCommit,
-          store
-        });
-        if (promoted === null) {
-          const promotionReason = "partial halt candidate could not be promoted from the git object store";
-          const failedAttempt = await archiveSlicedFailure({
-            checkoutPath,
-            attempt,
-            failure: "sandbox-violation",
-            reason: promotionReason,
-            store
-          });
-          authoritySafeToRelease = true;
-          finalAttempt = failedAttempt;
-          const failed = failedResult(
-            failedAttempt,
-            rounds,
-            currentCandidateCommit,
-            promotionReason,
-            "sandbox-violation",
-            increments,
-            phase.slices,
-            phase.haltedSliceIndex
-          );
-          await store.writePipelineArtifact("pipeline-result", failed);
-          return failed;
-        }
-        finalAttempt = promoted.attempt;
-        currentCandidateCommit = promoted.candidateCommit;
-        authoritySafeToRelease = true;
-        await notePhase("partial halt verification");
-        const verified2 = await verifyCandidate({
-          checkoutPath,
-          spec,
-          deps,
-          attempt: finalAttempt,
-          baselineCommit,
-          candidateCommit: currentCandidateCommit,
-          store,
-          namespace: "final"
-        });
-        await store.writePipelineArtifact("verification", verified2.verification);
-        const haltResult = {
-          runId: attempt.runId,
-          status: "human-decision-required",
-          attempt: finalAttempt,
-          increments,
-          slices: phase.slices,
-          haltedSliceIndex: phase.haltedSliceIndex,
-          rounds,
-          verification: verified2.verification,
-          gate: {
-            decisionReady: false,
-            requiresHumanDecision: true,
-            reasons: [reason]
-          },
-          finalCandidateCommit: currentCandidateCommit,
-          failure: null
-        };
-        await store.writePipelineArtifact("pipeline-result", haltResult);
-        return haltResult;
+        return await resolveHaltedSlicePhase(context, deps, state, phase);
       }
-      frozenTestEvidence = sliceTestEvidence(phase.slices);
+      state.frozenTestEvidence = sliceTestEvidence(phase.slices);
     }
     const candidateWorktree = await new WorktreeManager(
       checkoutPath,
-      slices.length === 0 ? `${attempt.runId}-pipeline` : `${attempt.runId}-composed-review`,
+      sliced ? `${attempt.runId}-composed-review` : `${attempt.runId}-pipeline`,
       ps,
       deps.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: deps.borrowedCheckoutLease }
-    ).create(currentCandidateCommit);
-    let gitObjectAccess = null;
+    ).create(state.currentCandidateCommit);
     try {
       if (maxIncrements > 1) {
-        try {
-          gitObjectAccess = await resolveLinkedWorktreeWritableRoots(candidateWorktree.path);
-        } catch {
-          return failedResult(
-            attempt,
-            rounds,
-            currentCandidateCommit,
-            "increment git object isolation could not be established",
-            "sandbox-violation",
-            increments,
-            pipelineSlices
-          );
-        }
-        try {
-          for (let increment = 2; increment <= maxIncrements; increment += 1) {
-            if (deps.abortSignal?.aborted === true) {
-              return failedResult(
-                attempt,
-                rounds,
-                currentCandidateCommit,
-                `cancelled before increment ${increment}`,
-                "cancelled",
-                increments,
-                pipelineSlices
-              );
-            }
-            await notePhase(`increment ${increment}/${maxIncrements}`);
-            const previousCandidateCommit = currentCandidateCommit;
-            const diffText = await checkedGit8(candidateWorktree.path, [
-              "diff",
-              `${baselineCommit}..${currentCandidateCommit}`
-            ], privateObjectReadOptions(gitObjectAccess));
-            const incrementRun = await runIncrement({
-              spec,
-              pkg: {
-                spec,
-                baselineCommit,
-                candidateCommit: currentCandidateCommit,
-                candidateDiff: diffText,
-                testEvidence: frozenTestEvidence,
-                progress: composeProgressNotes(increments.at(-1)?.report ?? attempt)
-              },
-              worktreePath: candidateWorktree.path,
-              deps,
-              runId: attempt.runId,
-              increment,
-              store,
-              gitObjectAccess,
-              ...runStart === void 0 ? {} : { runStart }
-            });
-            if (!incrementRun.ok) {
-              return failedResult(
-                attempt,
-                rounds,
-                currentCandidateCommit,
-                `increment phase did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
-                incrementRun.failure,
-                increments,
-                pipelineSlices
-              );
-            }
-            const report = redactRecord(incrementRun.report);
-            await store.writePipelineArtifact(`increment-${increment}`, report);
-            const provenanceFailure = await validateCandidateProvenance({
-              worktreePath: candidateWorktree.path,
-              previousCandidateCommit,
-              candidateCommit: report.candidateCommit,
-              gitObjectAccess
-            });
-            if (provenanceFailure !== null) {
-              return failedResult(
-                attempt,
-                rounds,
-                currentCandidateCommit,
-                provenanceFailure.reason,
-                provenanceFailure.failure,
-                increments,
-                pipelineSlices
-              );
-            }
-            const privateObjects = privateObjectReadOptions(gitObjectAccess);
-            const [previousTree, candidateTree] = await Promise.all([
-              checkedGit8(
-                candidateWorktree.path,
-                ["rev-parse", `${previousCandidateCommit}^{tree}`],
-                privateObjects
-              ),
-              checkedGit8(
-                candidateWorktree.path,
-                ["rev-parse", `${report.candidateCommit}^{tree}`],
-                privateObjects
-              )
-            ]);
-            const progressed = previousTree.trim() !== candidateTree.trim();
-            if (report.candidateCommit !== previousCandidateCommit) {
-              try {
-                await importPromotedObjects({
-                  checkoutPath,
-                  baselineCommit: previousCandidateCommit,
-                  promotedCommit: report.candidateCommit,
-                  access: gitObjectAccess
-                });
-              } catch {
-                return failedResult(
-                  attempt,
-                  rounds,
-                  currentCandidateCommit,
-                  "increment objects could not be imported into the shared git object store",
-                  "sandbox-violation",
-                  increments,
-                  pipelineSlices
-                );
-              }
-            }
-            currentCandidateCommit = report.candidateCommit;
-            increments.push({
-              increment,
-              report,
-              roleLogRefs: incrementRun.roleLogRefs
-            });
-            if (report.status === "complete") {
-              incrementOutcome = "complete";
-              break;
-            }
-            if (report.status === "blocked") {
-              incrementOutcome = "blocked";
-              break;
-            }
-            if (!progressed) {
-              incrementOutcome = "stalled";
-              break;
-            }
-          }
-          incrementOutcome ??= "budget-exhausted";
-        } catch {
-          return failedResult(
-            attempt,
-            rounds,
-            currentCandidateCommit,
-            "increment phase failed unexpectedly",
-            "producer-failure",
-            increments,
-            pipelineSlices
-          );
-        }
+        const outcome = await runIncrementPhase(context, deps, state, candidateWorktree.path, maxIncrements);
+        if (outcome.state === "terminal") return outcome.result;
       }
-      for (let round = 1; round <= maxRounds; round += 1) {
-        if (deps.abortSignal?.aborted === true) {
-          return failedResult(
-            attempt,
-            rounds,
-            currentCandidateCommit,
-            `cancelled before review round ${round}`,
-            "cancelled",
-            increments,
-            pipelineSlices
-          );
-        }
-        await notePhase(`review round ${round}/${maxRounds}`);
-        const diffText = await checkedGit8(candidateWorktree.path, [
-          "diff",
-          `${baselineCommit}..${currentCandidateCommit}`
-        ], gitObjectAccess === null ? void 0 : privateObjectReadOptions(gitObjectAccess));
-        const pkg = {
-          spec,
-          baselineCommit,
-          candidateCommit: currentCandidateCommit,
-          candidateDiff: diffText,
-          testEvidence: frozenTestEvidence
-        };
-        const reviewRun = await runReviews({
-          reviewers,
-          spec,
-          pkg,
-          worktreePath: candidateWorktree.path,
-          deps,
-          runId: attempt.runId,
-          round,
-          store,
-          onReviewer: (role) => emitPipelineStatus("reviewing", {
-            round,
-            role
-          })
-        });
-        if (!reviewRun.ok) {
-          const reason = `review phase did not produce valid structured output (see ${reviewRun.failedRoleLogRef})`;
-          return await salvagePipelineFailure({
-            finalCandidateCommit: currentCandidateCommit,
-            reason,
-            failure: "producer-failure",
-            gitObjectAccess
-          });
-        }
-        const reviews = reviewRun.reviews.map((review) => ({
-          reviewer: review.reviewer,
-          report: review.report
-        }));
-        const consolidated = consolidate(reviews);
-        await Promise.all(reviewRun.reviews.map((review) => store.writePipelineArtifact(
-          `round-${round}-review-${review.reviewer}`,
-          review.report
-        )));
-        await store.writePipelineArtifact(`round-${round}-consolidated`, consolidated);
-        const blocking = consolidated.findings.some(
-          (finding) => finding.severity === "blocker" || finding.severity === "major"
-        );
-        const approved = reviewRun.reviews.every((review) => review.report.verdict === "approve");
-        const roundRecord = {
-          round,
-          reviews,
-          consolidated,
-          fix: null,
-          roleLogRefs: reviewRun.roleLogRefs
-        };
-        rounds.push(roundRecord);
-        if (!blocking && approved) break;
-        try {
-          gitObjectAccess ??= await resolveLinkedWorktreeWritableRoots(candidateWorktree.path);
-        } catch {
-          return await archivePipelineFailure({
-            finalCandidateCommit: currentCandidateCommit,
-            reason: "fixer git object isolation could not be established",
-            failure: "sandbox-violation"
-          });
-        }
-        await emitPipelineStatus("fixing", { round, role: "fixer" });
-        await notePhase(`round ${round}: applying fixes`);
-        const fixRun = await runFix({
-          spec,
-          pkg: { ...pkg, findings: consolidated.findings },
-          worktreePath: candidateWorktree.path,
-          deps,
-          runId: attempt.runId,
-          round,
-          store,
-          gitObjectAccess,
-          ...runStart === void 0 ? {} : { runStart }
-        });
-        if (!fixRun.ok) {
-          return await salvagePipelineFailure({
-            finalCandidateCommit: currentCandidateCommit,
-            reason: `fix phase did not produce valid structured output (see ${fixRun.failedRoleLogRef})`,
-            failure: fixRun.failure,
-            gitObjectAccess
-          });
-        }
-        const { fix } = fixRun;
-        await store.writePipelineArtifact(`round-${round}-fix`, fix);
-        const provenanceFailure = await validateFixProvenance({
-          worktreePath: candidateWorktree.path,
-          previousCandidateCommit: currentCandidateCommit,
-          fix,
-          gitObjectAccess
-        });
-        if (provenanceFailure !== null) {
-          return await archivePipelineFailure({
-            finalCandidateCommit: currentCandidateCommit,
-            reason: provenanceFailure.reason,
-            failure: provenanceFailure.failure
-          });
-        }
-        currentCandidateCommit = fix.candidateCommit;
-        roundRecord.fix = fix;
-        roundRecord.roleLogRefs = [...reviewRun.roleLogRefs, ...fixRun.roleLogRefs];
-      }
-      if (currentCandidateCommit !== attempt.candidate.candidateCommitOid) {
-        if (gitObjectAccess === null && slices.length === 0) {
-          return failedResult(
-            attempt,
-            rounds,
-            currentCandidateCommit,
-            "fixer git object isolation state is missing during promotion",
-            "sandbox-violation",
-            increments,
-            pipelineSlices
-          );
-        }
-        const promoted = await promoteFinalCandidate({
-          checkoutPath,
-          attempt,
-          initialCandidate: attempt.candidate,
-          baselineCommit,
-          candidateCommit: currentCandidateCommit,
-          store,
-          ...gitObjectAccess === null ? {} : { privateObjectAccess: gitObjectAccess }
-        });
-        if (promoted === null) {
-          return await archivePipelineFailure({
-            finalCandidateCommit: currentCandidateCommit,
-            reason: slices.length === 0 ? "fixer objects could not be imported into the shared git object store" : "sliced candidate could not be promoted from the shared git object store",
-            failure: "sandbox-violation"
-          });
-        }
-        finalAttempt = promoted.attempt;
-        currentCandidateCommit = promoted.candidateCommit;
-      }
+      const reviewed = await runReviewRounds(context, deps, state, candidateWorktree.path, reviewers, maxRounds);
+      if (reviewed.state === "terminal") return reviewed.result;
+      const promoted = await promoteReviewedCandidate(context, state);
+      if (promoted.state === "terminal") return promoted.result;
     } finally {
       const cleanupError = await cleanupWorktree(candidateWorktree);
       if (cleanupError !== null) {
@@ -54171,120 +54162,19 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
         });
       }
     }
-    await emitPipelineStatus("verifying");
-    await notePhase("final verification");
-    const verified = await verifyCandidate({
-      checkoutPath,
-      spec,
-      deps,
-      attempt: finalAttempt,
-      baselineCommit,
-      candidateCommit: currentCandidateCommit,
-      store,
-      ...slices.length === 0 ? {} : { namespace: "final" }
-    });
-    await store.writePipelineArtifact("verification", verified.verification);
-    const lastRound = rounds.at(-1);
-    await emitPipelineStatus("gating");
-    await notePhase("evaluating gate");
-    const gate = evaluateGates({
-      findings: lastRound?.consolidated.findings ?? [],
-      dispositions: lastRound?.fix?.dispositions ?? [],
-      verification: verified.verification,
-      roundsUsed: rounds.length,
-      maxRounds,
-      finalRoundReviewed: (lastRound?.fix ?? null) === null,
-      artifactsValid: true,
-      baselineDrift: verified.baselineDrift,
-      // Computed over the whole round history, not one round's prose.
-      nonConvergence: detectNonConvergence(rounds.map((round) => ({
-        round: round.round,
-        findings: round.consolidated.findings,
-        fixAttempted: round.fix !== null
-      }))),
-      ...incrementOutcome === void 0 ? {} : { incrementOutcome }
-    });
-    const manifestForArchive = await store.readManifest(attempt.runId);
-    if (manifestForArchive === null) {
-      if (!gate.decisionReady) {
-        throw new RuntimeError(
-          "pipeline gate refused the candidate and the refusal could not be archived",
-          { reasons: gate.reasons }
-        );
-      }
-      throw new RuntimeError(
-        "pipeline gate cleared the candidate and the clearance could not be archived",
-        {
-          candidateCommitOid: currentCandidateCommit,
-          requiresHumanDecision: gate.requiresHumanDecision
-        }
-      );
-    }
-    if (!gate.decisionReady) {
-      finalAttempt = {
-        ...finalAttempt,
-        evidence: {
-          ...finalAttempt.evidence,
-          pipelineGateRefused: {
-            reasons: gate.reasons,
-            requiresHumanDecision: gate.requiresHumanDecision
-          }
-        }
-      };
-    }
-    const gateClearedRecord = !gate.decisionReady ? null : {
-      clearedVersion: "1",
-      candidateCommitOid: currentCandidateCommit,
-      requiresHumanDecision: gate.requiresHumanDecision,
-      clearedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    if (gateClearedRecord !== null) {
-      finalAttempt = {
-        ...finalAttempt,
-        evidence: {
-          ...finalAttempt.evidence,
-          pipelineGateCleared: {
-            candidateCommitOid: currentCandidateCommit,
-            requiresHumanDecision: gate.requiresHumanDecision
-          }
-        }
-      };
-      await store.writePipelineGateCleared(gateClearedRecord);
-    }
-    await store.promoteTerminalArtifacts({
-      result: finalAttempt,
-      manifest: manifestForArchive
-    });
-    const result = {
-      runId: attempt.runId,
-      status: gate.decisionReady ? "decision-ready" : "human-decision-required",
-      attempt: finalAttempt,
-      increments,
-      slices: pipelineSlices,
-      haltedSliceIndex: null,
-      rounds,
-      verification: verified.verification,
-      gate,
-      finalCandidateCommit: currentCandidateCommit,
-      failure: null,
-      pipelineGateCleared: gateClearedRecord
-    };
-    await store.writePipelineArtifact("pipeline-result", result);
-    await notePhase(`finished: ${result.status}`);
-    authoritySafeToRelease = true;
-    return result;
+    return await finalizePipelineGate(context, deps, state, maxRounds);
   } catch (error51) {
     let terminalError = error51;
-    if (slices.length > 0 && finalAttempt.status === "verified-candidate" && !containsSlicedFailureArchiveError(error51)) {
+    if (sliced && state.finalAttempt.status === "verified-candidate" && !containsSlicedFailureArchiveError(error51)) {
       try {
-        finalAttempt = await archiveSlicedFailure({
+        state.finalAttempt = await archiveSlicedFailure({
           checkoutPath,
-          attempt: finalAttempt,
+          attempt: state.finalAttempt,
           failure: "verification-failure",
           reason: "sliced pipeline terminated before completing trusted gates",
           store
         });
-        authoritySafeToRelease = true;
+        state.authoritySafeToRelease = true;
       } catch (archiveError) {
         terminalError = new AggregateError(
           [error51, archiveError],
@@ -54292,28 +54182,28 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
         );
       }
     }
-    await emitPipelineStatus("failed", {
+    await context.emitStatus("failed", {
       detail: terminalError instanceof Error ? terminalError.message : "pipeline failed unexpectedly"
     });
     pipelinePrimaryError = terminalError;
     throw terminalError;
   } finally {
     const cleanupErrors = await cleanupTemporarySliceRefs(checkoutPath, temporarySliceRefs2);
-    if (cleanupErrors.length > 0 && slices.length > 0 && finalAttempt.status === "verified-candidate" && !containsSlicedFailureArchiveError(pipelinePrimaryError)) {
+    if (cleanupErrors.length > 0 && sliced && state.finalAttempt.status === "verified-candidate" && !containsSlicedFailureArchiveError(pipelinePrimaryError)) {
       try {
-        finalAttempt = await archiveSlicedFailure({
+        state.finalAttempt = await archiveSlicedFailure({
           checkoutPath,
-          attempt: finalAttempt,
+          attempt: state.finalAttempt,
           failure: "verification-failure",
           reason: "temporary slice ref cleanup did not complete",
           store
         });
-        authoritySafeToRelease = true;
+        state.authoritySafeToRelease = true;
       } catch (archiveError) {
         cleanupErrors.push(archiveError);
       }
     }
-    if (cleanupErrors.length === 0 && authoritySafeToRelease) {
+    if (cleanupErrors.length === 0 && state.authoritySafeToRelease) {
       try {
         await store.clearPipelineActiveMarker();
       } catch (cleanupError) {
@@ -55477,7 +55367,7 @@ async function withCurrentArchivedRun(checkoutPath, runId, deps, fn, preserveRes
   });
 }
 async function requireInactivePipeline(run, runId) {
-  if (await run.store.readPipelineActiveMarker(runId) !== null) {
+  if (await run.store.readPipelineActiveMarker() !== null) {
     throw runtimeError(
       "the delegation pipeline for this run is still active",
       "pipeline-active"
@@ -55660,7 +55550,7 @@ async function requireSpecCorrespondence(run, runId, expectedSpecSha256) {
   if (!/^[0-9a-f]{64}$/u.test(expectedSpecSha256)) {
     throw runtimeError("expectedSpecSha256 is not a sha-256 digest", "run-spec-unverifiable");
   }
-  const recorded = await run.store.readRunStartSpecSha256(runId);
+  const recorded = await run.store.readRunStartSpecSha256();
   if (recorded === null) {
     throw runtimeError(
       "this run recorded no spec hash, so it cannot be matched to the dispatched spec",
@@ -55693,13 +55583,13 @@ async function sharedReviewSnapshot(run, deps, allowMissingAnchor = false) {
     git: deps.git ?? git,
     allowMissingAnchor
   });
-  const persisted = await run.store.readReviewSnapshot(run.result.runId);
+  const persisted = await run.store.readReviewSnapshot();
   if (persisted !== null) {
     requireMatchingSnapshotBytes(regenerated, persisted);
     return persisted;
   }
   await run.store.writeReviewSnapshot(regenerated);
-  const newlyPersisted = await run.store.readReviewSnapshot(run.result.runId);
+  const newlyPersisted = await run.store.readReviewSnapshot();
   if (newlyPersisted === null) {
     throw runtimeError(
       "review snapshot could not be persisted",
@@ -55866,7 +55756,7 @@ async function handleIntegrateCandidate(checkoutPath, runId, expectedArtifactHas
   try {
     return await withCurrentArchivedRun(checkoutPath, runId, deps, async (run, lock, ps) => {
       await requireInactivePipeline(run, runId);
-      const decision = await run.store.readCandidateDecision(runId);
+      const decision = await run.store.readCandidateDecision();
       if (decision?.decision !== "accepted") {
         return { integration: "aborted", detail: "no-accepted-decision" };
       }
@@ -56148,7 +56038,7 @@ async function removeStaleCandidateAnchor(repoRoot, runId) {
 }
 async function archiveInterruptedPipeline(store, result) {
   if (result.status !== "verified-candidate") return;
-  const manifest = await store.readManifest(result.runId);
+  const manifest = await store.readManifest();
   if (manifest === null) {
     throw new RuntimeError("run manifest is missing while recovering interrupted pipeline");
   }
@@ -58535,10 +58425,10 @@ async function recoverStaleRuns(dependencies = {}) {
           }
           const record2 = parseRunStart(runStartText, entry.name);
           const store = new ArtifactStore(entry.name);
-          const result2 = await store.readResult(entry.name);
+          const result2 = await store.readResult();
           if (result2 !== null) {
             validateTerminalResult(result2, entry.name);
-            const marker = await store.readPipelineActiveMarker(entry.name);
+            const marker = await store.readPipelineActiveMarker();
             if (marker !== null) {
               const markerStatus = await lockOwnerStatus(
                 { pid: marker.pid, processToken: marker.processToken },
@@ -58578,12 +58468,12 @@ async function recoverStaleRuns(dependencies = {}) {
               if (lockedRunStartText !== runStartText || lockedRecord.runId !== record2.runId || lockedRecord.lockKey !== record2.lockKey || lockedRecord.canonicalCommonDir !== record2.canonicalCommonDir || lockedRecord.pid !== record2.pid || lockedRecord.processToken !== record2.processToken || lockedRecord.startedAt !== record2.startedAt) {
                 throw new RuntimeError("run-start recovery record changed during recovery");
               }
-              const lockedResult = await store.readResult(entry.name);
+              const lockedResult = await store.readResult();
               if (lockedResult === null) {
                 throw new RuntimeError("terminal attempt result disappeared during recovery");
               }
               validateTerminalResult(lockedResult, entry.name);
-              const lockedMarker = await store.readPipelineActiveMarker(entry.name);
+              const lockedMarker = await store.readPipelineActiveMarker();
               const commonDir = await validateGitCommonDir(lockedRecord.canonicalCommonDir);
               if (lockedMarker === null) {
                 await cleanupRunWorktreesUnderLease(
@@ -58700,7 +58590,7 @@ async function recoverStaleRuns(dependencies = {}) {
         if (lockedRunStartText !== runStartText) {
           throw new RuntimeError("run-start recovery record changed before stale recovery");
         }
-        const lockedResult = await new ArtifactStore(record2.runId).readResult(record2.runId);
+        const lockedResult = await new ArtifactStore(record2.runId).readResult();
         if (lockedResult !== null) {
           validateTerminalResult(lockedResult, record2.runId);
           becameTerminal = true;

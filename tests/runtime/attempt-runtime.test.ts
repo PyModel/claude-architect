@@ -618,7 +618,7 @@ describe("runAttempt", () => {
       "utf8",
     )).resolves.toContain("attempt worktree cleanup failed");
     const archived = await new ArtifactStore("run-borrowed-lock-cleanup-failure")
-      .readResult("run-borrowed-lock-cleanup-failure");
+      .readResult();
     expect(archived?.status).toBe("verified-candidate");
     expect(fixture.acquireCalls()).toBe(0);
     expect(fixture.releaseCalls()).toBe(0);

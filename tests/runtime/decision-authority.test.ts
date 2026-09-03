@@ -142,7 +142,7 @@ describe("policy-autonomous decisions survive the archive", () => {
       recordedAt: new Date().toISOString(),
     };
     await store.writeCandidateDecisionRecord(record);
-    await expect(store.readCandidateDecision("decision-authority-roundtrip"))
+    await expect(store.readCandidateDecision())
       .resolves.toMatchObject({ authority: "policy-autonomous" });
   });
 });

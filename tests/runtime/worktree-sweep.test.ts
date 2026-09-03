@@ -963,7 +963,7 @@ describe("startup worktree sweep", () => {
         }],
       });
       await expect(access(worktree.path)).resolves.toBeUndefined();
-      await expect(store.readResult(runId)).resolves.toBeNull();
+      await expect(store.readResult()).resolves.toBeNull();
     } finally {
       await rm(manifestPath, { force: true });
       try { await recoverStaleRuns({ isProcessAlive: () => false }); } catch { /* fixture cleanup */ }
@@ -1138,7 +1138,7 @@ describe("startup worktree sweep", () => {
 
     await expect(access(protectedWorktree.path)).resolves.toBeUndefined();
     await expect(access(staleWorktree.path)).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(protectedStore.readPipelineActiveMarker("run-repair")).resolves.not.toBeNull();
+    await expect(protectedStore.readPipelineActiveMarker()).resolves.not.toBeNull();
   });
 
   it("claims a run missing its start record and preserves its worktree", async () => {

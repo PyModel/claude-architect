@@ -112,11 +112,11 @@ function createMockStore(runId: string, overrides: Partial<RunDecisionStore> = {
   let decision: CandidateDecisionV2 | null = null;
 
   return {
-    readResult: async (id: string) => (id === runId ? result : null),
-    readManifest: async (id: string) => (id === runId ? manifest : null),
-    readReviewSnapshot: async (id: string) => (id === runId ? snapshot : null),
-    readPipelineGateCleared: async (id: string) => (id === runId ? gateCleared : null),
-    readCandidateDecision: async (id: string) => (id === runId ? decision : null),
+    readResult: async () => result,
+    readManifest: async () => manifest,
+    readReviewSnapshot: async () => snapshot,
+    readPipelineGateCleared: async () => gateCleared,
+    readCandidateDecision: async () => decision,
     ...overrides,
   };
 }

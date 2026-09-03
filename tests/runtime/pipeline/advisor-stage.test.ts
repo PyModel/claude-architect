@@ -35,7 +35,7 @@ describe("runAdvisorStage", () => {
     const roleCalls: RoleRunArgs[] = [];
     const persisted: unknown[] = [];
     const store: AdvisorStageStore = {
-      async readPipelineArtifact<T>(_runId: string, name: string) {
+      async readPipelineArtifact<T>(name: string) {
         return structuredClone(name === "delegation-spec" ? spec : pipeline) as T;
       },
       async readReviewSnapshot() { return structuredClone(snapshot); },
@@ -115,7 +115,7 @@ describe("runAdvisorStage", () => {
     }];
     let capturedHistory: unknown;
     const store: AdvisorStageStore = {
-      async readPipelineArtifact<T>(_runId: string, name: string) {
+      async readPipelineArtifact<T>(name: string) {
         return structuredClone(name === "delegation-spec" ? spec : pipeline) as T;
       },
       async readReviewSnapshot() { return structuredClone(snapshot); },
@@ -161,7 +161,7 @@ describe("runAdvisorStage", () => {
     const spec = autopilotSpec();
     let persisted: Parameters<AdvisorStageStore["writePostPipelineAutopilotArtifacts"]>[0] | null = null;
     const store: AdvisorStageStore = {
-      async readPipelineArtifact<T>(_runId: string, name: string) {
+      async readPipelineArtifact<T>(name: string) {
         return structuredClone(name === "delegation-spec" ? spec : pipeline) as T;
       },
       async readReviewSnapshot() { return structuredClone(snapshot); },
@@ -204,7 +204,7 @@ describe("runAdvisorStage", () => {
     let persisted: Parameters<AdvisorStageStore["writePostPipelineAutopilotArtifacts"]>[0] | null = null;
     let failureLog: { name: string; text: string } | null = null;
     const store: AdvisorStageStore = {
-      async readPipelineArtifact<T>(_runId: string, name: string) {
+      async readPipelineArtifact<T>(name: string) {
         return structuredClone(name === "delegation-spec" ? spec : pipeline) as T;
       },
       async readReviewSnapshot() { return structuredClone(snapshot); },
@@ -250,7 +250,7 @@ describe("runAdvisorStage", () => {
     const snapshot = reviewSnapshot();
     const spec = autopilotSpec();
     const store: AdvisorStageStore = {
-      async readPipelineArtifact<T>(_runId: string, name: string) {
+      async readPipelineArtifact<T>(name: string) {
         return structuredClone(name === "delegation-spec" ? spec : pipeline) as T;
       },
       async readReviewSnapshot() { return structuredClone(snapshot); },
@@ -308,7 +308,7 @@ describe("runAdvisorStage", () => {
       detail: null,
     });
     const store: AdvisorStageStore = {
-      async readPipelineArtifact<T>(_runId: string, name: string) {
+      async readPipelineArtifact<T>(name: string) {
         return structuredClone(name === "delegation-spec" ? archivedSpec : pipeline) as T;
       },
       async readReviewSnapshot() { return structuredClone(reviewSnapshot()); },
@@ -325,7 +325,7 @@ describe("runAdvisorStage", () => {
       store,
     })).rejects.toThrow(/differs from the durable archived specification/u);
 
-    await expect(statusStore.readRunStatus(pipeline.runId))
+    await expect(statusStore.readRunStatus())
       .resolves.toMatchObject({ phase: "failed", role: "advisor" });
   });
 
@@ -334,7 +334,7 @@ describe("runAdvisorStage", () => {
     const snapshot = reviewSnapshot();
     const archivedSpec = autopilotSpec();
     const store: AdvisorStageStore = {
-      async readPipelineArtifact<T>(_runId: string, name: string) {
+      async readPipelineArtifact<T>(name: string) {
         return structuredClone(name === "delegation-spec" ? archivedSpec : pipeline) as T;
       },
       async readReviewSnapshot() { return structuredClone(snapshot); },
@@ -359,7 +359,7 @@ describe("runAdvisorStage", () => {
     let launched = false;
     let persisted: Parameters<AdvisorStageStore["writePostPipelineAutopilotArtifacts"]>[0] | null = null;
     const store: AdvisorStageStore = {
-      async readPipelineArtifact<T>(_runId: string, name: string) {
+      async readPipelineArtifact<T>(name: string) {
         return structuredClone(name === "delegation-spec" ? spec : pipeline) as T;
       },
       async readReviewSnapshot() { return structuredClone(snapshot); },

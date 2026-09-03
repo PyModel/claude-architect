@@ -273,9 +273,9 @@ async function validateArchivedTaskEvidence(
     snapshot = decisionSnapshot.reviewSnapshot;
     decision = decisionSnapshot.decision;
     [pipelineResult, advisor, eligibility] = await Promise.all([
-      store.readPipelineArtifact<PipelineResult>(evidence.runId, "pipeline-result"),
-      store.readAdvisorReport(evidence.runId),
-      store.readAutopilotEligibility(evidence.runId),
+      store.readPipelineArtifact<PipelineResult>("pipeline-result"),
+      store.readAdvisorReport(),
+      store.readAutopilotEligibility(),
     ]);
   } catch {
     fail("missing-task-evidence", `task evidence archive is invalid: ${task.id}`);

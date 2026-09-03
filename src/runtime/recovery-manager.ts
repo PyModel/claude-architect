@@ -522,7 +522,7 @@ async function archiveInterruptedPipeline(
   result: AttemptResult,
 ): Promise<void> {
   if (result.status !== "verified-candidate") return;
-  const manifest = await store.readManifest(result.runId);
+  const manifest = await store.readManifest();
   if (manifest === null) {
     throw new RuntimeError("run manifest is missing while recovering interrupted pipeline");
   }
@@ -3677,10 +3677,10 @@ export async function recoverStaleRuns(
           }
           const record = parseRunStart(runStartText, entry.name);
           const store = new ArtifactStore(entry.name);
-          const result = await store.readResult(entry.name);
+          const result = await store.readResult();
           if (result !== null) {
             validateTerminalResult(result, entry.name);
-            const marker = await store.readPipelineActiveMarker(entry.name);
+            const marker = await store.readPipelineActiveMarker();
             if (marker !== null) {
               const markerStatus = await lockOwnerStatus(
                 { pid: marker.pid, processToken: marker.processToken },
@@ -3726,12 +3726,12 @@ export async function recoverStaleRuns(
                 || lockedRecord.startedAt !== record.startedAt) {
                 throw new RuntimeError("run-start recovery record changed during recovery");
               }
-              const lockedResult = await store.readResult(entry.name);
+              const lockedResult = await store.readResult();
               if (lockedResult === null) {
                 throw new RuntimeError("terminal attempt result disappeared during recovery");
               }
               validateTerminalResult(lockedResult, entry.name);
-              const lockedMarker = await store.readPipelineActiveMarker(entry.name);
+              const lockedMarker = await store.readPipelineActiveMarker();
               const commonDir = await validateGitCommonDir(lockedRecord.canonicalCommonDir);
               if (lockedMarker === null) {
                 await cleanupRunWorktreesUnderLease(
@@ -3849,7 +3849,7 @@ export async function recoverStaleRuns(
         if (lockedRunStartText !== runStartText) {
           throw new RuntimeError("run-start recovery record changed before stale recovery");
         }
-        const lockedResult = await new ArtifactStore(record.runId).readResult(record.runId);
+        const lockedResult = await new ArtifactStore(record.runId).readResult();
         if (lockedResult !== null) {
           validateTerminalResult(lockedResult, record.runId);
           becameTerminal = true;

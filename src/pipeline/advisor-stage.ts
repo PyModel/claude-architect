@@ -34,8 +34,8 @@ import {
 const schemas = loadSchemas();
 
 export interface AdvisorStageStore {
-  readPipelineArtifact<T>(runId: string, name: string): Promise<T | null>;
-  readReviewSnapshot(runId: string): Promise<ReviewSnapshot | null>;
+  readPipelineArtifact<T>(name: string): Promise<T | null>;
+  readReviewSnapshot(): Promise<ReviewSnapshot | null>;
   writePostPipelineAutopilotArtifacts(args: {
     pipelineResult: PipelineResult;
     reviewSnapshot: ReviewSnapshot;
@@ -133,9 +133,9 @@ export async function runAdvisorStage(args: RunAdvisorStageArgs): Promise<Adviso
   });
   try {
   const [archivedPipelineResult, archivedReviewSnapshot, archivedSpec] = await Promise.all([
-    store.readPipelineArtifact<PipelineResult>(args.runId, "pipeline-result"),
-    store.readReviewSnapshot(args.runId),
-    store.readPipelineArtifact<DelegationSpec>(args.runId, "delegation-spec"),
+    store.readPipelineArtifact<PipelineResult>("pipeline-result"),
+    store.readReviewSnapshot(),
+    store.readPipelineArtifact<DelegationSpec>("delegation-spec"),
   ]);
   if (archivedPipelineResult === null) {
     throw new RuntimeError("advisor stage requires a durable archived PipelineResult");

@@ -481,7 +481,7 @@ describe("trusted run status", () => {
       runId: "status-redacted",
       detail: `status-secret-value ${"x".repeat(250)}`,
     });
-    const persisted = await store.readRunStatus("status-redacted");
+    const persisted = await store.readRunStatus();
     expect(persisted?.detail).not.toContain("status-secret-value");
     expect(persisted?.detail?.length).toBeLessThanOrEqual(200);
     await expect(store.writeRunStatus({ ...base, runId: "status-redacted", phase: "unknown" as RunStatus["phase"] }))
@@ -624,13 +624,13 @@ describe("trusted run status", () => {
       });
       const stale = new Date(Date.now() - 16 * 60 * 1000).toISOString();
       await store.writeRunStatus({
-        ...(await store.readRunStatus("statusline-live"))!,
+        ...(await store.readRunStatus())!,
         updatedAt: stale,
       });
       await expect(run()).resolves.toBe("");
 
       await store.writeRunStatus({
-        ...(await store.readRunStatus("statusline-live"))!,
+        ...(await store.readRunStatus())!,
         updatedAt: now,
       });
       await store.writePipelineActiveMarker({
@@ -686,7 +686,7 @@ describe("trusted run status", () => {
     // Durable transition 1: implementing
     await emitter.transition("implementing", { role: "implementer", producerId: "codex" });
     expect(writeCount).toBe(1);
-    expect((await store.readRunStatus("status-emitter-test"))?.phase).toBe("implementing");
+    expect((await store.readRunStatus())?.phase).toBe("implementing");
 
     // Ephemeral progress reports do NOT perform durable disk writes
     await emitter.ephemeral("running tests: 1/5 passed");
@@ -702,7 +702,7 @@ describe("trusted run status", () => {
     // Durable transition 2: verifying
     await emitter.transition("verifying");
     expect(writeCount).toBe(2);
-    expect((await store.readRunStatus("status-emitter-test"))?.phase).toBe("verifying");
+    expect((await store.readRunStatus())?.phase).toBe("verifying");
 
     // Ephemeral progress
     await emitter.ephemeral("verifying candidate tree");
@@ -712,6 +712,6 @@ describe("trusted run status", () => {
     // Durable transition 3: done
     await emitter.transition("done");
     expect(writeCount).toBe(3);
-    expect((await store.readRunStatus("status-emitter-test"))?.phase).toBe("done");
+    expect((await store.readRunStatus())?.phase).toBe("done");
   });
 });

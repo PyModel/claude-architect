@@ -67,7 +67,7 @@ export async function transitionRunStatusSafely(
   >> = {},
 ): Promise<void> {
   try {
-    const current = await store.readRunStatus(runId);
+    const current = await store.readRunStatus();
     if (current === null) return;
     await store.writeRunStatus({
       ...current,
