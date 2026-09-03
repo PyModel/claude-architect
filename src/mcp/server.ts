@@ -33,6 +33,7 @@ import {
   DECISION_AUTHORITY_ENV,
   type DecisionAuthority,
 } from "./decision-authority.js";
+import { runDecision } from "../runtime/run-decision.js";
 import { recoverStaleRuns, type WorktreeSweepIssue } from "../runtime/recovery-manager.js";
 import { pruneRuns } from "../runtime/artifact-store.js";
 import { boundedRedactedDiagnostic, redact } from "../runtime/redaction.js";
@@ -88,6 +89,12 @@ const pipelineResultOutput = z.object({
   slices: z.array(z.record(z.string(), z.unknown())),
   haltedSliceIndex: z.number().nullable(),
   failure: z.enum(FAILURE_PRECEDENCE).nullable().optional(),
+  pipelineGateCleared: z.object({
+    clearedVersion: z.literal("1"),
+    candidateCommitOid: z.string(),
+    requiresHumanDecision: z.boolean(),
+    clearedAt: z.string().optional(),
+  }).nullable().optional(),
 }).strict();
 // Lane mode returns the correlation envelope instead of the full result; both
 // shapes are part of the advertised contract.
@@ -687,22 +694,30 @@ export async function createServer(
         expectedArtifactHash,
         {
           ...dependencies,
-          decisionProvenanceResolver: async ({ advisory }) => {
-            const autonomy = autonomousEligibility(
+          decisionProvenanceResolver: async ({
+            advisory,
+            runId: targetRunId,
+            decision: targetDecision,
+            snapshot,
+          }) => {
+            const effectiveRunId = targetRunId ?? runId;
+            const effectiveDecision = targetDecision ?? decision;
+            const verdict = runDecision.verdictFor(
+              snapshot,
               (dependencies.decisionAuthority ?? decisionAuthority)(),
-              advisory,
             );
             // Eligibility says the runtime proved everything it can prove about
             // the candidate; it says nothing about the verdict. The policy may
             // only accept, so every other verdict is a human override.
-            if (autonomy.eligible && decision === "accepted") {
+            if (verdict.state === "accepted" && effectiveDecision === "accepted") {
               return "policy-autonomous";
             }
+            const reasons = verdict.state === "accepted" ? advisory.warnings : verdict.reasons;
             const confirmed = await confirmWithHuman(
               server,
-              runId,
-              decision,
-              advisory.warnings,
+              effectiveRunId,
+              effectiveDecision,
+              reasons,
             );
             if (!confirmed.ok) {
               throw new RuntimeError(confirmed.error.diagnostic, {

@@ -26,6 +26,10 @@ import {
   type CandidateDecisionV2,
   type HumanCandidateDecisionV2,
 } from "../protocol/candidate-decision.js";
+import {
+  type PipelineGateCleared,
+  parsePipelineGateCleared,
+} from "../protocol/pipeline-gate-cleared.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { checkVersionCompat } from "../protocol/schema-loader.js";
 import { specSha256 } from "../protocol/spec-hash.js";
@@ -50,6 +54,10 @@ import {
   type ReviewSnapshot,
 } from "../runtime/review-snapshot.js";
 import type { RunManifest } from "../runtime/run-manifest.js";
+import {
+  readRunDecisionSnapshot,
+  type RunDecisionSnapshot,
+} from "../runtime/run-decision.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
 import { redact } from "../runtime/redaction.js";
 import { NestedDelegationError, RuntimeError } from "../util/errors.js";
@@ -87,6 +95,7 @@ export interface ToolArtifactStore {
   /** Persist a decision whose authority the lifecycle already resolved. */
   writeCandidateDecisionRecord(record: CandidateDecisionV2): Promise<void>;
   readCandidateDecision(runId: string): Promise<RunDecision | null>;
+  readPipelineGateCleared?(runId: string): Promise<PipelineGateCleared | null>;
   readPipelineActiveMarker(runId: string): Promise<PipelineActiveMarker | null>;
   /**
    * The spec hash recorded when the run started. Required, not optional: a store
@@ -134,6 +143,8 @@ export interface ToolDependencies {
     runId: string;
     decision: RunDecisionValue;
     advisory: DecisionAdvisory;
+    /** The already-loaded archive, so the resolver never re-reads it. */
+    snapshot: RunDecisionSnapshot;
   }) => Promise<DecisionProvenance>;
   /** Injectable controller seam for hermetic MCP protocol tests. */
   autopilotControllerFactory?: (context: {
@@ -154,6 +165,13 @@ interface ArchivedRun {
   manifest: RunManifest;
   repoRoot: string;
   lockKey: string;
+  /**
+   * The one decision snapshot this run was loaded from. Every consumer on the
+   * decide path reads it instead of re-reading the archive: `loadArchivedRun`,
+   * the provenance resolver, and the decision write used to perform three
+   * independent five-file reads of the same immutable archive.
+   */
+  snapshot: RunDecisionSnapshot;
 }
 
 function services(deps: ToolDependencies): PlatformServices {
@@ -408,23 +426,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function loadArchivedRun(runId: string, deps: ToolDependencies): Promise<ArchivedRun> {
   const store = storeFor(runId, deps);
-  const [result, manifest] = await Promise.all([
-    store.readResult(runId),
-    store.readManifest(runId),
-  ]);
+  const snapshot = await readRunDecisionSnapshot(runId, { store });
+  const result = snapshot.result;
+  const manifest = snapshot.manifest;
   if (result === null || manifest === null) {
     throw runtimeError("archived run was not found", "run-not-found");
   }
-  if (result.runId !== runId || manifest.runId !== runId) {
-    throw runtimeError("archived run identity does not match", "archive-inconsistent");
-  }
-  if (result.candidate !== null
-    && (manifest.baseCommitOid !== result.candidate.baseCommitOid
-      || manifest.candidateManifestHash !== result.candidate.manifestHash
-      || result.candidate.manifestHash !== createHash("sha256")
-        .update(JSON.stringify(result.candidate.changedPaths))
-        .digest("hex"))) {
-    throw runtimeError("archived candidate does not match its run manifest", "archive-inconsistent");
+  if (snapshot.coherenceErrors.length > 0) {
+    throw runtimeError(snapshot.coherenceErrors[0]!, "archive-inconsistent");
   }
   const canonical = await services(deps).canonicalizePath(manifest.repoRoot);
   if (canonical.canonical !== manifest.repoRoot) {
@@ -436,6 +445,7 @@ async function loadArchivedRun(runId: string, deps: ToolDependencies): Promise<A
     manifest,
     repoRoot: canonical.canonical,
     lockKey: canonical.gitCommonDir ?? canonical.canonical,
+    snapshot,
   };
 }
 
@@ -1005,7 +1015,7 @@ export interface DecisionAdvisory {
 function decisionAdvisoryForRun(run: ArchivedRun): DecisionAdvisory {
   const refused = run.result.evidence.pipelineGateRefused;
   const incomplete = run.result.evidence.pipelineReviewIncomplete;
-  const cleared = run.result.evidence.pipelineGateCleared;
+  const rawCleared = run.result.evidence.pipelineGateCleared;
   const warnings: string[] = [];
   if (isRecord(refused) && Array.isArray(refused.reasons)) {
     warnings.push(
@@ -1022,26 +1032,29 @@ function decisionAdvisoryForRun(run: ArchivedRun): DecisionAdvisory {
   // pipeline evidence key — an archive carrying neither the marker nor gate
   // evidence proves nothing about its provenance and requires a human.
   const plainDelegate = run.result.evidence.plainDelegate === true
-    && refused === undefined && incomplete === undefined && cleared === undefined;
+    && refused === undefined && incomplete === undefined && rawCleared === undefined;
   let gateCleared = false;
   if (plainDelegate) {
     gateCleared = true;
-  } else if (cleared === undefined) {
+  } else if (rawCleared === undefined) {
     if (warnings.length === 0) {
       warnings.push("the pipeline gate clearance record is missing");
     }
-  } else if (!isRecord(cleared)
-    || typeof cleared.candidateCommitOid !== "string"
-    || typeof cleared.requiresHumanDecision !== "boolean") {
-    warnings.push("the pipeline gate clearance record is malformed");
-  } else if (cleared.requiresHumanDecision === true) {
-    warnings.push("the pipeline gate clearance record requires a human decision");
-  } else if (cleared.candidateCommitOid !== run.result.candidate?.candidateCommitOid) {
-    warnings.push(
-      "the pipeline gate clearance record does not match the archived candidate commit",
-    );
   } else {
-    gateCleared = true;
+    try {
+      const cleared = parsePipelineGateCleared(rawCleared);
+      if (cleared.requiresHumanDecision === true) {
+        warnings.push("the pipeline gate clearance record requires a human decision");
+      } else if (cleared.candidateCommitOid !== run.result.candidate?.candidateCommitOid) {
+        warnings.push(
+          "the pipeline gate clearance record does not match the archived candidate commit",
+        );
+      } else {
+        gateCleared = true;
+      }
+    } catch {
+      warnings.push("the pipeline gate clearance record is malformed");
+    }
   }
   return {
     warnings,
@@ -1085,6 +1098,7 @@ export async function handleDecideCandidate(
           runId,
           decision,
           advisory: decisionAdvisoryForRun(run),
+          snapshot: run.snapshot,
         });
       const candidate = decision === "accepted"
         ? requireVerifiedCandidate(run)
@@ -1110,7 +1124,7 @@ export async function handleDecideCandidate(
           "decision-authority-refused",
         );
       }
-      const existing = await run.store.readCandidateDecision(runId);
+      const existing = run.snapshot.decision;
       const reviewSnapshot = await sharedReviewSnapshot(
         run,
         deps,

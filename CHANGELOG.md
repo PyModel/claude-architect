@@ -4,6 +4,26 @@ All notable changes to Claude Architect are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The slice lifecycle moved out of `runPipelineWithLease` into `SliceRunner` (`src/pipeline/slice-runner.ts`): plan wave, create worktree, launch Producer, freeze, verify, review, compose, release anchor. Run-scoped facts travel as a `RunContext` value instead of a shared closure, so `pipeline-runtime.ts` fell from 2464 to ~1540 lines and slice behaviour can be exercised without driving a whole pipeline.
+- One implementation of the slice phase. `SliceRunner.run` superseded the callback-driven `runSlicePhase`/`SlicePhaseDeps` pair, which stayed behind as a second routing loop that nothing called but a test suite still exercised — so the suite proved nothing about the code that runs. The superseded loop is deleted and its evidence-isolation and hard-blocker cases now drive the real runner.
+- One implementation of the managed-worktree lifecycle. `withManagedWorktree` lives beside `WorktreeManager` in `src/runtime/worktree-manager.ts`, and the pipeline, the slice runner, and candidate verification all borrow through it — so creation serialization and the cleanup-failure disposition cannot drift apart, and verification worktrees gain the `git worktree add` serialization they previously lacked.
+- The slice ref namespace has a single declaration (`src/git/ref-namespace.ts`). The pipeline wrote `refs/claude-architect/slices/` while recovery swept the same literal from its own copy; one declaration makes a silent divergence — refs created but never reclaimed — impossible.
+- Unified candidate evaluation into `RunDecision` (`src/runtime/run-decision.ts`). `readRunDecisionSnapshot` loads a run's result, manifest, review snapshot, gate clearance, and decision once and checks their cross-file coherence in one place; `evaluate` returns a typed `RunVerdict` — `accepted` (autonomous), `human-required`, `rejected`, `incomplete`, or `invalid` — replacing the accept-only rule that was written twice, in `mcp/server.ts` and `mcp/tools.ts`. The decide path now reads the archive once: `loadArchivedRun` carries the snapshot it read, and the provenance resolver judges that snapshot through the pure `verdictFor` rather than re-reading five files per caller.
+- `pipelineGateCleared` is a versioned artifact next to `CandidateDecisionV2`, with its own canonical schema at `runtime/schemas/pipeline-gate-cleared.v1.json`. The artifact store validates every durable record against that schema on both read and write, so a malformed clearance is an `invalid` verdict with a reason rather than a shape-sniffed warning string, and a record that reached disk malformed never reads back as "absent".
+- Acceptance verification takes a named `mode` — `candidate`, `composed-slice`, or `final-branch` — instead of an injected structural verifier. `MODE_STRUCTURAL_FAILURES` declares the failure classes each mode may report and now drives `structuralVerify`, which skips the work that proves a class the mode cannot report. The pipeline's `IGNORED_STRUCTURAL_FAILURES` filter, the final branch reviewer's substitute verifier and its private `finalPathAllowed` copy, and the second scope-violation glob in `verifyCandidate` are all gone: one scope rule, one symlink rule, one manifest recomputation across every mode.
+- `RecoveryDependencies` drops `requestCooperativeTermination`, `delayMs`, and `graceMs`, which were retained for input compatibility and did nothing, and takes `platformServices` whole. `recoverStaleRuns` no longer rebuilds a `PlatformServices` by grafting a caller's three methods onto the selected platform — production code that existed only to complete an incomplete test double. Recovery never took a checkout lease through that object; leases come from `platformSafety.withRecoveryLease`.
+
+### Documentation
+
+- `docs/README.md` indexes every document under `docs/` as current, historical, or superseded, naming the superseding document where one exists.
+- `docs/ARCHITECTURE.md` maps each `AGENTS.md` trust invariant to exactly one owning subsystem and file; `SECURITY_MODEL.md`, `TRUST_BOUNDARIES.md`, and `THREAT_MODEL.md` point at that mapping.
+- `docs/MARKETPLACE_REVIEW.md` states edit-lane confinement evidence per lane and platform, and says plainly that no lane has native Windows edit evidence and none is claimed — five of the six lanes are unsupported for editing off macOS because `macos-seatbelt` declares no Linux or Windows platform at all.
+- The delegate skill is 35% shorter (5417 → ~3520 words) with no rule removed: the autopilot and manual lifecycles are one section, the two presentation sections are one, and the sliced pipeline, backgrounded-run monitoring, presentation templates, decision-authority policy, and verification-preflight reference moved to `docs/`. `subagent-driven-delegation` no longer restates the spec-authoring, lane-correlation, and decision rules it shares with `delegate`; it points at them.
+
 ## [0.52.0] - 2026-09-02
 
 ### Changed

@@ -17,12 +17,7 @@ import type { CheckoutLock, PlatformServices } from "../platform/platform-servic
 import { getPlatformServices } from "../platform/select-platform.js";
 import type { AcceptanceVerifyResult } from "../verify/acceptance-verifier.js";
 import { AcceptanceVerifier } from "../verify/acceptance-verifier.js";
-import {
-  recomputeManifest,
-  type StructuralFailure,
-  type StructuralVerifyArgs,
-  type StructuralVerifyResult,
-} from "../verify/structural-verifier.js";
+import { readRunDecisionSnapshot } from "../runtime/run-decision.js";
 import type { CandidateArtifact, ChangedPath } from "../protocol/attempt-result.js";
 import type { AutopilotSpec } from "../protocol/autopilot-spec.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
@@ -272,14 +267,15 @@ async function validateArchivedTaskEvidence(
   let eligibility;
   let decision;
   try {
-    [result, manifest, pipelineResult, snapshot, advisor, eligibility, decision] = await Promise.all([
-      store.readResult(evidence.runId),
-      store.readManifest(evidence.runId),
+    const decisionSnapshot = await readRunDecisionSnapshot(evidence.runId, { store });
+    result = decisionSnapshot.result;
+    manifest = decisionSnapshot.manifest;
+    snapshot = decisionSnapshot.reviewSnapshot;
+    decision = decisionSnapshot.decision;
+    [pipelineResult, advisor, eligibility] = await Promise.all([
       store.readPipelineArtifact<PipelineResult>(evidence.runId, "pipeline-result"),
-      store.readReviewSnapshot(evidence.runId),
       store.readAdvisorReport(evidence.runId),
       store.readAutopilotEligibility(evidence.runId),
-      store.readCandidateDecision(evidence.runId),
     ]);
   } catch {
     fail("missing-task-evidence", `task evidence archive is invalid: ${task.id}`);
@@ -612,82 +608,6 @@ function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
-function finalPathAllowed(
-  pathname: string,
-  writeAllowlist: string[],
-  forbiddenScope: string[],
-  opaqueDirectory: boolean,
-): boolean {
-  const candidates = opaqueDirectory ? [pathname, `${pathname}/`] : [pathname];
-  return writeAllowlist.some(pattern => candidates.some(candidate => globMatches(pattern, candidate)))
-    && !forbiddenScope.some(pattern =>
-      candidates.some(candidate => globMatches(pattern, candidate, true)));
-}
-
-/** Structural proof adapted to a linear, multi-commit base-to-head artifact. */
-async function structuralVerifyFinalBranch(
-  args: StructuralVerifyArgs,
-  runGit: typeof git = git,
-): Promise<StructuralVerifyResult> {
-  const failures = new Set<StructuralFailure>();
-  const [manifest, baseTree, sourceHead, materializedHead, candidateTree, sourceStatus, materializedStatus] =
-    await Promise.all([
-      recomputeManifest(args),
-      checkedGit(runGit, args.repoRoot, ["rev-parse", "--verify", `${args.baseCommitOid}^{tree}`]),
-      checkedGit(runGit, args.repoRoot, ["rev-parse", "--verify", "HEAD^{commit}"]),
-      checkedGit(runGit, args.worktreePath, ["rev-parse", "--verify", "HEAD^{commit}"]),
-      checkedGit(runGit, args.repoRoot, [
-        "rev-parse", "--verify", `${args.artifact.candidateCommitOid}^{tree}`,
-      ]),
-      checkedGit(runGit, args.repoRoot, [
-        "status", "--porcelain=v1", "-z", "--untracked-files=all",
-      ]),
-      checkedGit(runGit, args.worktreePath, [
-        "status", "--porcelain=v1", "-z", "--untracked-files=all",
-      ]),
-    ]);
-  const ancestry = await runGit(args.repoRoot, [
-    "merge-base", "--is-ancestor", args.baseCommitOid, args.artifact.candidateCommitOid,
-  ]);
-
-  if (args.artifact.baseCommitOid !== args.baseCommitOid) failures.add("artifact-base-mismatch");
-  if (sourceHead.trim() !== args.artifact.candidateCommitOid
-    || materializedHead.trim() !== args.artifact.candidateCommitOid
-    || candidateTree.trim() !== args.artifact.candidateTreeOid
-    || ancestry.exitCode !== 0
-    || ancestry.truncated?.stdout === true
-    || ancestry.truncated?.stderr === true
-    || sourceStatus !== ""
-    || materializedStatus !== "") {
-    failures.add("artifact-divergence");
-  }
-  if (JSON.stringify(args.artifact.changedPaths) !== JSON.stringify(manifest.changedPaths)
-    || args.artifact.manifestHash !== manifest.manifestHash) {
-    failures.add("manifest-divergence");
-  }
-  if (manifest.changedPaths.some(change => !finalPathAllowed(
-    change.path,
-    args.writeAllowlist,
-    args.forbiddenScope,
-    change.mode === "160000",
-  ))) {
-    failures.add("out-of-scope-write");
-  }
-  if (manifest.rawDiff.some(entry =>
-    [entry.oldMode, entry.newMode].some(mode => mode === "120000" || mode === "160000"))) {
-    failures.add("modified-symlink");
-  }
-  if (manifest.changedPaths.length === 0
-    || args.artifact.candidateTreeOid === baseTree.trim()) {
-    failures.add("empty-candidate");
-  }
-  return {
-    ok: failures.size === 0,
-    failures: [...failures],
-    manifestHash: manifest.manifestHash,
-  };
-}
-
 function finalDelegationSpec(spec: AutopilotSpec): DelegationSpec {
   const template = spec.tasks[0]?.delegation;
   if (template === undefined) {
@@ -1004,7 +924,7 @@ export class FinalBranchReviewer {
     this.branchManager = dependencies.branchManager ?? new WorkflowBranchManager();
     this.workflowStore = dependencies.workflowStore ?? (workflowId => new WorkflowStore(workflowId));
     this.acceptanceVerifier = dependencies.acceptanceVerifier ?? new AcceptanceVerifier({
-      structural: async args => await structuralVerifyFinalBranch(args, this.runGit),
+      mode: "final-branch",
     });
     this.roleRunner = dependencies.roleRunner ?? runRole;
     this.platformServices = dependencies.platformServices ?? getPlatformServices();

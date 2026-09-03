@@ -18,11 +18,13 @@ import {
 import { transitionRunStatusSafely } from "../runtime/run-status.js";
 import { RuntimeError } from "../util/errors.js";
 import {
-  runStructuredRole,
   type PipelineDependencies,
   type PipelineResult,
-  type StructuredRoleRunResult,
 } from "./pipeline-runtime.js";
+import {
+  runStructuredRole,
+  type StructuredRoleRunResult,
+} from "./pipeline-roles.js";
 import type { AdvisorReport } from "./report-types.js";
 import {
   canRenderUntrustedBlockExactly,

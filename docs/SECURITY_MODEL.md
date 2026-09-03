@@ -2,6 +2,9 @@
 
 Claude Architect treats repository content, Producer output, model text, and command output as untrusted. The Host runtime and the human-controlled Claude session form the control plane. The main security objective is to prevent an implementation Producer from silently expanding its scope or causing unreviewed bytes to enter the user's checkout.
 
+Each invariant named here has exactly one owner in the source; the mapping is
+[ARCHITECTURE.md § Who owns each trust invariant](ARCHITECTURE.md#who-owns-each-trust-invariant).
+
 ## Components that execute code
 
 `runtime/bootstrap.mjs` executes Node.js and starts the MCP server. The Host runtime invokes `git`, the selected Producer CLI (`codex`, `opencode`, `pi`, `pythinker`, or `agy`), OS confinement helpers such as `/usr/bin/sandbox-exec` on supported macOS systems, Linux sandbox tooling when selected, and the packaged Windows watchdog/helper. Verification executes only commands listed in the validated Delegation Spec.

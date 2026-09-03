@@ -28,6 +28,10 @@ import type {
   HumanCandidateDecisionV2,
   LegacyDecisionAuthority,
 } from "../protocol/candidate-decision.js";
+import {
+  type PipelineGateCleared,
+  parsePipelineGateCleared,
+} from "../protocol/pipeline-gate-cleared.js";
 import type { VerificationCommand } from "../protocol/delegation-spec.js";
 import { loadSchemas } from "../protocol/schema-loader.js";
 import { RuntimeError } from "../util/errors.js";
@@ -79,6 +83,7 @@ const candidateDecisionSchema = schemas.candidateDecision;
 const advisorReportSchema = schemas.advisorReport;
 const autopilotEligibilitySchema = schemas.autopilotEligibility;
 const runStatusSchema = schemas.runStatus;
+const pipelineGateClearedSchema = schemas.pipelineGateCleared;
 
 export interface PrunePolicy {
   maxAgeMs: number;
@@ -189,7 +194,7 @@ function isSafeComponent(value: string): boolean {
 const STORE_TEMPORARY_RESIDUE =
   /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/u;
 
-function validateComponent(value: string, kind: "run id" | "log name"): void {
+export function validateComponent(value: string, kind: "run id" | "log name"): void {
   if (!isSafeComponent(value) || (kind === "run id" && value !== value.toLowerCase())) {
     throw new RuntimeError(`invalid ${kind}: ${JSON.stringify(value)}`);
   }
@@ -1369,6 +1374,37 @@ export class ArtifactStore {
 
   async readDecision(runId: string): Promise<CandidateDecision | null> {
     return this.readCandidateDecision(runId);
+  }
+
+  async writePipelineGateCleared(cleared: PipelineGateCleared): Promise<void> {
+    const validated = parsePipelineGateCleared(cleared);
+    if (!pipelineGateClearedSchema(validated)) {
+      throw new RuntimeError("the pipeline gate clearance record is malformed");
+    }
+    await this.writeJson("pipeline-gate-cleared.json", validated);
+  }
+
+  async readPipelineGateCleared(runId: string): Promise<PipelineGateCleared | null> {
+    validateComponent(runId, "run id");
+    const runDirectory = path.join(this.runsRoot, runId);
+    const validated = await this.ensureExistingRunDirectory(runDirectory);
+    if (validated === null) return null;
+    let value: unknown;
+    try {
+      value = JSON.parse(await readRegularFile(
+        path.join(validated.path, "pipeline-gate-cleared.json"),
+        validated.identity,
+      ));
+    } catch (error) {
+      if (isMissing(error)) return null;
+      throw error;
+    }
+    // The canonical schema decides the shape; the parser narrows it to the type.
+    // A record that reached disk malformed must not read back as "absent".
+    if (!pipelineGateClearedSchema(value)) {
+      throw new RuntimeError("the pipeline gate clearance record is malformed");
+    }
+    return parsePipelineGateCleared(value);
   }
 
   async writePipelineActiveMarker(marker: PipelineActiveMarker): Promise<void> {

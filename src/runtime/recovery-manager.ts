@@ -29,6 +29,7 @@ import {
   type WorkflowOwnerRecord,
 } from "../autopilot/workflow-store.js";
 import { git, type GitResult } from "../git/git-exec.js";
+import { SLICE_REF_PREFIX } from "../git/ref-namespace.js";
 import { gitNulRecords, gitPathOutput } from "../git/git-output.js";
 import {
   canonicalizeWorktreePath,
@@ -103,7 +104,6 @@ const WORKFLOW_OWNERSHIP_NAME = /^([0-9a-f]{64})\.json$/;
 const OID = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 const CANDIDATE_REF_PREFIX = "refs/claude-architect/candidates/";
 const BACKUP_REF_PREFIX = "refs/claude-architect/prune-backups/";
-const SLICE_REF_PREFIX = "refs/claude-architect/slices/";
 const MAX_QUARANTINE_REASON_BYTES = 2_000;
 const MAX_QUARANTINE_RECORD_BYTES = 4_096;
 const MAX_WORKTREE_SWEEP_ISSUES = 100;
@@ -160,15 +160,16 @@ interface RecoveryQuarantineSnapshot {
 }
 
 export interface RecoveryDependencies {
-  platformServices?: Pick<PlatformServices, "os" | "getProcessStartToken" | "terminateProcessTreeByPid">
-    & Partial<Pick<PlatformServices, "acquireCheckoutLock">>;
+  /**
+   * The platform, whole. Recovery hands it to bound-directory cleanup, which
+   * spawns a native helper on Windows, so a partial value cannot serve. It used
+   * to be a three-method `Pick` and production grafted the missing members onto
+   * the real services at every call -- a full `PlatformServices` built solely so
+   * an incomplete test double would type-check. Recovery never takes a checkout
+   * lease through it: leases come from `platformSafety.withRecoveryLease`.
+   */
+  platformServices?: PlatformServices;
   isProcessAlive?: (pid: number) => boolean;
-  /** Retained for input compatibility; verified or unverifiable live owners are preserved. */
-  requestCooperativeTermination?: (pid: number) => void | Promise<void>;
-  /** Retained for input compatibility; startup recovery no longer signals live owners. */
-  delayMs?: (ms: number) => Promise<void>;
-  /** Retained for input compatibility; startup recovery no longer signals live owners. */
-  graceMs?: number;
   git?: typeof git;
 }
 
@@ -3570,27 +3571,7 @@ export async function recoverStaleRuns(
   dependencies: RecoveryDependencies = {},
 ): Promise<RecoveryResult> {
   const root = await stateRoot();
-  // Recovery replays interrupted prunes under a checkout lease. Injected test
-  // doubles may omit acquireCheckoutLock, so fall back to the selected platform
-  // for that one capability while honoring every capability the caller supplied.
-  const supplied = dependencies.platformServices;
-  const selected = getPlatformServices();
-  const ps = Object.create(selected) as PlatformServices;
-  Object.defineProperties(ps, {
-    os: { value: supplied?.os ?? selected.os },
-    getProcessStartToken: {
-      value: (pid: number) => (supplied ?? selected).getProcessStartToken(pid),
-    },
-    terminateProcessTreeByPid: {
-      value: (pid: number, token: string) =>
-        (supplied ?? selected).terminateProcessTreeByPid(pid, token),
-    },
-    acquireCheckoutLock: {
-      value: (checkout: string) => supplied?.acquireCheckoutLock
-        ? supplied.acquireCheckoutLock(checkout)
-        : selected.acquireCheckoutLock(checkout),
-    },
-  });
+  const ps = dependencies.platformServices ?? getPlatformServices();
   const isProcessAlive = dependencies.isProcessAlive ?? defaultIsProcessAlive;
   const runGit = dependencies.git ?? git;
   if (root === null) return { recovered: [], quarantined: [] };

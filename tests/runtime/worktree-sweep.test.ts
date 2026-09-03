@@ -22,6 +22,7 @@ import { WorkflowStore } from "../../src/autopilot/workflow-store.js";
 import { WorktreeManager } from "../../src/runtime/worktree-manager.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
+import { platformServicesDouble } from "../helpers/platform-services-double.js";
 import {
   recoverStaleRuns,
   type RecoveryDependencies,
@@ -538,13 +539,13 @@ describe("startup worktree sweep", () => {
     }));
     try {
       await expect(recoverStaleRuns({
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: getPlatformServices().os,
           async getProcessStartToken(pid) {
             return pid === process.pid ? "live-checkout-owner" : null;
           },
           async terminateProcessTreeByPid() {},
-        },
+        }),
         isProcessAlive: pid => pid === process.pid,
       })).resolves.toEqual({ recovered: [], quarantined: [] });
       await expect(access(worktree.path)).resolves.toBeUndefined();
@@ -724,11 +725,11 @@ describe("startup worktree sweep", () => {
     try {
       await expect(recoverStaleRuns({
         isProcessAlive: pid => pid === process.pid,
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: process.platform,
           getProcessStartToken: async () => null,
           async terminateProcessTreeByPid() {},
-        },
+        }),
       })).resolves.toEqual({
         recovered: [],
         quarantined: [],
@@ -993,7 +994,7 @@ describe("startup worktree sweep", () => {
       await writeCheckoutOwner(repo, JSON.stringify(owner));
       let published = false;
       dependencies = {
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: "darwin",
           async getProcessStartToken(pid) {
             if (pid === owner.pid) {
@@ -1006,7 +1007,7 @@ describe("startup worktree sweep", () => {
             return "darwin:self";
           },
           async terminateProcessTreeByPid() {},
-        },
+        }),
         isProcessAlive: pid => pid === owner.pid,
       };
     } else if (state === "terminal-cleanup-deferred-by-empty-owner") {
@@ -1029,7 +1030,7 @@ describe("startup worktree sweep", () => {
       const liveOwner = { pid: 9402, processToken: "darwin:live-pipeline" };
       await writeCheckoutOwner(repo, JSON.stringify(checkoutOwner));
       dependencies = {
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: "darwin",
           async getProcessStartToken(pid) {
             if (pid === checkoutOwner.pid) {
@@ -1043,7 +1044,7 @@ describe("startup worktree sweep", () => {
             return pid === liveOwner.pid ? liveOwner.processToken : "darwin:self";
           },
           async terminateProcessTreeByPid() {},
-        },
+        }),
         isProcessAlive: pid => pid === checkoutOwner.pid || pid === liveOwner.pid,
       };
     } else if (state === "terminal-live-owner") {
@@ -1054,11 +1055,11 @@ describe("startup worktree sweep", () => {
         sliced: false,
       });
       dependencies = {
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: "darwin",
           async getProcessStartToken() { return null; },
           async terminateProcessTreeByPid() {},
-        },
+        }),
         isProcessAlive: pid => pid === 4243,
       };
     } else {
@@ -1093,13 +1094,13 @@ describe("startup worktree sweep", () => {
     let terminated = false;
 
     await expect(recoverStaleRuns({
-      platformServices: {
+      platformServices: platformServicesDouble({
         os: "darwin",
         async getProcessStartToken(observedPid) {
           return observedPid === pid ? processToken : "darwin:recovery-token";
         },
         async terminateProcessTreeByPid() { terminated = true; },
-      },
+      }),
       isProcessAlive: observedPid => observedPid === pid,
     })).resolves.toEqual({ recovered: [], quarantined: [] });
 
@@ -1127,11 +1128,11 @@ describe("startup worktree sweep", () => {
     ).create(repo.head);
 
     await expect(recoverStaleRuns({
-      platformServices: {
+      platformServices: platformServicesDouble({
         os: "darwin",
         async getProcessStartToken() { return null; },
         async terminateProcessTreeByPid() {},
-      },
+      }),
       isProcessAlive: pid => pid === 4243,
     })).resolves.toEqual({ recovered: ["run"], quarantined: [] });
 
@@ -1196,6 +1197,17 @@ describe("worktree lease coverage", () => {
       const source = await readFile(filename, "utf8");
       if (!source.includes("worktree-manager.js")) continue;
       for (const line of source.split("\n")) {
+        // `withManagedWorktree` creates a worktree on its caller's behalf, so a
+        // call to it is a creation site too. Without this the helper would hide
+        // creations from the very inventory that exists to name them.
+        const borrows = /\bwithManagedWorktree\s*\(/u.test(line)
+          && !/\bfunction\s+withManagedWorktree/u.test(line);
+        if (borrows) {
+          calls.push(
+            `${path.relative(repositoryRoot, filename).replaceAll(path.sep, "/")}#withManagedWorktree`,
+          );
+          continue;
+        }
         if (!/\.create(?:Attached)?\s*\(/u.test(line) || line.includes("Object.create(")) continue;
         const method = line.match(/\.create(Attached)?\s*\(/u)?.[1] === "Attached"
           ? "createAttached"
@@ -1211,13 +1223,14 @@ describe("worktree lease coverage", () => {
     // leases in branch-manager tests.
     const instructions = "A new WorktreeManager create call needs a behavioral lease-lifetime "
       + "test for its ownership model, then must be added to this audited inventory.";
-    expect(calls, instructions).toHaveLength(9);
+    expect(calls, instructions).toHaveLength(10);
     expect(calls, instructions).toEqual([
       "src/autopilot/branch-manager.ts#createAttached",
       "src/autopilot/final-branch-reviewer.ts#create",
+      "src/pipeline/candidate-verifier.ts#withManagedWorktree",
       "src/pipeline/pipeline-runtime.ts#create",
-      "src/pipeline/pipeline-runtime.ts#create",
-      "src/pipeline/pipeline-runtime.ts#create",
+      "src/pipeline/slice-runner.ts#withManagedWorktree",
+      "src/pipeline/slice-runner.ts#withManagedWorktree",
       "src/runtime/attempt-runtime.ts#create",
       "src/runtime/producer-preflight.ts#create",
       "src/verify/baseline-verifier.ts#create",

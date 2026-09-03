@@ -13,6 +13,7 @@ import { ArtifactStore } from "../runtime/artifact-store.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
 import { redact } from "../runtime/redaction.js";
 import { reviewSnapshotHash } from "../runtime/review-snapshot.js";
+import { readRunDecisionSnapshot } from "../runtime/run-decision.js";
 import { logger } from "../util/logger.js";
 import {
   WorkflowBranchManager,
@@ -370,11 +371,12 @@ export class CandidatePromoter {
     let advisor;
     let eligibility: AutopilotEligibilityRecord | null;
     try {
-      [result, manifest, pipelineResult, snapshot, advisor, eligibility] = await Promise.all([
-        artifactStore.readResult(request.runId),
-        artifactStore.readManifest(request.runId),
+      const decisionSnapshot = await readRunDecisionSnapshot(request.runId, { store: artifactStore });
+      result = decisionSnapshot.result;
+      manifest = decisionSnapshot.manifest;
+      snapshot = decisionSnapshot.reviewSnapshot;
+      [pipelineResult, advisor, eligibility] = await Promise.all([
         artifactStore.readPipelineArtifact<PipelineResult>(request.runId, "pipeline-result"),
-        artifactStore.readReviewSnapshot(request.runId),
         artifactStore.readAdvisorReport(request.runId),
         artifactStore.readAutopilotEligibility(request.runId),
       ]);

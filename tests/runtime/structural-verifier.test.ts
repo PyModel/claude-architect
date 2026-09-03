@@ -8,8 +8,10 @@ import { git } from "../../src/git/git-exec.js";
 import type { CandidateArtifact } from "../../src/protocol/attempt-result.js";
 import { isWithinScope } from "../../src/verify/project-verifier.js";
 import {
+  MODE_STRUCTURAL_FAILURES,
   pathsCaseCollide,
   structuralVerify,
+  type VerificationMode,
 } from "../../src/verify/structural-verifier.js";
 
 interface Fixture {
@@ -65,6 +67,7 @@ function verify(
     writeAllowlist: ["a.txt"],
     forbiddenScope: [],
   },
+  mode: VerificationMode = "candidate",
 ) {
   return structuralVerify({
     repoRoot: fixture.repoRoot,
@@ -72,7 +75,7 @@ function verify(
     baseCommitOid: fixture.baseCommitOid,
     artifact,
     ...scope,
-  });
+  }, mode);
 }
 
 async function candidateWithAddedPaths(
@@ -473,5 +476,68 @@ describe("structuralVerify", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures).toContain("artifact-base-mismatch");
+  });
+});
+
+describe("verification modes", () => {
+  const modes: VerificationMode[] = ["candidate", "composed-slice", "final-branch"];
+
+  // The declared table is only a contract if the implementation cannot report
+  // outside it. Asserting the table's contents alone passes even when
+  // `structuralVerify` ignores the table entirely.
+  it.each(modes)("mode %s reports no failure class outside its declared set", async mode => {
+    const fixture = await frozenFixture();
+    const artifact = await candidateWithAddedPaths(fixture, ["Case.txt", "case.txt"]);
+
+    const result = await verify(
+      fixture,
+      artifact,
+      { writeAllowlist: ["elsewhere/**"], forbiddenScope: [] },
+      mode,
+    );
+
+    const declared = new Set<string>(MODE_STRUCTURAL_FAILURES[mode]);
+    expect(result.failures.filter(failure => !declared.has(failure))).toEqual([]);
+  });
+
+  it("mode candidate reports a case collision that mode final-branch does not", async () => {
+    const fixture = await frozenFixture();
+    const artifact = await candidateWithAddedPaths(fixture, ["Case.txt", "case.txt"]);
+    const scope = { writeAllowlist: ["**"], forbiddenScope: [] };
+
+    const asCandidate = await verify(fixture, artifact, scope, "candidate");
+    const asFinalBranch = await verify(fixture, artifact, scope, "final-branch");
+
+    expect(asCandidate.failures).toContain("case-collision");
+    expect(asFinalBranch.failures).not.toContain("case-collision");
+  });
+
+  it("mode composed-slice accepts a replayed commit that mode candidate rejects", async () => {
+    const fixture = await frozenFixture();
+    // A composed slice's commit has been replayed onto the wave head, so its
+    // parent is no longer the base -- the single-commit identity proof that
+    // `candidate` mode applies cannot hold for it.
+    const replayed = await runGit(fixture.repoRoot, [
+      "commit-tree", fixture.artifact.candidateTreeOid,
+      "-p", fixture.artifact.candidateCommitOid,
+      "-m", "replayed",
+    ]);
+    const artifact = { ...fixture.artifact, candidateCommitOid: replayed };
+
+    const asCandidate = await verify(fixture, artifact, undefined, "candidate");
+    const asComposedSlice = await verify(fixture, artifact, undefined, "composed-slice");
+
+    expect(asCandidate.failures).toContain("artifact-divergence");
+    expect(asComposedSlice.failures).not.toContain("artifact-divergence");
+  });
+
+  it("mode final-branch omits checkout drift, which it cannot observe", async () => {
+    const fixture = await frozenFixture();
+
+    const asCandidate = await verify(fixture, undefined, undefined, "candidate");
+    const asFinalBranch = await verify(fixture, undefined, undefined, "final-branch");
+
+    expect(asCandidate.checkoutDrift).toEqual({ headMoved: false, dirty: false });
+    expect(asFinalBranch.checkoutDrift).toBeUndefined();
   });
 });

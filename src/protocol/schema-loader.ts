@@ -11,6 +11,7 @@ import advisorSchema from "../../runtime/schemas/advisor-report.v1.json" with { 
 import autopilotEligibilitySchema from "../../runtime/schemas/autopilot-eligibility.v1.json" with { type: "json" };
 import autopilotWorkflowStateSchema from "../../runtime/schemas/autopilot-workflow-state.v1.json" with { type: "json" };
 import runStatusSchema from "../../runtime/schemas/run-status.v1.json" with { type: "json" };
+import pipelineGateClearedSchema from "../../runtime/schemas/pipeline-gate-cleared.v1.json" with { type: "json" };
 
 import { PROTOCOL_VERSION } from "./versions.js";
 
@@ -41,6 +42,7 @@ export interface CompiledSchemas {
   autopilotEligibility: ValidateFunction;
   autopilotWorkflowState: ValidateFunction;
   runStatus: ValidateFunction;
+  pipelineGateCleared: ValidateFunction;
 }
 
 export function loadSchemas(): CompiledSchemas {
@@ -67,6 +69,7 @@ export function loadSchemas(): CompiledSchemas {
     autopilotEligibility: ajv.compile(autopilotEligibilitySchema as object),
     autopilotWorkflowState: ajv.compile(autopilotWorkflowStateSchema as object),
     runStatus: ajv.compile(runStatusSchema as object),
+    pipelineGateCleared: ajv.compile(pipelineGateClearedSchema as object),
   };
 }
 

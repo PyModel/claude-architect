@@ -4352,15 +4352,15 @@ var require_core = __commonJS({
         }
         return metaSchema;
       }
-      _removeAllSchemas(schemas6, regex) {
-        for (const keyRef in schemas6) {
-          const sch = schemas6[keyRef];
+      _removeAllSchemas(schemas7, regex) {
+        for (const keyRef in schemas7) {
+          const sch = schemas7[keyRef];
           if (!regex || regex.test(keyRef)) {
             if (typeof sch == "string") {
-              delete schemas6[keyRef];
+              delete schemas7[keyRef];
             } else if (sch && !sch.meta) {
               this._cache.delete(sch.schema);
-              delete schemas6[keyRef];
+              delete schemas7[keyRef];
             }
           }
         }
@@ -10748,12 +10748,12 @@ var ZodTuple = class _ZodTuple extends ZodType {
     });
   }
 };
-ZodTuple.create = (schemas6, params) => {
-  if (!Array.isArray(schemas6)) {
+ZodTuple.create = (schemas7, params) => {
+  if (!Array.isArray(schemas7)) {
     throw new Error("You must pass an array of schemas to z.tuple([ ... ])");
   }
   return new ZodTuple({
-    items: schemas6,
+    items: schemas7,
     typeName: ZodFirstPartyTypeKind.ZodTuple,
     rest: null,
     ...processCreateParams(params)
@@ -23736,7 +23736,7 @@ function toJSONSchema(input, params) {
       const [_, schema] = entry;
       process2(schema, ctx2);
     }
-    const schemas6 = {};
+    const schemas7 = {};
     const external = {
       registry: registry3,
       uri: params?.uri,
@@ -23746,15 +23746,15 @@ function toJSONSchema(input, params) {
     for (const entry of registry3._idmap.entries()) {
       const [key, schema] = entry;
       extractDefs(ctx2, schema);
-      schemas6[key] = finalize(ctx2, schema);
+      schemas7[key] = finalize(ctx2, schema);
     }
     if (Object.keys(defs).length > 0) {
       const defsSegment = ctx2.target === "draft-2020-12" ? "$defs" : "definitions";
-      schemas6.__shared = {
+      schemas7.__shared = {
         [defsSegment]: defs
       };
     }
-    return { schemas: schemas6 };
+    return { schemas: schemas7 };
   }
   const ctx = initializeContext({ ...params, processors: allProcessors });
   process2(input, ctx);
@@ -34922,6 +34922,35 @@ var run_status_v1_default = {
   ]
 };
 
+// runtime/schemas/pipeline-gate-cleared.v1.json
+var pipeline_gate_cleared_v1_default = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "pipeline-gate-cleared.v1.json",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "clearedVersion",
+    "candidateCommitOid",
+    "requiresHumanDecision"
+  ],
+  properties: {
+    clearedVersion: {
+      const: "1"
+    },
+    candidateCommitOid: {
+      type: "string",
+      pattern: "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    requiresHumanDecision: {
+      type: "boolean"
+    },
+    clearedAt: {
+      type: "string",
+      format: "date-time"
+    }
+  }
+};
+
 // src/protocol/schema-loader.ts
 var DELEGATION_SPEC_SCHEMA_KEY = "delegation-spec.v1.json";
 var ISO_DATE_TIME = /^([0-9]{4})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$/u;
@@ -34958,7 +34987,8 @@ function loadSchemas() {
     advisorReport: ajv.compile(advisor_report_v1_default),
     autopilotEligibility: ajv.compile(autopilot_eligibility_v1_default),
     autopilotWorkflowState: ajv.compile(autopilot_workflow_state_v1_default),
-    runStatus: ajv.compile(run_status_v1_default)
+    runStatus: ajv.compile(run_status_v1_default),
+    pipelineGateCleared: ajv.compile(pipeline_gate_cleared_v1_default)
   };
 }
 function checkVersionCompat(skillProtocolVersion) {
@@ -39408,9 +39438,6 @@ function gitChangedFiles(checkoutPath, deps = {}) {
   return execute(checkoutPath, CHANGED_FILES_ARGS, deps);
 }
 
-// src/mcp/tools.ts
-import { createHash as createHash15 } from "node:crypto";
-
 // src/autopilot/autopilot-controller.ts
 import { randomUUID as randomUUID10 } from "node:crypto";
 
@@ -40151,38 +40178,10 @@ function evaluateAutopilotEligibility(input) {
 }
 
 // src/autopilot/final-branch-reviewer.ts
-import { createHash as createHash11, randomUUID as randomUUID9 } from "node:crypto";
+import { createHash as createHash12, randomUUID as randomUUID9 } from "node:crypto";
 import { constants as constants13 } from "node:fs";
 import { link as link7, lstat as lstat16, open as open13, readFile as readFile6, rm as rm10 } from "node:fs/promises";
 import path25 from "node:path";
-
-// src/util/glob.ts
-function escapeRegex2(character) {
-  return /[\\^$.*+?()[\]{}|]/.test(character) ? `\\${character}` : character;
-}
-function globMatches(pattern, candidate, caseInsensitive = false) {
-  let expression = "^";
-  for (let index = 0; index < pattern.length; index += 1) {
-    const character = pattern[index];
-    if (character === void 0) break;
-    if (character !== "*") {
-      expression += escapeRegex2(character);
-      continue;
-    }
-    if (pattern[index + 1] !== "*") {
-      expression += "[^/]*";
-      continue;
-    }
-    index += 1;
-    if (pattern[index + 1] === "/") {
-      expression += "(?:.*/)?";
-      index += 1;
-    } else {
-      expression += ".*";
-    }
-  }
-  return new RegExp(`${expression}$`, caseInsensitive ? "i" : void 0).test(candidate);
-}
 
 // src/runtime/worktree-manager.ts
 import { randomUUID as randomUUID6 } from "node:crypto";
@@ -42582,6 +42581,10 @@ var WorktreeManager = class {
   runId;
   platformServices;
   dependencies;
+  /** The repository this manager creates worktrees for. */
+  get repositoryRoot() {
+    return this.repoRoot;
+  }
   lockingPlatformServices() {
     const supplied = this.platformServices;
     if (typeof supplied.acquireCheckoutLock === "function" && typeof supplied.canonicalizePath === "function") {
@@ -43061,6 +43064,41 @@ var WorktreeManager = class {
     await this.withCheckoutLease(async () => await this.removeUnderLease(worktreePath, expectedIdentity));
   }
 };
+async function cleanupWorktree(worktree) {
+  try {
+    await worktree.cleanup();
+    return null;
+  } catch (error51) {
+    return error51;
+  }
+}
+var worktreeCreation = /* @__PURE__ */ new Map();
+function createWorktreeSerially(manager, commit) {
+  const key = manager.repositoryRoot;
+  const created = (worktreeCreation.get(key) ?? Promise.resolve()).catch(() => {
+  }).then(async () => await manager.create(commit));
+  const settled = created.catch(() => {
+  });
+  worktreeCreation.set(key, settled);
+  void settled.then(() => {
+    if (worktreeCreation.get(key) === settled) worktreeCreation.delete(key);
+  });
+  return created;
+}
+async function withManagedWorktree(args) {
+  const worktree = await createWorktreeSerially(args.manager, args.commit);
+  try {
+    return await args.run(worktree.path);
+  } finally {
+    const cleanupError = await cleanupWorktree(worktree);
+    if (cleanupError !== null) {
+      logger.warn(args.cleanupFailureMessage, {
+        error: redact(cleanupError instanceof Error ? cleanupError.message : String(cleanupError))
+      });
+      args.onCleanupFailure?.(cleanupError);
+    }
+  }
+}
 
 // src/verify/project-verifier.ts
 import { realpath as realpath8 } from "node:fs/promises";
@@ -43364,8 +43402,63 @@ async function projectVerify(args) {
   }
 }
 
+// src/util/glob.ts
+function escapeRegex2(character) {
+  return /[\\^$.*+?()[\]{}|]/.test(character) ? `\\${character}` : character;
+}
+function globMatches(pattern, candidate, caseInsensitive = false) {
+  let expression = "^";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === void 0) break;
+    if (character !== "*") {
+      expression += escapeRegex2(character);
+      continue;
+    }
+    if (pattern[index + 1] !== "*") {
+      expression += "[^/]*";
+      continue;
+    }
+    index += 1;
+    if (pattern[index + 1] === "/") {
+      expression += "(?:.*/)?";
+      index += 1;
+    } else {
+      expression += ".*";
+    }
+  }
+  return new RegExp(`${expression}$`, caseInsensitive ? "i" : void 0).test(candidate);
+}
+
 // src/verify/structural-verifier.ts
 var MAX_DIAGNOSTIC_LENGTH4 = 2e3;
+var MODE_STRUCTURAL_FAILURES = {
+  candidate: [
+    "manifest-divergence",
+    "artifact-divergence",
+    "out-of-scope-write",
+    "modified-symlink",
+    "case-collision",
+    "empty-candidate",
+    "artifact-base-mismatch"
+  ],
+  "composed-slice": [
+    "manifest-divergence",
+    "out-of-scope-write",
+    "modified-symlink",
+    "case-collision",
+    "empty-candidate",
+    "artifact-base-mismatch"
+  ],
+  "final-branch": [
+    "manifest-divergence",
+    "artifact-divergence",
+    "out-of-scope-write",
+    "modified-symlink",
+    "empty-candidate",
+    "artifact-base-mismatch"
+  ]
+};
 function gitFailure2(action, result) {
   const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, MAX_DIAGNOSTIC_LENGTH4);
   return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
@@ -43451,7 +43544,7 @@ async function recomputeManifest(args) {
   });
   return { changedPaths, manifestHash, rawDiff };
 }
-async function artifactIdentityMatches(args) {
+async function singleCommitIdentityMatches(args) {
   const [anchorResult, treeResult, parentResult] = await Promise.all([
     git(args.repoRoot, ["rev-parse", "--verify", `${args.artifact.anchorRef}^{commit}`]),
     git(args.repoRoot, [
@@ -43473,61 +43566,90 @@ async function artifactIdentityMatches(args) {
   const commitAndParents = parentResult.stdout.trim().split(/\s+/);
   return anchorResult.stdout.trim() === args.artifact.candidateCommitOid && treeResult.stdout.trim() === args.artifact.candidateTreeOid && commitAndParents.length === 2 && commitAndParents[0] === args.artifact.candidateCommitOid && commitAndParents[1] === args.baseCommitOid;
 }
-async function structuralVerify(args) {
+async function branchIdentityMatches(args) {
+  const [sourceHead, materializedHead, candidateTree, sourceStatus, materializedStatus] = await Promise.all([
+    checkedGit2(args.repoRoot, ["rev-parse", "--verify", "HEAD^{commit}"]),
+    checkedGit2(args.worktreePath, ["rev-parse", "--verify", "HEAD^{commit}"]),
+    checkedGit2(args.repoRoot, [
+      "rev-parse",
+      "--verify",
+      `${args.artifact.candidateCommitOid}^{tree}`
+    ]),
+    checkedGit2(args.repoRoot, [
+      "status",
+      "--porcelain=v1",
+      "-z",
+      "--untracked-files=all"
+    ]),
+    checkedGit2(args.worktreePath, [
+      "status",
+      "--porcelain=v1",
+      "-z",
+      "--untracked-files=all"
+    ])
+  ]);
+  const ancestry = await git(args.repoRoot, [
+    "merge-base",
+    "--is-ancestor",
+    args.baseCommitOid,
+    args.artifact.candidateCommitOid
+  ]);
+  return sourceHead.trim() === args.artifact.candidateCommitOid && materializedHead.trim() === args.artifact.candidateCommitOid && candidateTree.trim() === args.artifact.candidateTreeOid && ancestry.exitCode === 0 && ancestry.truncated?.stdout !== true && ancestry.truncated?.stderr !== true && sourceStatus === "" && materializedStatus === "";
+}
+async function structuralVerify(args, mode = "candidate") {
+  const applicable = new Set(MODE_STRUCTURAL_FAILURES[mode]);
   const failures = /* @__PURE__ */ new Set();
+  const record2 = (failure3, failed) => {
+    if (failed && applicable.has(failure3)) failures.add(failure3);
+  };
+  const observesCheckoutDrift = mode !== "final-branch";
   const [
     manifest,
     baseTreeOid,
     currentHead,
     mainStatus,
-    artifactIdentityValid,
+    identityValid,
     caseCollision
   ] = await Promise.all([
     recomputeManifest(args),
     checkedGit2(args.repoRoot, ["rev-parse", `${args.baseCommitOid}^{tree}`]),
-    checkedGit2(args.repoRoot, ["rev-parse", "--verify", "HEAD"]),
-    checkedGit2(args.repoRoot, [
+    observesCheckoutDrift ? checkedGit2(args.repoRoot, ["rev-parse", "--verify", "HEAD"]) : Promise.resolve(""),
+    observesCheckoutDrift ? checkedGit2(args.repoRoot, [
       "status",
       "--porcelain=v1",
       "--untracked-files=all",
       "--ignore-submodules=none"
-    ]),
-    artifactIdentityMatches(args),
-    candidateHasCaseCollision(args)
+    ]) : Promise.resolve(""),
+    !applicable.has("artifact-divergence") ? Promise.resolve(true) : mode === "final-branch" ? branchIdentityMatches(args) : singleCommitIdentityMatches(args),
+    applicable.has("case-collision") ? candidateHasCaseCollision(args) : Promise.resolve(false)
   ]);
-  if (caseCollision) failures.add("case-collision");
-  if (args.artifact.baseCommitOid !== args.baseCommitOid) {
-    failures.add("artifact-base-mismatch");
-  }
-  const checkoutDrift = {
-    headMoved: currentHead.trim() !== args.baseCommitOid,
-    dirty: mainStatus.length > 0
-  };
-  if (manifest.manifestHash === null || JSON.stringify(args.artifact.changedPaths) !== JSON.stringify(manifest.changedPaths) || args.artifact.manifestHash !== manifest.manifestHash) {
-    failures.add("manifest-divergence");
-  }
-  if (!artifactIdentityValid) {
-    failures.add("artifact-divergence");
-  }
-  if (manifest.changedPaths.some((change) => !isAllowed(
+  record2("case-collision", caseCollision);
+  record2("artifact-base-mismatch", args.artifact.baseCommitOid !== args.baseCommitOid);
+  record2(
+    "manifest-divergence",
+    manifest.manifestHash === null || JSON.stringify(args.artifact.changedPaths) !== JSON.stringify(manifest.changedPaths) || args.artifact.manifestHash !== manifest.manifestHash
+  );
+  record2("artifact-divergence", !identityValid);
+  record2("out-of-scope-write", manifest.changedPaths.some((change) => !isAllowed(
     change.path,
     args.writeAllowlist,
     args.forbiddenScope,
     change.mode === "160000"
-  ))) {
-    failures.add("out-of-scope-write");
-  }
-  if (manifest.rawDiff.some((entry) => [entry.oldMode, entry.newMode].some((mode) => mode === "120000" || mode === "160000"))) {
-    failures.add("modified-symlink");
-  }
-  if (manifest.changedPaths.length === 0 || args.artifact.candidateTreeOid === baseTreeOid.trim()) {
-    failures.add("empty-candidate");
-  }
+  )));
+  record2("modified-symlink", manifest.rawDiff.some((entry) => [entry.oldMode, entry.newMode].some((entryMode) => entryMode === "120000" || entryMode === "160000")));
+  record2(
+    "empty-candidate",
+    manifest.changedPaths.length === 0 || args.artifact.candidateTreeOid === baseTreeOid.trim()
+  );
+  const checkoutDrift = {
+    headMoved: currentHead.trim() !== args.baseCommitOid,
+    dirty: mainStatus.length > 0
+  };
   return {
     ok: failures.size === 0,
     failures: [...failures],
     manifestHash: manifest.manifestHash,
-    checkoutDrift
+    ...observesCheckoutDrift ? { checkoutDrift } : {}
   };
 }
 
@@ -43578,21 +43700,25 @@ function outcomesMatchHostCommands(commands, outcomes, evidence, os, arch) {
   });
 }
 var AcceptanceVerifier = class {
+  mode;
   structural;
   project;
   constructor(dependencies = {}) {
-    this.structural = dependencies.structural ?? structuralVerify;
+    this.mode = dependencies.mode ?? "candidate";
+    this.structural = dependencies.structural;
     this.project = dependencies.project ?? projectVerify;
   }
   async verify(args) {
-    const structural = await this.structural({
+    const effectiveMode = args.mode ?? this.mode;
+    const structuralArgs = {
       repoRoot: args.repoRoot,
       worktreePath: args.worktreePath,
       baseCommitOid: args.baseCommitOid,
       artifact: args.artifact,
       writeAllowlist: args.spec.writeAllowlist,
       forbiddenScope: args.spec.forbiddenScope
-    });
+    };
+    const structural = this.structural !== void 0 ? await this.structural(structuralArgs, effectiveMode) : await structuralVerify(structuralArgs, effectiveMode);
     const structuralEvidence = {
       manifestHash: structural.manifestHash,
       failures: [...structural.failures]
@@ -43652,6 +43778,49 @@ var AcceptanceVerifier = class {
     };
   }
 };
+
+// src/runtime/run-decision.ts
+import { createHash as createHash10 } from "node:crypto";
+
+// src/protocol/pipeline-gate-cleared.ts
+var GIT_OID2 = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
+function parsePipelineGateCleared(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new RuntimeError("the pipeline gate clearance record is malformed");
+  }
+  const record2 = value;
+  const known = /* @__PURE__ */ new Set([
+    "clearedVersion",
+    "candidateCommitOid",
+    "requiresHumanDecision",
+    "clearedAt"
+  ]);
+  const candidateCommitOid = record2.candidateCommitOid;
+  const requiresHumanDecision = record2.requiresHumanDecision;
+  const clearedVersion = record2.clearedVersion ?? "1";
+  const clearedAt = record2.clearedAt;
+  if (Object.keys(record2).some((key) => !known.has(key)) || clearedVersion !== "1" || typeof candidateCommitOid !== "string" || !GIT_OID2.test(candidateCommitOid) || typeof requiresHumanDecision !== "boolean" || clearedAt !== void 0 && (typeof clearedAt !== "string" || Number.isNaN(Date.parse(clearedAt)))) {
+    throw new RuntimeError("the pipeline gate clearance record is malformed");
+  }
+  return {
+    clearedVersion: "1",
+    candidateCommitOid,
+    requiresHumanDecision,
+    ...clearedAt === void 0 ? {} : { clearedAt }
+  };
+}
+
+// src/mcp/decision-authority.ts
+var DECISION_AUTHORITY_ENV = "CLAUDE_ARCHITECT_DECISION_AUTHORITY";
+function decisionAuthority(env = process.env, warn = (message) => console.error(message)) {
+  const raw = env[DECISION_AUTHORITY_ENV];
+  if (raw === void 0 || raw === "") return "autonomous";
+  if (raw === "autonomous" || raw === "human") return raw;
+  warn(
+    `${DECISION_AUTHORITY_ENV}="${raw}" is not a recognized decision authority; requiring human confirmation. Valid values: "autonomous", "human".`
+  );
+  return "human";
+}
 
 // src/runtime/artifact-store.ts
 import { randomUUID as randomUUID7 } from "node:crypto";
@@ -43860,6 +44029,7 @@ var candidateDecisionSchema = schemas2.candidateDecision;
 var advisorReportSchema = schemas2.advisorReport;
 var autopilotEligibilitySchema = schemas2.autopilotEligibility;
 var runStatusSchema = schemas2.runStatus;
+var pipelineGateClearedSchema = schemas2.pipelineGateCleared;
 var cleanupJournalTail = Promise.resolve();
 function isSafeComponent(value) {
   const base = value.split(".", 1)[0] ?? value;
@@ -44849,6 +45019,33 @@ var ArtifactStore = class _ArtifactStore {
   async readDecision(runId) {
     return this.readCandidateDecision(runId);
   }
+  async writePipelineGateCleared(cleared) {
+    const validated = parsePipelineGateCleared(cleared);
+    if (!pipelineGateClearedSchema(validated)) {
+      throw new RuntimeError("the pipeline gate clearance record is malformed");
+    }
+    await this.writeJson("pipeline-gate-cleared.json", validated);
+  }
+  async readPipelineGateCleared(runId) {
+    validateComponent(runId, "run id");
+    const runDirectory = path21.join(this.runsRoot, runId);
+    const validated = await this.ensureExistingRunDirectory(runDirectory);
+    if (validated === null) return null;
+    let value;
+    try {
+      value = JSON.parse(await readRegularFile(
+        path21.join(validated.path, "pipeline-gate-cleared.json"),
+        validated.identity
+      ));
+    } catch (error51) {
+      if (isMissing3(error51)) return null;
+      throw error51;
+    }
+    if (!pipelineGateClearedSchema(value)) {
+      throw new RuntimeError("the pipeline gate clearance record is malformed");
+    }
+    return parsePipelineGateCleared(value);
+  }
   async writePipelineActiveMarker(marker) {
     if (typeof marker !== "object" || marker === null || !Number.isSafeInteger(marker.pid) || marker.pid <= 1 || marker.processToken !== null && typeof marker.processToken !== "string" || typeof marker.startedAt !== "string" || !Number.isFinite(Date.parse(marker.startedAt)) || typeof marker.sliced !== "boolean") {
       throw new RuntimeError("pipeline-active marker is invalid");
@@ -45316,6 +45513,185 @@ var DEFAULT_PRUNE_POLICY = {
 };
 async function pruneRuns(policy = DEFAULT_PRUNE_POLICY, dependencies = {}) {
   return new ArtifactStore("prune-sweep").prune(policy, dependencies);
+}
+
+// src/runtime/run-decision.ts
+function isRecord7(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+var RunDecision = class {
+  async readSnapshot(runId, options) {
+    validateComponent(runId, "run id");
+    const store = options?.store ?? (options?.storeFactory ? options.storeFactory(runId) : new ArtifactStore(runId));
+    let result = null;
+    let manifest = null;
+    let reviewSnapshot = null;
+    let gateRecord = null;
+    let gateRecordError = null;
+    let decision = null;
+    const coherenceErrors = [];
+    try {
+      const readResult = typeof store.readResult === "function" ? store.readResult(runId).catch((err) => {
+        coherenceErrors.push(`failed to read result: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      }) : Promise.resolve(null);
+      const readManifest = typeof store.readManifest === "function" ? store.readManifest(runId).catch((err) => {
+        coherenceErrors.push(`failed to read manifest: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      }) : Promise.resolve(null);
+      const readSnapshot = typeof store.readReviewSnapshot === "function" ? store.readReviewSnapshot(runId).catch(() => null) : Promise.resolve(null);
+      const readGateRecord = typeof store.readPipelineGateCleared === "function" ? store.readPipelineGateCleared(runId).catch((err) => {
+        gateRecordError = `the pipeline gate clearance record is malformed: ${err instanceof Error ? err.message : String(err)}`;
+        return null;
+      }) : Promise.resolve(null);
+      const readDecision = typeof store.readCandidateDecision === "function" ? store.readCandidateDecision(runId).catch((err) => {
+        coherenceErrors.push(`failed to read decision: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      }) : Promise.resolve(null);
+      const [r, m, s, g, d] = await Promise.all([
+        readResult,
+        readManifest,
+        readSnapshot,
+        readGateRecord,
+        readDecision
+      ]);
+      result = r;
+      manifest = m;
+      reviewSnapshot = s;
+      gateRecord = g;
+      decision = d;
+    } catch (err) {
+      coherenceErrors.push(`failed to load decision snapshot: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (gateRecord === null && result?.evidence?.pipelineGateCleared !== void 0) {
+      try {
+        gateRecord = parsePipelineGateCleared(result.evidence.pipelineGateCleared);
+      } catch {
+        gateRecordError = "the pipeline gate clearance record is malformed";
+      }
+    }
+    if (result !== null && manifest !== null) {
+      if (result.runId !== runId || manifest.runId !== runId) {
+        coherenceErrors.push("archived run identity does not match runId");
+      }
+      if (result.candidate !== null) {
+        if (manifest.baseCommitOid !== result.candidate.baseCommitOid) {
+          coherenceErrors.push("archived candidate base commit does not match run manifest");
+        }
+        if (manifest.candidateManifestHash !== result.candidate.manifestHash) {
+          coherenceErrors.push("archived candidate manifest hash does not match run manifest");
+        }
+        const expectedHash = createHash10("sha256").update(JSON.stringify(result.candidate.changedPaths)).digest("hex");
+        if (result.candidate.manifestHash !== expectedHash) {
+          coherenceErrors.push("archived candidate changed paths hash mismatch");
+        }
+      }
+    }
+    if (gateRecord !== null && result?.candidate !== null && result?.candidate !== void 0) {
+      if (gateRecord.candidateCommitOid !== result.candidate.candidateCommitOid) {
+        gateRecordError = "the pipeline gate clearance record does not match the archived candidate commit";
+      }
+    }
+    if (decision !== null && result?.candidate !== null && result?.candidate !== void 0) {
+      if (decision.candidateManifestHash !== void 0 && decision.candidateManifestHash !== null) {
+        if (decision.candidateManifestHash !== result.candidate.manifestHash) {
+          coherenceErrors.push("recorded candidate decision does not match candidate manifest hash");
+        }
+      }
+      if (decision.decisionVersion === "2" && reviewSnapshot !== null) {
+        if (decision.evidenceHash !== reviewSnapshotHash(reviewSnapshot)) {
+          coherenceErrors.push("recorded candidate decision does not match review snapshot evidence hash");
+        }
+      }
+    }
+    return {
+      runId,
+      result,
+      manifest,
+      reviewSnapshot,
+      gateRecord,
+      gateRecordError,
+      decision,
+      coherenceErrors
+    };
+  }
+  async evaluate(runId, options) {
+    const snapshot = options?.snapshot ?? await this.readSnapshot(runId, options);
+    const authority = options?.authority ?? (options?.decisionAuthority ? options.decisionAuthority() : decisionAuthority());
+    return this.verdictFor(snapshot, authority);
+  }
+  /**
+   * The whole acceptance rule, over an archive already read. Pure: every caller
+   * that once re-derived "may this be accepted without a person" from the same
+   * files now asks this one function.
+   */
+  verdictFor(snapshot, authority) {
+    if (snapshot.coherenceErrors.length > 0) {
+      return { state: "invalid", reasons: snapshot.coherenceErrors };
+    }
+    if (snapshot.result === null || snapshot.manifest === null) {
+      return { state: "invalid", reasons: ["archived run was not found"] };
+    }
+    const incompleteEvidence = snapshot.result.evidence?.pipelineReviewIncomplete;
+    if (incompleteEvidence !== void 0) {
+      const reason = isRecord7(incompleteEvidence) && typeof incompleteEvidence.reason === "string" ? incompleteEvidence.reason : "pipeline review is incomplete";
+      return { state: "incomplete", reasons: [reason] };
+    }
+    if (snapshot.decision !== null) {
+      if (snapshot.decision.decision === "rejected") {
+        return { state: "rejected", reasons: ["candidate decision is rejected"] };
+      }
+      if (snapshot.decision.decision === "revision-requested") {
+        return { state: "rejected", reasons: ["candidate decision is revision-requested"] };
+      }
+    }
+    const refusedEvidence = snapshot.result.evidence?.pipelineGateRefused;
+    if (refusedEvidence !== void 0) {
+      const reasons = isRecord7(refusedEvidence) && Array.isArray(refusedEvidence.reasons) ? refusedEvidence.reasons.filter((r) => typeof r === "string") : ["the pipeline gate did NOT clear this candidate"];
+      return {
+        state: "rejected",
+        reasons: reasons.length > 0 ? reasons : ["the pipeline gate did NOT clear this candidate"]
+      };
+    }
+    if (snapshot.result.status !== "verified-candidate" || snapshot.result.failure !== null) {
+      const reasons = [];
+      if (snapshot.result.failure !== null) {
+        reasons.push(snapshot.result.failure);
+      } else {
+        reasons.push(`attempt status is ${snapshot.result.status}`);
+      }
+      return { state: "rejected", reasons };
+    }
+    if (snapshot.result.candidate === null) {
+      return { state: "rejected", reasons: ["no candidate artifact was produced"] };
+    }
+    const candidateCommit = snapshot.result.candidate.candidateCommitOid;
+    const humanReasons = [];
+    if (authority !== "autonomous") {
+      humanReasons.push(`decision authority is "${authority}"`);
+    }
+    const isPlainDelegate = snapshot.result.evidence?.plainDelegate === true && refusedEvidence === void 0 && incompleteEvidence === void 0 && snapshot.result.evidence?.pipelineGateCleared === void 0 && snapshot.gateRecord === null;
+    if (snapshot.gateRecordError) {
+      humanReasons.push(snapshot.gateRecordError);
+    } else if (isPlainDelegate) {
+    } else if (snapshot.gateRecord === null) {
+      humanReasons.push("the pipeline gate clearance record is missing");
+    } else if (snapshot.gateRecord.requiresHumanDecision === true) {
+      humanReasons.push("the pipeline gate clearance record requires a human decision");
+    }
+    if (humanReasons.length > 0) {
+      return { state: "human-required", candidateCommit, reasons: humanReasons };
+    }
+    return { state: "accepted", autonomous: true, candidateCommit };
+  }
+  async verify(args) {
+    const verifier = new AcceptanceVerifier({ mode: args.mode });
+    return verifier.verify(args);
+  }
+};
+var runDecision = new RunDecision();
+async function readRunDecisionSnapshot(runId, options) {
+  return runDecision.readSnapshot(runId, options);
 }
 
 // src/pipeline/role-runner.ts
@@ -45885,7 +46261,7 @@ async function parseStructuredReport(raw, validate, repair) {
 }
 
 // src/autopilot/branch-manager.ts
-import { createHash as createHash10, randomUUID as randomUUID8 } from "node:crypto";
+import { createHash as createHash11, randomUUID as randomUUID8 } from "node:crypto";
 import { constants as constants12 } from "node:fs";
 import { chmod, link as link6, lstat as lstat15, mkdir as mkdir8, mkdtemp as mkdtemp2, open as open12, realpath as realpath12, rm as rm9 } from "node:fs/promises";
 import path24 from "node:path";
@@ -46401,7 +46777,7 @@ async function workflowWorktreeOwnershipClaim(ownershipPath, worktreePath) {
   if (registration === null) {
     throw new RuntimeError("workflow ownership record is malformed");
   }
-  const ownershipHash = createHash10("sha256").update(registration.workflowId).digest("hex");
+  const ownershipHash = createHash11("sha256").update(registration.workflowId).digest("hex");
   const expectedOwnershipPath = path24.join(
     resolveStateDir(),
     "autopilot-branches",
@@ -46428,7 +46804,7 @@ async function workflowWorktreeOwnershipClaim(ownershipPath, worktreePath) {
   const managedName = `workflow-${ownershipHash.slice(0, 32)}`;
   const candidateName = path24.basename(canonicalWorktreePath);
   const ownsPrimary = candidateName === managedName && canonicalRegisteredWorktreePath === canonicalWorktreePath;
-  const legacyFinalName = `final-${createHash10("sha256").update(JSON.stringify(registration.workflowId)).digest("hex").slice(0, 24)}`;
+  const legacyFinalName = `final-${createHash11("sha256").update(JSON.stringify(registration.workflowId)).digest("hex").slice(0, 24)}`;
   const ownsFinalMaterialization = (candidateName === `${managedName}-final` || candidateName === legacyFinalName) && path24.basename(canonicalRegisteredWorktreePath) === managedName && path24.dirname(canonicalRegisteredWorktreePath) === path24.dirname(canonicalWorktreePath);
   if (canonicalOwnershipPath !== canonicalExpectedOwnershipPath || !ownsPrimary && !ownsFinalMaterialization) {
     throw new RuntimeError("workflow ownership record names a different worktree");
@@ -46465,7 +46841,7 @@ var WorkflowBranchManager = class {
     };
   }
   ownershipPath(workflowId) {
-    const name = createHash10("sha256").update(workflowId).digest("hex");
+    const name = createHash11("sha256").update(workflowId).digest("hex");
     return path24.join(resolveStateDir(), "autopilot-branches", `${name}.json`);
   }
   async readRegistration(workflowId) {
@@ -46590,7 +46966,7 @@ var WorkflowBranchManager = class {
     let fetchedOidForCleanup;
     let completedIdentity;
     let operationError;
-    const workflowHash = createHash10("sha256").update(request.workflowId).digest("hex");
+    const workflowHash = createHash11("sha256").update(request.workflowId).digest("hex");
     const remoteIdentity = await this.resolveRemote(initial.canonical);
     const safety = new PlatformSafety(this.platformServices);
     try {
@@ -46671,7 +47047,7 @@ var WorkflowBranchManager = class {
           refsCreated = true;
           const worktreeManager = new WorktreeManager(
             initial.canonical,
-            `workflow-${createHash10("sha256").update(request.workflowId).digest("hex").slice(0, 32)}`,
+            `workflow-${createHash11("sha256").update(request.workflowId).digest("hex").slice(0, 32)}`,
             { os: this.platformServices.os },
             { ...this.worktreeManagerDependencies, borrowedCheckoutLease: lock }
           );
@@ -47026,7 +47402,7 @@ var WorkflowBranchManager = class {
     }
     const manager = new WorktreeManager(
       identity.checkoutPath,
-      `workflow-${createHash10("sha256").update(identity.workflowId).digest("hex").slice(0, 32)}`,
+      `workflow-${createHash11("sha256").update(identity.workflowId).digest("hex").slice(0, 32)}`,
       { os: this.platformServices.os },
       { ...this.worktreeManagerDependencies, borrowedCheckoutLease: checkoutLease }
     );
@@ -47159,14 +47535,15 @@ async function validateArchivedTaskEvidence(task, evidence, context) {
   let eligibility;
   let decision;
   try {
-    [result, manifest, pipelineResult, snapshot, advisor, eligibility, decision] = await Promise.all([
-      store.readResult(evidence.runId),
-      store.readManifest(evidence.runId),
+    const decisionSnapshot = await readRunDecisionSnapshot(evidence.runId, { store });
+    result = decisionSnapshot.result;
+    manifest = decisionSnapshot.manifest;
+    snapshot = decisionSnapshot.reviewSnapshot;
+    decision = decisionSnapshot.decision;
+    [pipelineResult, advisor, eligibility] = await Promise.all([
       store.readPipelineArtifact(evidence.runId, "pipeline-result"),
-      store.readReviewSnapshot(evidence.runId),
       store.readAdvisorReport(evidence.runId),
-      store.readAutopilotEligibility(evidence.runId),
-      store.readCandidateDecision(evidence.runId)
+      store.readAutopilotEligibility(evidence.runId)
     ]);
   } catch {
     fail2("missing-task-evidence", `task evidence archive is invalid: ${task.id}`);
@@ -47223,7 +47600,7 @@ function normalizeTaskEvidence(state, supplied) {
   });
 }
 function evidenceHash(content) {
-  return createHash11("sha256").update(content, "utf8").digest("hex");
+  return createHash12("sha256").update(content, "utf8").digest("hex");
 }
 async function freezeTaskEvidence(evidence, evidenceStore) {
   return await Promise.all(evidence.map(async (task) => {
@@ -47402,68 +47779,6 @@ async function withHeadRevalidation(request) {
 }
 function uniqueSorted(values) {
   return [...new Set(values)].sort();
-}
-function finalPathAllowed(pathname, writeAllowlist, forbiddenScope, opaqueDirectory) {
-  const candidates = opaqueDirectory ? [pathname, `${pathname}/`] : [pathname];
-  return writeAllowlist.some((pattern) => candidates.some((candidate) => globMatches(pattern, candidate))) && !forbiddenScope.some((pattern) => candidates.some((candidate) => globMatches(pattern, candidate, true)));
-}
-async function structuralVerifyFinalBranch(args, runGit = git) {
-  const failures = /* @__PURE__ */ new Set();
-  const [manifest, baseTree, sourceHead, materializedHead, candidateTree, sourceStatus, materializedStatus] = await Promise.all([
-    recomputeManifest(args),
-    checkedGit3(runGit, args.repoRoot, ["rev-parse", "--verify", `${args.baseCommitOid}^{tree}`]),
-    checkedGit3(runGit, args.repoRoot, ["rev-parse", "--verify", "HEAD^{commit}"]),
-    checkedGit3(runGit, args.worktreePath, ["rev-parse", "--verify", "HEAD^{commit}"]),
-    checkedGit3(runGit, args.repoRoot, [
-      "rev-parse",
-      "--verify",
-      `${args.artifact.candidateCommitOid}^{tree}`
-    ]),
-    checkedGit3(runGit, args.repoRoot, [
-      "status",
-      "--porcelain=v1",
-      "-z",
-      "--untracked-files=all"
-    ]),
-    checkedGit3(runGit, args.worktreePath, [
-      "status",
-      "--porcelain=v1",
-      "-z",
-      "--untracked-files=all"
-    ])
-  ]);
-  const ancestry = await runGit(args.repoRoot, [
-    "merge-base",
-    "--is-ancestor",
-    args.baseCommitOid,
-    args.artifact.candidateCommitOid
-  ]);
-  if (args.artifact.baseCommitOid !== args.baseCommitOid) failures.add("artifact-base-mismatch");
-  if (sourceHead.trim() !== args.artifact.candidateCommitOid || materializedHead.trim() !== args.artifact.candidateCommitOid || candidateTree.trim() !== args.artifact.candidateTreeOid || ancestry.exitCode !== 0 || ancestry.truncated?.stdout === true || ancestry.truncated?.stderr === true || sourceStatus !== "" || materializedStatus !== "") {
-    failures.add("artifact-divergence");
-  }
-  if (JSON.stringify(args.artifact.changedPaths) !== JSON.stringify(manifest.changedPaths) || args.artifact.manifestHash !== manifest.manifestHash) {
-    failures.add("manifest-divergence");
-  }
-  if (manifest.changedPaths.some((change) => !finalPathAllowed(
-    change.path,
-    args.writeAllowlist,
-    args.forbiddenScope,
-    change.mode === "160000"
-  ))) {
-    failures.add("out-of-scope-write");
-  }
-  if (manifest.rawDiff.some((entry) => [entry.oldMode, entry.newMode].some((mode) => mode === "120000" || mode === "160000"))) {
-    failures.add("modified-symlink");
-  }
-  if (manifest.changedPaths.length === 0 || args.artifact.candidateTreeOid === baseTree.trim()) {
-    failures.add("empty-candidate");
-  }
-  return {
-    ok: failures.size === 0,
-    failures: [...failures],
-    manifestHash: manifest.manifestHash
-  };
 }
 function finalDelegationSpec(spec) {
   const template = spec.tasks[0]?.delegation;
@@ -47718,7 +48033,7 @@ var FinalBranchReviewer = class {
     this.branchManager = dependencies.branchManager ?? new WorkflowBranchManager();
     this.workflowStore = dependencies.workflowStore ?? ((workflowId) => new WorkflowStore(workflowId));
     this.acceptanceVerifier = dependencies.acceptanceVerifier ?? new AcceptanceVerifier({
-      structural: async (args) => await structuralVerifyFinalBranch(args, this.runGit)
+      mode: "final-branch"
     });
     this.roleRunner = dependencies.roleRunner ?? runRole;
     this.platformServices = dependencies.platformServices ?? getPlatformServices();
@@ -47727,7 +48042,7 @@ var FinalBranchReviewer = class {
     this.evidenceStore = dependencies.evidenceStore ?? ((runId) => new ArtifactStore(runId));
     this.taskEvidenceValidator = dependencies.taskEvidenceValidator ?? validateArchivedTaskEvidence;
     this.materialize = dependencies.materialize ?? (async (request) => {
-      const workflowHash = createHash11("sha256").update(request.workflowId).digest("hex");
+      const workflowHash = createHash12("sha256").update(request.workflowId).digest("hex");
       const manager = new WorktreeManager(
         request.checkoutPath,
         `workflow-${workflowHash.slice(0, 32)}-final`,
@@ -49300,7 +49615,7 @@ var AutopilotController = class {
 };
 
 // src/autopilot/candidate-promoter.ts
-import { createHash as createHash12 } from "node:crypto";
+import { createHash as createHash13 } from "node:crypto";
 
 // src/integrate/controlled-integrator.ts
 var CANDIDATE_REF = /^refs\/claude-architect\/candidates\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -49465,7 +49780,7 @@ function rejected(classification) {
   return { status: "rejected", classification };
 }
 function commitMessageHash(message) {
-  return createHash12("sha256").update(message, "utf8").digest("hex");
+  return createHash13("sha256").update(message, "utf8").digest("hex");
 }
 function workflowStillAuthorizes(workflow, request, taskId, eligibilityHash, expectedWorkflowRef, expectedRepositoryIdentity) {
   const task = workflow.tasks[workflow.currentTaskIndex];
@@ -49668,11 +49983,12 @@ var CandidatePromoter = class {
     let advisor;
     let eligibility;
     try {
-      [result, manifest, pipelineResult, snapshot, advisor, eligibility] = await Promise.all([
-        artifactStore.readResult(request.runId),
-        artifactStore.readManifest(request.runId),
+      const decisionSnapshot = await readRunDecisionSnapshot(request.runId, { store: artifactStore });
+      result = decisionSnapshot.result;
+      manifest = decisionSnapshot.manifest;
+      snapshot = decisionSnapshot.reviewSnapshot;
+      [pipelineResult, advisor, eligibility] = await Promise.all([
         artifactStore.readPipelineArtifact(request.runId, "pipeline-result"),
-        artifactStore.readReviewSnapshot(request.runId),
         artifactStore.readAdvisorReport(request.runId),
         artifactStore.readAutopilotEligibility(request.runId)
       ]);
@@ -49989,11 +50305,8 @@ var CandidatePromoter = class {
   }
 };
 
-// src/pipeline/pipeline-runtime.ts
-import path30 from "node:path";
-
 // src/protocol/spec-hash.ts
-import { createHash as createHash13 } from "node:crypto";
+import { createHash as createHash14 } from "node:crypto";
 function canonicalSpecJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalSpecJson).join(",")}]`;
   if (typeof value === "object" && value !== null) {
@@ -50003,7 +50316,7 @@ function canonicalSpecJson(value) {
   return JSON.stringify(value) ?? "null";
 }
 function specSha256(spec) {
-  return createHash13("sha256").update(canonicalSpecJson(spec)).digest("hex");
+  return createHash14("sha256").update(canonicalSpecJson(spec)).digest("hex");
 }
 
 // src/runtime/attempt-runtime.ts
@@ -51537,6 +51850,79 @@ function evaluateGates(input) {
   return { decisionReady: reasons.length === 0, requiresHumanDecision, reasons };
 }
 
+// src/pipeline/slice-scheduler.ts
+function allowlistsOverlap(left, right) {
+  return left.writeAllowlist.some((leftGlob) => right.writeAllowlist.some((rightGlob) => leftGlob === rightGlob || globMatches(leftGlob, literalPrefix(rightGlob)) || globMatches(rightGlob, literalPrefix(leftGlob)) || literalPrefix(leftGlob).startsWith(literalPrefix(rightGlob)) || literalPrefix(rightGlob).startsWith(literalPrefix(leftGlob))));
+}
+function literalPrefix(glob) {
+  const wildcard = glob.search(/[*?[]/u);
+  return wildcard === -1 ? glob : glob.slice(0, wildcard);
+}
+function planSliceWaves(slices, concurrency) {
+  const waves = [];
+  const completed = /* @__PURE__ */ new Set();
+  const pending = slices.map((_, offset) => offset + 1);
+  while (pending.length > 0) {
+    const wave = [];
+    for (const index of pending) {
+      if (wave.length >= Math.max(1, concurrency)) break;
+      const dependencies = resolveSliceDependencies(slices, index);
+      if (!dependencies.every((dependency) => completed.has(dependency))) continue;
+      const slice = slices[index - 1];
+      if (wave.some((member) => allowlistsOverlap(slices[member - 1], slice))) continue;
+      wave.push(index);
+    }
+    if (wave.length === 0) {
+      wave.push(pending[0]);
+    }
+    for (const index of wave) {
+      completed.add(index);
+      pending.splice(pending.indexOf(index), 1);
+    }
+    waves.push({ indices: wave });
+  }
+  return waves;
+}
+
+// src/pipeline/wayfinder.ts
+function routeSlice(input) {
+  if (input.hardBlocker) {
+    return { route: "halt", reasons: ["unrecoverable blocker"] };
+  }
+  const reasons = [];
+  const { verification } = input;
+  if (verification === null) {
+    return { route: "halt", reasons: ["verification report missing (fail closed)"] };
+  }
+  if (!verification.pass) {
+    reasons.push("slice verification failed");
+  }
+  if (verification.testsDeleted > 0) {
+    reasons.push(`${verification.testsDeleted} test(s) deleted`);
+  }
+  if (verification.testsSkipped > 0) {
+    reasons.push(`${verification.testsSkipped} test(s) newly skipped`);
+  }
+  if (!verification.workspaceClean) {
+    reasons.push("verify worktree dirty after checks");
+  }
+  if (verification.scopeViolations.length > 0) {
+    reasons.push(`out-of-scope diff: ${verification.scopeViolations.join(", ")}`);
+  }
+  if (input.perSliceReview !== null && input.perSliceReview.findings.some(
+    (finding) => finding.severity === "blocker" || finding.severity === "major"
+  )) {
+    reasons.push("per-slice review found blocking findings");
+  }
+  if (reasons.length === 0) {
+    return { route: "advance", reasons };
+  }
+  if (input.roundsUsed < input.maxRounds) {
+    return { route: "repair", reasons };
+  }
+  return { route: "halt", reasons };
+}
+
 // src/pipeline/slice-composer.ts
 import { mkdtemp as mkdtemp4, rm as rm13 } from "node:fs/promises";
 import { tmpdir as tmpdir7 } from "node:os";
@@ -51619,457 +52005,8 @@ async function composeSliceOntoHead(args) {
   }
 }
 
-// src/pipeline/slice-scheduler.ts
-function allowlistsOverlap(left, right) {
-  return left.writeAllowlist.some((leftGlob) => right.writeAllowlist.some((rightGlob) => leftGlob === rightGlob || globMatches(leftGlob, literalPrefix(rightGlob)) || globMatches(rightGlob, literalPrefix(leftGlob)) || literalPrefix(leftGlob).startsWith(literalPrefix(rightGlob)) || literalPrefix(rightGlob).startsWith(literalPrefix(leftGlob))));
-}
-function literalPrefix(glob) {
-  const wildcard = glob.search(/[*?[]/u);
-  return wildcard === -1 ? glob : glob.slice(0, wildcard);
-}
-function planSliceWaves(slices, concurrency) {
-  const waves = [];
-  const completed = /* @__PURE__ */ new Set();
-  const pending = slices.map((_, offset) => offset + 1);
-  while (pending.length > 0) {
-    const wave = [];
-    for (const index of pending) {
-      if (wave.length >= Math.max(1, concurrency)) break;
-      const dependencies = resolveSliceDependencies(slices, index);
-      if (!dependencies.every((dependency) => completed.has(dependency))) continue;
-      const slice = slices[index - 1];
-      if (wave.some((member) => allowlistsOverlap(slices[member - 1], slice))) continue;
-      wave.push(index);
-    }
-    if (wave.length === 0) {
-      wave.push(pending[0]);
-    }
-    for (const index of wave) {
-      completed.add(index);
-      pending.splice(pending.indexOf(index), 1);
-    }
-    waves.push({ indices: wave });
-  }
-  return waves;
-}
-
-// src/pipeline/wayfinder.ts
-function routeSlice(input) {
-  if (input.hardBlocker) {
-    return { route: "halt", reasons: ["unrecoverable blocker"] };
-  }
-  const reasons = [];
-  const { verification } = input;
-  if (verification === null) {
-    return { route: "halt", reasons: ["verification report missing (fail closed)"] };
-  }
-  if (!verification.pass) {
-    reasons.push("slice verification failed");
-  }
-  if (verification.testsDeleted > 0) {
-    reasons.push(`${verification.testsDeleted} test(s) deleted`);
-  }
-  if (verification.testsSkipped > 0) {
-    reasons.push(`${verification.testsSkipped} test(s) newly skipped`);
-  }
-  if (!verification.workspaceClean) {
-    reasons.push("verify worktree dirty after checks");
-  }
-  if (verification.scopeViolations.length > 0) {
-    reasons.push(`out-of-scope diff: ${verification.scopeViolations.join(", ")}`);
-  }
-  if (input.perSliceReview !== null && input.perSliceReview.findings.some(
-    (finding) => finding.severity === "blocker" || finding.severity === "major"
-  )) {
-    reasons.push("per-slice review found blocking findings");
-  }
-  if (reasons.length === 0) {
-    return { route: "advance", reasons };
-  }
-  if (input.roundsUsed < input.maxRounds) {
-    return { route: "repair", reasons };
-  }
-  return { route: "halt", reasons };
-}
-
-// src/pipeline/slice-runner.ts
-async function runSliceToCompletion(slice, index, base, deps, initialAttempt) {
-  let roundsUsed = 0;
-  const attempts = [];
-  while (true) {
-    const sourceAttempt = roundsUsed === 0 && initialAttempt !== void 0 ? initialAttempt : await deps.runSlice(slice, index, base, roundsUsed, attempts.map((e) => structuredClone(e)));
-    const attempt = structuredClone(sourceAttempt);
-    const perSliceReview = attempt.perSliceReview ?? null;
-    const route2 = routeSlice({
-      verification: attempt.verification,
-      perSliceReview,
-      roundsUsed,
-      maxRounds: deps.maxRounds,
-      hardBlocker: attempt.hardBlocker ?? false
-    });
-    const evidence = {
-      sliceIndex: index,
-      attempt: roundsUsed,
-      candidateCommit: attempt.candidateCommit,
-      verification: attempt.verification,
-      perSliceReview,
-      route: route2.route,
-      reasons: [...route2.reasons],
-      roleLogRefs: [...attempt.roleLogRefs ?? []]
-    };
-    if (deps.onAttempt) {
-      await deps.onAttempt(structuredClone(evidence));
-    }
-    attempts.push(evidence);
-    const pipelineSlice = {
-      index,
-      objective: slice.objective,
-      route: route2.route,
-      candidateCommit: attempt.candidateCommit,
-      roundsUsed,
-      verification: attempt.verification,
-      perSliceReview,
-      reasons: [...route2.reasons],
-      attempts: attempts.map((entry) => ({
-        ...entry,
-        reasons: [...entry.reasons],
-        roleLogRefs: [...entry.roleLogRefs]
-      })),
-      roleLogRefs: attempts.flatMap((entry) => entry.roleLogRefs)
-    };
-    if (route2.route === "repair") {
-      roundsUsed += 1;
-      continue;
-    }
-    return { slice: pipelineSlice, advanced: route2.route === "advance" };
-  }
-}
-async function runSlicePhase(slices, startCommit, deps) {
-  let currentCommit = startCommit;
-  const results = [];
-  for (const wave of planSliceWaves(slices, deps.concurrency ?? 1)) {
-    const base = currentCommit;
-    const outcomes = await Promise.all(wave.indices.map((index) => runSliceToCompletion(
-      slices[index - 1],
-      index,
-      base,
-      deps,
-      index === 1 ? deps.initialAttempt : void 0
-    )));
-    for (const outcome of outcomes) {
-      const composed = wave.indices.length === 1 || deps.composeSlice === void 0 ? outcome.slice.candidateCommit : await deps.composeSlice({
-        head: currentCommit,
-        base,
-        sliceCommit: outcome.slice.candidateCommit,
-        sliceIndex: outcome.slice.index
-      });
-      const recorded = { ...outcome.slice, candidateCommit: composed };
-      results.push(recorded);
-      if (deps.onSlice) {
-        await deps.onSlice(structuredClone(recorded));
-      }
-      if (!outcome.advanced) {
-        return {
-          slices: results,
-          finalCandidateCommit: currentCommit,
-          haltedSliceIndex: recorded.index
-        };
-      }
-      currentCommit = composed;
-    }
-  }
-  return {
-    slices: results,
-    finalCandidateCommit: currentCommit,
-    haltedSliceIndex: null
-  };
-}
-
-// src/pipeline/advisor-stage.ts
+// src/pipeline/pipeline-roles.ts
 var schemas4 = loadSchemas();
-function frozenAdvisorEvidence(spec, pipelineResult, reviewSnapshot) {
-  const finalRound = pipelineResult.rounds.at(-1) ?? null;
-  return {
-    runId: pipelineResult.runId,
-    specification: {
-      objective: spec.objective,
-      successCriteria: [...spec.successCriteria],
-      writeAllowlist: [...spec.writeAllowlist],
-      forbiddenScope: [...spec.forbiddenScope]
-    },
-    baselineCommitOid: reviewSnapshot.baseCommitOid,
-    candidateCommitOid: reviewSnapshot.candidateCommitOid,
-    candidateTreeOid: reviewSnapshot.candidateTreeOid,
-    candidateManifestHash: reviewSnapshot.manifestHash,
-    reviewSnapshot: structuredClone(reviewSnapshot),
-    finalRound: structuredClone(finalRound),
-    reviewAndFixHistory: structuredClone(pipelineResult.rounds),
-    trustedVerification: structuredClone(pipelineResult.verification),
-    gate: structuredClone(pipelineResult.gate),
-    pipelineStatus: pipelineResult.status
-  };
-}
-function failureReport(failure3, failedRoleLogRef) {
-  return {
-    reportVersion: "1",
-    verdict: "human-decision-required",
-    rationale: `The final advisor did not produce an approving valid report (${failure3}; see ${failedRoleLogRef}).`,
-    risks: [],
-    coverageGaps: ["A fresh confined advisor review is unavailable."]
-  };
-}
-function assertSameFrozenArtifact(label, providedHash, archivedHash) {
-  if (providedHash !== archivedHash) {
-    throw new RuntimeError(`${label} differs from the durable archived artifact`);
-  }
-}
-function advisorExecutionDiagnostic(error51) {
-  const detail = error51 instanceof Error ? `${error51.name}: ${error51.message}` : String(error51);
-  return redact(detail).slice(0, 2e3);
-}
-async function runAdvisorStage(args) {
-  const store = args.store ?? new ArtifactStore(args.runId);
-  const statusStore = new ArtifactStore(args.runId);
-  await transitionRunStatusSafely(statusStore, args.runId, "advisor", {
-    round: null,
-    role: "advisor",
-    detail: null
-  });
-  try {
-    const [archivedPipelineResult, archivedReviewSnapshot, archivedSpec] = await Promise.all([
-      store.readPipelineArtifact(args.runId, "pipeline-result"),
-      store.readReviewSnapshot(args.runId),
-      store.readPipelineArtifact(args.runId, "delegation-spec")
-    ]);
-    if (archivedPipelineResult === null) {
-      throw new RuntimeError("advisor stage requires a durable archived PipelineResult");
-    }
-    if (archivedReviewSnapshot === null) {
-      throw new RuntimeError("advisor stage requires a durable review snapshot");
-    }
-    if (archivedSpec === null) {
-      throw new RuntimeError("advisor stage requires a durable archived delegation specification");
-    }
-    if (!schemas4.delegationSpec(archivedSpec)) {
-      throw new RuntimeError("advisor stage archived delegation specification is invalid");
-    }
-    const suppliedSpec = redactRecord(structuredClone(args.spec));
-    if (canonicalArtifactHash(suppliedSpec) !== canonicalArtifactHash(archivedSpec)) {
-      throw new RuntimeError("advisor stage specification differs from the durable archived specification");
-    }
-    if (archivedPipelineResult.runId !== args.runId || archivedReviewSnapshot.runId !== args.runId) {
-      throw new RuntimeError("advisor stage run identity does not match its durable evidence");
-    }
-    if (args.pipelineResult !== void 0) {
-      assertSameFrozenArtifact(
-        "pipeline result",
-        pipelineResultHash(args.pipelineResult),
-        pipelineResultHash(archivedPipelineResult)
-      );
-    }
-    if (args.reviewSnapshot !== void 0) {
-      assertSameFrozenArtifact(
-        "review snapshot",
-        reviewSnapshotHash(args.reviewSnapshot),
-        reviewSnapshotHash(archivedReviewSnapshot)
-      );
-    }
-    const advisorSpec = {
-      ...structuredClone(archivedSpec),
-      context: ""
-    };
-    const pkg = {
-      spec: advisorSpec,
-      baselineCommit: archivedReviewSnapshot.baseCommitOid,
-      candidateCommit: archivedReviewSnapshot.candidateCommitOid,
-      candidateDiff: archivedReviewSnapshot.patch,
-      testEvidence: JSON.stringify({
-        evidence: archivedReviewSnapshot.evidence,
-        executedVerification: archivedReviewSnapshot.executedVerification,
-        finalVerification: archivedPipelineResult.verification
-      }),
-      advisorEvidence: frozenAdvisorEvidence(
-        advisorSpec,
-        archivedPipelineResult,
-        archivedReviewSnapshot
-      )
-    };
-    const advisorEvidenceText = JSON.stringify(pkg.advisorEvidence, null, 2);
-    let outcome;
-    if (!canRenderUntrustedBlockExactly(advisorEvidenceText)) {
-      const failedRoleLogRef = await store.writeLog(
-        "role-advisor-final",
-        "advisor was not launched: the exact frozen evidence package exceeds the bounded role input\n"
-      );
-      outcome = {
-        ok: false,
-        failure: "invalid-output",
-        failedRoleLogRef,
-        roleLogRefs: [failedRoleLogRef]
-      };
-    } else {
-      try {
-        outcome = await runStructuredRole({
-          role: "advisor",
-          schema: schemas4.advisorReport,
-          logName: "role-advisor-final",
-          spec: advisorSpec,
-          pkg,
-          worktreePath: args.worktreePath,
-          deps: args.deps,
-          runId: args.runId,
-          store
-        });
-      } catch (error51) {
-        const failedRoleLogRef = await store.writeLog(
-          "role-advisor-final",
-          `advisor execution failed before producing a classified result: ${advisorExecutionDiagnostic(error51)}
-`
-        );
-        outcome = {
-          ok: false,
-          failure: "producer-failure",
-          failedRoleLogRef,
-          roleLogRefs: [failedRoleLogRef]
-        };
-      }
-    }
-    const report = outcome.ok ? redactRecord(outcome.report) : failureReport(outcome.failure, outcome.failedRoleLogRef);
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
-      pipelineResult: archivedPipelineResult,
-      reviewSnapshot: archivedReviewSnapshot,
-      advisor: report,
-      evaluatedAt: args.evaluatedAt
-    }));
-    await transitionRunStatusSafely(statusStore, args.runId, "gating", {
-      role: "advisor"
-    });
-    await store.writePostPipelineAutopilotArtifacts({
-      pipelineResult: archivedPipelineResult,
-      reviewSnapshot: archivedReviewSnapshot,
-      advisorReport: report,
-      eligibility
-    });
-    advisorReportHash(report);
-    await transitionRunStatusSafely(
-      statusStore,
-      args.runId,
-      outcome.ok ? "done" : "failed",
-      {
-        role: "advisor",
-        detail: outcome.ok ? report.verdict : outcome.failure
-      }
-    );
-    return {
-      report,
-      eligibility,
-      failure: outcome.ok ? null : outcome.failure,
-      roleLogRefs: outcome.roleLogRefs
-    };
-  } catch (error51) {
-    await transitionRunStatusSafely(statusStore, args.runId, "failed", {
-      role: "advisor",
-      detail: error51 instanceof Error ? error51.message : "advisor stage failed unexpectedly"
-    });
-    throw error51;
-  }
-}
-
-// src/pipeline/pipeline-runtime.ts
-var schemas5 = loadSchemas();
-var IGNORED_STRUCTURAL_FAILURES = /* @__PURE__ */ new Set([
-  "artifact-divergence"
-]);
-var CANDIDATE_REF_PREFIX2 = "refs/claude-architect/candidates/";
-var SLICE_REF_PREFIX = "refs/claude-architect/slices/";
-function describePriorAttempts(attempts) {
-  return attempts.map((entry) => {
-    const failed = (entry.verification?.commandResults ?? []).filter((command) => !command.ok).map((command) => `${command.id} (exit ${String(command.exitCode)})`);
-    const blocking = (entry.perSliceReview?.findings ?? []).filter((finding) => finding.severity === "blocker" || finding.severity === "major").map((finding) => `${finding.severity} at ${finding.location}: ${finding.claim}`);
-    return [
-      `attempt ${entry.attempt} -> ${entry.route}`,
-      `  reasons: ${entry.reasons.join("; ") || "(none recorded)"}`,
-      ...failed.length === 0 ? [] : [`  failing verification: ${failed.join(", ")}`],
-      ...blocking.length === 0 ? [] : [`  blocking findings:
-    ${blocking.join("\n    ")}`]
-    ].join("\n");
-  }).join("\n\n");
-}
-function scopeSpecToSlice(spec, slice) {
-  const scoped = structuredClone({ ...spec, ...slice });
-  delete scoped.slices;
-  return scoped;
-}
-function gitFailure5(action, result) {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-async function checkedGit5(cwd, args, options) {
-  const result = await git(cwd, args, options);
-  if (result.exitCode !== 0) throw gitFailure5(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
-function temporarySliceRef(runId, index, attempt) {
-  return `${SLICE_REF_PREFIX}${runId}/slice-${index}-attempt-${attempt}`;
-}
-async function createTemporarySliceRef(checkoutPath, temporaryRef) {
-  const result = await git(checkoutPath, [
-    "update-ref",
-    "--no-deref",
-    temporaryRef.ref,
-    temporaryRef.oid,
-    "0".repeat(temporaryRef.oid.length)
-  ]);
-  if (result.exitCode !== 0) throw gitFailure5("create temporary slice ref", result);
-}
-async function cleanupTemporarySliceRefs(checkoutPath, temporaryRefs) {
-  const errors = [];
-  for (const temporaryRef of [...temporaryRefs].reverse()) {
-    try {
-      const result = await git(checkoutPath, [
-        "update-ref",
-        "--no-deref",
-        "-d",
-        temporaryRef.ref,
-        temporaryRef.oid
-      ]);
-      if (result.exitCode !== 0) {
-        errors.push(gitFailure5("delete temporary slice ref", result));
-      }
-    } catch (error51) {
-      errors.push(error51);
-    }
-  }
-  return errors;
-}
-function privateObjectReadOptions(access6) {
-  return {
-    env: { GIT_ALTERNATE_OBJECT_DIRECTORIES: access6.privateObjectsDir }
-  };
-}
-async function importPromotedObjects(args) {
-  const privateObjects = privateObjectReadOptions(args.access);
-  const packPrefix = path30.join(args.access.sharedObjectsDir, "pack", "pack");
-  await checkedGit5(
-    args.checkoutPath,
-    ["pack-objects", "--revs", packPrefix],
-    {
-      ...privateObjects,
-      stdin: `${args.promotedCommit}
-^${args.baselineCommit}
-`
-    }
-  );
-  await checkedGit5(args.checkoutPath, ["cat-file", "-e", `${args.promotedCommit}^{commit}`]);
-  await checkedGit5(args.checkoutPath, ["rev-parse", `${args.promotedCommit}^{tree}`]);
-  await checkedGit5(args.checkoutPath, [
-    "rev-list",
-    "--objects",
-    args.promotedCommit,
-    "--not",
-    args.baselineCommit
-  ]);
-}
 function roleArgs(args) {
   const ps = args.deps.ps ?? getPlatformServices();
   return {
@@ -52094,7 +52031,7 @@ async function runArchivedRole(runner, args, store, logName2) {
   return { result, logRef: logRef2 };
 }
 async function runStructuredRole(args) {
-  const runner = args.deps.roleRunner ?? runRole;
+  const runner = args.deps.roleRunner ?? args.deps.runRole ?? runRole;
   const callArgs = roleArgs({
     role: args.role,
     spec: args.spec,
@@ -52129,289 +52066,96 @@ async function runStructuredRole(args) {
       return repair.result.ok ? repair.result.rawOutput : "";
     }
   );
-  return outcome.ok ? { ok: true, report: outcome.value, roleLogRefs } : {
-    ok: false,
-    failure: "invalid-output",
-    failedRoleLogRef: initial.logRef,
-    roleLogRefs
-  };
-}
-function failedResult(attempt, rounds, finalCandidateCommit, reason, failure3 = "producer-failure", increments = [], slices = [], haltedSliceIndex = null) {
-  return {
-    runId: attempt.runId,
-    status: "failed",
-    attempt,
-    increments,
-    slices,
-    haltedSliceIndex,
-    rounds,
-    verification: null,
-    gate: {
-      decisionReady: false,
-      requiresHumanDecision: false,
-      reasons: [reason]
-    },
-    finalCandidateCommit,
-    failure: failure3
-  };
-}
-var MAX_PROGRESS_NOTES_LENGTH = 8e3;
-var PROGRESS_TRUNCATION_NOTE = "\n\n[progress notes truncated]";
-function composeProgressNotes(previous) {
-  const summary = "producerSummary" in previous ? previous.producerSummary ?? previous.summary : previous.summary;
-  const nextSteps = "nextSteps" in previous ? previous.nextSteps : void 0;
-  const rendered = redact([
-    `Summary:
-${summary}`,
-    ...nextSteps === void 0 ? [] : [`Next steps:
-${nextSteps}`]
-  ].join("\n\n"));
-  if (rendered.length <= MAX_PROGRESS_NOTES_LENGTH) return rendered;
-  return `${rendered.slice(
-    0,
-    MAX_PROGRESS_NOTES_LENGTH - PROGRESS_TRUNCATION_NOTE.length
-  )}${PROGRESS_TRUNCATION_NOTE}`;
-}
-function testEvidence(attempt) {
-  return JSON.stringify(attempt.executedVerification.map((outcome) => ({
-    id: outcome.id,
-    exitCode: outcome.exitCode,
-    timedOut: outcome.timedOut
-  })));
-}
-function attemptLogRefs(attempt) {
-  return [.../* @__PURE__ */ new Set([
-    attempt.logsRef,
-    ...attempt.executedVerification.flatMap((outcome) => [outcome.stdoutRef, outcome.stderrRef])
-  ])];
-}
-function verificationTestEvidence(verification) {
-  return {
-    pass: verification.pass,
-    commandResults: verification.commandResults.map((command) => ({ ...command })),
-    workspaceClean: verification.workspaceClean,
-    testsDeleted: verification.testsDeleted,
-    testsSkipped: verification.testsSkipped,
-    scopeViolations: [...verification.scopeViolations]
-  };
-}
-function sliceTestEvidence(slices) {
-  return JSON.stringify(slices.map((slice) => ({
-    sliceIndex: slice.index,
-    verification: slice.verification === null ? null : verificationTestEvidence(slice.verification),
-    attempts: slice.attempts.map((attempt) => ({
-      attempt: attempt.attempt,
-      verification: attempt.verification === null ? null : verificationTestEvidence(attempt.verification)
-    }))
-  })));
-}
-var SliceExecutionError = class extends RuntimeError {
-  constructor(message, failure3) {
-    super(message);
-    this.failure = failure3;
-    this.name = "SliceExecutionError";
-  }
-  failure;
-};
-var SlicedFailureArchiveError = class extends RuntimeError {
-  constructor(cause) {
-    super(cause instanceof Error ? cause.message : "sliced failure archival failed");
-    this.cause = cause;
-    this.name = "SlicedFailureArchiveError";
-  }
-  cause;
-};
-function findSliceExecutionError(error51) {
-  if (error51 instanceof SliceExecutionError) return error51;
-  if (!(error51 instanceof AggregateError)) return null;
-  for (const nested of error51.errors) {
-    const found = findSliceExecutionError(nested);
-    if (found !== null) return found;
-  }
-  return null;
-}
-function containsSlicedFailureArchiveError(error51) {
-  if (error51 instanceof SlicedFailureArchiveError) return true;
-  if (!(error51 instanceof AggregateError)) return false;
-  return error51.errors.some(containsSlicedFailureArchiveError);
-}
-function failedAttemptStatus(failure3) {
-  if (failure3 === "unavailable" || failure3 === "authentication-required") return "unavailable";
-  if (failure3 === "cancelled") return "cancelled";
-  return "failed";
-}
-async function archiveSlicedFailure(args) {
-  try {
-    const manifest = await args.store.readManifest(args.attempt.runId);
-    if (manifest === null) {
-      throw new RuntimeError("run manifest is missing while archiving sliced failure");
-    }
-    const retainCandidate = args.failure === "verification-failure";
-    if (!retainCandidate && args.attempt.candidate !== null) {
-      const candidate = args.attempt.candidate;
-      const expectedRef = `${CANDIDATE_REF_PREFIX2}${args.attempt.runId}`;
-      if (candidate.anchorRef !== expectedRef) {
-        throw new RuntimeError("sliced candidate anchor does not match run id");
-      }
-      const deleted = await git(args.checkoutPath, [
-        "update-ref",
-        "--no-deref",
-        "-d",
-        candidate.anchorRef,
-        candidate.candidateCommitOid
-      ]);
-      if (deleted.exitCode !== 0) throw gitFailure5("delete sliced candidate anchor", deleted);
-    }
-    const failedAttempt = {
-      ...args.attempt,
-      status: failedAttemptStatus(args.failure),
-      failure: args.failure,
-      summary: args.reason,
-      candidate: retainCandidate ? args.attempt.candidate : null,
-      unresolvedIssues: [...args.attempt.unresolvedIssues, args.reason],
-      evidence: {
-        ...args.attempt.evidence,
-        pipelineFailure: { failure: args.failure, reason: args.reason }
-      }
-    };
-    await args.store.promoteTerminalArtifacts({ result: failedAttempt, manifest });
-    return failedAttempt;
-  } catch (error51) {
-    if (error51 instanceof SlicedFailureArchiveError) throw error51;
-    throw new SlicedFailureArchiveError(error51);
-  }
-}
-async function archiveSliceExecutionError(args) {
-  const sliceError = findSliceExecutionError(args.error);
-  if (sliceError === null) throw args.error;
-  try {
+  if (!outcome.ok) {
     return {
-      sliceError,
-      failedAttempt: await archiveSlicedFailure({
-        checkoutPath: args.checkoutPath,
-        attempt: args.attempt,
-        failure: sliceError.failure,
-        reason: sliceError.message,
-        store: args.store
-      })
+      ok: false,
+      // Unparseable structured output is the Producer answering wrongly, not
+      // failing to answer; collapsing it to producer-failure loses the only
+      // signal that separates a malformed report from a crashed process.
+      failure: "invalid-output",
+      // The rejected output is what a reader needs to see. Pointing at the
+      // repair attempt hides the report that actually failed validation.
+      failedRoleLogRef: initial.logRef,
+      roleLogRefs
     };
-  } catch (archiveError) {
-    throw new AggregateError(
-      [args.error, archiveError],
-      "sliced pipeline failed and its attempt result could not be archived"
-    );
   }
+  return { ok: true, report: outcome.value, roleLogRefs };
 }
-async function cleanupWorktree(worktree) {
-  try {
-    await worktree.cleanup();
-    return null;
-  } catch (error51) {
-    return error51;
-  }
-}
-var worktreeCreation = Promise.resolve();
-function createWorktreeSerially(manager, commit) {
-  const created = worktreeCreation.catch(() => {
-  }).then(async () => manager.create(commit));
-  worktreeCreation = created.catch(() => {
-  });
-  return created;
-}
-async function withManagedWorktree(args) {
-  const worktree = await createWorktreeSerially(args.manager, args.commit);
-  try {
-    return await args.run(worktree.path);
-  } finally {
-    const cleanupError = await cleanupWorktree(worktree);
-    if (cleanupError !== null) {
-      logger.warn(args.cleanupFailureMessage, {
-        error: redact(cleanupError instanceof Error ? cleanupError.message : String(cleanupError))
-      });
-      args.onCleanupFailure?.(cleanupError);
-    }
-  }
-}
-async function candidateArtifact(args) {
-  const artifact = {
-    baseCommitOid: args.baselineCommit,
-    candidateTreeOid: (await checkedGit5(
-      args.worktreePath,
-      ["rev-parse", `${args.candidateCommit}^{tree}`]
-    )).trim(),
-    candidateCommitOid: args.candidateCommit,
-    anchorRef: args.anchorRef,
-    manifestHash: "",
-    changedPaths: [],
-    patch: args.diffText
-  };
-  const canonical = await recomputeManifest({
+async function runIncrement(args) {
+  const logNameNamespace = args.logNameNamespace === void 0 ? "" : `${args.logNameNamespace}-`;
+  return runStructuredRole({
+    role: "implementer",
+    schema: schemas4.incrementReport,
+    logName: `role-implementer-${logNameNamespace}increment${args.increment}`,
+    spec: args.spec,
+    pkg: args.pkg,
     worktreePath: args.worktreePath,
-    baseCommitOid: args.baselineCommit,
-    artifact
+    deps: args.deps,
+    runId: args.runId,
+    store: args.store,
+    ...args.runStart === void 0 ? {} : { runStart: args.runStart },
+    gitObjectAccess: args.gitObjectAccess
   });
-  if (canonical.manifestHash === null) {
-    throw new RuntimeError("final candidate paths collide under case folding");
-  }
-  return {
-    ...artifact,
-    changedPaths: canonical.changedPaths,
-    manifestHash: canonical.manifestHash
-  };
 }
-async function promoteFinalCandidate(args) {
-  let canonicalCommit;
-  try {
-    const objectReadOptions = args.privateObjectAccess === void 0 ? void 0 : privateObjectReadOptions(args.privateObjectAccess);
-    const finalTree = (await checkedGit5(
-      args.checkoutPath,
-      ["rev-parse", `${args.candidateCommit}^{tree}`],
-      objectReadOptions
-    )).trim();
-    canonicalCommit = (await checkedGit5(args.checkoutPath, [
-      "commit-tree",
-      finalTree,
-      "-p",
-      args.baselineCommit,
-      "-m",
-      `candidate ${args.attempt.runId}`
-    ], objectReadOptions)).trim();
-    if (args.privateObjectAccess !== void 0) {
-      await importPromotedObjects({
-        checkoutPath: args.checkoutPath,
-        baselineCommit: args.baselineCommit,
-        promotedCommit: canonicalCommit,
-        access: args.privateObjectAccess
-      });
-    }
-  } catch {
-    return null;
+async function runReviews(args) {
+  const logNameNamespace = args.logNameNamespace === void 0 ? "" : `${args.logNameNamespace}-`;
+  const outcomes = await Promise.all(args.reviewers.map(async (reviewer) => {
+    const role = `reviewer-${reviewer}`;
+    await args.onReviewer?.(role);
+    const outcome = await runStructuredRole({
+      role,
+      schema: schemas4.reviewReport,
+      logName: `role-${role}-${logNameNamespace}round${args.round}`,
+      spec: args.spec,
+      pkg: args.pkg,
+      worktreePath: args.worktreePath,
+      deps: args.deps,
+      runId: args.runId,
+      store: args.store
+    });
+    return {
+      review: outcome.ok ? { reviewer, report: outcome.report } : null,
+      initialLogRef: outcome.ok ? null : outcome.failedRoleLogRef,
+      roleLogRefs: outcome.roleLogRefs
+    };
+  }));
+  const roleLogRefs = outcomes.flatMap((outcome) => outcome.roleLogRefs);
+  const reviews = outcomes.map((outcome) => outcome.review);
+  if (reviews.every((review) => review !== null)) {
+    return { ok: true, reviews, roleLogRefs };
   }
-  await checkedGit5(args.checkoutPath, [
-    "update-ref",
-    args.initialCandidate.anchorRef,
-    canonicalCommit,
-    args.initialCandidate.candidateCommitOid
-  ]);
-  const diffText = await checkedGit5(
-    args.checkoutPath,
-    ["diff", `${args.baselineCommit}..${canonicalCommit}`]
-  );
-  const candidate = await candidateArtifact({
-    worktreePath: args.checkoutPath,
-    baselineCommit: args.baselineCommit,
-    candidateCommit: canonicalCommit,
-    anchorRef: args.initialCandidate.anchorRef,
-    diffText
+  const failed = outcomes.find((outcome) => outcome.review === null);
+  if (failed?.initialLogRef === null || failed === void 0) {
+    throw new Error("unreachable invalid review state");
+  }
+  return { ok: false, failedRoleLogRef: failed.initialLogRef, roleLogRefs };
+}
+async function runFix(args) {
+  const outcome = await runStructuredRole({
+    role: "fixer",
+    schema: schemas4.fixReport,
+    logName: `role-fixer-round${args.round}`,
+    spec: args.spec,
+    pkg: args.pkg,
+    worktreePath: args.worktreePath,
+    deps: args.deps,
+    runId: args.runId,
+    store: args.store,
+    ...args.runStart === void 0 ? {} : { runStart: args.runStart },
+    gitObjectAccess: args.gitObjectAccess
   });
-  const manifest = await args.store.readManifest(args.attempt.runId);
-  if (manifest === null) throw new RuntimeError("run manifest is missing during promotion");
-  const finalAttempt = { ...args.attempt, candidate };
-  await args.store.promoteTerminalArtifacts({
-    result: finalAttempt,
-    manifest: { ...manifest, candidateManifestHash: candidate.manifestHash }
-  });
-  return { attempt: finalAttempt, candidateCommit: canonicalCommit };
+  return outcome.ok ? { ok: true, fix: outcome.report, roleLogRefs: outcome.roleLogRefs } : outcome;
+}
+
+// src/pipeline/candidate-verifier.ts
+function gitFailure5(action, result) {
+  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
+  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
+}
+async function checkedGit5(cwd, args, options) {
+  const result = await git(cwd, args, options);
+  if (result.exitCode !== 0) throw gitFailure5(`git ${args[0] ?? "command"}`, result);
+  return result.stdout;
 }
 function analyzeWeakenedTests(diff, allowedTestDeletions = [], deletedPaths) {
   let testsDeleted = 0;
@@ -52469,119 +52213,173 @@ function parseDeletedPaths(nameStatus) {
   }
   return deletedPaths;
 }
-async function runReviews(args) {
-  const logNameNamespace = args.logNameNamespace === void 0 ? "" : `${args.logNameNamespace}-`;
-  const outcomes = await Promise.all(args.reviewers.map(async (reviewer) => {
-    const role = `reviewer-${reviewer}`;
-    await args.onReviewer?.(role);
-    const outcome = await runStructuredRole({
-      role,
-      schema: schemas5.reviewReport,
-      logName: `role-${role}-${logNameNamespace}round${args.round}`,
-      spec: args.spec,
-      pkg: args.pkg,
-      worktreePath: args.worktreePath,
-      deps: args.deps,
-      runId: args.runId,
-      store: args.store
-    });
-    return {
-      review: outcome.ok ? { reviewer, report: outcome.report } : null,
-      initialLogRef: outcome.ok ? null : outcome.failedRoleLogRef,
-      roleLogRefs: outcome.roleLogRefs
-    };
-  }));
-  const roleLogRefs = outcomes.flatMap((outcome) => outcome.roleLogRefs);
-  const reviews = outcomes.map((outcome) => outcome.review);
-  if (reviews.every((review) => review !== null)) {
-    return { ok: true, reviews, roleLogRefs };
+async function candidateArtifact(args) {
+  const artifact = {
+    baseCommitOid: args.baselineCommit,
+    candidateTreeOid: (await checkedGit5(
+      args.worktreePath,
+      ["rev-parse", `${args.candidateCommit}^{tree}`]
+    )).trim(),
+    candidateCommitOid: args.candidateCommit,
+    anchorRef: args.anchorRef,
+    manifestHash: "",
+    changedPaths: [],
+    patch: args.diffText
+  };
+  const canonical = await recomputeManifest({
+    worktreePath: args.worktreePath,
+    baseCommitOid: args.baselineCommit,
+    artifact
+  });
+  if (canonical.manifestHash === null) {
+    throw new RuntimeError("final candidate paths collide under case folding");
   }
-  const failed = outcomes.find((outcome) => outcome.review === null);
-  if (failed?.initialLogRef === null || failed === void 0) {
-    throw new Error("unreachable invalid review state");
-  }
-  return { ok: false, failedRoleLogRef: failed.initialLogRef, roleLogRefs };
+  return {
+    ...artifact,
+    changedPaths: canonical.changedPaths,
+    manifestHash: canonical.manifestHash
+  };
 }
-async function runSliceReview(args) {
-  const ps = args.deps.ps ?? getPlatformServices();
-  return withManagedWorktree({
-    manager: new WorktreeManager(
-      args.checkoutPath,
-      `${args.runId}-${args.namespace}-review`,
-      ps,
-      args.deps.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.deps.borrowedCheckoutLease }
-    ),
+async function verifyCandidate(args) {
+  const ps = args.deps?.ps ?? getPlatformServices();
+  const namespace = args.namespace === void 0 ? "" : `${args.namespace}-`;
+  const manager = new WorktreeManager(
+    args.checkoutPath,
+    `${args.attempt.runId}-${namespace}verify`,
+    ps,
+    args.deps?.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.deps.borrowedCheckoutLease }
+  );
+  return await withManagedWorktree({
+    manager,
     commit: args.candidateCommit,
-    cleanupFailureMessage: "slice review failed and its worktree could not be cleaned up",
+    cleanupFailureMessage: "pipeline verification worktree could not be cleaned up",
     run: async (worktreePath) => {
-      const diffText = await checkedGit5(worktreePath, [
-        "diff",
-        `${args.baselineCommit}..${args.candidateCommit}`
+      const [diffText, , nameStatus, status, ancestry] = await Promise.all([
+        checkedGit5(worktreePath, ["diff", `${args.baselineCommit}..${args.candidateCommit}`]),
+        checkedGit5(worktreePath, [
+          "diff",
+          "--name-only",
+          `${args.baselineCommit}..${args.candidateCommit}`
+        ]),
+        checkedGit5(worktreePath, [
+          "diff",
+          "--name-status",
+          "--no-renames",
+          "-z",
+          `${args.baselineCommit}..${args.candidateCommit}`
+        ]),
+        checkedGit5(worktreePath, ["status", "--porcelain"]),
+        git(worktreePath, [
+          "merge-base",
+          "--is-ancestor",
+          args.baselineCommit,
+          args.candidateCommit
+        ])
       ]);
-      const reviewRun = await runReviews({
-        reviewers: args.reviewers,
-        spec: args.spec,
-        pkg: {
-          spec: args.spec,
-          baselineCommit: args.baselineCommit,
-          candidateCommit: args.candidateCommit,
-          candidateDiff: diffText,
-          testEvidence: JSON.stringify(verificationTestEvidence(args.verification))
-        },
+      const artifact = await candidateArtifact({
         worktreePath,
-        deps: args.deps,
-        runId: args.runId,
-        round: 1,
-        store: args.store,
-        logNameNamespace: args.namespace
+        baselineCommit: args.baselineCommit,
+        candidateCommit: args.candidateCommit,
+        anchorRef: args.attempt.candidate?.anchorRef ?? "",
+        diffText
       });
-      if (!reviewRun.ok) {
-        throw new SliceExecutionError(
-          `slice review did not produce valid structured output (see ${reviewRun.failedRoleLogRef})`,
-          "producer-failure"
-        );
-      }
+      const verifier = new AcceptanceVerifier({ mode: "composed-slice" });
+      const acceptance = await verifier.verify({
+        repoRoot: args.checkoutPath,
+        worktreePath,
+        baseCommitOid: args.baselineCommit,
+        artifact,
+        spec: args.spec,
+        ps,
+        artifactStore: args.store,
+        ...args.deps?.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.deps.borrowedCheckoutLease },
+        verificationId: () => `${args.attempt.runId}-${namespace}pipeline`,
+        logNamePrefix: `${namespace}pipeline-verification`
+      });
+      const scopeViolations = artifact.changedPaths.filter((change) => !isAllowed(
+        change.path,
+        args.spec.writeAllowlist,
+        args.spec.forbiddenScope,
+        change.mode === "160000"
+      )).map((change) => change.path);
+      const weakened = analyzeWeakenedTests(
+        diffText,
+        args.spec.allowedTestDeletions,
+        parseDeletedPaths(nameStatus)
+      );
+      const workspaceClean = status === "";
+      const verificationCommands = new Map(
+        args.spec.verification.map((command) => [command.id, command])
+      );
       return {
-        review: consolidate(reviewRun.reviews.map((review) => ({
-          reviewer: review.reviewer,
-          report: review.report
-        }))),
-        roleLogRefs: reviewRun.roleLogRefs
+        verification: {
+          reportVersion: "1",
+          pass: acceptance.ok && workspaceClean && scopeViolations.length === 0,
+          commandResults: acceptance.commandOutcomes.map((command) => ({
+            id: command.id,
+            exitCode: command.exitCode ?? -1,
+            ok: command.exitCode !== null && !command.timedOut && (verificationCommands.get(command.id)?.expectedExitCodes.includes(
+              command.exitCode
+            ) ?? false)
+          })),
+          workspaceClean,
+          testsDeleted: weakened.testsDeleted,
+          testsSkipped: weakened.testsSkipped,
+          scopeViolations,
+          evidence: {
+            failures: [...acceptance.failures],
+            acceptance: acceptance.evidence,
+            commandOutcomes: acceptance.commandOutcomes.map((outcome) => ({
+              ...outcome,
+              args: [...outcome.args]
+            })),
+            ...args.spec.allowedTestDeletions === void 0 ? {} : { authorizedTestDeletions: [...weakened.authorizedTestDeletions] }
+          }
+        },
+        baselineDrift: ancestry.exitCode !== 0
       };
     }
   });
 }
-async function runFix(args) {
-  const outcome = await runStructuredRole({
-    role: "fixer",
-    schema: schemas5.fixReport,
-    logName: `role-fixer-round${args.round}`,
-    spec: args.spec,
-    pkg: args.pkg,
-    worktreePath: args.worktreePath,
-    deps: args.deps,
-    runId: args.runId,
-    store: args.store,
-    ...args.runStart === void 0 ? {} : { runStart: args.runStart },
-    gitObjectAccess: args.gitObjectAccess
-  });
-  return outcome.ok ? { ok: true, fix: outcome.report, roleLogRefs: outcome.roleLogRefs } : outcome;
+
+// src/pipeline/candidate-provenance.ts
+import path30 from "node:path";
+function gitFailure6(action, result) {
+  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
+  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
 }
-async function runIncrement(args) {
-  const logNameNamespace = args.logNameNamespace === void 0 ? "" : `${args.logNameNamespace}-`;
-  return runStructuredRole({
-    role: "implementer",
-    schema: schemas5.incrementReport,
-    logName: `role-implementer-${logNameNamespace}increment${args.increment}`,
-    spec: args.spec,
-    pkg: args.pkg,
-    worktreePath: args.worktreePath,
-    deps: args.deps,
-    runId: args.runId,
-    store: args.store,
-    ...args.runStart === void 0 ? {} : { runStart: args.runStart },
-    gitObjectAccess: args.gitObjectAccess
-  });
+async function checkedGit6(cwd, args, options) {
+  const result = await git(cwd, args, options);
+  if (result.exitCode !== 0) throw gitFailure6(`git ${args[0] ?? "command"}`, result);
+  return result.stdout;
+}
+function privateObjectReadOptions(access6) {
+  return {
+    env: { GIT_ALTERNATE_OBJECT_DIRECTORIES: access6.privateObjectsDir }
+  };
+}
+async function importPromotedObjects(args) {
+  const privateObjects = privateObjectReadOptions(args.access);
+  const packPrefix = path30.join(args.access.sharedObjectsDir, "pack", "pack");
+  await checkedGit6(
+    args.checkoutPath,
+    ["pack-objects", "--revs", packPrefix],
+    {
+      ...privateObjects,
+      stdin: `${args.promotedCommit}
+^${args.baselineCommit}
+`
+    }
+  );
+  await checkedGit6(args.checkoutPath, ["cat-file", "-e", `${args.promotedCommit}^{commit}`]);
+  await checkedGit6(args.checkoutPath, ["rev-parse", `${args.promotedCommit}^{tree}`]);
+  await checkedGit6(args.checkoutPath, [
+    "rev-list",
+    "--objects",
+    args.promotedCommit,
+    "--not",
+    args.baselineCommit
+  ]);
 }
 async function validateCandidateProvenance(args) {
   const phaseLabel = args.phaseLabel ?? "fix phase";
@@ -52684,113 +52482,880 @@ async function validateFixProvenance(args) {
   }
   return null;
 }
-async function verifyCandidate(args) {
-  const ps = args.deps.ps ?? getPlatformServices();
-  const namespace = args.namespace === void 0 ? "" : `${args.namespace}-`;
-  const manager = new WorktreeManager(
-    args.checkoutPath,
-    `${args.attempt.runId}-${namespace}verify`,
-    ps,
-    args.deps.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.deps.borrowedCheckoutLease }
-  );
-  const fresh = await manager.create(args.candidateCommit);
-  try {
-    const [diffText, nameOnly, nameStatus, status, ancestry] = await Promise.all([
-      checkedGit5(fresh.path, ["diff", `${args.baselineCommit}..${args.candidateCommit}`]),
-      checkedGit5(fresh.path, [
-        "diff",
-        "--name-only",
-        `${args.baselineCommit}..${args.candidateCommit}`
-      ]),
-      checkedGit5(fresh.path, [
-        "diff",
-        "--name-status",
-        "--no-renames",
-        "-z",
-        `${args.baselineCommit}..${args.candidateCommit}`
-      ]),
-      checkedGit5(fresh.path, ["status", "--porcelain"]),
-      git(fresh.path, [
-        "merge-base",
-        "--is-ancestor",
-        args.baselineCommit,
-        args.candidateCommit
-      ])
-    ]);
-    const artifact = await candidateArtifact({
-      worktreePath: fresh.path,
-      baselineCommit: args.baselineCommit,
-      candidateCommit: args.candidateCommit,
-      anchorRef: args.attempt.candidate?.anchorRef ?? "",
-      diffText
-    });
-    const verifier = new AcceptanceVerifier({
-      structural: async (structuralArgs) => {
-        const result = await structuralVerify(structuralArgs);
-        const failures = result.failures.filter(
-          (failure3) => !IGNORED_STRUCTURAL_FAILURES.has(failure3)
-        );
-        return { ...result, ok: failures.length === 0, failures };
-      }
-    });
-    const acceptance = await verifier.verify({
-      repoRoot: args.checkoutPath,
-      worktreePath: fresh.path,
-      baseCommitOid: args.baselineCommit,
-      artifact,
-      spec: args.spec,
-      ps,
-      artifactStore: args.store,
-      ...args.deps.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.deps.borrowedCheckoutLease },
-      verificationId: () => `${args.attempt.runId}-${namespace}pipeline`,
-      logNamePrefix: `${namespace}pipeline-verification`
-    });
-    const changedPaths = nameOnly.split("\n").map((line) => line.trim()).filter(Boolean);
-    const scopeViolations = changedPaths.filter((pathname) => !args.spec.writeAllowlist.some((pattern) => globMatches(pattern, pathname)) || args.spec.forbiddenScope.some((pattern) => globMatches(pattern, pathname)));
-    const weakened = analyzeWeakenedTests(
-      diffText,
-      args.spec.allowedTestDeletions,
-      parseDeletedPaths(nameStatus)
-    );
-    const workspaceClean = status === "";
-    const verificationCommands = new Map(
-      args.spec.verification.map((command) => [command.id, command])
-    );
-    return {
-      verification: {
-        reportVersion: "1",
-        pass: acceptance.ok && workspaceClean && scopeViolations.length === 0,
-        commandResults: acceptance.commandOutcomes.map((command) => ({
-          id: command.id,
-          exitCode: command.exitCode ?? -1,
-          ok: command.exitCode !== null && !command.timedOut && (verificationCommands.get(command.id)?.expectedExitCodes.includes(
-            command.exitCode
-          ) ?? false)
-        })),
-        workspaceClean,
-        testsDeleted: weakened.testsDeleted,
-        testsSkipped: weakened.testsSkipped,
-        scopeViolations,
-        evidence: {
-          failures: [...acceptance.failures],
-          acceptance: acceptance.evidence,
-          commandOutcomes: acceptance.commandOutcomes.map((outcome) => ({
-            ...outcome,
-            args: [...outcome.args]
-          })),
-          ...args.spec.allowedTestDeletions === void 0 ? {} : { authorizedTestDeletions: [...weakened.authorizedTestDeletions] }
-        }
-      },
-      baselineDrift: ancestry.exitCode !== 0
-    };
-  } finally {
-    const cleanupError = await cleanupWorktree(fresh);
-    if (cleanupError !== null) {
-      logger.warn("pipeline verification worktree could not be cleaned up", {
-        error: redact(cleanupError instanceof Error ? cleanupError.message : String(cleanupError))
-      });
+
+// src/git/ref-namespace.ts
+var SLICE_REF_PREFIX = "refs/claude-architect/slices/";
+
+// src/pipeline/slice-runner.ts
+var SliceExecutionError = class extends RuntimeError {
+  constructor(message, failure3) {
+    super(message);
+    this.failure = failure3;
+    this.name = "SliceExecutionError";
+  }
+  failure;
+};
+function findSliceExecutionError(error51) {
+  if (error51 instanceof SliceExecutionError) return error51;
+  if (error51 instanceof AggregateError) {
+    for (const nested of error51.errors) {
+      const found = findSliceExecutionError(nested);
+      if (found !== null) return found;
     }
   }
+  return null;
+}
+function scopeSpecToSlice(spec, slice) {
+  const scoped = structuredClone({ ...spec, ...slice });
+  delete scoped.slices;
+  return scoped;
+}
+function gitFailure7(action, result) {
+  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
+  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
+}
+async function checkedGit7(cwd, args, options) {
+  const result = await git(cwd, args, options);
+  if (result.exitCode !== 0) throw gitFailure7(`git ${args[0] ?? "command"}`, result);
+  return result.stdout;
+}
+function temporarySliceRef(runId, index, attempt) {
+  return `${SLICE_REF_PREFIX}${runId}/slice-${index}-attempt-${attempt}`;
+}
+async function createTemporarySliceRef(checkoutPath, temporaryRef) {
+  const result = await git(checkoutPath, [
+    "update-ref",
+    "--no-deref",
+    temporaryRef.ref,
+    temporaryRef.oid,
+    "0".repeat(temporaryRef.oid.length)
+  ]);
+  if (result.exitCode !== 0) throw gitFailure7("create temporary slice ref", result);
+}
+async function cleanupTemporarySliceRefs(checkoutPath, temporaryRefs) {
+  const errors = [];
+  for (const temporaryRef of [...temporaryRefs].reverse()) {
+    try {
+      const result = await git(checkoutPath, [
+        "update-ref",
+        "--no-deref",
+        "-d",
+        temporaryRef.ref,
+        temporaryRef.oid
+      ]);
+      if (result.exitCode !== 0) {
+        errors.push(gitFailure7("delete temporary slice ref", result));
+      }
+    } catch (error51) {
+      errors.push(error51);
+    }
+  }
+  return errors;
+}
+function describePriorAttempts(attempts) {
+  return attempts.map((entry) => {
+    const failed = (entry.verification?.commandResults ?? []).filter((command) => !command.ok).map((command) => `${command.id} (exit ${String(command.exitCode)})`);
+    const blocking = (entry.perSliceReview?.findings ?? []).filter((finding) => finding.severity === "blocker" || finding.severity === "major").map((finding) => `${finding.severity} at ${finding.location}: ${finding.claim}`);
+    return [
+      `attempt ${entry.attempt} -> ${entry.route}`,
+      `  reasons: ${entry.reasons.join("; ") || "(none recorded)"}`,
+      ...failed.length === 0 ? [] : [`  failing verification: ${failed.join(", ")}`],
+      ...blocking.length === 0 ? [] : [`  blocking findings:
+    ${blocking.join("\n    ")}`]
+    ].join("\n");
+  }).join("\n\n");
+}
+function verificationTestEvidence(verification) {
+  return {
+    pass: verification.pass,
+    commandResults: verification.commandResults.map((command) => ({ ...command })),
+    workspaceClean: verification.workspaceClean,
+    testsDeleted: verification.testsDeleted,
+    testsSkipped: verification.testsSkipped,
+    scopeViolations: [...verification.scopeViolations]
+  };
+}
+function sliceTestEvidence(slices) {
+  return JSON.stringify(slices.map((slice) => ({
+    sliceIndex: slice.index,
+    verification: slice.verification === null ? null : verificationTestEvidence(slice.verification),
+    attempts: slice.attempts.map((attempt) => ({
+      attempt: attempt.attempt,
+      verification: attempt.verification === null ? null : verificationTestEvidence(attempt.verification)
+    }))
+  })));
+}
+function testEvidence(attempt) {
+  return JSON.stringify(attempt.executedVerification.map((outcome) => ({
+    id: outcome.id,
+    exitCode: outcome.exitCode,
+    timedOut: outcome.timedOut
+  })));
+}
+async function runSliceReview(args) {
+  const ps = args.deps.ps ?? getPlatformServices();
+  return withManagedWorktree({
+    manager: new WorktreeManager(
+      args.checkoutPath,
+      `${args.runId}-${args.namespace}-review`,
+      ps,
+      args.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.borrowedCheckoutLease }
+    ),
+    commit: args.candidateCommit,
+    cleanupFailureMessage: "slice review failed and its worktree could not be cleaned up",
+    run: async (worktreePath) => {
+      const diffText = await checkedGit7(worktreePath, [
+        "diff",
+        `${args.baselineCommit}..${args.candidateCommit}`
+      ]);
+      const reviewRun = await runReviews({
+        reviewers: args.reviewers,
+        spec: args.spec,
+        pkg: {
+          spec: args.spec,
+          baselineCommit: args.baselineCommit,
+          candidateCommit: args.candidateCommit,
+          candidateDiff: diffText,
+          testEvidence: JSON.stringify(verificationTestEvidence(args.verification))
+        },
+        worktreePath,
+        deps: args.deps,
+        runId: args.runId,
+        round: 1,
+        store: args.store,
+        logNameNamespace: args.namespace
+      });
+      if (!reviewRun.ok) {
+        throw new SliceExecutionError(
+          `slice review did not produce valid structured output (see ${reviewRun.failedRoleLogRef})`,
+          "producer-failure"
+        );
+      }
+      return {
+        review: consolidate(reviewRun.reviews.map((review) => ({
+          reviewer: review.reviewer,
+          report: review.report
+        }))),
+        roleLogRefs: reviewRun.roleLogRefs
+      };
+    }
+  });
+}
+var SliceRunner = class {
+  producerRuntime;
+  runDecision;
+  platformSafety;
+  ps;
+  runRole;
+  roleRunner;
+  constructor(dependencies = {}) {
+    this.producerRuntime = dependencies.producerRuntime ?? producerRuntime;
+    this.runDecision = dependencies.runDecision ?? runDecision;
+    this.platformSafety = dependencies.platformSafety ?? platformSafety;
+    this.ps = dependencies.ps ?? getPlatformServices();
+    this.runRole = dependencies.runRole ?? runRole;
+    this.roleRunner = dependencies.roleRunner;
+  }
+  async run(options) {
+    const { context, slices, baselineCommit, attempt } = options;
+    const maxRounds = options.budgets?.maxRounds ?? options.maxRounds ?? 3;
+    const concurrency = options.concurrency ?? 1;
+    const temporarySliceRefs2 = [];
+    const completedSlices = [];
+    let currentCommit = baselineCommit;
+    const results = [];
+    try {
+      for (const wave of planSliceWaves(slices, concurrency)) {
+        const base = currentCommit;
+        const outcomes = await Promise.all(wave.indices.map(async (index) => {
+          const slice = slices[index - 1];
+          let roundsUsed = 0;
+          const attempts = [];
+          while (true) {
+            let sourceAttempt;
+            if (roundsUsed === 0 && index === 1 && options.initialAttempt !== void 0) {
+              sourceAttempt = options.initialAttempt;
+            } else {
+              const namespace = `slice-${index}-attempt-${roundsUsed}`;
+              const scopedSpec = scopeSpecToSlice(context.spec, slice);
+              sourceAttempt = await withManagedWorktree({
+                manager: new WorktreeManager(
+                  context.checkoutPath,
+                  `${context.runId}-${namespace}`,
+                  this.ps,
+                  context.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: context.borrowedCheckoutLease }
+                ),
+                commit: base,
+                cleanupFailureMessage: "slice implementation failed and its worktree could not be cleaned up",
+                run: async (worktreePath) => {
+                  let gitObjectAccess;
+                  try {
+                    gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
+                  } catch {
+                    throw new SliceExecutionError(
+                      "slice implementer git object isolation could not be established",
+                      "sandbox-violation"
+                    );
+                  }
+                  await context.emitStatus("implementing", {
+                    sliceIndex: index,
+                    role: "implementer"
+                  });
+                  const roleDeps = {
+                    ps: this.ps,
+                    runRole: this.runRole,
+                    ...this.roleRunner === void 0 ? {} : { roleRunner: this.roleRunner },
+                    ...options.registry === void 0 ? {} : { registry: options.registry },
+                    ...options.abortSignal === void 0 ? {} : { abortSignal: options.abortSignal }
+                  };
+                  const incrementRun = await runIncrement({
+                    spec: scopedSpec,
+                    pkg: {
+                      spec: scopedSpec,
+                      baselineCommit: base,
+                      candidateCommit: base,
+                      candidateDiff: "",
+                      testEvidence: completedSlices.length === 0 ? testEvidence(attempt) : sliceTestEvidence(completedSlices),
+                      ...attempts.length === 0 ? {} : { priorAttempts: describePriorAttempts(attempts) }
+                    },
+                    worktreePath,
+                    deps: roleDeps,
+                    runId: context.runId,
+                    increment: roundsUsed + 1,
+                    store: context.store,
+                    gitObjectAccess,
+                    ...context.runStart === void 0 ? {} : { runStart: context.runStart },
+                    logNameNamespace: namespace
+                  });
+                  if (!incrementRun.ok) {
+                    throw new SliceExecutionError(
+                      `slice implementer did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
+                      incrementRun.failure
+                    );
+                  }
+                  await context.emitStatus("freezing", {
+                    sliceIndex: index,
+                    role: "implementer"
+                  });
+                  const candidateCommit = incrementRun.report.candidateCommit;
+                  const provenanceFailure = await validateCandidateProvenance({
+                    worktreePath,
+                    previousCandidateCommit: base,
+                    candidateCommit,
+                    gitObjectAccess,
+                    phaseLabel: "slice implementer"
+                  });
+                  if (provenanceFailure !== null) {
+                    throw new SliceExecutionError(
+                      provenanceFailure.reason,
+                      provenanceFailure.failure
+                    );
+                  }
+                  if (candidateCommit !== base) {
+                    try {
+                      await importPromotedObjects({
+                        checkoutPath: context.checkoutPath,
+                        baselineCommit: base,
+                        promotedCommit: candidateCommit,
+                        access: gitObjectAccess
+                      });
+                    } catch {
+                      throw new SliceExecutionError(
+                        "slice candidate objects could not be imported into the shared git object store",
+                        "sandbox-violation"
+                      );
+                    }
+                    const temporaryRef = {
+                      ref: temporarySliceRef(context.runId, index, roundsUsed),
+                      oid: candidateCommit
+                    };
+                    try {
+                      await createTemporarySliceRef(context.checkoutPath, temporaryRef);
+                    } catch {
+                      throw new SliceExecutionError(
+                        "slice candidate temporary ref could not be established",
+                        "sandbox-violation"
+                      );
+                    }
+                    temporarySliceRefs2.push(temporaryRef);
+                  }
+                  await context.emitStatus("verifying", { sliceIndex: index });
+                  const verified = await verifyCandidate({
+                    checkoutPath: context.checkoutPath,
+                    spec: scopedSpec,
+                    deps: {
+                      ps: this.ps,
+                      ...context.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: context.borrowedCheckoutLease }
+                    },
+                    attempt,
+                    baselineCommit: base,
+                    candidateCommit,
+                    store: context.store,
+                    namespace
+                  });
+                  let perSliceReview2 = null;
+                  const roleLogRefs = [...incrementRun.roleLogRefs];
+                  if (options.reviewConfig?.perSlice === true) {
+                    const reviewers = (options.reviewers ?? ["reviewer-correctness"]).map((r) => r.startsWith("reviewer-") ? r.replace("reviewer-", "") : r);
+                    const reviewed = await runSliceReview({
+                      checkoutPath: context.checkoutPath,
+                      spec: scopedSpec,
+                      deps: roleDeps,
+                      runId: context.runId,
+                      baselineCommit: base,
+                      candidateCommit,
+                      namespace,
+                      reviewers,
+                      verification: verified.verification,
+                      store: context.store,
+                      borrowedCheckoutLease: context.borrowedCheckoutLease
+                    });
+                    perSliceReview2 = reviewed.review;
+                    roleLogRefs.push(...reviewed.roleLogRefs);
+                  }
+                  return {
+                    candidateCommit,
+                    verification: verified.verification,
+                    perSliceReview: perSliceReview2,
+                    roleLogRefs
+                  };
+                }
+              });
+            }
+            const currentAttempt = structuredClone(sourceAttempt);
+            const perSliceReview = currentAttempt.perSliceReview ?? null;
+            const route2 = routeSlice({
+              verification: currentAttempt.verification,
+              perSliceReview,
+              roundsUsed,
+              maxRounds,
+              hardBlocker: currentAttempt.hardBlocker ?? false
+            });
+            const evidence = {
+              sliceIndex: index,
+              attempt: roundsUsed,
+              candidateCommit: currentAttempt.candidateCommit,
+              verification: currentAttempt.verification,
+              perSliceReview,
+              route: route2.route,
+              reasons: [...route2.reasons],
+              roleLogRefs: [...currentAttempt.roleLogRefs ?? []]
+            };
+            await context.store.writePipelineArtifact(
+              `slice-${evidence.sliceIndex}-attempt-${evidence.attempt}`,
+              evidence
+            );
+            if (options.onAttempt) {
+              await options.onAttempt(structuredClone(evidence));
+            }
+            attempts.push(evidence);
+            const pipelineSlice = {
+              index,
+              objective: slice.objective,
+              route: route2.route,
+              candidateCommit: currentAttempt.candidateCommit,
+              roundsUsed,
+              verification: currentAttempt.verification,
+              perSliceReview,
+              reasons: [...route2.reasons],
+              attempts: attempts.map((entry) => ({
+                ...entry,
+                reasons: [...entry.reasons],
+                roleLogRefs: [...entry.roleLogRefs]
+              })),
+              roleLogRefs: attempts.flatMap((entry) => entry.roleLogRefs)
+            };
+            if (route2.route === "repair") {
+              roundsUsed += 1;
+              continue;
+            }
+            return { slice: pipelineSlice, advanced: route2.route === "advance" };
+          }
+        }));
+        for (const outcome of outcomes) {
+          const composed = wave.indices.length === 1 ? outcome.slice.candidateCommit : await composeSliceOntoHead({
+            checkoutPath: context.checkoutPath,
+            runId: context.runId,
+            head: currentCommit,
+            base,
+            sliceCommit: outcome.slice.candidateCommit,
+            sliceIndex: outcome.slice.index
+          });
+          const recorded = { ...outcome.slice, candidateCommit: composed };
+          results.push(recorded);
+          completedSlices.push(structuredClone(recorded));
+          await context.store.writePipelineArtifact(`slice-${recorded.index}`, recorded);
+          if (options.onSlice) {
+            await options.onSlice(structuredClone(recorded));
+          }
+          if (!outcome.advanced) {
+            return {
+              slices: results,
+              finalCandidateCommit: currentCommit,
+              haltedSliceIndex: recorded.index,
+              temporarySliceRefs: [...temporarySliceRefs2]
+            };
+          }
+          currentCommit = composed;
+        }
+      }
+      return {
+        slices: results,
+        finalCandidateCommit: currentCommit,
+        haltedSliceIndex: null,
+        temporarySliceRefs: [...temporarySliceRefs2]
+      };
+    } catch (error51) {
+      await cleanupTemporarySliceRefs(context.checkoutPath, temporarySliceRefs2);
+      throw error51;
+    }
+  }
+};
+
+// src/pipeline/run-context.ts
+function createRunContext(options) {
+  const {
+    runId,
+    checkoutPath,
+    spec,
+    store,
+    ps,
+    borrowedCheckoutLease,
+    runStart,
+    onPhase,
+    sliceCount
+  } = options;
+  return {
+    runId,
+    checkoutPath,
+    spec,
+    store,
+    ps,
+    ...borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease },
+    ...runStart === void 0 ? {} : { runStart },
+    async emitStatus(phase, fields) {
+      await transitionRunStatusSafely(store, runId, phase, {
+        sliceIndex: fields?.sliceIndex ?? null,
+        sliceCount: fields?.sliceCount ?? sliceCount ?? null,
+        round: fields?.round ?? null,
+        role: fields?.role ?? null,
+        producerId: fields?.producerId ?? null,
+        detail: fields?.detail ?? null
+      });
+    },
+    async notePhase(phase) {
+      try {
+        await onPhase?.(phase);
+      } catch {
+      }
+    }
+  };
+}
+
+// src/pipeline/advisor-stage.ts
+var schemas5 = loadSchemas();
+function frozenAdvisorEvidence(spec, pipelineResult, reviewSnapshot) {
+  const finalRound = pipelineResult.rounds.at(-1) ?? null;
+  return {
+    runId: pipelineResult.runId,
+    specification: {
+      objective: spec.objective,
+      successCriteria: [...spec.successCriteria],
+      writeAllowlist: [...spec.writeAllowlist],
+      forbiddenScope: [...spec.forbiddenScope]
+    },
+    baselineCommitOid: reviewSnapshot.baseCommitOid,
+    candidateCommitOid: reviewSnapshot.candidateCommitOid,
+    candidateTreeOid: reviewSnapshot.candidateTreeOid,
+    candidateManifestHash: reviewSnapshot.manifestHash,
+    reviewSnapshot: structuredClone(reviewSnapshot),
+    finalRound: structuredClone(finalRound),
+    reviewAndFixHistory: structuredClone(pipelineResult.rounds),
+    trustedVerification: structuredClone(pipelineResult.verification),
+    gate: structuredClone(pipelineResult.gate),
+    pipelineStatus: pipelineResult.status
+  };
+}
+function failureReport(failure3, failedRoleLogRef) {
+  return {
+    reportVersion: "1",
+    verdict: "human-decision-required",
+    rationale: `The final advisor did not produce an approving valid report (${failure3}; see ${failedRoleLogRef}).`,
+    risks: [],
+    coverageGaps: ["A fresh confined advisor review is unavailable."]
+  };
+}
+function assertSameFrozenArtifact(label, providedHash, archivedHash) {
+  if (providedHash !== archivedHash) {
+    throw new RuntimeError(`${label} differs from the durable archived artifact`);
+  }
+}
+function advisorExecutionDiagnostic(error51) {
+  const detail = error51 instanceof Error ? `${error51.name}: ${error51.message}` : String(error51);
+  return redact(detail).slice(0, 2e3);
+}
+async function runAdvisorStage(args) {
+  const store = args.store ?? new ArtifactStore(args.runId);
+  const statusStore = new ArtifactStore(args.runId);
+  await transitionRunStatusSafely(statusStore, args.runId, "advisor", {
+    round: null,
+    role: "advisor",
+    detail: null
+  });
+  try {
+    const [archivedPipelineResult, archivedReviewSnapshot, archivedSpec] = await Promise.all([
+      store.readPipelineArtifact(args.runId, "pipeline-result"),
+      store.readReviewSnapshot(args.runId),
+      store.readPipelineArtifact(args.runId, "delegation-spec")
+    ]);
+    if (archivedPipelineResult === null) {
+      throw new RuntimeError("advisor stage requires a durable archived PipelineResult");
+    }
+    if (archivedReviewSnapshot === null) {
+      throw new RuntimeError("advisor stage requires a durable review snapshot");
+    }
+    if (archivedSpec === null) {
+      throw new RuntimeError("advisor stage requires a durable archived delegation specification");
+    }
+    if (!schemas5.delegationSpec(archivedSpec)) {
+      throw new RuntimeError("advisor stage archived delegation specification is invalid");
+    }
+    const suppliedSpec = redactRecord(structuredClone(args.spec));
+    if (canonicalArtifactHash(suppliedSpec) !== canonicalArtifactHash(archivedSpec)) {
+      throw new RuntimeError("advisor stage specification differs from the durable archived specification");
+    }
+    if (archivedPipelineResult.runId !== args.runId || archivedReviewSnapshot.runId !== args.runId) {
+      throw new RuntimeError("advisor stage run identity does not match its durable evidence");
+    }
+    if (args.pipelineResult !== void 0) {
+      assertSameFrozenArtifact(
+        "pipeline result",
+        pipelineResultHash(args.pipelineResult),
+        pipelineResultHash(archivedPipelineResult)
+      );
+    }
+    if (args.reviewSnapshot !== void 0) {
+      assertSameFrozenArtifact(
+        "review snapshot",
+        reviewSnapshotHash(args.reviewSnapshot),
+        reviewSnapshotHash(archivedReviewSnapshot)
+      );
+    }
+    const advisorSpec = {
+      ...structuredClone(archivedSpec),
+      context: ""
+    };
+    const pkg = {
+      spec: advisorSpec,
+      baselineCommit: archivedReviewSnapshot.baseCommitOid,
+      candidateCommit: archivedReviewSnapshot.candidateCommitOid,
+      candidateDiff: archivedReviewSnapshot.patch,
+      testEvidence: JSON.stringify({
+        evidence: archivedReviewSnapshot.evidence,
+        executedVerification: archivedReviewSnapshot.executedVerification,
+        finalVerification: archivedPipelineResult.verification
+      }),
+      advisorEvidence: frozenAdvisorEvidence(
+        advisorSpec,
+        archivedPipelineResult,
+        archivedReviewSnapshot
+      )
+    };
+    const advisorEvidenceText = JSON.stringify(pkg.advisorEvidence, null, 2);
+    let outcome;
+    if (!canRenderUntrustedBlockExactly(advisorEvidenceText)) {
+      const failedRoleLogRef = await store.writeLog(
+        "role-advisor-final",
+        "advisor was not launched: the exact frozen evidence package exceeds the bounded role input\n"
+      );
+      outcome = {
+        ok: false,
+        failure: "invalid-output",
+        failedRoleLogRef,
+        roleLogRefs: [failedRoleLogRef]
+      };
+    } else {
+      try {
+        outcome = await runStructuredRole({
+          role: "advisor",
+          schema: schemas5.advisorReport,
+          logName: "role-advisor-final",
+          spec: advisorSpec,
+          pkg,
+          worktreePath: args.worktreePath,
+          deps: args.deps,
+          runId: args.runId,
+          store
+        });
+      } catch (error51) {
+        const failedRoleLogRef = await store.writeLog(
+          "role-advisor-final",
+          `advisor execution failed before producing a classified result: ${advisorExecutionDiagnostic(error51)}
+`
+        );
+        outcome = {
+          ok: false,
+          failure: "producer-failure",
+          failedRoleLogRef,
+          roleLogRefs: [failedRoleLogRef]
+        };
+      }
+    }
+    const report = outcome.ok ? redactRecord(outcome.report) : failureReport(outcome.failure, outcome.failedRoleLogRef);
+    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+      pipelineResult: archivedPipelineResult,
+      reviewSnapshot: archivedReviewSnapshot,
+      advisor: report,
+      evaluatedAt: args.evaluatedAt
+    }));
+    await transitionRunStatusSafely(statusStore, args.runId, "gating", {
+      role: "advisor"
+    });
+    await store.writePostPipelineAutopilotArtifacts({
+      pipelineResult: archivedPipelineResult,
+      reviewSnapshot: archivedReviewSnapshot,
+      advisorReport: report,
+      eligibility
+    });
+    advisorReportHash(report);
+    await transitionRunStatusSafely(
+      statusStore,
+      args.runId,
+      outcome.ok ? "done" : "failed",
+      {
+        role: "advisor",
+        detail: outcome.ok ? report.verdict : outcome.failure
+      }
+    );
+    return {
+      report,
+      eligibility,
+      failure: outcome.ok ? null : outcome.failure,
+      roleLogRefs: outcome.roleLogRefs
+    };
+  } catch (error51) {
+    await transitionRunStatusSafely(statusStore, args.runId, "failed", {
+      role: "advisor",
+      detail: error51 instanceof Error ? error51.message : "advisor stage failed unexpectedly"
+    });
+    throw error51;
+  }
+}
+
+// src/pipeline/pipeline-runtime.ts
+var schemas6 = loadSchemas();
+var CANDIDATE_REF_PREFIX2 = "refs/claude-architect/candidates/";
+function gitFailure8(action, result) {
+  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
+  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
+}
+async function checkedGit8(cwd, args, options) {
+  const result = await git(cwd, args, options);
+  if (result.exitCode !== 0) throw gitFailure8(`git ${args[0] ?? "command"}`, result);
+  return result.stdout;
+}
+function failedResult(attempt, rounds, finalCandidateCommit, reason, failure3 = "producer-failure", increments = [], slices = [], haltedSliceIndex = null) {
+  return {
+    runId: attempt.runId,
+    status: "failed",
+    attempt,
+    increments,
+    slices,
+    haltedSliceIndex,
+    rounds,
+    verification: null,
+    gate: {
+      decisionReady: false,
+      requiresHumanDecision: false,
+      reasons: [reason]
+    },
+    finalCandidateCommit,
+    failure: failure3
+  };
+}
+var MAX_PROGRESS_NOTES_LENGTH = 8e3;
+var PROGRESS_TRUNCATION_NOTE = "\n\n[progress notes truncated]";
+function composeProgressNotes(previous) {
+  const summary = "producerSummary" in previous ? previous.producerSummary ?? previous.summary : previous.summary;
+  const nextSteps = "nextSteps" in previous ? previous.nextSteps : void 0;
+  const rendered = redact([
+    `Summary:
+${summary}`,
+    ...nextSteps === void 0 ? [] : [`Next steps:
+${nextSteps}`]
+  ].join("\n\n"));
+  if (rendered.length <= MAX_PROGRESS_NOTES_LENGTH) return rendered;
+  return `${rendered.slice(
+    0,
+    MAX_PROGRESS_NOTES_LENGTH - PROGRESS_TRUNCATION_NOTE.length
+  )}${PROGRESS_TRUNCATION_NOTE}`;
+}
+function attemptLogRefs(attempt) {
+  return [.../* @__PURE__ */ new Set([
+    attempt.logsRef,
+    ...attempt.executedVerification.flatMap((outcome) => [outcome.stdoutRef, outcome.stderrRef])
+  ])];
+}
+var SlicedFailureArchiveError = class extends RuntimeError {
+  constructor(cause) {
+    super(cause instanceof Error ? cause.message : "sliced failure archival failed");
+    this.cause = cause;
+    this.name = "SlicedFailureArchiveError";
+  }
+  cause;
+};
+function containsSlicedFailureArchiveError(error51) {
+  if (error51 instanceof SlicedFailureArchiveError) return true;
+  if (!(error51 instanceof AggregateError)) return false;
+  return error51.errors.some(containsSlicedFailureArchiveError);
+}
+function failedAttemptStatus(failure3) {
+  if (failure3 === "unavailable" || failure3 === "authentication-required") return "unavailable";
+  if (failure3 === "cancelled") return "cancelled";
+  return "failed";
+}
+async function archiveSlicedFailure(args) {
+  try {
+    const manifest = await args.store.readManifest(args.attempt.runId);
+    if (manifest === null) {
+      throw new RuntimeError("run manifest is missing while archiving sliced failure");
+    }
+    const retainCandidate = args.failure === "verification-failure";
+    if (!retainCandidate && args.attempt.candidate !== null) {
+      const candidate = args.attempt.candidate;
+      const expectedRef = `${CANDIDATE_REF_PREFIX2}${args.attempt.runId}`;
+      if (candidate.anchorRef !== expectedRef) {
+        throw new RuntimeError("sliced candidate anchor does not match run id");
+      }
+      const deleted = await git(args.checkoutPath, [
+        "update-ref",
+        "--no-deref",
+        "-d",
+        candidate.anchorRef,
+        candidate.candidateCommitOid
+      ]);
+      if (deleted.exitCode !== 0) throw gitFailure8("delete sliced candidate anchor", deleted);
+    }
+    const failedAttempt = {
+      ...args.attempt,
+      status: failedAttemptStatus(args.failure),
+      failure: args.failure,
+      summary: args.reason,
+      candidate: retainCandidate ? args.attempt.candidate : null,
+      unresolvedIssues: [...args.attempt.unresolvedIssues, args.reason],
+      evidence: {
+        ...args.attempt.evidence,
+        pipelineFailure: { failure: args.failure, reason: args.reason }
+      }
+    };
+    await args.store.promoteTerminalArtifacts({ result: failedAttempt, manifest });
+    return failedAttempt;
+  } catch (error51) {
+    if (error51 instanceof SlicedFailureArchiveError) throw error51;
+    throw new SlicedFailureArchiveError(error51);
+  }
+}
+async function archiveSliceExecutionError(args) {
+  const sliceError = findSliceExecutionError(args.error);
+  if (sliceError === null) throw args.error;
+  try {
+    return {
+      sliceError,
+      failedAttempt: await archiveSlicedFailure({
+        checkoutPath: args.checkoutPath,
+        attempt: args.attempt,
+        failure: sliceError.failure,
+        reason: sliceError.message,
+        store: args.store
+      })
+    };
+  } catch (archiveError) {
+    throw new AggregateError(
+      [args.error, archiveError],
+      "sliced pipeline failed and its attempt result could not be archived"
+    );
+  }
+}
+async function candidateArtifact2(args) {
+  const artifact = {
+    baseCommitOid: args.baselineCommit,
+    candidateTreeOid: (await checkedGit8(
+      args.worktreePath,
+      ["rev-parse", `${args.candidateCommit}^{tree}`]
+    )).trim(),
+    candidateCommitOid: args.candidateCommit,
+    anchorRef: args.anchorRef,
+    manifestHash: "",
+    changedPaths: [],
+    patch: args.diffText
+  };
+  const canonical = await recomputeManifest({
+    worktreePath: args.worktreePath,
+    baseCommitOid: args.baselineCommit,
+    artifact
+  });
+  if (canonical.manifestHash === null) {
+    throw new RuntimeError("final candidate paths collide under case folding");
+  }
+  return {
+    ...artifact,
+    changedPaths: canonical.changedPaths,
+    manifestHash: canonical.manifestHash
+  };
+}
+async function promoteFinalCandidate(args) {
+  let canonicalCommit;
+  try {
+    const objectReadOptions = args.privateObjectAccess === void 0 ? void 0 : privateObjectReadOptions(args.privateObjectAccess);
+    const finalTree = (await checkedGit8(
+      args.checkoutPath,
+      ["rev-parse", `${args.candidateCommit}^{tree}`],
+      objectReadOptions
+    )).trim();
+    canonicalCommit = (await checkedGit8(args.checkoutPath, [
+      "commit-tree",
+      finalTree,
+      "-p",
+      args.baselineCommit,
+      "-m",
+      `candidate ${args.attempt.runId}`
+    ], objectReadOptions)).trim();
+    if (args.privateObjectAccess !== void 0) {
+      await importPromotedObjects({
+        checkoutPath: args.checkoutPath,
+        baselineCommit: args.baselineCommit,
+        promotedCommit: canonicalCommit,
+        access: args.privateObjectAccess
+      });
+    }
+  } catch {
+    return null;
+  }
+  await checkedGit8(args.checkoutPath, [
+    "update-ref",
+    args.initialCandidate.anchorRef,
+    canonicalCommit,
+    args.initialCandidate.candidateCommitOid
+  ]);
+  const diffText = await checkedGit8(
+    args.checkoutPath,
+    ["diff", `${args.baselineCommit}..${canonicalCommit}`]
+  );
+  const candidate = await candidateArtifact2({
+    worktreePath: args.checkoutPath,
+    baselineCommit: args.baselineCommit,
+    candidateCommit: canonicalCommit,
+    anchorRef: args.initialCandidate.anchorRef,
+    diffText
+  });
+  const manifest = await args.store.readManifest(args.attempt.runId);
+  if (manifest === null) throw new RuntimeError("run manifest is missing during promotion");
+  const finalAttempt = { ...args.attempt, candidate };
+  await args.store.promoteTerminalArtifacts({
+    result: finalAttempt,
+    manifest: { ...manifest, candidateManifestHash: candidate.manifestHash }
+  });
+  return { attempt: finalAttempt, candidateCommit: canonicalCommit };
 }
 async function runPipeline(checkoutPath, spec, deps) {
   const ps = deps.ps ?? getPlatformServices();
@@ -52918,6 +53483,17 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
   });
   const store = new ArtifactStore(attempt.runId);
   await store.writePipelineArtifact("delegation-spec", spec);
+  const runContext = createRunContext({
+    runId: attempt.runId,
+    checkoutPath,
+    spec,
+    store,
+    ps,
+    borrowedCheckoutLease,
+    ...runStart === void 0 ? {} : { runStart },
+    ...inheritedOnPhase === void 0 ? {} : { onPhase: inheritedOnPhase },
+    sliceCount: slices.length > 0 ? slices.length : null
+  });
   if (attempt.status !== "verified-candidate" || attempt.candidate === null) {
     if (slicedMarkerEstablished) await store.clearPipelineActiveMarker();
     return failedResult(
@@ -53103,7 +53679,8 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
             namespace: initialNamespace,
             reviewers,
             verification: initialVerification.verification,
-            store
+            store,
+            borrowedCheckoutLease
           });
         } catch (error51) {
           const archived = await archiveSliceExecutionError({
@@ -53132,164 +53709,33 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
       const completedSlices = [];
       let phase;
       try {
-        phase = await runSlicePhase(slices, baselineCommit, {
-          maxRounds,
+        const sliceRunner = new SliceRunner({
+          producerRuntime: deps.producerRuntime,
+          runDecision: deps.runDecision,
+          platformSafety: deps.platformSafety,
+          ps,
+          runRole: deps.runRole,
+          roleRunner: deps.roleRunner
+        });
+        phase = await sliceRunner.run({
+          context: runContext,
+          slices,
+          baselineCommit,
+          attempt,
+          budgets: { maxRounds },
           concurrency: resolveSliceConcurrency(spec),
-          composeSlice: async (composeArgs) => composeSliceOntoHead({
-            checkoutPath,
-            runId: attempt.runId,
-            ...composeArgs
-          }),
           initialAttempt: {
             candidateCommit: currentCandidateCommit,
             verification: initialVerification.verification,
             perSliceReview: initialPerSliceReview,
             roleLogRefs: initialRoleLogRefs
           },
-          runSlice: async (slice, index, base, sliceAttempt, priorAttempts) => {
-            const namespace = `slice-${index}-attempt-${sliceAttempt}`;
-            const scopedSpec = scopeSpecToSlice(spec, slice);
-            return withManagedWorktree({
-              manager: new WorktreeManager(
-                checkoutPath,
-                `${attempt.runId}-${namespace}`,
-                ps,
-                deps.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: deps.borrowedCheckoutLease }
-              ),
-              commit: base,
-              cleanupFailureMessage: "slice implementation failed and its worktree could not be cleaned up",
-              run: async (worktreePath) => {
-                let gitObjectAccess2;
-                try {
-                  gitObjectAccess2 = await resolveLinkedWorktreeWritableRoots(worktreePath);
-                } catch {
-                  throw new SliceExecutionError(
-                    "slice implementer git object isolation could not be established",
-                    "sandbox-violation"
-                  );
-                }
-                await emitPipelineStatus("implementing", {
-                  sliceIndex: index,
-                  role: "implementer"
-                });
-                const incrementRun = await runIncrement({
-                  spec: scopedSpec,
-                  pkg: {
-                    spec: scopedSpec,
-                    baselineCommit: base,
-                    candidateCommit: base,
-                    candidateDiff: "",
-                    testEvidence: completedSlices.length === 0 ? testEvidence(attempt) : sliceTestEvidence(completedSlices),
-                    // A repair that cannot see why the last attempt was rejected
-                    // reproduces it. Bounded and redacted like any prompt data.
-                    ...priorAttempts === void 0 || priorAttempts.length === 0 ? {} : { priorAttempts: describePriorAttempts(priorAttempts) }
-                  },
-                  worktreePath,
-                  deps,
-                  runId: attempt.runId,
-                  increment: sliceAttempt + 1,
-                  store,
-                  gitObjectAccess: gitObjectAccess2,
-                  ...runStart === void 0 ? {} : { runStart },
-                  logNameNamespace: namespace
-                });
-                if (!incrementRun.ok) {
-                  throw new SliceExecutionError(
-                    `slice implementer did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
-                    incrementRun.failure
-                  );
-                }
-                await emitPipelineStatus("freezing", {
-                  sliceIndex: index,
-                  role: "implementer"
-                });
-                const candidateCommit = incrementRun.report.candidateCommit;
-                const provenanceFailure = await validateCandidateProvenance({
-                  worktreePath,
-                  previousCandidateCommit: base,
-                  candidateCommit,
-                  gitObjectAccess: gitObjectAccess2,
-                  phaseLabel: "slice implementer"
-                });
-                if (provenanceFailure !== null) {
-                  throw new SliceExecutionError(
-                    provenanceFailure.reason,
-                    provenanceFailure.failure
-                  );
-                }
-                if (candidateCommit !== base) {
-                  try {
-                    await importPromotedObjects({
-                      checkoutPath,
-                      baselineCommit: base,
-                      promotedCommit: candidateCommit,
-                      access: gitObjectAccess2
-                    });
-                  } catch {
-                    throw new SliceExecutionError(
-                      "slice candidate objects could not be imported into the shared git object store",
-                      "sandbox-violation"
-                    );
-                  }
-                  const temporaryRef = {
-                    ref: temporarySliceRef(attempt.runId, index, sliceAttempt),
-                    oid: candidateCommit
-                  };
-                  try {
-                    await createTemporarySliceRef(checkoutPath, temporaryRef);
-                  } catch {
-                    throw new SliceExecutionError(
-                      "slice candidate temporary ref could not be established",
-                      "sandbox-violation"
-                    );
-                  }
-                  temporarySliceRefs2.push(temporaryRef);
-                }
-                await emitPipelineStatus("verifying", { sliceIndex: index });
-                const verified2 = await verifyCandidate({
-                  checkoutPath,
-                  spec: scopedSpec,
-                  deps,
-                  attempt,
-                  baselineCommit: base,
-                  candidateCommit,
-                  store,
-                  namespace
-                });
-                let perSliceReview = null;
-                const roleLogRefs = [...incrementRun.roleLogRefs];
-                if (reviewConfig.perSlice === true) {
-                  const reviewed = await runSliceReview({
-                    checkoutPath,
-                    spec: scopedSpec,
-                    deps,
-                    runId: attempt.runId,
-                    baselineCommit: base,
-                    candidateCommit,
-                    namespace,
-                    reviewers,
-                    verification: verified2.verification,
-                    store
-                  });
-                  perSliceReview = reviewed.review;
-                  roleLogRefs.push(...reviewed.roleLogRefs);
-                }
-                return {
-                  candidateCommit,
-                  verification: verified2.verification,
-                  perSliceReview,
-                  roleLogRefs
-                };
-              }
-            });
-          },
-          onAttempt: (evidence) => store.writePipelineArtifact(
-            `slice-${evidence.sliceIndex}-attempt-${evidence.attempt}`,
-            evidence
-          ),
+          reviewConfig,
+          reviewers,
+          registry: deps.registry,
+          abortSignal: deps.abortSignal,
           onSlice: async (slice) => {
-            await store.writePipelineArtifact(`slice-${slice.index}`, slice);
-            completedSlices.push(structuredClone(slice));
+            completedSlices.push(slice);
           }
         });
       } catch (error51) {
@@ -53315,6 +53761,7 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
         return failed;
       }
       pipelineSlices = phase.slices;
+      temporarySliceRefs2.push(...phase.temporarySliceRefs ?? []);
       currentCandidateCommit = phase.finalCandidateCommit;
       if (phase.haltedSliceIndex !== null) {
         const halted = phase.slices.at(-1);
@@ -53448,7 +53895,7 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
             }
             await notePhase(`increment ${increment}/${maxIncrements}`);
             const previousCandidateCommit = currentCandidateCommit;
-            const diffText = await checkedGit5(candidateWorktree.path, [
+            const diffText = await checkedGit8(candidateWorktree.path, [
               "diff",
               `${baselineCommit}..${currentCandidateCommit}`
             ], privateObjectReadOptions(gitObjectAccess));
@@ -53502,12 +53949,12 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
             }
             const privateObjects = privateObjectReadOptions(gitObjectAccess);
             const [previousTree, candidateTree] = await Promise.all([
-              checkedGit5(
+              checkedGit8(
                 candidateWorktree.path,
                 ["rev-parse", `${previousCandidateCommit}^{tree}`],
                 privateObjects
               ),
-              checkedGit5(
+              checkedGit8(
                 candidateWorktree.path,
                 ["rev-parse", `${report.candidateCommit}^{tree}`],
                 privateObjects
@@ -53579,7 +54026,7 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
           );
         }
         await notePhase(`review round ${round}/${maxRounds}`);
-        const diffText = await checkedGit5(candidateWorktree.path, [
+        const diffText = await checkedGit8(candidateWorktree.path, [
           "diff",
           `${baselineCommit}..${currentCandidateCommit}`
         ], gitObjectAccess === null ? void 0 : privateObjectReadOptions(gitObjectAccess));
@@ -53784,7 +54231,14 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
           }
         }
       };
-    } else {
+    }
+    const gateClearedRecord = !gate.decisionReady ? null : {
+      clearedVersion: "1",
+      candidateCommitOid: currentCandidateCommit,
+      requiresHumanDecision: gate.requiresHumanDecision,
+      clearedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (gateClearedRecord !== null) {
       finalAttempt = {
         ...finalAttempt,
         evidence: {
@@ -53795,6 +54249,7 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
           }
         }
       };
+      await store.writePipelineGateCleared(gateClearedRecord);
     }
     await store.promoteTerminalArtifacts({
       result: finalAttempt,
@@ -53811,7 +54266,8 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
       verification: verified.verification,
       gate,
       finalCandidateCommit: currentCandidateCommit,
-      failure: null
+      failure: null,
+      pipelineGateCleared: gateClearedRecord
     };
     await store.writePipelineArtifact("pipeline-result", result);
     await notePhase(`finished: ${result.status}`);
@@ -54941,23 +55397,19 @@ async function handleAutopilotResume(checkoutPath, workflowId, deps = {}) {
     return autopilotErrorResult(error51);
   }
 }
-function isRecord7(value) {
+function isRecord8(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 async function loadArchivedRun(runId, deps) {
   const store = storeFor(runId, deps);
-  const [result, manifest] = await Promise.all([
-    store.readResult(runId),
-    store.readManifest(runId)
-  ]);
+  const snapshot = await readRunDecisionSnapshot(runId, { store });
+  const result = snapshot.result;
+  const manifest = snapshot.manifest;
   if (result === null || manifest === null) {
     throw runtimeError("archived run was not found", "run-not-found");
   }
-  if (result.runId !== runId || manifest.runId !== runId) {
-    throw runtimeError("archived run identity does not match", "archive-inconsistent");
-  }
-  if (result.candidate !== null && (manifest.baseCommitOid !== result.candidate.baseCommitOid || manifest.candidateManifestHash !== result.candidate.manifestHash || result.candidate.manifestHash !== createHash15("sha256").update(JSON.stringify(result.candidate.changedPaths)).digest("hex"))) {
-    throw runtimeError("archived candidate does not match its run manifest", "archive-inconsistent");
+  if (snapshot.coherenceErrors.length > 0) {
+    throw runtimeError(snapshot.coherenceErrors[0], "archive-inconsistent");
   }
   const canonical = await services2(deps).canonicalizePath(manifest.repoRoot);
   if (canonical.canonical !== manifest.repoRoot) {
@@ -54968,7 +55420,8 @@ async function loadArchivedRun(runId, deps) {
     result,
     manifest,
     repoRoot: canonical.canonical,
-    lockKey: canonical.gitCommonDir ?? canonical.canonical
+    lockKey: canonical.gitCommonDir ?? canonical.canonical,
+    snapshot
   };
 }
 function requireCandidate(run) {
@@ -55039,7 +55492,7 @@ function unknownProducerErrors(preferences) {
   }]);
 }
 function schemaCompatibility(input) {
-  if (isRecord7(input) && input.specVersion !== void 0 && input.specVersion !== DELEGATION_SPEC_VERSION) {
+  if (isRecord8(input) && input.specVersion !== void 0 && input.specVersion !== DELEGATION_SPEC_VERSION) {
     return {
       ok: false,
       diagnostic: `delegation spec version mismatch: request declares ${String(input.specVersion)}, runtime expects ${DELEGATION_SPEC_VERSION}`
@@ -55308,34 +55761,39 @@ async function handleReviewCandidate(checkoutPath, runId, deps = {}, expectedSpe
 function decisionAdvisoryForRun(run) {
   const refused = run.result.evidence.pipelineGateRefused;
   const incomplete = run.result.evidence.pipelineReviewIncomplete;
-  const cleared = run.result.evidence.pipelineGateCleared;
+  const rawCleared = run.result.evidence.pipelineGateCleared;
   const warnings = [];
-  if (isRecord7(refused) && Array.isArray(refused.reasons)) {
+  if (isRecord8(refused) && Array.isArray(refused.reasons)) {
     warnings.push(
       `the pipeline gate did NOT clear this candidate: ${refused.reasons.filter((r) => typeof r === "string").join("; ")}`
     );
   }
-  if (isRecord7(incomplete) && typeof incomplete.reason === "string") {
+  if (isRecord8(incomplete) && typeof incomplete.reason === "string") {
     warnings.push(`the pipeline could not complete its own review: ${incomplete.reason}`);
   }
-  const plainDelegate = run.result.evidence.plainDelegate === true && refused === void 0 && incomplete === void 0 && cleared === void 0;
+  const plainDelegate = run.result.evidence.plainDelegate === true && refused === void 0 && incomplete === void 0 && rawCleared === void 0;
   let gateCleared = false;
   if (plainDelegate) {
     gateCleared = true;
-  } else if (cleared === void 0) {
+  } else if (rawCleared === void 0) {
     if (warnings.length === 0) {
       warnings.push("the pipeline gate clearance record is missing");
     }
-  } else if (!isRecord7(cleared) || typeof cleared.candidateCommitOid !== "string" || typeof cleared.requiresHumanDecision !== "boolean") {
-    warnings.push("the pipeline gate clearance record is malformed");
-  } else if (cleared.requiresHumanDecision === true) {
-    warnings.push("the pipeline gate clearance record requires a human decision");
-  } else if (cleared.candidateCommitOid !== run.result.candidate?.candidateCommitOid) {
-    warnings.push(
-      "the pipeline gate clearance record does not match the archived candidate commit"
-    );
   } else {
-    gateCleared = true;
+    try {
+      const cleared = parsePipelineGateCleared(rawCleared);
+      if (cleared.requiresHumanDecision === true) {
+        warnings.push("the pipeline gate clearance record requires a human decision");
+      } else if (cleared.candidateCommitOid !== run.result.candidate?.candidateCommitOid) {
+        warnings.push(
+          "the pipeline gate clearance record does not match the archived candidate commit"
+        );
+      } else {
+        gateCleared = true;
+      }
+    } catch {
+      warnings.push("the pipeline gate clearance record is malformed");
+    }
   }
   return {
     warnings,
@@ -55350,7 +55808,8 @@ async function handleDecideCandidate(checkoutPath, runId, decision, expectedArti
       const decisionProvenance = deps.decisionProvenanceResolver === void 0 ? deps.decisionProvenance : await deps.decisionProvenanceResolver({
         runId,
         decision,
-        advisory: decisionAdvisoryForRun(run)
+        advisory: decisionAdvisoryForRun(run),
+        snapshot: run.snapshot
       });
       const candidate = decision === "accepted" ? requireVerifiedCandidate(run) : requireCandidate(run);
       if (expectedArtifactHash !== run.manifest.candidateManifestHash) {
@@ -55366,7 +55825,7 @@ async function handleDecideCandidate(checkoutPath, runId, decision, expectedArti
           "decision-authority-refused"
         );
       }
-      const existing = await run.store.readCandidateDecision(runId);
+      const existing = run.snapshot.decision;
       const reviewSnapshot = await sharedReviewSnapshot(
         run,
         deps,
@@ -55434,32 +55893,6 @@ async function handleIntegrateCandidate(checkoutPath, runId, expectedArtifactHas
   }
 }
 
-// src/mcp/decision-authority.ts
-var DECISION_AUTHORITY_ENV = "CLAUDE_ARCHITECT_DECISION_AUTHORITY";
-function decisionAuthority(env = process.env, warn = (message) => console.error(message)) {
-  const raw = env[DECISION_AUTHORITY_ENV];
-  if (raw === void 0 || raw === "") return "autonomous";
-  if (raw === "autonomous" || raw === "human") return raw;
-  warn(
-    `${DECISION_AUTHORITY_ENV}="${raw}" is not a recognized decision authority; requiring human confirmation. Valid values: "autonomous", "human".`
-  );
-  return "human";
-}
-function autonomousEligibility(authority, advisory) {
-  if (authority !== "autonomous") {
-    return { eligible: false, reasons: [`decision authority is "${authority}"`] };
-  }
-  const reasons = [];
-  if (advisory.unreadable) reasons.push("the candidate archive could not be read");
-  else {
-    if (!advisory.verifiedClean) {
-      reasons.push("the candidate is not an independently verified result");
-    }
-    reasons.push(...advisory.warnings);
-  }
-  return { eligible: reasons.length === 0, reasons };
-}
-
 // src/runtime/recovery-manager.ts
 import { createHash as createHash16, randomUUID as randomUUID13 } from "node:crypto";
 import { constants as constants14 } from "node:fs";
@@ -55484,7 +55917,6 @@ var WORKFLOW_OWNERSHIP_NAME = /^([0-9a-f]{64})\.json$/;
 var OID3 = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 var CANDIDATE_REF_PREFIX3 = "refs/claude-architect/candidates/";
 var BACKUP_REF_PREFIX = "refs/claude-architect/prune-backups/";
-var SLICE_REF_PREFIX2 = "refs/claude-architect/slices/";
 var MAX_QUARANTINE_REASON_BYTES = 2e3;
 var MAX_QUARANTINE_RECORD_BYTES = 4096;
 var MAX_WORKTREE_SWEEP_ISSUES = 100;
@@ -55740,7 +56172,7 @@ function escapeRegex3(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 async function temporarySliceRefs(repoRoot, runId, runGit) {
-  const prefix = `${SLICE_REF_PREFIX2}${runId}/`;
+  const prefix = `${SLICE_REF_PREFIX}${runId}/`;
   const listed = await runGit(repoRoot, [
     "for-each-ref",
     "--format=%(refname)%09%(objectname)",
@@ -58019,21 +58451,7 @@ async function reclaimPendingRemovalLocks(locksRoot, isProcessAlive2, getProcess
 }
 async function recoverStaleRuns(dependencies = {}) {
   const root = await stateRoot();
-  const supplied = dependencies.platformServices;
-  const selected = getPlatformServices();
-  const ps = Object.create(selected);
-  Object.defineProperties(ps, {
-    os: { value: supplied?.os ?? selected.os },
-    getProcessStartToken: {
-      value: (pid) => (supplied ?? selected).getProcessStartToken(pid)
-    },
-    terminateProcessTreeByPid: {
-      value: (pid, token) => (supplied ?? selected).terminateProcessTreeByPid(pid, token)
-    },
-    acquireCheckoutLock: {
-      value: (checkout) => supplied?.acquireCheckoutLock ? supplied.acquireCheckoutLock(checkout) : selected.acquireCheckoutLock(checkout)
-    }
-  });
+  const ps = dependencies.platformServices ?? getPlatformServices();
   const isProcessAlive2 = dependencies.isProcessAlive ?? defaultIsProcessAlive;
   const runGit = dependencies.git ?? git;
   if (root === null) return { recovered: [], quarantined: [] };
@@ -58424,7 +58842,13 @@ var pipelineResultOutput = external_exports.object({
   finalCandidateCommit: external_exports.string(),
   slices: external_exports.array(external_exports.record(external_exports.string(), external_exports.unknown())),
   haltedSliceIndex: external_exports.number().nullable(),
-  failure: external_exports.enum(FAILURE_PRECEDENCE).nullable().optional()
+  failure: external_exports.enum(FAILURE_PRECEDENCE).nullable().optional(),
+  pipelineGateCleared: external_exports.object({
+    clearedVersion: external_exports.literal("1"),
+    candidateCommitOid: external_exports.string(),
+    requiresHumanDecision: external_exports.boolean(),
+    clearedAt: external_exports.string().optional()
+  }).nullable().optional()
 }).strict();
 var laneEnvelopeOutput = external_exports.object({
   runId: external_exports.string(),
@@ -58924,19 +59348,27 @@ async function createServer(dependencies = {}) {
         expectedArtifactHash,
         {
           ...dependencies,
-          decisionProvenanceResolver: async ({ advisory }) => {
-            const autonomy = autonomousEligibility(
-              (dependencies.decisionAuthority ?? decisionAuthority)(),
-              advisory
+          decisionProvenanceResolver: async ({
+            advisory,
+            runId: targetRunId,
+            decision: targetDecision,
+            snapshot
+          }) => {
+            const effectiveRunId = targetRunId ?? runId;
+            const effectiveDecision = targetDecision ?? decision;
+            const verdict = runDecision.verdictFor(
+              snapshot,
+              (dependencies.decisionAuthority ?? decisionAuthority)()
             );
-            if (autonomy.eligible && decision === "accepted") {
+            if (verdict.state === "accepted" && effectiveDecision === "accepted") {
               return "policy-autonomous";
             }
+            const reasons = verdict.state === "accepted" ? advisory.warnings : verdict.reasons;
             const confirmed = await confirmWithHuman(
               server,
-              runId,
-              decision,
-              advisory.warnings
+              effectiveRunId,
+              effectiveDecision,
+              reasons
             );
             if (!confirmed.ok) {
               throw new RuntimeError(confirmed.error.diagnostic, {

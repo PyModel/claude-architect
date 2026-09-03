@@ -2,6 +2,9 @@
 
 This model covers every Producer adapter exposed through the MCP implementation path. It assumes the local OS, user account, Node.js runtime, Git executable, and Claude Code host are not already fully compromised. It does not assume that repository text, generated code, Producer output, or model-provider responses are trustworthy.
 
+Each invariant named here has exactly one owner in the source; the mapping is
+[ARCHITECTURE.md § Who owns each trust invariant](ARCHITECTURE.md#who-owns-each-trust-invariant).
+
 ## Assets
 
 Assets include the integrity and confidentiality of the user's repository and Git history; uncommitted work; credentials and environment variables; filesystem data outside the delegated scope; the correctness of verification evidence; candidate/decision integrity; plugin run logs; provider account access; and the integrity of the configured human/policy authority that may accept and integrate a candidate.

@@ -9,7 +9,7 @@ import {
 } from "../platform/bound-directory-cleanup.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
-import { boundedRedactedDiagnostic } from "./redaction.js";
+import { boundedRedactedDiagnostic, redact } from "./redaction.js";
 import { resolveStateDir } from "./state-dir.js";
 import {
   coordinateWorktreeRemoval,
@@ -29,6 +29,7 @@ import {
   syncDirectoryTreeMetadata,
 } from "../platform/durable-directory.js";
 import { RuntimeError } from "../util/errors.js";
+import { logger } from "../util/logger.js";
 import { platformPathsEqual } from "../util/platform-path.js";
 import { readStableRegularFile } from "../util/stable-file.js";
 import { git, type GitResult } from "../git/git-exec.js";
@@ -1220,6 +1221,11 @@ export class WorktreeManager {
     private readonly dependencies: WorktreeManagerDependencies = {},
   ) {}
 
+  /** The repository this manager creates worktrees for. */
+  get repositoryRoot(): string {
+    return this.repoRoot;
+  }
+
   private lockingPlatformServices(): PlatformServices {
     const supplied = this.platformServices as Partial<PlatformServices>;
     if (typeof supplied.acquireCheckoutLock === "function"
@@ -1783,5 +1789,89 @@ export class WorktreeManager {
   ): Promise<void> {
     await this.withCheckoutLease(async () =>
       await this.removeUnderLease(worktreePath, expectedIdentity));
+  }
+}
+
+/**
+ * A worktree handed out by {@link WorktreeManager.create}: a path plus the only
+ * supported way to give it back.
+ */
+export interface ManagedWorktree {
+  path: string;
+  cleanup(): Promise<void>;
+}
+
+/**
+ * Removal itself retries and falls back inside WorktreeManager. What matters
+ * here is the disposition: a worktree that still cannot be removed is reported,
+ * never substituted for the outcome of the work it held. The Producer's process
+ * tree is already terminated by `supervise` before this runs.
+ */
+export async function cleanupWorktree(worktree: ManagedWorktree): Promise<unknown | null> {
+  try {
+    await worktree.cleanup();
+    return null;
+  } catch (error) {
+    return error;
+  }
+}
+
+/**
+ * `git worktree add` mutates shared repository state, so concurrent slices are
+ * given their worktrees one at a time even though their Producers then run in
+ * parallel. Creation is a fraction of a slice's runtime; a lock collision costs
+ * the whole attempt.
+ *
+ * The queue is per repository. One process-wide queue would make an unrelated
+ * repository's creation wait behind this one — head-of-line blocking that buys
+ * nothing, because the contention being avoided is over a single repository's
+ * worktree state.
+ */
+const worktreeCreation = new Map<string, Promise<unknown>>();
+
+function createWorktreeSerially(
+  manager: WorktreeManager,
+  commit: string,
+): Promise<ManagedWorktree> {
+  const key = manager.repositoryRoot;
+  const created = (worktreeCreation.get(key) ?? Promise.resolve())
+    .catch(() => {})
+    .then(async () => await manager.create(commit));
+  const settled = created.catch(() => {});
+  worktreeCreation.set(key, settled);
+  // Drop the entry once it is the tail, so a long-lived process does not
+  // accumulate one resolved promise per repository it ever touched.
+  void settled.then(() => {
+    if (worktreeCreation.get(key) === settled) worktreeCreation.delete(key);
+  });
+  return created;
+}
+
+/**
+ * Borrow a managed worktree for the duration of `run`. Every caller in the
+ * pipeline goes through here so that creation serialization and the
+ * cleanup-failure disposition have exactly one implementation.
+ */
+export async function withManagedWorktree<T>(args: {
+  manager: WorktreeManager;
+  commit: string;
+  cleanupFailureMessage: string;
+  run: (worktreePath: string) => Promise<T>;
+  onCleanupFailure?: (error: unknown) => void;
+}): Promise<T> {
+  const worktree = await createWorktreeSerially(args.manager, args.commit);
+  try {
+    return await args.run(worktree.path);
+  } finally {
+    // A cleanup failure must stay visible without erasing the primary outcome.
+    // Replacing a graceful slice timeout with a hard runtime error loses the
+    // whole slice result and the salvage that goes with it.
+    const cleanupError = await cleanupWorktree(worktree);
+    if (cleanupError !== null) {
+      logger.warn(args.cleanupFailureMessage, {
+        error: redact(cleanupError instanceof Error ? cleanupError.message : String(cleanupError)),
+      });
+      args.onCleanupFailure?.(cleanupError);
+    }
   }
 }

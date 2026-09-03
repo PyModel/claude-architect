@@ -44,7 +44,7 @@ The unified execution layer for Producers. It coordinates capability probing, pr
 
 ### Producer Adapter
 
-An adapter at the Producer seam. It owns Producer discovery, capability observations, invocation construction, and normalization of native events and errors. It does not choose the canonical Failure Classification.
+A Producer Descriptor plus whatever custom code that CLI genuinely requires — nothing more. The descriptor states identification, executable resolution, argument layout, prompt framing, isolation model, and host state; custom code exists only where the CLI's own behavior differs, such as `buildInvocation` for an unusual argument shape or a native event format to normalize. An adapter never chooses the canonical Failure Classification and never gains acceptance authority.
 
 ### Attempt Result
 
@@ -52,7 +52,11 @@ The canonical, machine-readable outcome of a Delegation Attempt. It records arti
 
 ### Host Decision
 
-Claude's decision after reviewing a verified Candidate Artifact and its evidence. A Host Decision is `accepted`, `rejected`, or `revision-requested`.
+Claude's decision after reviewing a verified Candidate Artifact and its evidence. A Host Decision is `accepted`, `rejected`, or `revision-requested`. Evaluated via the unified `RunDecision` subsystem into one of five `RunVerdict` states: `accepted` (autonomous: true), `human-required`, `rejected`, `incomplete`, or `invalid`. Cross-file coherence of archived evidence, manifest, review snapshot, gate clearance, and decision is loaded concurrently via `readRunDecisionSnapshot`.
+
+### RunDecision & RunVerdict
+
+The unified subsystem (`src/runtime/run-decision.ts`) that determines candidate eligibility and authority clearance. It evaluates autonomous eligibility, provenance allowlists, and the accept-only rule once across all call sites, returning a typed `RunVerdict`.
 
 ### Integration Result
 
@@ -60,7 +64,7 @@ The outcome of applying an accepted Candidate Artifact to the main checkout thro
 
 ### Acceptance Verification
 
-Independent executable verification of an Attempt Result and its candidate artifacts. Acceptance Verification checks declared tests, changed paths, worktree state, command outcomes, and scope before controlled integration.
+Independent executable verification of an Attempt Result and its candidate artifacts. Acceptance Verification operates under named verification modes (`candidate`, `composed-slice`, and `final-branch`), with unified scope-checking via canonical path rules before controlled integration.
 
 ### Candidate Artifact
 
@@ -206,15 +210,28 @@ Claude Code
       |     |-- SharedPromptRenderer
       |     |-- CliProbe (with abnormal-termination guard & run-scoped cache)
       |     `-- LaunchPlanner & Supervisor
+      |-- PipelineRuntime
+      |     |-- RunContext (run-scoped facts; no shared mutable closure)
+      |     `-- SliceRunner
+      |           |-- plan wave -> worktree -> launch -> freeze -> verify -> review
+      |           `-- compose -> release anchor
       |-- AttemptRuntime
       |     |-- WorktreeManager
       |     |-- EnvironmentPolicy
-      |     |-- PlatformServices
-      |     |     |-- PosixPlatformServices
-      |     |     `-- WindowsPlatformServices
       |     |-- ProcessSupervisor
       |     |-- ArtifactStore
       |     `-- RecoveryManager
+      |-- RunDecision
+      |     |-- RunDecisionSnapshot (one read per decision)
+      |     |-- RunVerdict (accepted | human-required | rejected | incomplete | invalid)
+      |     `-- VerificationMode (candidate | composed-slice | final-branch)
+      |-- PlatformSafety
+      |     |-- withCheckoutLease / withRecoveryLease
+      |     |-- writeAtomic & DurableDirectorySession
+      |     |-- LockOwnership
+      |     `-- PlatformServices
+      |           |-- PosixPlatformServices
+      |           `-- WindowsPlatformServices
       |-- AcceptanceVerifier
       |-- ControlledIntegrator
       `-- Doctor

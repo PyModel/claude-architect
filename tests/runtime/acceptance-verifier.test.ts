@@ -153,7 +153,7 @@ describe("AcceptanceVerifier", () => {
     expect(structural).toHaveBeenCalledWith(expect.objectContaining({
       writeAllowlist: spec.writeAllowlist,
       forbiddenScope: spec.forbiddenScope,
-    }));
+    }), "candidate");
     expect(project).toHaveBeenCalledWith(expect.objectContaining({
       commands: spec.verification,
     }));

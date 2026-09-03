@@ -221,6 +221,10 @@ function requireCoherentCandidate(
 }
 
 export async function createReviewSnapshot(run: ReviewSnapshotRun): Promise<ReviewSnapshot> {
+  // Deliberately not the run-decision snapshot: this function *produces* the
+  // review snapshot that snapshot reads, and it needs neither the gate record
+  // nor the decision. Reading them here would cost three extra files and invert
+  // the dependency between an artifact and the policy that judges it.
   const [result, manifest] = await Promise.all([
     run.store.readResult(run.runId),
     run.store.readManifest(run.runId),
