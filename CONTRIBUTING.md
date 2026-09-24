@@ -14,7 +14,7 @@ as described in [SECURITY.md](SECURITY.md).
 Use Node.js 22 or newer (the current package engine requirement) and npm.
 
 ```bash
-git clone https://github.com/Pythoughts-labs/claude-architect.git
+git clone https://github.com/PyModel/claude-architect.git
 cd claude-architect
 npm install
 git config core.hooksPath .githooks

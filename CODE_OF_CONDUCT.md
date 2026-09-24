@@ -60,7 +60,7 @@ representative at an online or offline event.
 Report abusive, harassing, or otherwise unacceptable behavior only through a
 private channel: use GitHub's private **Report content** feature where it is
 available, submit a report through the repository's
-[private advisory form](https://github.com/Pythoughts-labs/claude-architect/security/advisories/new),
+[private advisory form](https://github.com/PyModel/claude-architect/security/advisories/new),
 or contact maintainer Mohamed Elkholy (`elkaix`) privately through GitHub.
 Never submit a conduct report as a public issue, discussion, pull request, or
 comment.

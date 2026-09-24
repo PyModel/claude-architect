@@ -17,7 +17,7 @@
     <circle cx="92" cy="60" r="8" fill="#ff5f57"/>
     <circle cx="120" cy="60" r="8" fill="#febc2e"/>
     <circle cx="148" cy="60" r="8" fill="#28c840"/>
-    <text x="184" y="66" font-size="20" fill="#6e7681">Pythoughts-labs/claude-architect · architect session</text>
+    <text x="184" y="66" font-size="20" fill="#6e7681">PyModel/claude-architect · architect session</text>
     <text x="1216" y="66" font-size="18" fill="#4b5563" text-anchor="end">v0.6.0</text>
     <line x1="64" y1="94" x2="1216" y2="94" stroke="#1a212c" stroke-width="1"/>
 
@@ -65,6 +65,6 @@
     <text x="846" y="552" font-size="17" fill="#6e7681">-&gt; architect reviews every diff</text>
 
     <!-- footer -->
-    <text x="66" y="606" font-size="17" fill="#5a6572">Claude Code plugin  ·  OpenCode native  ·  MIT  ·  github.com/Pythoughts-labs/claude-architect</text>
+    <text x="66" y="606" font-size="17" fill="#5a6572">Claude Code plugin  ·  OpenCode native  ·  MIT  ·  github.com/PyModel/claude-architect</text>
   </g>
 </svg>
