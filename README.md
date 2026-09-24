@@ -52,7 +52,7 @@ All agent output is an untrusted candidate, and implementers cannot approve thei
 Claude Code requires Node.js 22 or newer. Add the marketplace and install the plugin:
 
 ```bash
-claude plugin marketplace add Pythoughts-labs/claude-architect
+claude plugin marketplace add PyModel/claude-architect
 claude plugin install claude-architect@claude-architect
 claude plugin list --json
 ```
@@ -170,7 +170,7 @@ See [AGENTS.md](AGENTS.md) for architecture boundaries, trust invariants, testin
 
 ## Support and security reporting
 
-Use [GitHub Issues](https://github.com/Pythoughts-labs/claude-architect/issues) for reproducible bugs and support questions. For a suspected vulnerability, use the repository's private GitHub security reporting channel rather than a public issue. Include the plugin version, host OS/architecture, Claude Code version, Producer CLI/version, redacted diagnostics, and reproduction steps.
+Use [GitHub Issues](https://github.com/PyModel/claude-architect/issues) for reproducible bugs and support questions. For a suspected vulnerability, use the repository's private GitHub security reporting channel rather than a public issue. Include the plugin version, host OS/architecture, Claude Code version, Producer CLI/version, redacted diagnostics, and reproduction steps.
 
 ## Contributing
 

@@ -17,7 +17,7 @@ versions are unsupported; upgrade before reporting or reproducing an issue.
 ## Report a vulnerability privately
 
 Do **not** open a public issue for a suspected vulnerability. Use GitHub's
-[private vulnerability reporting form](https://github.com/Pythoughts-labs/claude-architect/security/advisories/new).
+[private vulnerability reporting form](https://github.com/PyModel/claude-architect/security/advisories/new).
 If the form is unavailable, contact maintainer Mohamed Elkholy (`elkaix`)
 privately through GitHub before sharing details publicly.
 
