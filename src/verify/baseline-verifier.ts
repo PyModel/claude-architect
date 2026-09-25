@@ -11,6 +11,7 @@ import { linkPrimaryDependencies, type DependencyLink } from "./dependency-link.
 import type { ArtifactStore } from "../runtime/artifact-store.js";
 import { boundedRedactedDiagnostic } from "../runtime/redaction.js";
 import { logger } from "../util/logger.js";
+import { isMissing } from "../util/errors.js";
 
 export interface BaselineCommandResult {
   id: string;
@@ -162,10 +163,7 @@ async function packageScriptInvokesVitest(cwd: string, scriptName: string): Prom
     // A parse error, a permission denial, or anything else is ambiguity, and
     // resolving it to `false` would let a command that collected zero tests
     // pass as a valid baseline proof.
-    if (typeof error === "object" && error !== null && "code" in error
-      && (error as NodeJS.ErrnoException).code === "ENOENT") {
-      return false;
-    }
+    if (isMissing(error)) return false;
     throw error;
   }
 }

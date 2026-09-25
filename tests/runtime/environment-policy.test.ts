@@ -28,6 +28,28 @@ afterEach(() => {
 });
 
 describe("buildEnvironment", () => {
+  it("redacts every value handed to the Producer, whatever its name", () => {
+    const result = buildEnvironment({
+      os: "darwin",
+      adapterAllowlist: [],
+      specAdditions: { VENDOR_WEBHOOK: "hooks-x9Y8z7W6v5", CACHE_DIR: "/abs/cache/path" },
+    });
+    try {
+      expect(redact("posting to hooks-x9Y8z7W6v5")).not.toContain("hooks-x9Y8z7W6v5");
+      expect(redact("cache at /abs/cache/path")).toContain("/abs/cache/path");
+    } finally {
+      result.secretRegistration.dispose();
+    }
+  });
+
+  it("refuses a spec that overrides a confinement input", () => {
+    expect(() => buildEnvironment({
+      os: "darwin",
+      adapterAllowlist: [],
+      specAdditions: { PATH: "/attacker/bin" },
+    })).toThrow('delegation environment may not override "PATH"');
+  });
+
   it("constructs a layered allowlisted environment with names-only provenance", () => {
     const result = buildEnvironment({
       os: "darwin",

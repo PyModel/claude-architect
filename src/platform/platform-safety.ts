@@ -36,37 +36,32 @@ export class PlatformSafety {
       ...(options?.runId === undefined ? {} : { runId: options.runId }),
     });
 
-    let primaryError: unknown;
-    let result: T | undefined;
-    let completed = false;
+    let result: T;
     try {
       // 1. Ambiguity gate under the acquired lease
       await this.assertAmbiguityGate(lease.repositoryIdentity);
 
       // 2. Execute caller logic under the lease
       result = await fn(lease);
-      completed = true;
-      return result;
-    } catch (error) {
-      primaryError = error;
-      throw error;
-    } finally {
+    } catch (primaryError) {
       try {
         await lease.release();
       } catch (releaseError) {
-        if (completed && options?.onReleaseError !== undefined) {
-          result = options.onReleaseError(releaseError, result as T);
-        } else if (primaryError !== undefined) {
-          const primaryMessage = primaryError instanceof Error ? primaryError.message : String(primaryError);
-          throw new AggregateError(
-            [primaryError, releaseError],
-            `${primaryMessage}; checkout lock release failed`,
-          );
-        } else {
-          throw releaseError;
-        }
+        const primaryMessage = primaryError instanceof Error ? primaryError.message : String(primaryError);
+        throw new AggregateError(
+          [primaryError, releaseError],
+          `${primaryMessage}; checkout lock release failed`,
+        );
       }
+      throw primaryError;
     }
+    try {
+      await lease.release();
+    } catch (releaseError) {
+      if (options?.onReleaseError === undefined) throw releaseError;
+      return options.onReleaseError(releaseError, result);
+    }
+    return result;
   }
 
   async withRecoveryLease<T>(

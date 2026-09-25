@@ -1,8 +1,9 @@
 import { access, lstat, opendir, readlink, realpath } from "node:fs/promises";
+import { gitSucceeded as succeeded } from "./checked-git.js";
 import path from "node:path";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { canonicalizeForScope } from "../platform/windows-platform-services.js";
-import { git, type GitResult } from "./git-exec.js";
+import { git } from "./git-exec.js";
 import { gitPathOutput } from "./git-output.js";
 
 export interface PreconditionOptions {
@@ -33,9 +34,6 @@ const MAX_NESTED_REPOSITORY_SCAN_ENTRIES = 10_000;
 
 export type InProgressOperationResult = "clear" | "in-progress" | "scan-failed";
 
-function succeeded(result: GitResult): boolean {
-  return result.exitCode === 0;
-}
 
 async function exists(filePath: string): Promise<boolean> {
   try {

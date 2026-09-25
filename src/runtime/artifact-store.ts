@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import {
-  link,
   lstat,
   mkdir,
   open,
@@ -34,7 +33,7 @@ import {
 } from "../protocol/pipeline-gate-cleared.js";
 import type { VerificationCommand } from "../protocol/delegation-spec.js";
 import { loadSchemas } from "../protocol/schema-loader.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
 import {
   containsRegisteredSecret,
   containsRegisteredSecretValue,
@@ -54,12 +53,11 @@ import {
 import { resolveStateDir } from "./state-dir.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { PlatformSafety, platformSafety, openDurableDirectorySession } from "../platform/platform-safety.js";
-import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
+import type { PlatformServices } from "../platform/platform-services.js";
 import {
   advisorReportHash,
   autopilotDecisionEligibilityProjection,
   canonicalArtifactHash,
-  eligibilityInputFromArtifacts,
   evaluateAutopilotEligibility,
   pipelineResultHash,
   type AutopilotEligibilityRecord,
@@ -67,6 +65,7 @@ import {
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { AdvisorReport } from "../pipeline/report-types.js";
 import type { RunStatus } from "./run-status.js";
+import { flushDirectory } from "../platform/durable-directory.js";
 
 const SAFE_COMPONENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const WINDOWS_RESERVED_COMPONENT = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
@@ -200,14 +199,6 @@ export function validateComponent(value: string, kind: "run id" | "log name"): v
   }
 }
 
-function errorCode(error: unknown): string | undefined {
-  return (error as NodeJS.ErrnoException).code;
-}
-
-function isMissing(error: unknown): boolean {
-  return errorCode(error) === "ENOENT";
-}
-
 function isAlreadyPresent(error: unknown): boolean {
   return errorCode(error) === "EEXIST";
 }
@@ -253,7 +244,7 @@ async function ensurePlainDirectory(directory: string): Promise<DirectoryIdentit
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
   }
-  if (created) await syncDirectory(path.dirname(directory));
+  if (created) await flushDirectory(path.dirname(directory));
   return { dev: metadata.dev, ino: metadata.ino };
 }
 
@@ -279,20 +270,6 @@ async function assertDirectoryIdentity(
     || metadata.dev !== expected.dev
     || metadata.ino !== expected.ino) {
     throw new RuntimeError("archive directory identity changed during operation");
-  }
-}
-
-async function syncDirectory(directory: string): Promise<void> {
-  let handle;
-  try {
-    handle = await open(directory, constants.O_RDONLY | NO_FOLLOW);
-    await handle.sync();
-  } catch (error) {
-    const unsupportedOnWindows = process.platform === "win32"
-      && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode(error) ?? "");
-    if (!unsupportedOnWindows) throw error;
-  } finally {
-    await handle?.close();
   }
 }
 
@@ -1261,12 +1238,12 @@ export class ArtifactStore {
       this.readAdvisorReport(),
     ]);
     if (pipelineResult === null || reviewSnapshot === null || advisorReport === null) return null;
-    return evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    return evaluateAutopilotEligibility({
       pipelineResult,
       reviewSnapshot,
       advisor: advisorReport,
       evaluatedAt: record.evaluatedAt,
-    }));
+    });
   }
 
   /**
@@ -1308,12 +1285,12 @@ export class ArtifactStore {
       throw new RuntimeError("advisor report cannot be safely persisted after redaction");
     }
     const record = validateAutopilotEligibilityRecord(structuredClone(args.eligibility), this.runId);
-    const expected = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const expected = evaluateAutopilotEligibility({
       pipelineResult: archivedPipelineResult,
       reviewSnapshot: archivedReviewSnapshot,
       advisor: sanitizedReport,
       evaluatedAt: record.evaluatedAt,
-    }));
+    });
     if (canonicalArtifactHash(expected) !== canonicalArtifactHash(record)) {
       throw new RuntimeError("post-pipeline eligibility was not derived from the supplied frozen evidence");
     }
@@ -1649,7 +1626,7 @@ export class ArtifactStore {
           await handle.close();
         }
         await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-        await syncDirectory(this.runsRoot);
+        await flushDirectory(this.runsRoot);
         await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
       } finally {
         await journalLock.release();
@@ -1686,11 +1663,11 @@ export class ArtifactStore {
     await assertDirectoryIdentity(entry.directory, entry.identity);
     await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
     await rename(entry.directory, quarantinePath);
-    await syncDirectory(this.runsRoot);
+    await flushDirectory(this.runsRoot);
     await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
     await assertDirectoryIdentity(quarantinePath, entry.identity);
     await rm(quarantinePath, { recursive: true, force: false });
-    await syncDirectory(this.runsRoot);
+    await flushDirectory(this.runsRoot);
     await this.appendCleanupRecord({
       event: "prune-cleanup-complete",
       runId: entry.runId,
@@ -1730,7 +1707,6 @@ export class ArtifactStore {
       let transaction: AnchorCleanupTransaction | null = null;
       let runsRootIdentity: DirectoryIdentity | null = null;
       let archiveRemovalCommitted = false;
-      let lease: CheckoutLock | null = null;
       try {
         // Fast path: never wait on a checkout lease for a run that still
         // advertises a live pipeline. Refuse before canonicalizing or locking.
@@ -1765,8 +1741,7 @@ export class ArtifactStore {
           return;
         }
         const safety = new PlatformSafety(platformServices);
-        await safety.withCheckoutLease(canonical.canonical, async (acquiredLease) => {
-          lease = acquiredLease;
+        await safety.withCheckoutLease(canonical.canonical, async () => {
           await assertDirectoryIdentity(entry.directory, entry.identity);
           // Re-establish authority under the lease: the manifest, terminal
           // result, and active marker may all have changed while we waited.
@@ -1813,12 +1788,12 @@ export class ArtifactStore {
           await assertDirectoryIdentity(entry.directory, entry.identity);
           await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
           await rename(entry.directory, quarantinePath);
-          await syncDirectory(this.runsRoot);
+          await flushDirectory(this.runsRoot);
           await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
           await assertDirectoryIdentity(quarantinePath, entry.identity);
           archiveRemovalCommitted = true;
           await rm(quarantinePath, { recursive: true, force: false });
-          await syncDirectory(this.runsRoot);
+          await flushDirectory(this.runsRoot);
           await transaction.commit();
           await this.appendCleanupRecord({
             event: "prune-cleanup-complete",
@@ -1861,7 +1836,7 @@ export class ArtifactStore {
               await assertDirectoryIdentity(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity(quarantinePath, entry.identity);
               await rename(quarantinePath, entry.directory);
-              await syncDirectory(this.runsRoot);
+              await flushDirectory(this.runsRoot);
               await assertDirectoryIdentity(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity(entry.directory, entry.identity);
             } else if (runDirectoryExists) {

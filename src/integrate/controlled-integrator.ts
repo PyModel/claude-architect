@@ -1,4 +1,5 @@
-import { git, type GitResult } from "../git/git-exec.js";
+import { git } from "../git/git-exec.js";
+import { gitSucceeded as succeeded } from "../git/checked-git.js";
 import { checkPreconditions } from "../git/repo-preconditions.js";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
@@ -33,9 +34,6 @@ export interface IntegrationResult {
 const CANDIDATE_REF = /^refs\/claude-architect\/candidates\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const OBJECT_ID = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 
-function succeeded(result: GitResult): boolean {
-  return result.exitCode === 0;
-}
 
 function aborted(detail: string): IntegrationResult {
   return { integration: "aborted", detail };
@@ -198,19 +196,18 @@ export async function applyCandidateTree(args: ApplyCandidateTreeArgs): Promise<
     return await executeWithLock(args.borrowedCheckoutLock, "borrowed");
   }
 
-  let terminalResult: IntegrationResult | null = null;
-  try {
-    return await safety.withCheckoutLease(args.repoRoot, async (lock) => {
-      terminalResult = await executeWithLock(lock, "owned");
-      return terminalResult;
-    });
-  } catch (error) {
-    if (terminalResult !== null) {
-      (terminalResult as IntegrationResult).detail = `${(terminalResult as IntegrationResult).detail}; checkout lock release failed`;
-      return terminalResult;
-    }
-    throw error;
-  }
+  return await safety.withCheckoutLease(
+    args.repoRoot,
+    lock => executeWithLock(lock, "owned"),
+    {
+      // The terminal result already happened; a failed release must stay
+      // visible without erasing it.
+      onReleaseError: (_releaseError, result) => ({
+        ...result,
+        detail: `${result.detail}; checkout lock release failed`,
+      }),
+    },
+  );
 }
 
 

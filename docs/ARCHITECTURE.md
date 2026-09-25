@@ -32,7 +32,7 @@ with it.
 | Roles communicate only through versioned durable artifacts | The protocol types and their canonical schemas | `src/protocol/`, `runtime/schemas/` |
 | Verification is objective, recorded, and rerunnable; Producer claims are never evidence | AcceptanceVerifier, under the verification mode RunDecision selects | `src/verify/acceptance-verifier.ts`, `src/verify/structural-verifier.ts` |
 | Acceptance is governed by a configured decision authority, and every decision's provenance is recorded | RunDecision computes the verdict; ControlledIntegrator refuses unknown provenance | `src/runtime/run-decision.ts`, `src/integrate/controlled-integrator.ts` |
-| Workflow state, decisions, evidence, and recovery data survive process failure | PlatformSafety owns durable writes, lease and lock ownership; ArtifactStore and RecoveryManager own the archive and its replay | `src/platform/platform-safety.ts`, `src/runtime/artifact-store.ts`, `src/runtime/recovery-manager.ts` |
+| Workflow state, decisions, evidence, and recovery data survive process failure | PlatformSafety owns durable writes, lease and lock ownership; ArtifactStore and RecoveryManager own the archive and its replay | `src/platform/platform-safety.ts`, `src/runtime/artifact-store.ts`, `src/runtime/recovery-*.ts` |
 | Final review covers the whole candidate branch and every attempt, not the latest patch | FinalBranchReviewer for autopilot; PipelineRuntime's final round otherwise | `src/autopilot/final-branch-reviewer.ts`, `src/pipeline/pipeline-runtime.ts` |
 
 Four subsystems carry most of this weight, and each has one job:
@@ -58,6 +58,6 @@ OpenCode, Pi, Pythinker, Antigravity CLI (`agy`), and headless Claude Code (`cla
 
 ## State and recovery
 
-`CLAUDE_PLUGIN_DATA` is mandatory outside tests. It contains `runs/`, `worktrees/`, and lock/recovery state. Archives use restrictive file modes, no-follow checks, bounded reads, atomic create/link or rename patterns, and integrity hashes. Startup recovery in `src/runtime/recovery-manager.ts` validates directory identity and process start tokens before terminating or reclaiming stale work. Git candidate refs keep frozen commits reachable until rejection, successful integration, or pruning.
+`CLAUDE_PLUGIN_DATA` is mandatory outside tests. It contains `runs/`, the records of every managed worktree namespace, and lock/recovery state; the worktrees themselves live in each repository's main checkout under `.worktrees/claude-architect/`. Archives use restrictive file modes, no-follow checks, bounded reads, atomic create/link or rename patterns, and integrity hashes. Startup recovery (`src/runtime/recovery-manager.ts`, which sequences one module per concern: `recovery-runs`, `recovery-prune-journal`, `recovery-quarantine`, `recovery-worktree-removals`, `recovery-worktree-sweep`, and `recovery-autopilot`, over `recovery-shared`) validates directory identity and process start tokens before terminating or reclaiming stale work. Git candidate refs keep frozen commits reachable until rejection, successful integration, or pruning.
 
 The architecture reduces the authority of a Producer; it does not make generated code trustworthy. Human review and the final integration boundary remain essential.

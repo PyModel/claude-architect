@@ -6,7 +6,7 @@ import { supervise } from "./process-supervisor.js";
 import { getPlatformServices } from "./select-platform.js";
 import { resolveWindowsFilesystemHelper } from "./windows-filesystem-helper.js";
 import { windowsEssentialEnvironment } from "./windows-env.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode } from "../util/errors.js";
 
 const WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS = 30_000;
 const WINDOWS_UNSUPPORTED_DIRECTORY_CODES = new Set(["EISDIR", "EINVAL", "ENOTSUP", "EPERM"]);
@@ -217,10 +217,6 @@ export interface DirectorySyncDependencies {
   ) => Promise<void>;
 }
 
-function errorCode(error: unknown): string | undefined {
-  return (error as NodeJS.ErrnoException).code;
-}
-
 async function closeDirectoryHandle(handle: FileHandle | undefined, primaryError: unknown) {
   try {
     await handle?.close();
@@ -269,6 +265,31 @@ async function syncWindowsDirectoryMetadata(
 }
 
 /** Flush directory-entry metadata after a rename, link, or unlink. */
+/**
+ * Flush a directory entry on the hot write paths (artifact, workflow and
+ * run-start records). Unlike {@link syncDirectoryMetadata} it neither proves
+ * identity nor spawns the Windows helper: on Windows, where a directory handle
+ * cannot be flushed, it is a no-op rather than a process per write.
+ */
+export async function flushDirectory(directory: string): Promise<void> {
+  let handle: FileHandle | undefined;
+  try {
+    handle = await open(directory, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    await handle.sync();
+  } catch (error) {
+    const unsupportedOnWindows = process.platform === "win32"
+      && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode(error) ?? "");
+    if (!unsupportedOnWindows) throw error;
+  } finally {
+    await handle?.close();
+  }
+}
+
+/** Exact identity: same device, inode and birth time. */
+export function sameDirectoryIdentity(left: DirectoryIdentity, right: DirectoryIdentity): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
+}
+
 export async function syncDirectoryMetadata(
   directory: string,
   dependencies: DirectorySyncDependencies = {},

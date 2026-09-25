@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import finalBranchReportSchema from "../../../runtime/schemas/final-branch-report.v1.json" with { type: "json" };
+import finalBranchReportSchema from "../../../runtime/schemas/final-branch-report.v2.json" with { type: "json" };
 import {
   branchArtifactHashOf,
   FINAL_ADVISOR_REF,
@@ -97,7 +97,7 @@ function initialState(args: {
 }): AutopilotWorkflowState {
   const taskIds = args.taskIds ?? ["task-1"];
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId: args.workflowId,
     repositoryIdentity: path.join(args.repo, ".git"),
     baseCommitOid: args.baseOid,
@@ -121,13 +121,7 @@ function initialState(args: {
       lastEntryHash: null,
     },
     finalGate: null,
-    shipping: {
-      branch: "main",
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: "2026-07-20T22:00:00.000Z",
-    },
-    ciObservations: [],
+    branch: "main",
     cleanup: null,
     terminal: null,
     createdAt: "2026-07-20T20:00:00.000Z",
@@ -384,7 +378,7 @@ function inMemoryEvidenceStore(
 
 function finalSpec(): AutopilotSpec {
   return {
-    specVersion: "1",
+    specVersion: "2",
     topic: "final-branch-fixture",
     base: { remote: "origin", branch: "main" },
     tasks: [{
@@ -414,14 +408,6 @@ function finalSpec(): AutopilotSpec {
       network: "denied",
       expectedExitCodes: [0],
     }],
-    shipping: {
-      provider: "github",
-      draft: true,
-      markReadyWhenRequiredChecksPass: true,
-      requiredChecksTimeoutMs: 600_000,
-      pullRequestTitle: "Final branch fixture",
-      pullRequestBody: "Fixture body",
-    },
   };
 }
 
@@ -538,9 +524,9 @@ async function freezeForFinalReview(f: Fixture, reviewer: FinalBranchReviewer) {
   });
 }
 
-describe("FinalBranchReport v1", () => {
+describe("FinalBranchReport v2", () => {
   const valid = {
-    reportVersion: "1",
+    reportVersion: "2",
     workflowId: "workflow-1",
     baseCommitOid: "1".repeat(40),
     headCommitOid: "2".repeat(40),
@@ -551,7 +537,7 @@ describe("FinalBranchReport v1", () => {
     taskEvidenceHashes: ["8".repeat(64)],
     eligible: true,
     reasons: [],
-    status: "ready-to-ship",
+    status: "ready-for-human-review",
     evaluatedAt: "2026-07-20T20:00:00.000Z",
   } satisfies FinalBranchReport;
 
@@ -1126,6 +1112,7 @@ describe("FinalBranchReviewer cumulative artifact", () => {
     archivedRefs.set(f.evidence.runId, [
       ...archivedRefs.get(f.evidence.runId)!,
       repairRef,
+      "logs/implementer.log",
     ].sort());
     const evidence = new Map<string, string | null>();
     const reviewer = new FinalBranchReviewer({
@@ -1137,6 +1124,8 @@ describe("FinalBranchReviewer cumulative artifact", () => {
 
     const artifact = await freezeForFinalReview(f, reviewer);
     expect(artifact.taskEvidence[0]!.evidenceRefs).toContain(repairRef);
+    // Producer transcripts never reach the final reviewers.
+    expect(artifact.taskEvidence[0]!.evidenceRefs).not.toContain("logs/implementer.log");
     expect(artifact.taskEvidence[0]!.evidence.find(item => item.reference === repairRef))
       .toMatchObject({ content: evidenceBytes(f.evidence.runId, repairRef) });
 
@@ -1331,15 +1320,18 @@ describe("FinalBranchReviewer strict final gate", () => {
       f.evidence.flatMap(evidence => expectedEvidenceRefs(evidence.evidenceRefs)),
     );
 
-    const testEvidence = JSON.parse(pkg.testEvidence) as Record<string, unknown>;
-    expect(testEvidence).toEqual(pkg.advisorEvidence);
-    expect(testEvidence).toMatchObject({
+    // Each piece of evidence appears once: reviewers get the final
+    // verification beside the diff; the advisor gets the frozen artifact,
+    // whose task evidence is already inside it.
+    expect(JSON.parse(pkg.testEvidence)).toMatchObject(passingVerification());
+    expect(Object.keys(pkg.advisorEvidence ?? {}).sort())
+      .toEqual(["artifact", "autopilotSpec", "verification"]);
+    expect(pkg.advisorEvidence).toMatchObject({
       autopilotSpec: f.spec,
       artifact: {
         patch: expectedDiff.stdout,
         taskEvidence: artifact.taskEvidence,
       },
-      taskEvidence: artifact.taskEvidence,
       verification: passingVerification(),
     });
   });
@@ -1360,7 +1352,7 @@ describe("FinalBranchReviewer strict final gate", () => {
       checkoutPath: f.repo,
     });
 
-    expect(report).toMatchObject({ eligible: true, status: "ready-to-ship", reasons: [] });
+    expect(report).toMatchObject({ eligible: true, status: "ready-for-human-review", reasons: [] });
     expect(new Set(packages).size).toBe(1);
     const evidence = await Promise.all([
       FINAL_VERIFICATION_REF,
@@ -1413,7 +1405,7 @@ describe("FinalBranchReviewer strict final gate", () => {
       checkoutPath: f.repo,
     });
 
-    expect(report).toMatchObject({ eligible: true, status: "ready-to-ship" });
+    expect(report).toMatchObject({ eligible: true, status: "ready-for-human-review" });
     expect(worktrees.size).toBe(4);
   });
 
@@ -1763,6 +1755,42 @@ describe("FinalBranchReviewer strict final gate", () => {
       if (previousPluginData === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
       else process.env.CLAUDE_PLUGIN_DATA = previousPluginData;
     }
+  });
+
+  it("resumes a review that crashed before its report without colliding on its own evidence", async () => {
+    const f = await fixture();
+    const reviewer = finalReviewerFor(f);
+    const artifact = await freezeForFinalReview(f, reviewer);
+    // The crashed attempt published evidence but never its report.
+    await writeFile(
+      path.join(f.store.workflowDirectory, FINAL_VERIFICATION_REF),
+      "{\"stale\": true}\n",
+    );
+    const request = { artifact, autopilotSpec: finalSpec(), checkoutPath: f.repo };
+
+    const report = await reviewer.runFinalReview(request);
+    // A second resume after publication returns the published report as is.
+    await expect(reviewer.runFinalReview(request)).resolves.toEqual(report);
+  });
+
+  it("refuses to resume from a report of an earlier report version", async () => {
+    const f = await fixture();
+    const reviewer = finalReviewerFor(f);
+    const artifact = await freezeForFinalReview(f, reviewer);
+    const request = { artifact, autopilotSpec: finalSpec(), checkoutPath: f.repo };
+    const report = await reviewer.runFinalReview(request);
+    const reportPath = path.join(f.store.workflowDirectory, FINAL_BRANCH_REPORT_REF);
+    await rm(reportPath);
+    await writeFile(reportPath, `${JSON.stringify({
+      ...report,
+      reportVersion: "1",
+      status: "ready-to-ship",
+    })}\n`);
+
+    await expect(reviewer.runFinalReview(request)).rejects.toMatchObject({
+      classification: "artifact-persistence-failed",
+      message: expect.stringContaining("version is unsupported"),
+    });
   });
 
   it("rejects an atomic final-report publication collision", async () => {

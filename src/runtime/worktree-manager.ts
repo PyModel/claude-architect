@@ -12,6 +12,11 @@ import { PlatformSafety } from "../platform/platform-safety.js";
 import { boundedRedactedDiagnostic, redact } from "./redaction.js";
 import { resolveStateDir } from "./state-dir.js";
 import {
+  isManagedWorktreeRoot,
+  prepareManagedWorktreeRoot as prepareCheckoutWorktreeRoot,
+  repositoryNamespaceRoot,
+} from "./managed-worktree-root.js";
+import {
   coordinateWorktreeRemoval,
   type StagedWorktreeRegistration,
 } from "./worktree-removal-coordinator.js";
@@ -28,11 +33,17 @@ import {
   syncDirectoryMetadata,
   syncDirectoryTreeMetadata,
 } from "../platform/durable-directory.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { platformPathsEqual } from "../util/platform-path.js";
 import { readStableRegularFile } from "../util/stable-file.js";
-import { git, type GitResult } from "../git/git-exec.js";
+import {
+  git,
+  type GitResult,
+  pinnedWorktreeGitDirectory,
+  pinWorktreeGitDirectory,
+  unpinWorktreeGitDirectory,
+} from "../git/git-exec.js";
 import { gitNulRecords, gitPathOutput } from "../git/git-output.js";
 import {
   canonicalizeWorktreePath,
@@ -71,12 +82,6 @@ export interface ManagedWorktreeDirectoryIdentity {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
-}
-
-function errorCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String(error.code)
-    : undefined;
 }
 
 async function syncChangedDirectories(
@@ -210,15 +215,7 @@ export async function removeQuarantinedDirectory(
 }
 
 async function managedPath(worktreePath: string): Promise<{ root: string; target: string }> {
-  const root = path.resolve(resolveStateDir(), "worktrees");
   const target = path.resolve(worktreePath);
-  let canonicalRoot: string;
-  try {
-    canonicalRoot = await realpath(root);
-  } catch (error) {
-    if (errorCode(error) !== "ENOENT") throw error;
-    canonicalRoot = path.join(await realpath(path.dirname(root)), path.basename(root));
-  }
   let canonicalTarget: string;
   try {
     canonicalTarget = await canonicalizeWorktreePath(target, true);
@@ -231,8 +228,9 @@ async function managedPath(worktreePath: string): Promise<{ root: string; target
       path.basename(target),
     );
   }
+  const canonicalRoot = path.dirname(canonicalTarget);
   if (platformPathsEqual(canonicalTarget, canonicalRoot)
-    || !platformPathsEqual(path.dirname(canonicalTarget), canonicalRoot)) {
+    || !await isManagedWorktreeRoot(canonicalRoot)) {
     throw new RuntimeError("refusing to remove unmanaged worktree path");
   }
   return { root: canonicalRoot, target: canonicalTarget };
@@ -508,7 +506,12 @@ async function worktreeRegistrationDirectory(
   worktreePath: string,
   runGit: typeof git,
 ): Promise<WorktreeRegistrationDirectory> {
-  const markerRegistrationPath = await worktreeMarkerRegistrationPath(worktreePath);
+  // A pinned worktree's registration was proven before any Producer ran; its
+  // `.git` pointer is Producer-writable and may be missing or rewritten.
+  const pinned = pinnedWorktreeGitDirectory(worktreePath);
+  const markerRegistrationPath = pinned === undefined
+    ? await worktreeMarkerRegistrationPath(worktreePath)
+    : path.resolve(pinned.gitDir);
   const commonResult = await runGit(repoRoot, [
     "rev-parse", "--path-format=absolute", "--git-common-dir",
   ]);
@@ -577,8 +580,15 @@ async function worktreeRegistrationDirectory(
     contents.toString("utf8"),
     "worktree registration backlink",
   );
+  const expectedBacklink = pinned === undefined
+    ? await realpath(path.join(worktreePath, ".git"))
+    : path.join(await canonicalizeWorktreePath(worktreePath, true), ".git");
+  const actualBacklink = pinned === undefined
+    ? await realpath(backlink)
+    : path.join(await canonicalizeWorktreePath(path.dirname(backlink), true), ".git");
   if (!path.isAbsolute(backlink)
-    || await realpath(backlink) !== await realpath(path.join(worktreePath, ".git"))) {
+    || path.basename(backlink) !== ".git"
+    || !platformPathsEqual(actualBacklink, expectedBacklink)) {
     throw new RuntimeError("worktree registration backlink does not match the managed path");
   }
   return {
@@ -1254,13 +1264,21 @@ export class WorktreeManager {
   }
 
 
+  private namespaceRoot: string | undefined;
+
+  private async managedRoot(): Promise<string> {
+    // A read-only lookup of where the namespace lives; every mutating Git
+    // call still goes through the injectable runner after validation.
+    this.namespaceRoot ??= await repositoryNamespaceRoot(this.repoRoot, git);
+    return this.namespaceRoot;
+  }
+
   private managedWorktreePath(
-    stateRoot: string = path.resolve(resolveStateDir()),
+    worktreesRoot: string,
   ): { worktreesRoot: string; worktreePath: string } {
     if (!SAFE_MANAGED_ID.test(this.runId)) {
       throw new RuntimeError("invalid worktree run id");
     }
-    const worktreesRoot = path.resolve(stateRoot, "worktrees");
     const worktreePath = path.resolve(worktreesRoot, this.runId);
     if (worktreePath === worktreesRoot || !worktreePath.startsWith(`${worktreesRoot}${path.sep}`)) {
       throw new RuntimeError("invalid worktree run id");
@@ -1270,9 +1288,9 @@ export class WorktreeManager {
 
   private async prepareManagedWorktreeRoot() {
     await verifyBoundDirectoryCleanupSupport(this.lockingPlatformServices());
-    const configuredStateRoot = path.resolve(resolveStateDir());
     const syncDirectory = this.dependencies.syncDirectory ?? syncDirectoryMetadata;
-    const stateRootIdentity = await ensurePrivateDirectory(configuredStateRoot, {
+    // Removal manifests and root records live in the private state directory.
+    await ensurePrivateDirectory(path.resolve(resolveStateDir()), {
       description: "runtime state root",
       migratePermissions: true,
       syncDirectory,
@@ -1280,23 +1298,13 @@ export class WorktreeManager {
         ? {}
         : { platformServices: this.dependencies.processSupervisor }),
     });
-    const stateRoot = await realpath(configuredStateRoot);
-    await assertDirectoryIdentity(stateRoot, stateRootIdentity, "runtime state root");
-    const { worktreesRoot, worktreePath } = this.managedWorktreePath(stateRoot);
-    const worktreesRootIdentity = await ensurePrivateDirectory(worktreesRoot, {
-      description: "managed worktree root",
-      migratePermissions: true,
+    const { worktreesRoot, worktreePath } = this.managedWorktreePath(await this.managedRoot());
+    const worktreesRootIdentity = await prepareCheckoutWorktreeRoot(worktreesRoot, {
       syncDirectory,
-      ...(this.dependencies.processSupervisor === undefined
-        ? {}
-        : { platformServices: this.dependencies.processSupervisor }),
     });
     await (this.dependencies.verifyRemovalStorage
       ?? verifyWorktreeRemovalManifestStorage)();
-    await Promise.all([
-      assertDirectoryIdentity(stateRoot, stateRootIdentity, "runtime state root"),
-      assertDirectoryIdentity(worktreesRoot, worktreesRootIdentity, "managed worktree root"),
-    ]);
+    await assertDirectoryIdentity(worktreesRoot, worktreesRootIdentity, "managed worktree root");
     return {
       worktreesRoot,
       worktreePath,
@@ -1539,7 +1547,7 @@ export class WorktreeManager {
     rootIdentity: ManagedWorktreeDirectoryIdentity,
     identity: ManagedWorktreeDirectoryIdentity,
     runGit: typeof git,
-  ): Promise<void> {
+  ): Promise<WorktreeRegistrationDirectory> {
     const registration = await worktreeRegistrationDirectory(
       this.repoRoot,
       worktreePath,
@@ -1563,6 +1571,7 @@ export class WorktreeManager {
         "created Git registration",
       ),
     ]);
+    return registration;
   }
 
   private async finishCreatedWorktree(
@@ -1627,8 +1636,9 @@ export class WorktreeManager {
         new RuntimeError("created worktree replaced its durable placeholder"),
       );
     }
+    let registration: WorktreeRegistrationDirectory;
     try {
-      await this.syncCreatedWorktree(
+      registration = await this.syncCreatedWorktree(
         worktreePath,
         worktreesRoot,
         rootIdentity,
@@ -1658,6 +1668,10 @@ export class WorktreeManager {
       rootIdentity,
       identity,
     );
+    pinWorktreeGitDirectory(worktreePath, {
+      gitDir: registration.path,
+      commonDir: registration.commonDir,
+    });
     await removeWorktreeRemovalManifest(creation.manifestPath, creation.transactionId);
     return created;
   }
@@ -1704,8 +1718,9 @@ export class WorktreeManager {
         new RuntimeError("created worktree replaced its durable placeholder"),
       );
     }
+    let registration: WorktreeRegistrationDirectory;
     try {
-      await this.syncCreatedWorktree(
+      registration = await this.syncCreatedWorktree(
         worktreePath,
         worktreesRoot,
         rootIdentity,
@@ -1735,6 +1750,10 @@ export class WorktreeManager {
       rootIdentity,
       identity,
     );
+    pinWorktreeGitDirectory(worktreePath, {
+      gitDir: registration.path,
+      commonDir: registration.commonDir,
+    });
     await removeWorktreeRemovalManifest(creation.manifestPath, creation.transactionId);
     return created;
   }
@@ -1743,18 +1762,15 @@ export class WorktreeManager {
     worktreePath: string,
     expectedIdentity?: ManagedWorktreeDirectoryIdentity,
   ): Promise<void> {
-    const expectedWorktreePath = this.managedWorktreePath().worktreePath;
+    const managedRoot = await this.managedRoot();
+    const expectedWorktreePath = this.managedWorktreePath(managedRoot).worktreePath;
     const canonicalWorktreePath = await canonicalizeWorktreePath(worktreePath, true);
     let canonicalExpectedPath: string;
     try {
       canonicalExpectedPath = await canonicalizeWorktreePath(expectedWorktreePath, true);
     } catch (error) {
       if (errorCode(error) !== "ENOENT") throw error;
-      canonicalExpectedPath = path.join(
-        await realpath(path.resolve(resolveStateDir())),
-        "worktrees",
-        path.basename(expectedWorktreePath),
-      );
+      canonicalExpectedPath = path.join(managedRoot, path.basename(expectedWorktreePath));
     }
     if (!platformPathsEqual(canonicalWorktreePath, canonicalExpectedPath)) {
       throw new RuntimeError("refusing to remove unmanaged worktree path");
@@ -1789,6 +1805,7 @@ export class WorktreeManager {
   ): Promise<void> {
     await this.withCheckoutLease(async () =>
       await this.removeUnderLease(worktreePath, expectedIdentity));
+    unpinWorktreeGitDirectory(worktreePath);
   }
 }
 

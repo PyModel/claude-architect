@@ -1,7 +1,6 @@
 import {
   advisorReportHash,
   canonicalArtifactHash,
-  eligibilityInputFromArtifacts,
   evaluateAutopilotEligibility,
   pipelineResultHash,
   type AutopilotEligibilityRecord,
@@ -236,12 +235,12 @@ export async function runAdvisorStage(args: RunAdvisorStageArgs): Promise<Adviso
   const report = outcome.ok
     ? redactRecord(outcome.report) as AdvisorReport
     : failureReport(outcome.failure, outcome.failedRoleLogRef);
-  const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+  const eligibility = evaluateAutopilotEligibility({
     pipelineResult: archivedPipelineResult,
     reviewSnapshot: archivedReviewSnapshot,
     advisor: report,
     evaluatedAt: args.evaluatedAt,
-  }));
+  });
   await transitionRunStatusSafely(statusStore, args.runId, "gating", {
     role: "advisor",
   });

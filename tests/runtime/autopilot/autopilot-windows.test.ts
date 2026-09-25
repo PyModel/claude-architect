@@ -48,10 +48,6 @@ import { ProducerRegistry } from "../../../src/producers/producer-registry.js";
 import { ArtifactStore } from "../../../src/runtime/artifact-store.js";
 import type { AttemptRuntimeDependencies } from "../../../src/runtime/attempt-runtime.js";
 import { createReviewSnapshot } from "../../../src/runtime/review-snapshot.js";
-import {
-  InMemoryHostingAdapter,
-  type InMemoryHostingOperations,
-} from "../../../src/ship/github-cli-adapter.js";
 import { AcceptanceVerifier } from "../../../src/verify/acceptance-verifier.js";
 
 const editFixture = fileURLToPath(new URL("../fixtures/edit-file.mjs", import.meta.url));
@@ -59,7 +55,6 @@ const WORKFLOW_ID = "workflow-forced-red-12345678";
 const RUN_ID = "autopilot-forced-red-task";
 const NOW = "2026-07-21T13:00:00.000Z";
 const REMOTE_URL = "https://github.com/example/autopilot-forced-red.git";
-const REPOSITORY = "example/autopilot-forced-red";
 const FORCED_RED = {
   id: "forced-red",
   executable: "node",
@@ -204,7 +199,7 @@ function unreachableRoleRunner(args: RoleRunArgs): Promise<RoleRunResult> {
 
 function forcedRedSpec(): AutopilotSpec {
   return {
-    specVersion: "1",
+    specVersion: "2",
     topic: "forced-red",
     base: { remote: "origin", branch: "main" },
     tasks: [{
@@ -225,16 +220,8 @@ function forcedRedSpec(): AutopilotSpec {
         review: { reviewers: ["correctness", "systems"], maxRounds: 1 },
       },
     }],
-    finalSuccessCriteria: ["No authorization or shipping follows the red gate."],
+    finalSuccessCriteria: ["No authorization or promotion follows the red gate."],
     finalVerification: [structuredClone(FORCED_RED)],
-    shipping: {
-      provider: "github",
-      draft: true,
-      markReadyWhenRequiredChecksPass: true,
-      requiredChecksTimeoutMs: 600_000,
-      pullRequestTitle: "Forced red must not ship",
-      pullRequestBody: "This pull request must never be created.",
-    },
   };
 }
 
@@ -280,7 +267,7 @@ afterEach(async () => {
 });
 
 describe("AutopilotController platform-neutral forced-red gate", () => {
-  it("durably fails before eligibility, promotion, integration, or shipping", async () => {
+  it("durably fails before eligibility, promotion, or integration", async () => {
     const root = temporaryPaths[0]!;
     const fixture = await createRepository(root);
     const platformServices = getPlatformServices();
@@ -304,41 +291,6 @@ describe("AutopilotController platform-neutral forced-red gate", () => {
       remoteTransport: localRemoteTransport(fixture.bareRemote),
     });
     const workflowStore = (workflowId: string) => new WorkflowStore(workflowId);
-    const hostingCalls: string[] = [];
-    const hostingOperations: InMemoryHostingOperations = {
-      preflight: async () => {
-        hostingCalls.push("preflight");
-        return {
-          provider: "github",
-          repository: REPOSITORY,
-          canonicalHttpsUrl: REMOTE_URL,
-        };
-      },
-      pushBranch: async request => {
-        hostingCalls.push("push");
-        return { remoteHead: request.headCommitOid };
-      },
-      ensureDraftPullRequest: async request => {
-        hostingCalls.push("draft-pr");
-        return {
-          number: 7,
-          url: "https://github.com/example/autopilot-forced-red/pull/7",
-          repository: REPOSITORY,
-          baseBranch: request.baseBranch,
-          headBranch: request.headBranch,
-          headCommitOid: request.headCommitOid,
-          draft: true,
-        };
-      },
-      requiredChecks: async request => {
-        hostingCalls.push("checks");
-        return { result: "passed", headCommitOid: request.headCommitOid, checks: [] };
-      },
-      markReady: async () => {
-        hostingCalls.push("mark-ready");
-        throw new Error("mark-ready must remain unreachable");
-      },
-    };
     const controllerDependencies: AutopilotControllerDependencies = {
       workflowId: () => WORKFLOW_ID,
       now: () => NOW,
@@ -396,9 +348,6 @@ describe("AutopilotController platform-neutral forced-red gate", () => {
         roleRunner: unreachableRoleRunner,
         now: () => NOW,
       }),
-      hostingAdapter: new InMemoryHostingAdapter(hostingOperations),
-      requiredChecksPollIntervalMs: 100,
-      sleep: async () => {},
     };
     const controller = new AutopilotController(controllerDependencies);
 
@@ -440,7 +389,6 @@ describe("AutopilotController platform-neutral forced-red gate", () => {
       .rejects.toMatchObject({ code: "ENOENT" });
 
     expect(producer.invocations).toEqual([]);
-    expect(hostingCalls).toEqual(["preflight"]);
     expect(await readFile(path.join(fixture.checkout, "base.txt"))).toEqual(fixture.baseBytes);
     expect(await runGit(fixture.checkout, ["rev-parse", "HEAD"])).toBe(fixture.baseCommitOid);
     expect(await runGit(fixture.checkout, ["status", "--porcelain=v1", "--untracked-files=all"]))

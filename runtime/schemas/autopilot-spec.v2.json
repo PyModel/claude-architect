@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "autopilot-spec.v1.json",
+  "$id": "autopilot-spec.v2.json",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,12 +9,11 @@
     "base",
     "tasks",
     "finalSuccessCriteria",
-    "finalVerification",
-    "shipping"
+    "finalVerification"
   ],
   "properties": {
     "specVersion": {
-      "const": "1"
+      "const": "2"
     },
     "topic": {
       "type": "string",
@@ -76,44 +75,6 @@
     },
     "finalVerification": {
       "$ref": "delegation-spec.v1.json#/properties/verification"
-    },
-    "shipping": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "provider",
-        "draft",
-        "markReadyWhenRequiredChecksPass",
-        "requiredChecksTimeoutMs",
-        "pullRequestTitle",
-        "pullRequestBody"
-      ],
-      "properties": {
-        "provider": {
-          "const": "github"
-        },
-        "draft": {
-          "const": true
-        },
-        "markReadyWhenRequiredChecksPass": {
-          "const": true
-        },
-        "requiredChecksTimeoutMs": {
-          "type": "integer",
-          "minimum": 600000,
-          "maximum": 3600000
-        },
-        "pullRequestTitle": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 256
-        },
-        "pullRequestBody": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4000
-        }
-      }
     }
   }
 }

@@ -2,10 +2,8 @@ import { access, link, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  recoverPendingWorktreeRemovals,
-  recoverStaleRuns,
-} from "../../src/runtime/recovery-manager.js";
+import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
+import { recoverPendingWorktreeRemovals } from "../../src/runtime/recovery-worktree-removals.js";
 import { PlatformSafety } from "../../src/platform/platform-safety.js";
 import {
   assertNoPendingWorktreeRemovalForRepository,

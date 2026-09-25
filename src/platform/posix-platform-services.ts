@@ -4,10 +4,9 @@ import { constants, promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import nodeProcess from "node:process";
-import { resolveStateDir } from "../runtime/state-dir.js";
 import { BoundedBuffer } from "../util/bounded-buffer.js";
 import { gitPathOutput } from "../git/git-output.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import type {
   CanonicalPath, CheckoutLock, ExecutableRequest, FileLock, LockOwnerAnnotation, PlatformServices,
@@ -32,11 +31,6 @@ export {
 // distinct (by domain prefix) from checkout locks keyed on a repository identity.
 export const CLEANUP_JOURNAL_LOCK_KEY =
   createHash("sha256").update("claude-architect:cleanup-journal:v1").digest("hex");
-
-function errorCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String(error.code) : undefined;
-}
 
 
 

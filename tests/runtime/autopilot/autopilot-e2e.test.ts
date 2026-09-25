@@ -47,17 +47,12 @@ import { ProducerRegistry } from "../../../src/producers/producer-registry.js";
 import { ArtifactStore } from "../../../src/runtime/artifact-store.js";
 import type { AttemptRuntimeDependencies } from "../../../src/runtime/attempt-runtime.js";
 import { createReviewSnapshot } from "../../../src/runtime/review-snapshot.js";
-import {
-  InMemoryHostingAdapter,
-  type InMemoryHostingOperations,
-} from "../../../src/ship/github-cli-adapter.js";
 import { AcceptanceVerifier } from "../../../src/verify/acceptance-verifier.js";
 
 const editFixture = fileURLToPath(new URL("../fixtures/edit-file.mjs", import.meta.url));
 const WORKFLOW_ID = "workflow-e2e-12345678";
 const NOW = "2026-07-21T12:00:00.000Z";
 const REMOTE_URL = "https://github.com/example/autopilot-fixture.git";
-const REPOSITORY = "example/autopilot-fixture";
 const nodeExecutable: ResolvedExecutable = {
   kind: "native",
   command: process.execPath,
@@ -266,7 +261,7 @@ function delegation(task: "one" | "two"): DelegationSpec {
 
 function autopilotSpec(): AutopilotSpec {
   return {
-    specVersion: "1",
+    specVersion: "2",
     topic: "e2e-green",
     base: { remote: "origin", branch: "main" },
     tasks: [{
@@ -291,14 +286,6 @@ function autopilotSpec(): AutopilotSpec {
       network: "denied",
       expectedExitCodes: [0],
     }],
-    shipping: {
-      provider: "github",
-      draft: true,
-      markReadyWhenRequiredChecksPass: true,
-      requiredChecksTimeoutMs: 600_000,
-      pullRequestTitle: "Autopilot E2E",
-      pullRequestBody: "Exercises the complete verified workflow.",
-    },
   };
 }
 
@@ -344,7 +331,7 @@ afterEach(async () => {
 });
 
 describe("AutopilotController end-to-end", () => {
-  it("promotes two exact commits, freezes cumulative evidence, ships, and cleans up", async () => {
+  it("promotes two exact commits, freezes cumulative evidence, and hands off the reviewed branch", async () => {
     const root = temporaryPaths[0]!;
     const stateRoot = process.env.CLAUDE_PLUGIN_DATA!;
     const fixture = await createRepository(root);
@@ -371,54 +358,6 @@ describe("AutopilotController end-to-end", () => {
       remoteTransport: localRemoteTransport(fixture.bareRemote),
     });
     const workflowStore = (workflowId: string) => new WorkflowStore(workflowId);
-    const shippingOrder: string[] = [];
-    let shippedHead = "";
-    let shippedBranch = "";
-    const hostingOperations: InMemoryHostingOperations = {
-      preflight: async () => ({
-        provider: "github",
-        repository: REPOSITORY,
-        canonicalHttpsUrl: REMOTE_URL,
-      }),
-      pushBranch: async request => {
-        shippingOrder.push("push");
-        shippedHead = request.headCommitOid;
-        shippedBranch = request.branch;
-        return { remoteHead: request.headCommitOid };
-      },
-      ensureDraftPullRequest: async request => {
-        shippingOrder.push("draft-pr");
-        return {
-          number: 42,
-          url: "https://github.com/example/autopilot-fixture/pull/42",
-          repository: REPOSITORY,
-          baseBranch: request.baseBranch,
-          headBranch: request.headBranch,
-          headCommitOid: request.headCommitOid,
-          draft: true,
-        };
-      },
-      requiredChecks: async request => {
-        shippingOrder.push("checks");
-        return {
-          result: "passed",
-          headCommitOid: request.headCommitOid,
-          checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-        };
-      },
-      markReady: async () => {
-        shippingOrder.push("mark-ready");
-        return {
-          number: 42,
-          url: "https://github.com/example/autopilot-fixture/pull/42",
-          repository: REPOSITORY,
-          baseBranch: "main",
-          headBranch: shippedBranch,
-          headCommitOid: shippedHead,
-          draft: false,
-        };
-      },
-    };
     const controller = new AutopilotController({
       workflowId: () => WORKFLOW_ID,
       now: () => NOW,
@@ -476,9 +415,6 @@ describe("AutopilotController end-to-end", () => {
         roleRunner: approvingRoleRunner,
         now: () => NOW,
       }),
-      hostingAdapter: new InMemoryHostingAdapter(hostingOperations),
-      requiredChecksPollIntervalMs: 100,
-      sleep: async () => {},
     });
 
     const result = await controller.start(fixture.checkout, autopilotSpec());
@@ -488,16 +424,32 @@ describe("AutopilotController end-to-end", () => {
     expect(result.tasks.map(task => task.status)).toEqual(["promoted", "promoted"]);
     expect(producer.invocations.filter(name => name !== "probe"))
       .toEqual(["task-one", "task-two"]);
-    expect(shippingOrder).toEqual(["push", "draft-pr", "checks", "mark-ready"]);
-    expect(shippedHead).toBe(result.headCommitOid);
+    // The final-reviewed branch survives cleanup as the hand-off to the
+    // delivery gate; nothing was pushed.
+    expect(await runGit(fixture.checkout, ["rev-parse", `refs/heads/${result.branch}`]))
+      .toBe(result.headCommitOid);
+    expect((await git(fixture.bareRemote, ["show-ref", "--verify", "--quiet", `refs/heads/${result.branch}`])).exitCode)
+      .toBe(1);
     expect(await runGit(fixture.checkout, [
       "log", "--reverse", "--format=%s", `${fixture.baseCommitOid}..${result.headCommitOid}`,
     ])).toBe("feat: promote task one\nfeat: promote task two");
+    // Promotions are the user's commits, not the runtime's fixed identity.
+    expect(await runGit(fixture.checkout, [
+      "log", "--format=%an <%ae>|%cn", `${fixture.baseCommitOid}..${result.headCommitOid}`,
+    ])).toBe([
+      "Autopilot E2E <autopilot-e2e@example.invalid>|Autopilot E2E",
+      "Autopilot E2E <autopilot-e2e@example.invalid>|Autopilot E2E",
+    ].join("\n"));
     expect(await runGit(fixture.checkout, ["show", `${result.headCommitOid}:task-one.txt`]))
       .toBe("task-one promoted bytes");
     expect(await runGit(fixture.checkout, ["show", `${result.headCommitOid}:task-two.txt`]))
       .toBe("task-two promoted bytes");
-    expect(await workingTreeSnapshot(fixture.checkout)).toEqual(humanBefore);
+    // The only runtime residue in the checkout is the self-ignoring namespace
+    // marker; every worktree beneath it is gone.
+    const { [".worktrees/claude-architect/.gitignore"]: namespaceMarker, ...humanAfter } =
+      await workingTreeSnapshot(fixture.checkout);
+    expect(humanAfter).toEqual(humanBefore);
+    expect(Buffer.from(namespaceMarker ?? "", "base64").toString()).toBe("*\n");
     expect(await runGit(fixture.checkout, ["status", "--porcelain=v1", "--untracked-files=all"]))
       .toBe("");
 
@@ -532,8 +484,8 @@ describe("AutopilotController end-to-end", () => {
       .split(/\r?\n/u).filter(line => line.startsWith("worktree "))
       .map(line => path.resolve(line.slice("worktree ".length)));
     expect(registeredWorktrees).toEqual([fixture.checkout]);
-    const worktreesRoot = path.join(stateRoot, "worktrees");
-    await expect(readdir(worktreesRoot)).resolves.toEqual([]);
+    await expect(readdir(path.join(fixture.checkout, ".worktrees", "claude-architect")))
+      .resolves.toEqual([".gitignore"]);
   // Full-suite contention can push dual-commit promotion past 120s; scale gracefully.
   }, process.platform === "win32" ? 360_000 : 240_000);
 });

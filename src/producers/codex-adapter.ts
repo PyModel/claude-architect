@@ -2,7 +2,6 @@ import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ResolvedExecutable } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { probeOsConfinedCli } from "./cli-probe.js";
 import type {

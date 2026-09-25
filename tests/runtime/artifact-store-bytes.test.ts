@@ -20,7 +20,7 @@ const REPO_ROOT = "/repo";
 const GOLDEN: Record<string, string> = {
   "decision.json": "4cef15d87869d4ece959d5bad7ebd0c005ae089144c90c808b84c9729f1d26bb",
   "logs/producer.log": "e9024f1a07d29d52ad3aa5e1a18e94db1f3a9fd32b89e39d47c472cd99071e13",
-  "manifest.json": "9345893b4a64416898871a61fc65133a43371dcd50f51c472fe9f8060cec00bf",
+  "manifest.json": "d68bf2d317822ba625af666854f810fca06d1c66a1da3caf33d1f46287af7dab",
   "pipeline-active.json": "3c1c0c3ff953ec85e6b52da6a0dd124d41e29ba6f3394f545d2ef636dc20edce",
   "pipeline-gate-cleared.json": "a53c3367231380c176a4fc0e03f6f5056b1446452923dca40e1cb80e1a391c46",
   "pipeline/delegation-spec.json": "475e0a1730837fefbf663e3cec5923326087e80da856a60e4c21004c7e2351a3",

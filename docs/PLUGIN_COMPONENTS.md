@@ -39,7 +39,7 @@ The MCP server has no generic command-execution endpoint. Verification execution
 - `src/git/worktree-manager.ts` and `candidate-tree.ts`: detached worktrees, change inventory, scope enforcement, candidate Git objects/refs, and manifest hash.
 - `src/verify/*`: structural and project verification in a separate worktree.
 - `src/pipeline/*`: fresh role invocations, adversarial review/fix reports, consolidation, gates, and final verification.
-- `src/runtime/artifact-store.ts`, `run-manifest.ts`, and `recovery-manager.ts`: bounded/redacted archives, provenance hashes, pruning, and crash recovery.
+- `src/runtime/artifact-store.ts`, `run-manifest.ts`, and `recovery-*.ts`: bounded/redacted archives, provenance hashes, pruning, and crash recovery.
 - `src/integrate/controlled-integrator.ts`: locked, hash-gated candidate tree application.
 - `runtime/bootstrap.mjs` and `runtime/server.mjs`: packaged executable JavaScript loaded by Claude Code.
 

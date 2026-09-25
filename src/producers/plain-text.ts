@@ -1,7 +1,6 @@
 import { open } from "node:fs/promises";
 import type { ResolvedExecutable, SupervisedExit } from "../platform/platform-services.js";
 import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
-import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import type { AdapterEvent, ProbeContext } from "./producer-adapter.js";
 export {
   EDIT_ACTION_PREAMBLE,

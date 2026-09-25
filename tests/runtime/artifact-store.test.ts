@@ -33,7 +33,6 @@ import {
 } from "../../src/runtime/redaction.js";
 import { scrubbedGitEnv } from "./helpers/git-fixture-env.js";
 import {
-  eligibilityInputFromArtifacts,
   evaluateAutopilotEligibility,
 } from "../../src/autopilot/autopilot-eligibility.js";
 import {
@@ -256,12 +255,12 @@ describe("ArtifactStore", () => {
     await store.writeReviewSnapshot(snapshot);
     const pipelinePath = join(store.runDirectory, "pipeline", "pipeline-result.json");
     const pipelineBefore = await readFile(pipelinePath, "utf8");
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-20T12:00:00.000Z",
-    }));
+    });
 
     const hashes = await store.writePostPipelineAutopilotArtifacts({
       pipelineResult: pipeline,
@@ -302,12 +301,12 @@ describe("ArtifactStore", () => {
     await store.writeReviewSnapshot(snapshot);
     const pipelinePath = join(store.runDirectory, "pipeline", "pipeline-result.json");
     const pipelineBefore = await readFile(pipelinePath, "utf8");
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-20T12:00:00.000Z",
-    }));
+    });
     filesystemHooks.beforeLink = async (_source, destination) => {
       if (!destination.endsWith("post-pipeline-autopilot.json")) return;
       const error = new Error("injected atomic publication failure") as NodeJS.ErrnoException;
@@ -348,12 +347,12 @@ describe("ArtifactStore", () => {
     const snapshot = reviewSnapshot(runId);
     await store.writePipelineArtifact("pipeline-result", pipeline);
     await store.writeReviewSnapshot(snapshot);
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-20T12:00:00.000Z",
-    }));
+    });
 
     await expect(store.writePostPipelineAutopilotArtifacts({
       pipelineResult: pipeline,
@@ -536,12 +535,12 @@ describe("ArtifactStore", () => {
     expect(archivedBytes).not.toBeNull();
     const archivedPipeline = JSON.parse(archivedBytes!);
 
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: archivedPipeline,
       reviewSnapshot: reviewSnapshot(runId),
       advisor: advisorReport,
       evaluatedAt: "2026-07-20T12:00:00.000Z",
-    }));
+    });
     expect(eligibility).toMatchObject({
       eligible: false,
       reasons: expect.arrayContaining(["pipeline result is malformed"]),
@@ -847,12 +846,12 @@ describe("ArtifactStore", () => {
     await store.writeResult(sampleResult(runId));
     await store.writePipelineArtifact("pipeline-result", pipeline);
     await store.writeReviewSnapshot(snapshot);
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-14T12:00:00.000Z",
-    }));
+    });
     const hashes = await store.writePostPipelineAutopilotArtifacts({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
@@ -905,12 +904,12 @@ describe("ArtifactStore", () => {
     const candidate = pipeline.attempt.candidate!;
     await store.writePipelineArtifact("pipeline-result", pipeline);
     await store.writeReviewSnapshot(snapshot);
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-14T12:00:00.000Z",
-    }));
+    });
     await store.writePostPipelineAutopilotArtifacts({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,

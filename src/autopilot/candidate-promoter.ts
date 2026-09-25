@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { git, type GitResult } from "../git/git-exec.js";
+import { gitSucceeded as succeeded } from "../git/checked-git.js";
+import { git, userCommitEnvironment } from "../git/git-exec.js";
 import {
   stageCandidateTreeUnderLock,
   statusMatchesArtifact,
@@ -10,6 +11,8 @@ import { getPlatformServices } from "../platform/select-platform.js";
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { CandidateArtifact } from "../protocol/attempt-result.js";
 import { ArtifactStore } from "../runtime/artifact-store.js";
+import { decisionAuthority, type DecisionAuthority } from "../mcp/decision-authority.js";
+import { isLockContention } from "../platform/lock-ownership.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
 import { redact } from "../runtime/redaction.js";
 import { reviewSnapshotHash } from "../runtime/review-snapshot.js";
@@ -43,6 +46,7 @@ export type PromotionClassification =
   | "evidence-mismatch"
   | "decision-conflict"
   | "branch-identity-changed"
+  | "checkout-busy"
   | "dirty-worktree"
   | "head-changed"
   | "apply-conflict"
@@ -77,6 +81,7 @@ export interface CandidatePromoterDependencies {
   artifactStore?: (runId: string) => ArtifactStore;
   stageCandidate?: typeof stageCandidateTreeUnderLock;
   now?: () => string;
+  decisionAuthority?: () => DecisionAuthority;
 }
 
 function safeCommitMessage(message: string): boolean {
@@ -88,11 +93,6 @@ function safeCommitMessage(message: string): boolean {
     && !/\b(?:ai|claude|codex|chatgpt|copilot|gemini|llm)[ -]generated\b/iu.test(message);
 }
 
-function succeeded(result: GitResult): boolean {
-  return result.exitCode === 0
-    && result.truncated?.stdout !== true
-    && result.truncated?.stderr !== true;
-}
 
 function rejected(classification: PromotionClassification): PromotionResult {
   return { status: "rejected", classification };
@@ -165,6 +165,7 @@ const PROMOTION_CLASSIFICATION_RECORD = {
   "journal-failed": true,
   "anchor-deletion-failed": true,
   "lock-release-failed": true,
+  "checkout-busy": true,
   "human-decision-required": true,
 } as const satisfies Record<PromotionClassification, true>;
 const PROMOTION_CLASSIFICATIONS: ReadonlySet<string> = new Set(
@@ -188,6 +189,7 @@ export class CandidatePromoter {
   private readonly artifactStore: (runId: string) => ArtifactStore;
   private readonly stageCandidate: typeof stageCandidateTreeUnderLock;
   private readonly now: () => string;
+  private readonly decisionAuthority: () => DecisionAuthority;
 
   constructor(dependencies: CandidatePromoterDependencies = {}) {
     this.runGit = dependencies.git ?? git;
@@ -198,6 +200,7 @@ export class CandidatePromoter {
     this.artifactStore = dependencies.artifactStore ?? (runId => new ArtifactStore(runId));
     this.stageCandidate = dependencies.stageCandidate ?? stageCandidateTreeUnderLock;
     this.now = dependencies.now ?? (() => new Date().toISOString());
+    this.decisionAuthority = dependencies.decisionAuthority ?? (() => decisionAuthority());
   }
 
   private async proveCommit(
@@ -310,6 +313,9 @@ export class CandidatePromoter {
       || !SHA256.test(request.expectedArtifactHash)
       || request.workflowCheckoutPath.length === 0) return rejected("invalid-request");
     if (!safeCommitMessage(request.commitMessage)) return rejected("invalid-commit-message");
+    // Promotion records an `autopilot-policy` acceptance. Under the `human`
+    // authority no acceptance may be recorded without a person.
+    if (this.decisionAuthority() === "human") return rejected("human-decision-required");
 
     const workflowStore = this.workflowStore(request.workflowId);
     const artifactStore = this.artifactStore(request.runId);
@@ -518,13 +524,6 @@ export class CandidatePromoter {
                 journalFailure: false,
               };
             }
-            if (!await this.ensureAcceptedDecision(
-              artifactStore, request.runId, artifact, eligibility, eligibilityHash,
-            )) {
-              return {
-                kind: "rejected", classification: "decision-conflict", journalFailure: true,
-              };
-            }
             const staged = await this.stageCandidate({
               repoRoot: request.workflowCheckoutPath,
               artifact,
@@ -542,7 +541,11 @@ export class CandidatePromoter {
                   kind: "rejected", classification: classifyStage(staged), journalFailure: true,
                 };
             }
-          } else if (!await this.ensureAcceptedDecision(
+          }
+          // Recorded only once the exact bytes are staged, so a conflicted or
+          // failed stage never leaves an acceptance behind for bytes that were
+          // not applied. A crash after staging lands here again via recovery.
+          if (!await this.ensureAcceptedDecision(
             artifactStore, request.runId, artifact, eligibility, eligibilityHash,
           )) {
             return {
@@ -554,11 +557,12 @@ export class CandidatePromoter {
               kind: "rejected", classification: "human-decision-required", journalFailure: false,
             };
           }
-          const [author, committer] = await Promise.all([
-            this.runGit(request.workflowCheckoutPath, ["var", "GIT_AUTHOR_IDENT"]),
-            this.runGit(request.workflowCheckoutPath, ["var", "GIT_COMMITTER_IDENT"]),
-          ]);
-          if (!succeeded(author) || !succeeded(committer)) {
+          // The promoted commit is handed off under the user's name, so it
+          // carries their identity rather than the runtime's fixed one.
+          const identityEnv = await userCommitEnvironment(
+            request.workflowCheckoutPath, this.runGit,
+          );
+          if (identityEnv === null) {
             return {
               kind: "rejected", classification: "git-identity-missing", journalFailure: true,
             };
@@ -566,7 +570,7 @@ export class CandidatePromoter {
           const created = await this.runGit(request.workflowCheckoutPath, [
             "commit-tree", artifact.candidateTreeOid, "-p", request.expectedHead,
             "-m", request.commitMessage,
-          ]);
+          ], { env: identityEnv });
           const commitOid = created.stdout.trim();
           if (!succeeded(created) || !OBJECT_ID.test(commitOid)) {
             return {
@@ -636,7 +640,8 @@ export class CandidatePromoter {
           reason: redact(String(error)),
         });
       } else if (!enteredLease) {
-        return finishFailure("branch-identity-changed");
+        // Contention is transient and says nothing about branch identity.
+        return finishFailure(isLockContention(error) ? "checkout-busy" : "branch-identity-changed");
       } else {
         throw error;
       }

@@ -1,11 +1,13 @@
-import { createHash } from "node:crypto";
-import { type AttemptResult, type CandidateArtifact } from "../protocol/attempt-result.js";
+import { manifestHashOf } from "../git/changed-path-manifest.js";
+import { verificationInputPaths } from "../verify/verification-inputs.js";
+import { type AttemptResult } from "../protocol/attempt-result.js";
 import { type CandidateDecision } from "../protocol/candidate-decision.js";
 import {
   type PipelineGateCleared,
   parsePipelineGateCleared,
 } from "../protocol/pipeline-gate-cleared.js";
 import type { PlatformServices } from "../platform/platform-services.js";
+import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
 import {
   type DecisionAuthority,
   decisionAuthority,
@@ -105,7 +107,11 @@ export class RunDecision {
           })
         : Promise.resolve(null);
       const readSnapshot = typeof store.readReviewSnapshot === "function"
-        ? store.readReviewSnapshot().catch(() => null)
+        ? store.readReviewSnapshot().catch(err => {
+            // A malformed snapshot must not silently skip the evidence-hash check.
+            coherenceErrors.push(`failed to read review snapshot: ${err instanceof Error ? err.message : String(err)}`);
+            return null;
+          })
         : Promise.resolve(null);
       const readGateRecord = typeof store.readPipelineGateCleared === "function"
         ? store.readPipelineGateCleared().catch(err => {
@@ -155,9 +161,12 @@ export class RunDecision {
         if (manifest.candidateManifestHash !== result.candidate.manifestHash) {
           coherenceErrors.push("archived candidate manifest hash does not match run manifest");
         }
-        const expectedHash = createHash("sha256")
-          .update(JSON.stringify(result.candidate.changedPaths))
-          .digest("hex");
+        let expectedHash: string | null;
+        try {
+          expectedHash = manifestHashOf(result.candidate.changedPaths);
+        } catch {
+          expectedHash = null;
+        }
         if (result.candidate.manifestHash !== expectedHash) {
           coherenceErrors.push("archived candidate changed paths hash mismatch");
         }
@@ -271,10 +280,25 @@ export class RunDecision {
       && snapshot.result.evidence?.pipelineGateCleared === undefined
       && snapshot.gateRecord === null;
 
+    // Unconfined verification ran Producer-authored code with the user's full
+    // authority; it could have rewritten the very archive being judged here.
+    if (verificationRanUnconfined(snapshot.manifest)) {
+      humanReasons.push("project verification ran without OS confinement on this platform");
+    }
+
     if (snapshot.gateRecordError) {
       humanReasons.push(snapshot.gateRecordError);
     } else if (isPlainDelegate) {
-      // Plain delegate is judged on verification result alone.
+      // With no independent review, verification is the only evidence, and it
+      // proves nothing when the candidate rewrote what verification checks.
+      const touched = verificationInputPaths(
+        snapshot.result.candidate.changedPaths.map(change => change.path),
+      );
+      if (touched.length > 0) {
+        humanReasons.push(
+          `the candidate changes verification inputs: ${touched.slice(0, 10).join(", ")}`,
+        );
+      }
     } else if (snapshot.gateRecord === null) {
       humanReasons.push("the pipeline gate clearance record is missing");
     } else if (snapshot.gateRecord.requiresHumanDecision === true) {
@@ -292,6 +316,24 @@ export class RunDecision {
     const verifier = new AcceptanceVerifier({ mode: args.mode });
     return verifier.verify(args);
   }
+}
+
+/** Only a known OS backend counts; an unknown or redacted label is unconfined. */
+const OS_CONFINEMENT: ReadonlySet<string> = new Set(
+  SANDBOX_BACKENDS.filter(backend => backend.kind === "os").map(backend => backend.id),
+);
+
+function verificationRanUnconfined(manifest: RunManifest): boolean {
+  const policy = isRecord(manifest.effectivePolicy)
+    ? manifest.effectivePolicy.verificationPolicy
+    : undefined;
+  // A missing record is unknowable, so it fails closed. An empty one means no
+  // project command executed, so nothing ran outside confinement.
+  if (!Array.isArray(policy)) return true;
+  return policy.some(command =>
+    !isRecord(command)
+    || (command.skipped !== true
+      && !(typeof command.confinement === "string" && OS_CONFINEMENT.has(command.confinement))));
 }
 
 export const runDecision = new RunDecision();

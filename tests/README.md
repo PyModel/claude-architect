@@ -33,8 +33,8 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/autopilot/autopilot-doctor.test.ts | src/mcp/doctor.ts | doctor | integration | no |
 | tests/runtime/autopilot/autopilot-e2e.test.ts | src/autopilot/autopilot-controller.ts, src/pipeline/pipeline-runtime.ts | AutopilotController, runPipeline | integration | no |
 | tests/runtime/autopilot/autopilot-mcp.test.ts | src/mcp/server.ts | createServer (via MCP Client/InMemoryTransport) | contract | no |
-| tests/runtime/autopilot/autopilot-recovery-cutpoints.test.ts | src/runtime/recovery-manager.ts | recoverStaleRuns | adversarial | no |
-| tests/runtime/autopilot/autopilot-recovery.test.ts | src/runtime/recovery-manager.ts | recoverStaleRuns | integration | no |
+| tests/runtime/autopilot/autopilot-recovery-cutpoints.test.ts | src/runtime/recovery-autopilot.ts | recoverStaleRuns | adversarial | no |
+| tests/runtime/autopilot/autopilot-recovery.test.ts | src/runtime/recovery-autopilot.ts | recoverStaleRuns | integration | no |
 | tests/runtime/autopilot/autopilot-windows.test.ts | src/autopilot/autopilot-controller.ts, src/pipeline/pipeline-runtime.ts | AutopilotController, runPipeline | integration | no |
 | tests/runtime/autopilot/branch-manager.test.ts | src/autopilot/branch-manager.ts | WorkflowBranchManager | integration | YES (minor) — `vi.spyOn(logger, "warn")` (L911) silences internal logger |
 | tests/runtime/autopilot/candidate-promoter.integration.test.ts | src/autopilot/candidate-promoter.ts | CandidatePromoter | integration | no |
@@ -50,6 +50,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/candidate-tree.test.ts | src/git/candidate-tree.ts | freezeCandidate | integration | YES — `vi.mock("../../src/git/git-exec.js", ...)` (L439) wraps `git()` to inject failures |
 | tests/runtime/capability-probe.test.ts | src/producers/capability-probe.ts | probeAll, CodexAdapter, ProducerRegistry | contract | no |
 | tests/runtime/changed-path-manifest.test.ts | src/git/changed-path-manifest.ts | computeChangedPathManifest, parseRawDiff, manifestHashOf | unit | no |
+| tests/runtime/checked-git.test.ts | src/git/checked-git.ts | gitChecked, gitSucceeded, reviewDiffArgs | unit | no |
 | tests/runtime/claude-adapter.test.ts | src/producers/claude-adapter.ts | ClaudeAdapter, renderProducerPrompt | contract | no |
 | tests/runtime/codex-adapter.test.ts | src/producers/codex-adapter.ts | CodexAdapter, codexDescriptor, sandboxSupportWritableRoots | contract | no |
 | tests/runtime/consolidator.test.ts | src/pipeline/consolidator.ts | consolidate, detectNonConvergence | unit | no |
@@ -81,12 +82,14 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/mcp-input-schema.test.ts | src/mcp/server.ts | delegateInputSchema, delegatePipelineInputSchema | contract | no |
 | tests/runtime/mcp-output-schema.test.ts | src/mcp/server.ts, src/mcp/doctor.ts | delegatePipelineOutput, doctorOutput, doctor | contract | no |
 | tests/runtime/opencode-adapter.test.ts | src/producers/opencode-adapter.ts | OpenCodeAdapter | integration | no |
+| tests/runtime/jev-screen.test.ts | src/mcp/jev-screen.ts | jevScreen | unit | no — the TypeSafe API is reached through an injected `fetch` |
 | tests/runtime/pi-adapter.test.ts | src/producers/pi-adapter.ts | PiAdapter | integration | no |
 | tests/runtime/pipeline-runtime.test.ts | src/pipeline/pipeline-runtime.ts | runPipeline, runIncrement, runReviews, verifyCandidate | integration | YES — extensive `vi.spyOn(AcceptanceVerifier.prototype, "verify")`, `ArtifactStore.prototype.*`, `WorktreeManager.prototype.create` (L792,927,933,1010,1180,1239,1378,1483,2076,3345,3424) replace internal src behavior |
 | tests/runtime/pipeline/advisor-stage.test.ts | src/pipeline/advisor-stage.ts | runAdvisorStage | integration | no |
-| tests/runtime/pipeline/autopilot-eligibility.test.ts | src/autopilot/autopilot-eligibility.ts | evaluateAutopilotEligibility, eligibilityInputFromArtifacts | unit | no |
+| tests/runtime/pipeline/autopilot-eligibility.test.ts | src/autopilot/autopilot-eligibility.ts | evaluateAutopilotEligibility | unit | no |
 | tests/runtime/pipeline/slice-runner.test.ts | src/pipeline/slice-runner.ts | SliceRunner, PipelineSlice, SliceAttempt | integration | no |
 | tests/runtime/pipeline/wayfinder.test.ts | src/pipeline/wayfinder.ts | routeSlice | unit | no |
+| tests/runtime/platform-safety.test.ts | src/platform/platform-safety.ts | PlatformSafety.withCheckoutLease | unit | no |
 | tests/runtime/platform-path.test.ts | src/util/platform-path.ts | platformPathsEqual | unit | no |
 | tests/runtime/plugin-wiring.test.mjs | .mcp.json, runtime/bootstrap.mjs, runtime/server.mjs, agents/advisor.md | file/wiring assertions | contract | no |
 | tests/runtime/posix-platform-services.test.ts | src/platform/posix-platform-services.ts | PosixPlatformServices, CLEANUP_JOURNAL_LOCK_KEY | integration | no |
@@ -120,8 +123,6 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/schema-loader.test.ts | src/protocol/schema-loader.ts | loadSchemas, checkVersionCompat | contract | no |
 | tests/runtime/seatbelt.test.ts | src/platform/sandbox/seatbelt.ts | buildSeatbeltProfile, buildReadOnlySeatbeltPolicy, wrapInvocationWithSeatbelt | unit | no |
 | tests/runtime/serialize.test.ts | src/mcp/serialize.ts | withRepoLock | unit | no |
-| tests/runtime/shipping/github-cli-adapter-red-paths.test.ts | src/ship/github-cli-adapter.ts | GitHubCliAdapter, HostingAdapterError, InMemoryHostingAdapter | adversarial | YES — mocks internal src/platform/select-platform.js (L53), src/platform/process-supervisor.js (L60), node:fs/promises (L71) to fake process execution |
-| tests/runtime/shipping/github-cli-adapter.test.ts | src/ship/github-cli-adapter.ts | GitHubCliAdapter, HostingAdapterError, InMemoryHostingAdapter | contract | YES — same mocking pattern (L54, L61, L72) |
 | tests/runtime/skill-bootstrap.test.ts | src/producers/skill-bootstrap.ts | renderSkillBootstrap | unit | YES — `vi.doMock("node:fs")` (~L59) stubs `existsSync` to force a fail-closed branch |
 | tests/runtime/slice-composer.test.ts | src/pipeline/slice-composer.ts | composeSliceOntoHead, parseRawDiffEntries | integration | no |
 | tests/runtime/slice-scheduler.test.ts | src/pipeline/slice-scheduler.ts | planSliceWaves | unit | no |
@@ -142,7 +143,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/worktree-manager.test.ts | src/runtime/worktree-manager.ts | WorktreeManager, managedWorktreeDirectoryIdentity, removeManagedWorktreeDirectory | integration | no |
 | tests/runtime/worktree-registration.test.ts | src/git/worktree-registration.ts | findWorktreeRegistration | unit | no |
 | tests/runtime/worktree-removal-manifest.test.ts | src/runtime/worktree-removal-manifest.ts | persistWorktreeRemovalManifest, readPendingWorktreeRemovalManifests, replaceWorktreeRemovalManifest, assertNoPendingWorktreeRemovalForRepository | integration | no |
-| tests/runtime/worktree-sweep.test.ts | src/runtime/recovery-manager.ts | recoverStaleRuns, WorktreeManager | integration | no |
+| tests/runtime/worktree-sweep.test.ts | src/runtime/recovery-worktree-sweep.ts | recoverStaleRuns, WorktreeManager | integration | no |
 | tests/validate-release.test.sh | scripts/validate-release.sh | validate-release CLI contract | integration | no |
 
 ## Past the interface
@@ -165,7 +166,6 @@ site below was read; each verdict names the reason.
 | `tests/runtime/pipeline-runtime.test.ts` (11 sites) | `AcceptanceVerifier.prototype.verify`, `ArtifactStore.prototype.*`, `WorktreeManager.prototype.create` spied; each calls through and either asserts the lease is held, counts calls, or fails once | keep: every spy runs the real method; the pipeline, store, verifier, and worktrees are real. Sites that never call through (`1180`, `1483`) reject a single durable write to prove the failure is reported, not swallowed |
 | `tests/runtime/run-status.test.ts:1661` | `writeRunStatus` rejected once; `logger.warn` observed | keep: proves status is advisory and never breaks control flow |
 | `tests/runtime/repo-preconditions.test.ts:982`, `tests/runtime/skill-bootstrap.test.ts:59` | `node:fs` failures forced | keep: fail-closed branches unreachable without an injected fault |
-| `tests/runtime/shipping/github-cli-adapter*.test.ts` | `select-platform`, `process-supervisor`, `node:fs/promises` mocked to fake `gh` | keep: the adapter's designed seam; the real CLI is covered by the opt-in smoke path |
 | `branch-manager.test.ts:911`, `candidate-promoter.test.ts:447`, `lock-ownership.test.ts:690`, `recovery-manager.test.ts:897` | `logger.warn` / `console.error` spied | keep: log observation, no behaviour substituted |
 
 Nothing was moved or deleted: no test replaces the component whose property it

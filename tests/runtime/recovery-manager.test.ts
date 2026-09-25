@@ -2142,7 +2142,7 @@ describe("recoverStaleRuns", () => {
     // A previous process crashed while holding the cleanup-journal mutex, leaving its
     // lock file behind with a now-dead owner. Recovery must reclaim it before replay:
     // otherwise replayInterruptedPrunes spins to its acquire deadline, throws, and aborts
-    // recovery before reclaimLocks runs — permanently blocking every future pass. Without
+    // recovery before reclaimDeadCheckoutLocks runs — permanently blocking every future pass. Without
     // the up-front reclaim this test throws "cleanup journal is locked" after ~2.5s.
     const journalLockPath = path.join(
       process.env.CLAUDE_PLUGIN_DATA!, "locks", `${CLEANUP_JOURNAL_LOCK_KEY}.lock`,

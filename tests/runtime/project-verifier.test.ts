@@ -12,7 +12,7 @@ import { getPlatformServices } from "../../src/platform/select-platform.js";
 import type { CandidateArtifact } from "../../src/protocol/attempt-result.js";
 import type { VerificationCommand } from "../../src/protocol/delegation-spec.js";
 import { clearRegisteredSecrets, redact } from "../../src/runtime/redaction.js";
-import { projectVerify } from "../../src/verify/project-verifier.js";
+import { projectVerify, verificationConfinementBackend } from "../../src/verify/project-verifier.js";
 
 interface Fixture {
   repoRoot: string;
@@ -102,36 +102,24 @@ afterEach(async () => {
 describe("projectVerify", () => {
   it("derives its managed worktree name from the artifact run id", async () => {
     const fixture = await frozenFixture();
-    const marker = join(await temporaryDirectory("ca-project-verifier-marker-"), "cwd.txt");
 
-    await projectVerify({
+    const result = await projectVerify({
       repoRoot: fixture.repoRoot,
       artifact: fixture.artifact,
-      commands: [command({
-        args: [
-          "-e",
-          `require('node:fs').writeFileSync(${JSON.stringify(marker)}, process.cwd())`,
-        ],
-      })],
+      commands: [command({ args: ["-e", "process.stdout.write(process.cwd())"] })],
     });
 
-    expect(await readFile(marker, "utf8")).toMatch(/verify-project-verifier$/);
+    expect(result.outputLogs[0]?.text).toMatch(/verify-project-verifier$/);
   });
 
   it("evaluates verificationId once to select its managed worktree name", async () => {
     const fixture = await frozenFixture();
-    const marker = join(await temporaryDirectory("ca-project-verifier-marker-"), "cwd.txt");
     let calls = 0;
 
-    await projectVerify({
+    const result = await projectVerify({
       repoRoot: fixture.repoRoot,
       artifact: fixture.artifact,
-      commands: [command({
-        args: [
-          "-e",
-          `require('node:fs').writeFileSync(${JSON.stringify(marker)}, process.cwd())`,
-        ],
-      })],
+      commands: [command({ args: ["-e", "process.stdout.write(process.cwd())"] })],
       verificationId: () => {
         calls += 1;
         return "slice-2-attempt-0";
@@ -139,7 +127,7 @@ describe("projectVerify", () => {
     });
 
     expect(calls).toBe(1);
-    expect(await readFile(marker, "utf8")).toMatch(/verify-slice-2-attempt-0$/);
+    expect(result.outputLogs[0]?.text).toMatch(/verify-slice-2-attempt-0$/);
   });
 
   it("records a passing Host-authorized command without mutation", async () => {
@@ -164,7 +152,8 @@ describe("projectVerify", () => {
     expect(result.evidence.commands).toEqual([
       expect.objectContaining({
         id: "pass",
-        confinement: "none",
+        confinement: verificationConfinementBackend(process.platform as never, process.arch)
+          ?? "none",
         networkPolicy: "unenforced",
         requestedNetwork: "denied",
         skipped: false,
@@ -234,9 +223,12 @@ describe("projectVerify", () => {
   it("detects a tracked mutation hidden by the skip-worktree index bit", async () => {
     const fixture = await frozenFixture();
 
+    // Confinement blocks these writes outright; exercise detection where no
+    // confinement backend exists.
     const result = await projectVerify({
       repoRoot: fixture.repoRoot,
       artifact: fixture.artifact,
+      arch: "unconfined-test-arch",
       commands: [command({
         id: "hidden-mutation",
         args: [
@@ -359,9 +351,12 @@ describe("projectVerify", () => {
   it("detects a clean status after the verification command changes HEAD", async () => {
     const fixture = await frozenFixture();
 
+    // Confinement blocks these writes outright; exercise detection where no
+    // confinement backend exists.
     const result = await projectVerify({
       repoRoot: fixture.repoRoot,
       artifact: fixture.artifact,
+      arch: "unconfined-test-arch",
       commands: [command({
         id: "move-head",
         executable: "git",
@@ -537,3 +532,56 @@ describe("projectVerify", () => {
     expect(redact(secret)).toBe(secret);
   });
 });
+
+describe.runIf(verificationConfinementBackend(process.platform as never, process.arch) !== null)(
+  "confined verification",
+  () => {
+    it("cannot write outside its worktree or read credential stores", async () => {
+      const fixture = await frozenFixture();
+      const outside = join(await temporaryDirectory("ca-verify-outside-"), "escaped.txt");
+      const home = await temporaryDirectory("ca-verify-home-");
+      await mkdir(join(home, ".ssh"));
+      await writeFile(join(home, ".ssh", "id_ed25519"), "PRIVATE KEY\n");
+      const previousHome = process.env.HOME;
+      process.env.HOME = home;
+      try {
+        const result = await projectVerify({
+          repoRoot: fixture.repoRoot,
+          artifact: fixture.artifact,
+          commands: [
+            command({
+              id: "escape",
+              args: ["-e", `require('node:fs').writeFileSync(${JSON.stringify(outside)}, 'x')`],
+            }),
+            command({
+              id: "steal",
+              args: [
+                "-e",
+                `process.stdout.write(require('node:fs').readFileSync(${
+                  JSON.stringify(join(home, ".ssh", "id_ed25519"))}, 'utf8'))`,
+              ],
+            }),
+            command({
+              id: "local-write",
+              args: ["-e", "require('node:fs').writeFileSync(require('node:os').tmpdir() + '/ok', 'x')"],
+            }),
+          ],
+        });
+
+        expect(result.failures).toEqual(expect.arrayContaining([
+          "command-failed:escape",
+          "command-failed:steal",
+        ]));
+        expect(result.failures).not.toContain("command-failed:local-write");
+        expect(result.outputLogs.map(log => log.text).join("")).not.toContain("PRIVATE KEY");
+        await expect(access(outside)).rejects.toMatchObject({ code: "ENOENT" });
+        expect(result.evidence.commands.every(entry => entry.confinement === "macos-seatbelt"))
+          .toBe(true);
+      } finally {
+        if (previousHome === undefined) delete process.env.HOME;
+        else process.env.HOME = previousHome;
+      }
+    });
+  },
+);
+

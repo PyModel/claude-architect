@@ -104,7 +104,7 @@ function reviewRun(overrides: {
       }),
     },
     git: async (_cwd, args) => {
-      if (args[0] === "diff") return overrides.patch ?? gitResult("exact patch\n");
+      if (args[1] === "diff") return overrides.patch ?? gitResult("exact patch\n");
       if (args.includes(`${candidate.anchorRef}^{commit}`)) {
         return overrides.anchor ?? gitResult(`${candidate.candidateCommitOid}\n`);
       }

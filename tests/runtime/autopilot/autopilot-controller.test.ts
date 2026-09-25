@@ -13,8 +13,6 @@ import type { AutopilotWorkflowState } from "../../../src/autopilot/types.js";
 import type { PipelineResult } from "../../../src/pipeline/pipeline-runtime.js";
 import type { AutopilotSpec } from "../../../src/protocol/autopilot-spec.js";
 import type { ReviewSnapshot } from "../../../src/runtime/review-snapshot.js";
-import type { HostingAdapter } from "../../../src/ship/hosting-adapter.js";
-import { GitHubCliAdapter } from "../../../src/ship/github-cli-adapter.js";
 
 const REPOSITORY = "/repo";
 const WORKFLOW_ID = "12345678-1234-4123-8123-123456789abc";
@@ -26,8 +24,6 @@ const SECOND_TREE = "5".repeat(40);
 const FIRST_MANIFEST = "a".repeat(64);
 const SECOND_MANIFEST = "b".repeat(64);
 const NOW = "2026-07-21T12:00:00.000Z";
-const DEADLINE = "2026-07-21T12:30:00.000Z";
-const PR_URL = "https://github.com/openai/claude-architect/pull/42";
 
 function verification() {
   return [{
@@ -59,7 +55,7 @@ function delegation(objective: string) {
 
 function validSpec(): AutopilotSpec {
   return {
-    specVersion: "1",
+    specVersion: "2",
     topic: "delegation-autopilot",
     base: { remote: "origin", branch: "main" },
     tasks: [
@@ -76,14 +72,6 @@ function validSpec(): AutopilotSpec {
     ],
     finalSuccessCriteria: ["The complete branch passes every release gate."],
     finalVerification: verification(),
-    shipping: {
-      provider: "github",
-      draft: true,
-      markReadyWhenRequiredChecksPass: true,
-      requiredChecksTimeoutMs: 1_800_000,
-      pullRequestTitle: "Add delegation autopilot",
-      pullRequestBody: "Implements the reviewed autonomous workflow.",
-    },
   };
 }
 
@@ -170,21 +158,21 @@ function eligibilityFor(
 }
 
 function resumedState(
-  phase: "running-task" | "waiting-required-checks" | "ready-for-human-review",
+  phase: "running-task" | "cleaning-up" | "ready-for-human-review",
 ): AutopilotWorkflowState {
-  const shipping = phase === "waiting-required-checks" || phase === "ready-for-human-review";
+  const reviewed = phase === "cleaning-up" || phase === "ready-for-human-review";
   const terminal = phase === "ready-for-human-review";
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId: WORKFLOW_ID,
     repositoryIdentity: branch.repositoryIdentity,
     baseCommitOid: BASE,
     workflowRef: branch.branchRef,
     worktreePath: branch.worktreePath,
     autopilotSpecHash: canonicalArtifactHash(validSpec()),
-    revision: shipping ? 8 : 3,
+    revision: reviewed ? 8 : 3,
     phase,
-    currentTaskIndex: shipping ? 2 : 1,
+    currentTaskIndex: reviewed ? 2 : 1,
     tasks: [{
       id: "contracts",
       runId: "run-contracts",
@@ -194,30 +182,24 @@ function resumedState(
       status: "promoted",
     }, {
       id: "controller",
-      runId: shipping ? "run-controller" : null,
-      candidateManifestHash: shipping ? SECOND_MANIFEST : null,
-      eligibilityHash: shipping ? "7".repeat(64) : null,
-      promotionCommitOid: shipping ? SECOND_COMMIT : null,
-      status: shipping ? "promoted" : "running",
+      runId: reviewed ? "run-controller" : null,
+      candidateManifestHash: reviewed ? SECOND_MANIFEST : null,
+      eligibilityHash: reviewed ? "7".repeat(64) : null,
+      promotionCommitOid: reviewed ? SECOND_COMMIT : null,
+      status: reviewed ? "promoted" : "running",
     }],
     intentJournal: {
       ref: "journal.ndjson",
       entryCount: 2,
       lastEntryHash: "8".repeat(64),
     },
-    finalGate: shipping ? {
+    finalGate: reviewed ? {
       reportRef: "final-branch-report.json",
       reportHash: "9".repeat(64),
       headCommitOid: SECOND_COMMIT,
       eligibilityHash: "9".repeat(64),
     } : null,
-    shipping: {
-      branch: branch.branch,
-      prNumber: shipping ? 42 : null,
-      prUrl: shipping ? PR_URL : null,
-      ciDeadlineAt: DEADLINE,
-    },
-    ciObservations: [],
+    branch: branch.branch,
     cleanup: terminal ? {
       status: "succeeded",
       worktreeRemoved: true,
@@ -383,7 +365,6 @@ class MemoryWorkflowStore implements WorkflowStorePort {
 }
 
 function harness(overrides: {
-  preflightError?: Error & { classification?: string };
   branchError?: Error & { classification?: string };
   branchIdentity?: WorkflowBranchIdentity;
   storeCreateError?: Error;
@@ -405,35 +386,16 @@ function harness(overrides: {
     headCommitOid?: string;
     eligible?: boolean;
     reasons?: string[];
-    status?: "ready-to-ship" | "human-decision-required";
+    status?: "ready-for-human-review" | "human-decision-required";
   };
-  pushError?: Error & { classification?: string };
-  pushHead?: string;
-  pullRequestError?: Error & { classification?: string };
-  pullRequestHead?: string;
-  pullRequestDraft?: boolean;
-  checks?: Array<{
-    result: "missing" | "pending" | "failed" | "passed";
-    headCommitOid?: string;
-    checks: Array<{
-      bucket: "pass" | "pending" | "fail" | "cancel" | "skipping";
-      name: string;
-      state: string;
-      link: string | null;
-    }>;
-  }>;
-  checksError?: Error & { classification?: string };
-  markReadyError?: Error & { classification?: string };
-  readyHead?: string;
-  readyDraft?: boolean;
   cleanup?: { ok: true; worktreeRemoved: boolean; refsRemoved: boolean }
     | { ok: false; classification: "cleanup-failed" };
   branchLoadMissing?: boolean;
   revalidation?: { ok: false; classification: "head-changed" };
   now?: () => string;
-  sleepError?: Error & { classification?: string };
   lockReleaseError?: Error;
-  hostingAdapter?: HostingAdapter;
+  decisionAuthority?: "autonomous" | "human";
+  identityMissing?: boolean;
 } = {}) {
   const events: string[] = [];
   const operations: string[] = [];
@@ -471,15 +433,6 @@ function harness(overrides: {
       operations.push("lock:released");
       if (overrides.lockReleaseError !== undefined) throw overrides.lockReleaseError;
     }
-  });
-  const preflight = vi.fn(async () => {
-    operations.push("side-effect:preflight");
-    if (overrides.preflightError !== undefined) throw overrides.preflightError;
-    return {
-      provider: "github" as const,
-      repository: "openai/claude-architect",
-      canonicalHttpsUrl: "https://github.com/openai/claude-architect.git",
-    };
   });
   const createBranch = vi.fn(async () => {
     operations.push("side-effect:create-branch");
@@ -522,7 +475,7 @@ function harness(overrides: {
     operations.push("side-effect:final-review");
     if (overrides.finalReviewError !== undefined) throw overrides.finalReviewError;
     return {
-      reportVersion: "1" as const,
+      reportVersion: "2" as const,
       workflowId: overrides.finalReport?.workflowId ?? WORKFLOW_ID,
       baseCommitOid: BASE,
       headCommitOid: overrides.finalReport?.headCommitOid ?? SECOND_COMMIT,
@@ -533,63 +486,8 @@ function harness(overrides: {
       taskEvidenceHashes: ["a".repeat(64), "b".repeat(64)],
       eligible: overrides.finalReport?.eligible ?? true,
       reasons: overrides.finalReport?.reasons ?? [],
-      status: overrides.finalReport?.status ?? "ready-to-ship",
+      status: overrides.finalReport?.status ?? "ready-for-human-review",
       evaluatedAt: NOW,
-    };
-  });
-  const pushBranch = vi.fn(async () => {
-    operations.push("side-effect:push");
-    if (overrides.pushError !== undefined) throw overrides.pushError;
-    return { remoteHead: overrides.pushHead ?? SECOND_COMMIT };
-  });
-  const ensureDraftPullRequest = vi.fn(async () => {
-    operations.push("side-effect:create-draft-pr");
-    if (overrides.pullRequestError !== undefined) throw overrides.pullRequestError;
-    return {
-      number: 42,
-      url: PR_URL,
-      repository: "openai/claude-architect",
-      baseBranch: "main",
-      headBranch: branch.branch,
-      headCommitOid: overrides.pullRequestHead ?? SECOND_COMMIT,
-      draft: overrides.pullRequestDraft ?? true,
-    };
-  });
-  let checksIndex = 0;
-  const checkResults = overrides.checks ?? [{
-    result: "pending" as const,
-    checks: [{
-      bucket: "pending" as const,
-      name: "test",
-      state: "IN_PROGRESS",
-      link: null,
-    }],
-  }, {
-    result: "passed" as const,
-    checks: [{
-      bucket: "pass" as const,
-      name: "test",
-      state: "SUCCESS",
-      link: "https://github.com/openai/claude-architect/actions/runs/1",
-    }],
-  }];
-  const requiredChecks = vi.fn(async (request: { headCommitOid: string }) => {
-    operations.push("side-effect:required-checks");
-    if (overrides.checksError !== undefined) throw overrides.checksError;
-    const result = checkResults[Math.min(checksIndex++, checkResults.length - 1)]!;
-    return { ...result, headCommitOid: result.headCommitOid ?? request.headCommitOid };
-  });
-  const markReady = vi.fn(async () => {
-    operations.push("side-effect:mark-ready");
-    if (overrides.markReadyError !== undefined) throw overrides.markReadyError;
-    return {
-      number: 42,
-      url: PR_URL,
-      repository: "openai/claude-architect",
-      baseBranch: "main",
-      headBranch: branch.branch,
-      headCommitOid: overrides.readyHead ?? SECOND_COMMIT,
-      draft: overrides.readyDraft ?? false,
     };
   });
   const cleanup = vi.fn(async () => {
@@ -599,10 +497,6 @@ function harness(overrides: {
   const loadBranch = vi.fn(async () => overrides.branchLoadMissing ? null : branch);
   const revalidate = vi.fn(async () => overrides.revalidation ?? ({ ok: true as const }));
   const repositoryIdentity = vi.fn(async () => branch.repositoryIdentity);
-  const sleep = vi.fn(async (milliseconds: number) => {
-    operations.push(`side-effect:sleep:${milliseconds}`);
-    if (overrides.sleepError !== undefined) throw overrides.sleepError;
-  });
 
   const dependencies = {
     workflowId,
@@ -616,16 +510,9 @@ function harness(overrides: {
     eligibilityEvaluator: { evaluate },
     promoter: { promote },
     finalBranchReviewer: { review: finalReview },
-    hostingAdapter: overrides.hostingAdapter ?? {
-      preflight,
-      pushBranch,
-      ensureDraftPullRequest,
-      requiredChecks,
-      markReady,
-    },
-    requiredChecksPollIntervalMs: 1_000,
-    sleep,
     emit: (event: string) => { events.push(event); },
+    decisionAuthority: () => overrides.decisionAuthority ?? "autonomous",
+    commitIdentityAvailable: async () => overrides.identityMissing !== true,
   } as unknown as AutopilotControllerDependencies;
 
   return {
@@ -636,29 +523,23 @@ function harness(overrides: {
     spies: {
       workflowId,
       lock,
-      preflight,
       createBranch,
       runPipeline,
       createSnapshot,
       evaluate,
       promote,
       finalReview,
-      pushBranch,
-      ensureDraftPullRequest,
-      requiredChecks,
-      markReady,
       cleanup,
       loadBranch,
       revalidate,
       repositoryIdentity,
-      sleep,
       workflowStore: dependencies.workflowStore,
     },
   };
 }
 
-describe("AutopilotController start-through-shipping", () => {
-  it("promotes every task, ships a draft, waits for required checks, and marks ready", async () => {
+describe("AutopilotController start-through-hand-off", () => {
+  it("promotes every task, final-reviews the branch, and hands it off without publishing", async () => {
     const run = harness();
 
     const result = await run.controller.start(REPOSITORY, validSpec());
@@ -668,18 +549,14 @@ describe("AutopilotController start-through-shipping", () => {
       phase: "ready-for-human-review",
       currentTaskIndex: 2,
       headCommitOid: SECOND_COMMIT,
-      pullRequest: {
-        number: 42,
-        draft: false,
-        headCommitOid: SECOND_COMMIT,
-      },
-      shipping: { prNumber: 42, prUrl: PR_URL, ciDeadlineAt: DEADLINE },
+      branch: branch.branch,
       finalGate: { headCommitOid: SECOND_COMMIT },
       cleanup: { status: "succeeded", worktreeRemoved: true, lockReleased: true },
       terminal: { classification: "ready-for-human-review" },
     });
+    expect(result).not.toHaveProperty("pullRequest");
+    expect(result).not.toHaveProperty("shipping");
     expect(result.tasks.map(task => task.status)).toEqual(["promoted", "promoted"]);
-    expect(result.pullRequest.headCommitOid).toBe(result.headCommitOid);
     expect(run.events).toEqual([
       "preflight",
       "task:contracts",
@@ -687,11 +564,6 @@ describe("AutopilotController start-through-shipping", () => {
       "task:controller",
       "promote:controller",
       "final-review",
-      "push",
-      "draft-pr",
-      "checks:pending",
-      "checks:pass",
-      "mark-ready",
       "cleanup",
       "ready",
     ]);
@@ -702,13 +574,8 @@ describe("AutopilotController start-through-shipping", () => {
       expectedRevision: 5,
       checkoutPath: branch.worktreePath,
     }));
-    expect(run.spies.pushBranch).toHaveBeenCalledWith(expect.objectContaining({
-      headCommitOid: SECOND_COMMIT,
-    }));
-    expect(run.spies.markReady).toHaveBeenCalledWith(expect.objectContaining({
-      headCommitOid: SECOND_COMMIT,
-    }));
-    expect(run.spies.cleanup).toHaveBeenCalledWith(branch, SECOND_COMMIT);
+    // The reviewed branch is the hand-off, so cleanup must keep it.
+    expect(run.spies.cleanup).toHaveBeenCalledWith(branch, SECOND_COMMIT, { retainBranch: true });
 
     expect(run.operations.indexOf("persist:running-task"))
       .toBeLessThan(run.operations.indexOf("side-effect:task:0"));
@@ -719,13 +586,9 @@ describe("AutopilotController start-through-shipping", () => {
     expect(run.operations.indexOf("side-effect:promote:1"))
       .toBeLessThan(run.operations.indexOf("persist:final-review"));
     expect(run.operations.indexOf("side-effect:final-review"))
-      .toBeLessThan(run.operations.indexOf("side-effect:push"));
-    expect(run.operations.indexOf("side-effect:push"))
-      .toBeLessThan(run.operations.indexOf("side-effect:create-draft-pr"));
-    expect(run.operations.indexOf("side-effect:create-draft-pr"))
-      .toBeLessThan(run.operations.indexOf("side-effect:required-checks"));
-    expect(run.operations.indexOf("side-effect:required-checks"))
-      .toBeLessThan(run.operations.indexOf("side-effect:mark-ready"));
+      .toBeLessThan(run.operations.indexOf("persist:cleaning-up"));
+    expect(run.operations.indexOf("persist:cleaning-up"))
+      .toBeLessThan(run.operations.indexOf("side-effect:cleanup"));
     expect(run.operations.indexOf("side-effect:cleanup"))
       .toBeLessThan(run.operations.indexOf("lock:released"));
     expect(run.operations.indexOf("lock:released"))
@@ -744,18 +607,47 @@ describe("AutopilotController start-through-shipping", () => {
     expect(run.operations).toEqual([]);
   });
 
-  it("halts on shipping preflight failure before branch creation or a Producer", async () => {
-    const error = Object.assign(new Error("auth failed"), {
-      classification: "preflight-auth-failed",
-    });
-    const run = harness({ preflightError: error });
+  it("refuses to start under the human decision authority before any side effect", async () => {
+    const run = harness({ decisionAuthority: "human" });
 
     await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "preflight-auth-failed",
+      classification: "decision-authority-human",
     });
 
+    expect(run.operations).toEqual([]);
     expect(run.spies.createBranch).not.toHaveBeenCalled();
+  });
+
+  it("refuses to start without a Git identity before any side effect", async () => {
+    const run = harness({ identityMissing: true });
+
+    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
+      classification: "git-identity-missing",
+    });
+    expect(run.operations).toEqual([]);
+  });
+
+  it("refuses to resume an active workflow under the human decision authority", async () => {
+    const run = harness({ decisionAuthority: "human" });
+    const state = resumedState("running-task");
+    run.store.state = structuredClone(state);
+
+    await expect(run.controller.resume(REPOSITORY, WORKFLOW_ID)).rejects.toMatchObject({
+      classification: "decision-authority-human",
+    });
+
+    expect(run.store.state).toEqual(state);
+    expect(run.operations).toEqual(["lock", "read:state", "lock:released"]);
     expect(run.spies.runPipeline).not.toHaveBeenCalled();
+  });
+
+  it("finishes an already-promoted workflow under the human decision authority", async () => {
+    const run = harness({ decisionAuthority: "human" });
+    run.store.state = resumedState("cleaning-up");
+
+    await expect(run.controller.resume(REPOSITORY, WORKFLOW_ID)).resolves.toMatchObject({
+      phase: "ready-for-human-review",
+    });
     expect(run.spies.promote).not.toHaveBeenCalled();
   });
 
@@ -771,7 +663,6 @@ describe("AutopilotController start-through-shipping", () => {
 
     expect(run.operations).toEqual([
       "lock",
-      "side-effect:preflight",
       "side-effect:create-branch",
       "lock:released",
     ]);
@@ -787,18 +678,6 @@ describe("AutopilotController start-through-shipping", () => {
     expect(run.spies.cleanup).toHaveBeenCalledWith(branch, BASE);
     expect(run.spies.runPipeline).not.toHaveBeenCalled();
     expect(run.spies.finalReview).not.toHaveBeenCalled();
-  });
-
-  it("cleans an exact created branch on shipping repository mismatch", async () => {
-    const mismatched = { ...branch, ownerRepo: "elsewhere/repository" };
-    const run = harness({ branchIdentity: mismatched });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "repository-identity-mismatch",
-    });
-
-    expect(run.spies.cleanup).toHaveBeenCalledWith(mismatched, BASE);
-    expect(run.spies.runPipeline).not.toHaveBeenCalled();
   });
 
   it("halts a failed pipeline without snapshotting or promoting", async () => {
@@ -869,7 +748,6 @@ describe("AutopilotController start-through-shipping", () => {
     expect(run.spies.evaluate).not.toHaveBeenCalled();
     expect(run.spies.promote).not.toHaveBeenCalled();
     expect(run.spies.finalReview).not.toHaveBeenCalled();
-    expect(run.spies.pushBranch).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -902,10 +780,6 @@ describe("AutopilotController start-through-shipping", () => {
         "eligibility",
         "promotion",
         "final-review",
-        "push",
-        "create-draft-pr",
-        "required-checks",
-        "mark-ready",
         "cleanup",
       ] as const;
       const operationPrefix: Record<(typeof orderedCollaborators)[number], string> = {
@@ -914,10 +788,6 @@ describe("AutopilotController start-through-shipping", () => {
         eligibility: "side-effect:eligibility",
         promotion: "side-effect:promote:",
         "final-review": "side-effect:final-review",
-        push: "side-effect:push",
-        "create-draft-pr": "side-effect:create-draft-pr",
-        "required-checks": "side-effect:required-checks",
-        "mark-ready": "side-effect:mark-ready",
         cleanup: "side-effect:cleanup",
       };
       const redIndex = orderedCollaborators.indexOf(stage);
@@ -961,7 +831,7 @@ describe("AutopilotController start-through-shipping", () => {
     expect(run.events).toEqual(["preflight", "task:contracts", "promote:contracts"]);
   });
 
-  it("halts on a human-decision-required final report before push", async () => {
+  it("halts on a human-decision-required final report before cleanup", async () => {
     const run = harness({
       finalReport: {
         eligible: false,
@@ -978,229 +848,17 @@ describe("AutopilotController start-through-shipping", () => {
       phase: "human-decision-required",
       finalGate: { headCommitOid: SECOND_COMMIT },
     });
-    expect(run.spies.pushBranch).not.toHaveBeenCalled();
-    expect(run.spies.ensureDraftPullRequest).not.toHaveBeenCalled();
-    expect(run.spies.requiredChecks).not.toHaveBeenCalled();
-    expect(run.spies.markReady).not.toHaveBeenCalled();
     expect(run.spies.cleanup).not.toHaveBeenCalled();
   });
 
-  it("halts on a final report for a stale head before push", async () => {
+  it("halts on a final report for a stale head before cleanup", async () => {
     const run = harness({ finalReport: { headCommitOid: FIRST_COMMIT } });
 
     await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
       classification: "stale-final-review",
     });
 
-    expect(run.spies.pushBranch).not.toHaveBeenCalled();
-    expect(run.spies.ensureDraftPullRequest).not.toHaveBeenCalled();
-    expect(run.spies.requiredChecks).not.toHaveBeenCalled();
-    expect(run.spies.markReady).not.toHaveBeenCalled();
     expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("halts on push failure before creating a pull request", async () => {
-    const pushError = Object.assign(new Error("push failed"), {
-      classification: "push-command-failed",
-    });
-    const run = harness({ pushError });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "push-command-failed",
-    });
-
-    expect(run.spies.ensureDraftPullRequest).not.toHaveBeenCalled();
-    expect(run.spies.requiredChecks).not.toHaveBeenCalled();
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("halts on pushed-head mismatch before creating a pull request", async () => {
-    const run = harness({ pushHead: FIRST_COMMIT });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "push-head-mismatch",
-    });
-
-    expect(run.spies.ensureDraftPullRequest).not.toHaveBeenCalled();
-    expect(run.spies.requiredChecks).not.toHaveBeenCalled();
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("halts on pull-request ambiguity before checking CI", async () => {
-    const pullRequestError = Object.assign(new Error("ambiguous"), {
-      classification: "draft-pull-request-ambiguous",
-    });
-    const run = harness({ pullRequestError });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "draft-pull-request-ambiguous",
-    });
-
-    expect(run.spies.requiredChecks).not.toHaveBeenCalled();
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("halts on draft pull-request identity mismatch before checking CI", async () => {
-    const run = harness({ pullRequestHead: FIRST_COMMIT });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "draft-pull-request-identity-mismatch",
-    });
-
-    expect(run.spies.requiredChecks).not.toHaveBeenCalled();
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("halts when the required-check set is missing before mark-ready", async () => {
-    const run = harness({ checks: [{ result: "missing", checks: [] }] });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "required-checks-missing",
-    });
-
-    expect(run.store.state?.ciObservations).toEqual([expect.objectContaining({
-      result: "missing",
-      checks: [],
-    })]);
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("halts pending checks at the original absolute deadline", async () => {
-    const times = [NOW, NOW, "2026-07-21T12:29:59.500Z", DEADLINE];
-    const now = vi.fn(() => times.shift() ?? DEADLINE);
-    const run = harness({
-      now,
-      checks: [{
-        result: "pending",
-        checks: [{ bucket: "pending", name: "test", state: "IN_PROGRESS", link: null }],
-      }],
-    });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "required-checks-timeout",
-    });
-
-    expect(run.store.state?.shipping.ciDeadlineAt).toBe(DEADLINE);
-    expect(run.spies.requiredChecks).toHaveBeenCalledTimes(1);
-    expect(run.spies.sleep).toHaveBeenCalledWith(500);
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("halts red required checks before mark-ready", async () => {
-    const run = harness({
-      checks: [{
-        result: "failed",
-        checks: [{ bucket: "fail", name: "test", state: "FAILURE", link: null }],
-      }],
-    });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "required-checks-red",
-    });
-
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("halts on a required-check query failure before mark-ready", async () => {
-    const error = Object.assign(new Error("checks unavailable"), {
-      classification: "required-checks-query-failed",
-    });
-    const run = harness({ checksError: error });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "required-checks-query-failed",
-    });
-
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("halts on a bounded-wait failure before another check query", async () => {
-    const error = Object.assign(new Error("wait failed"), {
-      classification: "checks-wait-failed",
-    });
-    const run = harness({ sleepError: error });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "checks-wait-failed",
-    });
-
-    expect(run.spies.requiredChecks).toHaveBeenCalledTimes(1);
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("rejects an all-pass observation returned after the absolute deadline", async () => {
-    const times = [NOW, "2026-07-21T12:29:59.999Z", DEADLINE];
-    const run = harness({
-      now: vi.fn(() => times.shift() ?? DEADLINE),
-      checks: [{
-        result: "passed",
-        checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-      }],
-    });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "required-checks-timeout",
-    });
-
-    expect(run.spies.requiredChecks).toHaveBeenCalledTimes(1);
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("never marks ready from passing checks bound to an earlier head", async () => {
-    const times = [NOW, "2026-07-21T12:29:59.999Z", DEADLINE];
-    const run = harness({
-      now: vi.fn(() => times.shift() ?? DEADLINE),
-      checks: [{
-        result: "passed",
-        headCommitOid: FIRST_COMMIT,
-        checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-      }],
-    });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "required-checks-timeout",
-    });
-    expect(run.store.state?.ciObservations).toEqual([
-      expect.objectContaining({ result: "passed", headCommitOid: FIRST_COMMIT }),
-    ]);
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-  });
-
-  it("halts a mark-ready failure before cleanup", async () => {
-    const markReadyError = Object.assign(new Error("ready failed"), {
-      classification: "mark-ready-command-failed",
-    });
-    const run = harness({ markReadyError });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "mark-ready-command-failed",
-    });
-
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-    expect(run.events).not.toContain("cleanup");
-    expect(run.events).not.toContain("ready");
-  });
-
-  it("halts on ready pull-request identity mismatch before cleanup", async () => {
-    const run = harness({ readyDraft: true });
-
-    await expect(run.controller.start(REPOSITORY, validSpec())).rejects.toMatchObject({
-      classification: "mark-ready-identity-mismatch",
-    });
-
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-    expect(run.events).not.toContain("cleanup");
-    expect(run.events).not.toContain("ready");
   });
 
   it("records cleanup failure and cannot produce the success terminal", async () => {
@@ -1259,18 +917,7 @@ describe("AutopilotController start-through-shipping", () => {
 
   it("returns redacted status using only read-only collaborators", async () => {
     const run = harness();
-    run.store.state = resumedState("waiting-required-checks");
-    run.store.state.ciObservations.push({
-      observedAt: NOW,
-      result: "pending",
-      headCommitOid: SECOND_COMMIT,
-      checks: [{
-        bucket: "pending",
-        name: "test",
-        state: "IN_PROGRESS",
-        link: "https://github.com/openai/claude-architect/actions/runs/secret",
-      }],
-    });
+    run.store.state = resumedState("cleaning-up");
 
     const result = await run.controller.status(REPOSITORY, WORKFLOW_ID);
 
@@ -1278,14 +925,13 @@ describe("AutopilotController start-through-shipping", () => {
       workflowId: WORKFLOW_ID,
       repositoryIdentity: "[redacted]",
       worktreePath: "[redacted]",
-      shipping: { prUrl: "[redacted]" },
-      ciObservations: [{ checks: [{ link: "[redacted]" }] }],
+      branch: branch.branch,
     });
     expect(run.operations).toEqual(["read:state"]);
     expect(run.spies.lock).not.toHaveBeenCalled();
-    expect(run.spies.preflight).not.toHaveBeenCalled();
     expect(run.spies.revalidate).not.toHaveBeenCalled();
     expect(run.spies.runPipeline).not.toHaveBeenCalled();
+    expect(run.spies.cleanup).not.toHaveBeenCalled();
   });
 
   it("fails status identity validation without reading branch ownership or mutating", async () => {
@@ -1321,7 +967,7 @@ describe("AutopilotController start-through-shipping", () => {
     expect(result).toMatchObject({
       phase: "ready-for-human-review",
       currentTaskIndex: 2,
-      shipping: { ciDeadlineAt: DEADLINE },
+      branch: branch.branch,
     });
     expect(run.spies.runPipeline).toHaveBeenCalledTimes(1);
     expect(run.spies.promote).toHaveBeenCalledWith(expect.objectContaining({
@@ -1351,278 +997,12 @@ describe("AutopilotController start-through-shipping", () => {
     }));
   });
 
-  it("resumes pending shipping checks only until the original deadline", async () => {
-    const times = ["2026-07-21T12:29:59.500Z", "2026-07-21T12:29:59.500Z", DEADLINE];
-    const run = harness({
-      now: vi.fn(() => times.shift() ?? DEADLINE),
-      checks: [{
-        result: "pending",
-        checks: [{ bucket: "pending", name: "test", state: "IN_PROGRESS", link: null }],
-      }],
-    });
-    run.store.state = resumedState("waiting-required-checks");
-
-    await expect(run.controller.resume(REPOSITORY, WORKFLOW_ID)).rejects.toMatchObject({
-      classification: "required-checks-timeout",
-    });
-
-    expect(run.store.state?.shipping.ciDeadlineAt).toBe(DEADLINE);
-    expect(run.spies.requiredChecks).toHaveBeenCalledTimes(1);
-    expect(run.spies.sleep).toHaveBeenCalledWith(500);
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-  });
-
-  it("re-establishes exact draft PR identity before resumed check polling", async () => {
-    const run = harness({
-      checks: [{
-        result: "passed",
-        checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-      }],
-    });
-    run.store.state = resumedState("waiting-required-checks");
-
-    await run.controller.resume(REPOSITORY, WORKFLOW_ID);
-
-    expect(run.spies.ensureDraftPullRequest).toHaveBeenCalledTimes(1);
-    expect(run.operations.indexOf("side-effect:create-draft-pr"))
-      .toBeLessThan(run.operations.indexOf("side-effect:required-checks"));
-  });
-
-  it("rejects a resumed all-pass result returned at the original deadline", async () => {
-    const times = ["2026-07-21T12:29:59.999Z", DEADLINE];
-    const run = harness({
-      now: vi.fn(() => times.shift() ?? DEADLINE),
-      checks: [{
-        result: "passed",
-        checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-      }],
-    });
-    run.store.state = resumedState("waiting-required-checks");
-
-    await expect(run.controller.resume(REPOSITORY, WORKFLOW_ID)).rejects.toMatchObject({
-      classification: "required-checks-timeout",
-    });
-
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("replays marking-ready without polling required checks again", async () => {
-    const run = harness();
-    const state = resumedState("waiting-required-checks");
-    state.phase = "marking-ready";
-    state.ciObservations.push({
-      observedAt: "2026-07-21T12:29:00.000Z",
-      result: "passed",
-      headCommitOid: SECOND_COMMIT,
-      checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-    });
-    run.store.state = state;
-
-    const result = await run.controller.resume(REPOSITORY, WORKFLOW_ID);
-
-    expect(result).toMatchObject({ phase: "ready-for-human-review" });
-    expect(run.spies.ensureDraftPullRequest).toHaveBeenCalledTimes(1);
-    expect(run.spies.requiredChecks).not.toHaveBeenCalled();
-    expect(run.spies.markReady).toHaveBeenCalledTimes(1);
-    expect(run.spies.cleanup).toHaveBeenCalledTimes(1);
-  });
-
-  it("fails closed before replaying mark-ready without persisted all-pass proof", async () => {
-    const run = harness();
-    const state = resumedState("waiting-required-checks");
-    state.phase = "marking-ready";
-    run.store.state = state;
-
-    await expect(run.controller.resume(REPOSITORY, WORKFLOW_ID)).rejects.toMatchObject({
-      classification: "required-checks-proof-missing",
-    });
-
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).not.toHaveBeenCalled();
-  });
-
-  it("fails closed before replaying mark-ready from stale-head all-pass proof", async () => {
-    const run = harness();
-    const state = resumedState("waiting-required-checks");
-    state.phase = "marking-ready";
-    state.ciObservations.push({
-      observedAt: "2026-07-21T12:29:00.000Z",
-      result: "passed",
-      headCommitOid: FIRST_COMMIT,
-      checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-    });
-    run.store.state = state;
-
-    await expect(run.controller.resume(REPOSITORY, WORKFLOW_ID)).rejects.toMatchObject({
-      classification: "required-checks-proof-missing",
-    });
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-  });
-
-  it("observes an already-ready exact pull request after a mark-ready crash", async () => {
-    const run = harness({ pullRequestDraft: false });
-    const state = resumedState("waiting-required-checks");
-    state.phase = "marking-ready";
-    state.ciObservations.push({
-      observedAt: "2026-07-21T12:29:00.000Z",
-      result: "passed",
-      headCommitOid: SECOND_COMMIT,
-      checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-    });
-    run.store.state = state;
-
-    const result = await run.controller.resume(REPOSITORY, WORKFLOW_ID);
-
-    expect(result).toMatchObject({ phase: "ready-for-human-review" });
-    expect(run.spies.ensureDraftPullRequest).toHaveBeenCalledTimes(1);
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).toHaveBeenCalledTimes(1);
-  });
-
-  it("uses persisted exact-head proof when waiting-checks reconciliation finds the PR ready", async () => {
-    const run = harness({ pullRequestDraft: false });
-    const state = resumedState("waiting-required-checks");
-    state.ciObservations.push({
-      observedAt: "2026-07-21T12:29:00.000Z",
-      result: "passed",
-      headCommitOid: SECOND_COMMIT,
-      checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-    });
-    run.store.state = state;
-
-    await expect(run.controller.resume(REPOSITORY, WORKFLOW_ID)).resolves.toMatchObject({
-      phase: "ready-for-human-review",
-    });
-    expect(run.spies.requiredChecks).not.toHaveBeenCalled();
-    expect(run.spies.markReady).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([
-    ["after gh pr ready", false, 0],
-    ["before gh pr ready", true, 1],
-  ] as const)(
-    "recovers %s with a fresh real GitHub adapter",
-    async (_cutPoint, initialDraft, expectedReadyCalls) => {
-      const commands: Array<{ executable: "gh" | "git"; args: string[] }> = [];
-      let draft = true;
-      const createAdapter = () => {
-        const adapter = new GitHubCliAdapter();
-        Object.defineProperty(adapter, "runner", {
-          value: async (request: { executable: "gh" | "git"; args: string[] }) => {
-            commands.push({ executable: request.executable, args: [...request.args] });
-            const ok = (stdout = "") => ({
-              exitCode: 0,
-              stdout,
-              stderr: "",
-              truncated: { stdout: false, stderr: false },
-            });
-            if (request.args[0] === "version") return ok("gh version 2.96.0\n");
-            if (request.args[0] === "auth") return ok();
-            if (request.args[0] === "repo") {
-              return ok(JSON.stringify({
-                nameWithOwner: "openai/claude-architect",
-                url: "https://github.com/openai/claude-architect",
-              }));
-            }
-            if (request.args[0] === "pr" && request.args[1] === "list") {
-              return ok(JSON.stringify([{
-                number: 42,
-                url: PR_URL,
-                baseRefName: "main",
-                headRefName: branch.branch,
-                headRefOid: SECOND_COMMIT,
-                headRepository: { nameWithOwner: "openai/claude-architect" },
-                isDraft: draft,
-              }]));
-            }
-            if (request.args[0] === "pr" && request.args[1] === "view") {
-              return ok(JSON.stringify({
-                number: 42,
-                url: PR_URL,
-                baseRefName: "main",
-                headRefName: branch.branch,
-                headRefOid: SECOND_COMMIT,
-                headRepository: { nameWithOwner: "openai/claude-architect" },
-                isDraft: draft,
-              }));
-            }
-            if (request.args[0] === "pr" && request.args[1] === "checks") {
-              return ok(JSON.stringify([
-                { bucket: "pass", name: "test", state: "SUCCESS", link: null },
-              ]));
-            }
-            if (request.args[0] === "pr" && request.args[1] === "ready") {
-              draft = false;
-              return ok();
-            }
-            throw new Error(`unexpected command: ${request.executable} ${request.args.join(" ")}`);
-          },
-        });
-        return adapter;
-      };
-      if (!initialDraft) {
-        const preCrashAdapter = createAdapter();
-        await preCrashAdapter.ensureDraftPullRequest({
-          checkoutPath: branch.worktreePath,
-          target: {
-            provider: "github",
-            repository: "openai/claude-architect",
-            canonicalHttpsUrl: "https://github.com/openai/claude-architect.git",
-          },
-          baseBranch: "main",
-          headBranch: branch.branch,
-          headCommitOid: SECOND_COMMIT,
-          title: "Ship reviewed workflow",
-          body: "Crash recovery fixture.",
-        });
-        await preCrashAdapter.markReady({
-          checkoutPath: branch.worktreePath,
-          target: {
-            provider: "github",
-            repository: "openai/claude-architect",
-            canonicalHttpsUrl: "https://github.com/openai/claude-architect.git",
-          },
-          pullRequestNumber: 42,
-          headCommitOid: SECOND_COMMIT,
-        });
-      }
-      const resumeCommandIndex = commands.length;
-      const run = harness({ hostingAdapter: createAdapter() });
-      const state = resumedState("waiting-required-checks");
-      state.phase = "marking-ready";
-      state.ciObservations.push({
-        observedAt: "2026-07-21T12:29:00.000Z",
-        result: "passed",
-        headCommitOid: SECOND_COMMIT,
-        checks: [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-      });
-      run.store.state = state;
-
-      await expect(run.controller.resume(REPOSITORY, WORKFLOW_ID)).resolves.toMatchObject({
-        phase: "ready-for-human-review",
-      });
-
-      expect(commands.slice(resumeCommandIndex)
-        .filter(command => command.args.slice(0, 2).join(" ") === "pr ready"))
-        .toHaveLength(expectedReadyCalls);
-      expect(commands.filter(command => command.args.slice(0, 2).join(" ") === "pr ready"))
-        .toHaveLength(1);
-      expect(commands.some(command => command.args.slice(0, 2).join(" ") === "pr create"))
-        .toBe(false);
-      expect(commands.some(command => command.executable === "git" && command.args.includes("push")))
-        .toBe(false);
-    },
-  );
-
   it("fails closed when incomplete cleanup cannot be reproven", async () => {
     const run = harness({
       branchLoadMissing: true,
       cleanup: { ok: false, classification: "cleanup-failed" },
     });
-    const state = resumedState("waiting-required-checks");
-    state.phase = "cleaning-up";
+    const state = resumedState("cleaning-up");
     run.store.state = state;
     run.store.seedCleanupIntent(SECOND_COMMIT);
 
@@ -1631,13 +1011,12 @@ describe("AutopilotController start-through-shipping", () => {
     });
 
     expect(run.spies.revalidate).not.toHaveBeenCalled();
-    expect(run.spies.cleanup).toHaveBeenCalledWith(branch, SECOND_COMMIT);
+    expect(run.spies.cleanup).toHaveBeenCalledWith(branch, SECOND_COMMIT, { retainBranch: true });
   });
 
   it("reuses durable cleanup proof without repeating cleanup", async () => {
     const run = harness({ branchLoadMissing: true });
-    const state = resumedState("waiting-required-checks");
-    state.phase = "cleaning-up";
+    const state = resumedState("cleaning-up");
     run.store.state = state;
     run.store.seedCleanupIntent(SECOND_COMMIT, true);
 
@@ -1657,7 +1036,6 @@ describe("AutopilotController start-through-shipping", () => {
     expect(result).toEqual(terminal);
     expect(run.operations).toEqual(["lock", "read:state", "lock:released"]);
     expect(run.spies.loadBranch).not.toHaveBeenCalled();
-    expect(run.spies.preflight).not.toHaveBeenCalled();
     expect(run.spies.runPipeline).not.toHaveBeenCalled();
     expect(run.spies.cleanup).not.toHaveBeenCalled();
   });
@@ -1675,7 +1053,6 @@ describe("AutopilotController start-through-shipping", () => {
     expect(run.store.state).toEqual(state);
     expect(run.operations).toEqual(["lock", "read:state", "lock:released"]);
     expect(run.spies.loadBranch).not.toHaveBeenCalled();
-    expect(run.spies.preflight).not.toHaveBeenCalled();
     expect(run.spies.runPipeline).not.toHaveBeenCalled();
   });
 });
@@ -1733,7 +1110,6 @@ describe("AutopilotController workflow leases", () => {
       "lock:released",
     ]);
     expect(run.spies.loadBranch).not.toHaveBeenCalled();
-    expect(run.spies.preflight).not.toHaveBeenCalled();
     expect(run.spies.runPipeline).not.toHaveBeenCalled();
   });
 

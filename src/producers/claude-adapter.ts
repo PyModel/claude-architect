@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import type { ResolvedExecutable } from "../platform/platform-services.js";
-import { parseSemver, probeOsConfinedCli, runVersionProbe } from "./cli-probe.js";
+import { probeOsConfinedCli, runVersionProbe } from "./cli-probe.js";
 import {
   defaultHasOauthAccount,
   isProducerAuthenticated,

@@ -6,7 +6,7 @@ description: Execute an implementation plan with the Superpowers subagent-driven
 # Subagent-Driven Delegation
 
 ```claude-architect-protocol
-PROTOCOL_VERSION: 2.0.0
+PROTOCOL_VERSION: 3.0.0
 ```
 
 Superpowers `subagent-driven-development` (SDD) dispatches a fresh implementer subagent per task, reviews each task, and reviews the whole branch at the end. This skill runs that same loop with one substitution: **the implementer is a Claude Architect delegation, not a generic subagent.** Each task becomes a versioned Delegation Spec executed by an untrusted Producer in an isolated worktree, frozen as a Candidate Artifact, and independently verified by the runtime before any reviewer sees it.

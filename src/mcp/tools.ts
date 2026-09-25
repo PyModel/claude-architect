@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   AutopilotController,
   AutopilotControllerError,
@@ -26,10 +25,7 @@ import {
   type CandidateDecisionV2,
   type HumanCandidateDecisionV2,
 } from "../protocol/candidate-decision.js";
-import {
-  type PipelineGateCleared,
-  parsePipelineGateCleared,
-} from "../protocol/pipeline-gate-cleared.js";
+import type { PipelineGateCleared } from "../protocol/pipeline-gate-cleared.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { checkVersionCompat } from "../protocol/schema-loader.js";
 import { specSha256 } from "../protocol/spec-hash.js";
@@ -56,6 +52,7 @@ import {
 import type { RunManifest } from "../runtime/run-manifest.js";
 import {
   readRunDecisionSnapshot,
+  runDecision,
   type RunDecisionSnapshot,
 } from "../runtime/run-decision.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
@@ -64,7 +61,6 @@ import { NestedDelegationError, RuntimeError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { AcceptanceVerifier } from "../verify/acceptance-verifier.js";
 import { runAdvisorStage } from "../pipeline/advisor-stage.js";
-import { GitHubCliAdapter } from "../ship/github-cli-adapter.js";
 import {
   allowlistSufficiencyDiagnostic,
   checkAllowlistSufficiency,
@@ -229,17 +225,6 @@ function runtimeError(message: string, error: string): RuntimeError {
   return new RuntimeError(message, { toolError: error });
 }
 
-class LifecycleLockReleaseError extends AggregateError {
-  constructor(readonly primaryError: unknown, releaseError: unknown) {
-    const primaryMessage = primaryError instanceof Error ? primaryError.message : String(primaryError);
-    super(
-      [primaryError, releaseError],
-      `${primaryMessage}; checkout lock release failed`,
-    );
-    this.name = "LifecycleLockReleaseError";
-  }
-}
-
 function errorResult(error: unknown): ToolErrorResult {
   const classified = error instanceof AggregateError && error.errors.length > 0
     ? error.errors[0]
@@ -341,7 +326,6 @@ function createAutopilotController(deps: ToolDependencies): Pick<
       branchManager,
       workflowStore,
     }),
-    hostingAdapter: new GitHubCliAdapter(),
     ...(deps.abortSignal === undefined ? {} : { abortSignal: deps.abortSignal }),
     emit: (event: AutopilotControllerEvent) => deps.onProgress?.(event),
   });
@@ -988,81 +972,24 @@ export async function handleReviewCandidate(
  * one at exactly the moment that matters.
  */
 export interface DecisionAdvisory {
-  /** Human-readable cautions to show whoever confirms the decision. */
+  /** Why a person must decide; empty when the runtime proved everything it can. */
   warnings: string[];
-  /**
-   * The run is an independently verified candidate carrying no failure, and
-   * either (a) a durable pipeline-gate clearance bound to its archived
-   * candidate commit, or (b) a recorded `plainDelegate` provenance marker with
-   * no pipeline evidence — a plain `delegate` run never enters the pipeline
-   * gate, so there is nothing to clear or refuse, and its independent
-   * verification result is the only signal there is. An archive carrying
-   * neither the marker nor gate evidence proves nothing about its provenance
-   * and requires a human. This is deliberately not "warnings.length === 0": partial or
-   * malformed pipeline evidence (a refused gate, a mid-review salvage, a
-   * clearance record that doesn't match the archived commit) still refuses,
-   * because that IS positive evidence something did not go cleanly.
-   */
+  /** `verdictFor` would accept this candidate under the autonomous authority. */
   verifiedClean: boolean;
   /**
    * The archive could not be read, so nothing about this candidate is known.
-   * Distinct from "verified false" — the difference decides whether autonomous
-   * acceptance may proceed or must refuse.
+   * Distinct from "verified false" — an unreadable archive refuses rather than
+   * presenting an unknown candidate as a clean one.
    */
   unreadable: boolean;
 }
 
+/** The advisory is the acceptance rule's own verdict; there is no second rule. */
 function decisionAdvisoryForRun(run: ArchivedRun): DecisionAdvisory {
-  const refused = run.result.evidence.pipelineGateRefused;
-  const incomplete = run.result.evidence.pipelineReviewIncomplete;
-  const rawCleared = run.result.evidence.pipelineGateCleared;
-  const warnings: string[] = [];
-  if (isRecord(refused) && Array.isArray(refused.reasons)) {
-    warnings.push(
-      `the pipeline gate did NOT clear this candidate: ${
-        refused.reasons.filter(r => typeof r === "string").join("; ")}`,
-    );
-  }
-  if (isRecord(incomplete) && typeof incomplete.reason === "string") {
-    warnings.push(`the pipeline could not complete its own review: ${incomplete.reason}`);
-  }
-  // A plain `delegate` run records `plainDelegate: true` in its archived
-  // evidence at the terminal-archive funnel; pipeline-managed attempts never
-  // do. Autonomy keys on that positive marker plus the absence of every
-  // pipeline evidence key — an archive carrying neither the marker nor gate
-  // evidence proves nothing about its provenance and requires a human.
-  const plainDelegate = run.result.evidence.plainDelegate === true
-    && refused === undefined && incomplete === undefined && rawCleared === undefined;
-  let gateCleared = false;
-  if (plainDelegate) {
-    gateCleared = true;
-  } else if (rawCleared === undefined) {
-    if (warnings.length === 0) {
-      warnings.push("the pipeline gate clearance record is missing");
-    }
-  } else {
-    try {
-      const cleared = parsePipelineGateCleared(rawCleared);
-      if (cleared.requiresHumanDecision === true) {
-        warnings.push("the pipeline gate clearance record requires a human decision");
-      } else if (cleared.candidateCommitOid !== run.result.candidate?.candidateCommitOid) {
-        warnings.push(
-          "the pipeline gate clearance record does not match the archived candidate commit",
-        );
-      } else {
-        gateCleared = true;
-      }
-    } catch {
-      warnings.push("the pipeline gate clearance record is malformed");
-    }
-  }
-  return {
-    warnings,
-    verifiedClean: run.result.status === "verified-candidate"
-      && run.result.failure === null
-      && gateCleared,
-    unreadable: false,
-  };
+  const verdict = runDecision.verdictFor(run.snapshot, "autonomous");
+  return verdict.state === "accepted"
+    ? { warnings: [], verifiedClean: true, unreadable: false }
+    : { warnings: verdict.reasons, verifiedClean: false, unreadable: false };
 }
 
 export async function readDecisionAdvisory(
@@ -1190,12 +1117,10 @@ export async function handleIntegrateCandidate(
       if (!(INTEGRABLE_DECISION_AUTHORITIES as readonly string[]).includes(decision.authority)) {
         return { integration: "aborted", detail: "accepted-decision-not-confirmed" };
       }
-      // An acceptance is a judgement about one specific candidate. When the
-      // record names the artifact it was made about, refuse to spend it on a
-      // different one. Records written before provenance existed carry no hash;
-      // those fall through to the hash check inside applyCandidateTree.
-      if (decision.candidateManifestHash != null
-        && decision.candidateManifestHash !== expectedArtifactHash) {
+      // An acceptance is a judgement about one specific candidate, so it is
+      // spent only on the artifact it names. A legacy record that names none
+      // says nothing about which bytes were accepted and is refused too.
+      if (decision.candidateManifestHash !== expectedArtifactHash) {
         return { integration: "aborted", detail: "decision-artifact-mismatch" };
       }
       return (deps.applyCandidateTree ?? applyTree)({

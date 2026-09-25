@@ -108,7 +108,7 @@ function dependencies(storedManifest: RunManifest): ToolDependencies {
     ps,
     storeFactory: () => store,
     git: async (_cwd, args) => {
-      if (args[0] === "diff") return gitResult("exact patch\n");
+      if (args[1] === "diff") return gitResult("exact patch\n");
       if (args.includes(`${candidate.anchorRef}^{commit}`)) {
         return gitResult(`${candidate.candidateCommitOid}\n`);
       }

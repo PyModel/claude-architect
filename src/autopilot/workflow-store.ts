@@ -15,8 +15,9 @@ import path from "node:path";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { loadSchemas } from "../protocol/schema-loader.js";
 import { resolveStateDir } from "../runtime/state-dir.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
 import type { AutopilotPhase, AutopilotWorkflowState } from "./types.js";
+import { flushDirectory } from "../platform/durable-directory.js";
 
 const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const MAX_WRITER_LOCK_BYTES = 512;
@@ -101,21 +102,7 @@ export const LEGAL_WORKFLOW_PHASE_EDGES: Readonly<
     "failed",
     "cancelled",
   ],
-  "final-review": ["pushing", "human-decision-required", "failed", "cancelled"],
-  pushing: ["creating-draft-pr", "human-decision-required", "failed", "cancelled"],
-  "creating-draft-pr": [
-    "waiting-required-checks",
-    "human-decision-required",
-    "failed",
-    "cancelled",
-  ],
-  "waiting-required-checks": [
-    "marking-ready",
-    "human-decision-required",
-    "failed",
-    "cancelled",
-  ],
-  "marking-ready": ["cleaning-up", "human-decision-required", "failed", "cancelled"],
+  "final-review": ["cleaning-up", "human-decision-required", "failed", "cancelled"],
   "cleaning-up": ["ready-for-human-review", "human-decision-required", "failed", "cancelled"],
   "ready-for-human-review": [],
   "human-decision-required": [],
@@ -214,14 +201,6 @@ interface JournalRead extends WorkflowIntentJournal {
 
 function workflowError(message: string, toolError: string): RuntimeError {
   return new RuntimeError(message, { toolError });
-}
-
-function errorCode(error: unknown): string | undefined {
-  return (error as NodeJS.ErrnoException).code;
-}
-
-function isMissing(error: unknown): boolean {
-  return errorCode(error) === "ENOENT";
 }
 
 function isPlainDirectory(metadata: Stats): boolean {
@@ -339,20 +318,6 @@ async function assertDirectoryIdentity(
   }
 }
 
-async function syncDirectory(directory: string): Promise<void> {
-  let handle: FileHandle | undefined;
-  try {
-    handle = await open(directory, constants.O_RDONLY | NO_FOLLOW);
-    await handle.sync();
-  } catch (error) {
-    const unsupportedOnWindows = process.platform === "win32"
-      && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode(error) ?? "");
-    if (!unsupportedOnWindows) throw error;
-  } finally {
-    await handle?.close();
-  }
-}
-
 async function readHandleBytes(handle: FileHandle, size: number): Promise<Buffer> {
   const bytes = Buffer.alloc(size);
   let offset = 0;
@@ -369,6 +334,47 @@ async function readHandleBytes(handle: FileHandle, size: number): Promise<Buffer
 
 /** The single definition of a workflow id that is safe as a path component. */
 export const SAFE_WORKFLOW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+
+/**
+ * Read an open single-link regular file twice and prove that neither the open
+ * file nor the name changed underneath the read. Every workflow record except
+ * the writer lock (which legitimately gains a second link) is read this way.
+ */
+async function readSingleLinkFile(
+  handle: FileHandle,
+  filename: string,
+  limits: { minBytes: number; maxBytes: number },
+  errors: { unsafe: () => RuntimeError; oversized: () => RuntimeError; changed: () => RuntimeError },
+): Promise<{ bytes: Buffer; metadata: Stats }> {
+  const metadata = await handle.stat();
+  const named = await lstat(filename);
+  if (metadata.isFile() && metadata.size > limits.maxBytes) throw errors.oversized();
+  if (!metadata.isFile()
+    || metadata.nlink !== 1
+    || metadata.size < limits.minBytes
+    || !named.isFile()
+    || named.isSymbolicLink()
+    || named.nlink !== 1
+    || named.dev !== metadata.dev
+    || named.ino !== metadata.ino
+    || named.size !== metadata.size) throw errors.unsafe();
+  const first = await readHandleBytes(handle, metadata.size);
+  const second = await readHandleBytes(handle, metadata.size);
+  const settled = await handle.stat();
+  const settledNamed = await lstat(filename);
+  if (!first.equals(second)
+    || !settled.isFile()
+    || settled.nlink !== 1
+    || settled.size !== metadata.size
+    || settled.mtimeMs !== metadata.mtimeMs
+    || settled.ctimeMs !== metadata.ctimeMs
+    || !settledNamed.isFile()
+    || settledNamed.isSymbolicLink()
+    || settledNamed.dev !== metadata.dev
+    || settledNamed.ino !== metadata.ino
+    || settledNamed.size !== metadata.size) throw errors.changed();
+  return { bytes: first, metadata };
+}
 
 function assertWorkflowId(workflowId: string): void {
   if (!SAFE_WORKFLOW_ID.test(workflowId)) {
@@ -410,6 +416,13 @@ function assertSemanticState(state: AutopilotWorkflowState, workflowId: string):
 const validateWorkflowState = loadSchemas().autopilotWorkflowState;
 
 function validateState(value: unknown, workflowId: string): AutopilotWorkflowState {
+  if (isRecord(value) && value.stateVersion === "1") {
+    throw workflowError(
+      "workflow was created by a runtime that shipped branches itself (state v1); "
+        + "finish or cancel it with that runtime, or start a new workflow",
+      "workflow-state-version-unsupported",
+    );
+  }
   if (!validateWorkflowState(value)) {
     throw workflowError("workflow state does not match its schema", "invalid-workflow-state");
   }
@@ -1010,7 +1023,7 @@ export class WorkflowStore {
       next.autopilotSpecHash = current.autopilotSpecHash;
       next.intentJournal = structuredClone(current.intentJournal);
       next.createdAt = current.createdAt;
-      next.shipping.ciDeadlineAt = current.shipping.ciDeadlineAt;
+      next.branch = current.branch;
       next.revision = current.revision + 1;
       next.phase = transitionTo ?? current.phase;
       next.updatedAt = this.now();
@@ -1131,7 +1144,7 @@ export class WorkflowStore {
     if (identity === undefined) {
       throw workflowError("workflow owner was not created", "unsafe-workflow-owner");
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     return structuredClone(record);
   }
@@ -1150,33 +1163,17 @@ export class WorkflowStore {
       throw error;
     }
     try {
-      const metadata = await handle.stat();
-      const named = await lstat(this.ownerPath);
-      if (!metadata.isFile()
-        || metadata.nlink !== 1
-        || metadata.size < 1
-        || metadata.size > MAX_WORKFLOW_OWNER_BYTES
-        || !named.isFile()
-        || named.isSymbolicLink()
-        || named.nlink !== 1
-        || named.dev !== metadata.dev
-        || named.ino !== metadata.ino
-        || named.size !== metadata.size) {
-        throw workflowError("workflow owner is unsafe", "unsafe-workflow-owner");
-      }
-      const first = await readHandleBytes(handle, metadata.size);
-      const second = await readHandleBytes(handle, metadata.size);
-      const settled = await handle.stat();
-      const settledNamed = await lstat(this.ownerPath);
-      if (!first.equals(second)
-        || settled.size !== metadata.size
-        || settled.mtimeMs !== metadata.mtimeMs
-        || settled.ctimeMs !== metadata.ctimeMs
-        || settledNamed.dev !== metadata.dev
-        || settledNamed.ino !== metadata.ino
-        || settledNamed.size !== metadata.size) {
-        throw workflowError("workflow owner changed during read", "unsafe-workflow-owner");
-      }
+      const unsafe = () => workflowError("workflow owner is unsafe", "unsafe-workflow-owner");
+      const { bytes: first, metadata } = await readSingleLinkFile(
+        handle,
+        this.ownerPath,
+        { minBytes: 1, maxBytes: MAX_WORKFLOW_OWNER_BYTES },
+        {
+          unsafe,
+          oversized: unsafe,
+          changed: () => workflowError("workflow owner changed during read", "unsafe-workflow-owner"),
+        },
+      );
       return {
         dev: metadata.dev,
         ino: metadata.ino,
@@ -1235,7 +1232,7 @@ export class WorkflowStore {
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     return true;
   }
@@ -1310,7 +1307,7 @@ export class WorkflowStore {
           ownerPath,
           record,
         };
-        await syncDirectory(this.workflowDirectory);
+        await flushDirectory(this.workflowDirectory);
         break;
       }
       if (lockIdentity === undefined) {
@@ -1331,7 +1328,7 @@ export class WorkflowStore {
         if (lockIdentity !== undefined) {
           await this.retireWriterLock(lockIdentity, directory);
           await rm(lockIdentity.ownerPath, { force: true });
-          await syncDirectory(this.workflowDirectory);
+          await flushDirectory(this.workflowDirectory);
         }
       } catch (cleanupError) {
         if (operationError === undefined) throw cleanupError;
@@ -1424,7 +1421,7 @@ export class WorkflowStore {
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     return true;
   }
@@ -1473,7 +1470,7 @@ export class WorkflowStore {
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     return true;
   }
@@ -1547,7 +1544,7 @@ export class WorkflowStore {
       }
       await rm(artifact.filePath);
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
 
@@ -1563,40 +1560,17 @@ export class WorkflowStore {
         if (isMissing(error)) return null;
         throw error;
       }
-      const metadata = await handle.stat();
-      const named = await lstat(this.statePath);
-      if (!metadata.isFile()
-        || metadata.nlink !== 1
-        || metadata.size > this.maxStateBytes
-        || !named.isFile()
-        || named.isSymbolicLink()
-        || named.nlink !== 1
-        || named.dev !== metadata.dev
-        || named.ino !== metadata.ino
-        || named.size !== metadata.size) {
-        throw workflowError(
-          "workflow state must be a bounded regular single-link file",
-          metadata.size > this.maxStateBytes
-            ? "workflow-state-too-large"
-            : "unsafe-workflow-state",
-        );
-      }
-      const first = await readHandleBytes(handle, metadata.size);
-      const second = await readHandleBytes(handle, metadata.size);
-      const settled = await handle.stat();
-      const settledNamed = await lstat(this.statePath);
-      if (!first.equals(second)
-        || !settled.isFile()
-        || settled.nlink !== 1
-        || settled.size !== metadata.size
-        || settled.mtimeMs !== metadata.mtimeMs
-        || settled.ctimeMs !== metadata.ctimeMs
-        || !settledNamed.isFile()
-        || settledNamed.isSymbolicLink()
-        || settledNamed.dev !== metadata.dev
-        || settledNamed.ino !== metadata.ino) {
-        throw workflowError("workflow state changed during read", "unsafe-workflow-state");
-      }
+      const message = "workflow state must be a bounded regular single-link file";
+      const { bytes: first } = await readSingleLinkFile(
+        handle,
+        this.statePath,
+        { minBytes: 0, maxBytes: this.maxStateBytes },
+        {
+          unsafe: () => workflowError(message, "unsafe-workflow-state"),
+          oversized: () => workflowError(message, "workflow-state-too-large"),
+          changed: () => workflowError("workflow state changed during read", "unsafe-workflow-state"),
+        },
+      );
       let parsed: unknown;
       try {
         parsed = JSON.parse(first.toString("utf8")) as unknown;
@@ -1701,38 +1675,17 @@ export class WorkflowStore {
         }
         throw error;
       }
-      const metadata = await handle.stat();
-      const named = await lstat(this.journalPath);
-      if (!metadata.isFile()
-        || metadata.nlink !== 1
-        || metadata.size > this.maxJournalBytes
-        || !named.isFile()
-        || named.isSymbolicLink()
-        || named.nlink !== 1
-        || named.dev !== metadata.dev
-        || named.ino !== metadata.ino
-        || named.size !== metadata.size) {
-        throw workflowError(
-          "workflow journal must be a bounded regular single-link file",
-          metadata.size > this.maxJournalBytes
-            ? "workflow-journal-too-large"
-            : "unsafe-workflow-state",
-        );
-      }
-      const first = await readHandleBytes(handle, metadata.size);
-      const second = await readHandleBytes(handle, metadata.size);
-      const settled = await handle.stat();
-      const settledNamed = await lstat(this.journalPath);
-      if (!first.equals(second)
-        || settled.size !== metadata.size
-        || settled.mtimeMs !== metadata.mtimeMs
-        || settled.ctimeMs !== metadata.ctimeMs
-        || !settledNamed.isFile()
-        || settledNamed.isSymbolicLink()
-        || settledNamed.dev !== metadata.dev
-        || settledNamed.ino !== metadata.ino) {
-        throw workflowError("workflow journal changed during read", "unsafe-workflow-state");
-      }
+      const message = "workflow journal must be a bounded regular single-link file";
+      const { bytes: first, metadata } = await readSingleLinkFile(
+        handle,
+        this.journalPath,
+        { minBytes: 0, maxBytes: this.maxJournalBytes },
+        {
+          unsafe: () => workflowError(message, "unsafe-workflow-state"),
+          oversized: () => workflowError(message, "workflow-journal-too-large"),
+          changed: () => workflowError("workflow journal changed during read", "unsafe-workflow-state"),
+        },
+      );
       const finalNewline = first.lastIndexOf(0x0a);
       const tornTail = first.byteLength > 0 && finalNewline !== first.byteLength - 1;
       const completeByteLength = tornTail ? finalNewline + 1 : first.byteLength;
@@ -1790,7 +1743,7 @@ export class WorkflowStore {
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
 
@@ -1831,7 +1784,7 @@ export class WorkflowStore {
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
 
@@ -1912,7 +1865,7 @@ export class WorkflowStore {
       await rename(publicationPath, this.statePath);
       publicationExists = false;
       await this.assertPublishedState(bytes, temporaryIdentity);
-      await syncDirectory(this.workflowDirectory);
+      await flushDirectory(this.workflowDirectory);
       await assertDirectoryIdentity(this.workflowDirectory, directory);
     } finally {
       await handle?.close();

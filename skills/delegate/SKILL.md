@@ -6,7 +6,7 @@ description: Let Claude Architect route a versioned implementation spec through 
 # Delegate
 
 ```claude-architect-protocol
-PROTOCOL_VERSION: 2.0.0
+PROTOCOL_VERSION: 3.0.0
 ```
 
 The current session is the architect: it owns requirements, the Delegation Spec, Producer selection, review, and acceptance. Producers are untrusted — their output is only a candidate until the runtime freezes it, independently verifies it, and the architect reviews the exact anchored bytes.
@@ -117,15 +117,16 @@ integration before an accepted decision, or substitute a different artifact hash
 
 Project-scoped permission settings become active only after the human grants Claude Code workspace trust. They can allow the three autopilot tools, but they cannot override managed `ask` or `deny` policy. “No mid-loop prompts” is therefore conditional: it applies only after workspace trust, when all three tool calls are allowed and no higher-precedence policy, controller halt, or ambiguity requires the human.
 
-1. Call `autopilotStart` with `checkoutPath`, the complete Autopilot Spec as `spec`, and `protocolVersion: "2.0.0"` copied from this skill's marker. Do not attempt a workflow start against a dirty checkout.
+1. Call `autopilotStart` with `checkoutPath`, the complete Autopilot Spec as `spec`, and `protocolVersion: "3.0.0"` copied from this skill's marker. Do not attempt a workflow start against a dirty checkout.
 2. If validation returns `validationErrors`, repair only the reported spec defects and resubmit. A protocol mismatch means the installed plugin must be updated and reloaded; never guess across versions. A report with `laneEligibility.edit=false`, or any other ineligible or unconfined lane, fails closed with the structured diagnostic.
-3. Record the returned `workflowId`. Call `autopilotStatus` with `checkoutPath`, that `workflowId`, and `protocolVersion: "2.0.0"` for read-only monitoring. Report only persisted phases and bounded progress supplied by the runtime; never infer completion from a phase name or Producer output.
-4. After a host or process interruption, call `autopilotResume` with `checkoutPath`, the same `workflowId`, and `protocolVersion: "2.0.0"`. Resume replays durable observed state; it does not authorize a second workflow or waive a failed gate.
-5. During autopilot, do not construct Autopilot Eligibility, synthesize a Candidate Decision, call separate review/decision/integration tools, run Git or `gh`, push, create or edit a PR, mark a PR ready, merge, or delete a branch. The controller owns policy, promotion, cumulative final review, exact-head push, draft-PR identity, required-check polling, ready transition, cleanup, and recovery.
+3. Record the returned `workflowId`. Call `autopilotStatus` with `checkoutPath`, that `workflowId`, and `protocolVersion: "3.0.0"` for read-only monitoring. Report only persisted phases and bounded progress supplied by the runtime; never infer completion from a phase name or Producer output.
+4. After a host or process interruption, call `autopilotResume` with `checkoutPath`, the same `workflowId`, and `protocolVersion: "3.0.0"`. Resume replays durable observed state; it does not authorize a second workflow or waive a failed gate.
+5. During autopilot, do not construct Autopilot Eligibility, synthesize a Candidate Decision, call separate review/decision/integration tools, run Git or `gh`, push, create or edit a PR, merge, or delete a branch. The controller owns policy, promotion, cumulative final review, cleanup, and recovery. It refuses to start under `CLAUDE_ARCHITECT_DECISION_AUTHORITY=human` (`decision-authority-human`) and without a configured Git identity (`git-identity-missing`), because promotions are committed under the user's name.
 
-The controller may proceed without a mid-loop prompt only while every eligibility and
-shipping gate remains objectively proven. Autopilot is autonomous only up to a PR ready
-for human review: it never merges, deploys, releases, or deletes the remote branch.
+The controller may proceed without a mid-loop prompt only while every eligibility gate
+remains objectively proven. Autopilot is autonomous only up to a final-reviewed local
+branch: it never pushes, opens a PR, merges, deploys, or releases. Deliver that branch
+through the repository's delivery gate only with the human's approval.
 Interpret `ready-for-human-review`, `human-decision-required`, `failed`, and `cancelled`
 exactly as [docs/autopilot-terminal-states.md](../../docs/autopilot-terminal-states.md)
 defines them; every one is terminal, and none authorizes improvised continuation.
@@ -147,7 +148,7 @@ pre-start validation or spec-identity error. Announcement wording and what the h
 call count does and does not mean:
 [docs/delegation-monitoring.md](../../docs/delegation-monitoring.md).
 
-1. Call `validateDelegationSpec` with the exact Delegation Spec and `protocolVersion: "2.0.0"` copied from this skill's `PROTOCOL_VERSION` marker. This read-only call starts no Producer. Keep its runtime-returned `specSha256` as the identity of the spec you dispatch. Never hash the spec file or reimplement the canonicalization algorithm; file bytes and object key order are not the runtime's canonical wire identity.
+1. Call `validateDelegationSpec` with the exact Delegation Spec and `protocolVersion: "3.0.0"` copied from this skill's `PROTOCOL_VERSION` marker. This read-only call starts no Producer. Keep its runtime-returned `specSha256` as the identity of the spec you dispatch. Never hash the spec file or reimplement the canonicalization algorithm; file bytes and object key order are not the runtime's canonical wire identity.
 2. When validation returns `ok:false` with `validationErrors`, repair only the reported spec defects and revalidate. This repair loop must not touch a Producer.
 3. Call `delegate` through `mcp__plugin_claude-architect_runtime__delegate` with `checkoutPath`, the validated candidate spec, the same `protocolVersion`, and `expectedSpecSha256` set to the runtime-returned `specSha256`. The runtime compares that identity before it touches the checkout or starts a Producer.
 4. When dispatch returns `ok:false` with `validationErrors`, repair only the reported defects, revalidate for the replacement digest, and resubmit — this catches a spec changed after validation without touching a Producer.
@@ -206,7 +207,7 @@ behavior existing code depends on). Use plain `delegate` only for trivial tasks
 
 Build the spec exactly as for `delegate`, optionally adding `review` (`reviewers`
 defaults to `[correctness, systems]`, `maxRounds` to `2`, and `focus` is reviewer-only
-guidance). Call it with `checkoutPath`, `spec`, `protocolVersion: "2.0.0"`, and
+guidance). Call it with `checkoutPath`, `spec`, `protocolVersion: "3.0.0"`, and
 `expectedSpecSha256` set to the runtime-returned digest, then read the returned evidence
 bundle: attempt result, per-round review reports and consolidated findings, fix
 dispositions, verification report, and gate reasons.

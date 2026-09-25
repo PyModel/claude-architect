@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { isManagedWorktreeNamespace } from "../runtime/managed-worktree-root.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
@@ -28,16 +29,18 @@ import {
   type ToolDependencies,
 } from "./tools.js";
 import {
-  autonomousEligibility,
   decisionAuthority,
   DECISION_AUTHORITY_ENV,
   type DecisionAuthority,
 } from "./decision-authority.js";
 import { runDecision } from "../runtime/run-decision.js";
-import { recoverStaleRuns, type WorktreeSweepIssue } from "../runtime/recovery-manager.js";
+import { jevScreen, type JevScreen } from "./jev-screen.js";
+import { recoverStaleRuns } from "../runtime/recovery-manager.js";
+import type { WorktreeSweepIssue } from "../runtime/recovery-shared.js";
 import { pruneRuns } from "../runtime/artifact-store.js";
 import { boundedRedactedDiagnostic, redact } from "../runtime/redaction.js";
 import { RuntimeError } from "../util/errors.js";
+import { logger } from "../util/logger.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { platformPathsEqual } from "../util/platform-path.js";
 import { git } from "../git/git-exec.js";
@@ -288,6 +291,8 @@ export type ServerDependencies = ToolDependencies & DoctorDependencies & GitRead
   transport?: Transport;
   /** Test seam for the configured decision authority. */
   decisionAuthority?: () => DecisionAuthority;
+  /** Test seam for the optional independent candidate screen. */
+  jevScreen?: JevScreen;
 };
 
 /**
@@ -463,7 +468,8 @@ export async function createServer(
     );
     const unattributedWorktrees = unresolvedSweepIssues.filter(issue =>
       issue.repositoryIdentity === undefined
-      && path.basename(path.dirname(issue.worktreePath)) === "worktrees",
+      && (path.basename(path.dirname(issue.worktreePath)) === "worktrees"
+        || isManagedWorktreeNamespace(path.dirname(issue.worktreePath))),
     );
     if (attributed.length === 0 && unattributedWorktrees.length === 0) return;
     const canonical = await (dependencies.ps ?? getPlatformServices())
@@ -592,11 +598,13 @@ export async function createServer(
     "autopilotStart",
     {
       title: "Start an autopilot workflow",
-      description: "Validate an Autopilot Spec and run its verified workflow.",
+      description: "Validate an Autopilot Spec and run its verified workflow to a "
+        + "final-reviewed local branch. It never pushes or opens a pull request; hand the "
+        + "branch to the No Mistakes delivery gate.",
       inputSchema: autopilotStartInputSchema,
       outputSchema: autopilotOutput,
       // The most consequential tool on the surface: runs Producers, creates
-      // branches and worktrees, promotes commits, pushes, and opens a PR.
+      // branches and worktrees, and promotes commits onto the workflow branch.
       annotations: { destructiveHint: true, idempotentHint: false, readOnlyHint: false },
     },
     async ({ checkoutPath, spec, protocolVersion }, extra) => {
@@ -635,7 +643,7 @@ export async function createServer(
       description: "Resume a recoverable autopilot workflow from durable state.",
       inputSchema: autopilotWorkflowInputSchema,
       outputSchema: autopilotOutput,
-      // Continues the same shipping workflow from durable state.
+      // Continues the same workflow from durable state.
       annotations: { destructiveHint: true, idempotentHint: false, readOnlyHint: false },
     },
     async ({ checkoutPath, workflowId, protocolVersion }, extra) => {
@@ -709,10 +717,24 @@ export async function createServer(
             // Eligibility says the runtime proved everything it can prove about
             // the candidate; it says nothing about the verdict. The policy may
             // only accept, so every other verdict is a human override.
+            let reasons = verdict.state === "accepted" ? advisory.warnings : verdict.reasons;
             if (verdict.state === "accepted" && effectiveDecision === "accepted") {
-              return "policy-autonomous";
+              // The optional screen may only withdraw autonomy, never grant it.
+              const candidate = snapshot.result?.candidate;
+              if (candidate == null) {
+                throw new RuntimeError("accepted verdict without a frozen candidate");
+              }
+              const screen = await (dependencies.jevScreen ?? jevScreen)(candidate);
+              if (screen.status === "unavailable") {
+                logger.warn("independent candidate screen unavailable; deterministic verdict stands", {
+                  event: "jev-screen-unavailable",
+                  runId: effectiveRunId,
+                  reason: screen.reason,
+                });
+              }
+              if (screen.status !== "concern") return "policy-autonomous";
+              reasons = screen.reasons;
             }
-            const reasons = verdict.state === "accepted" ? advisory.warnings : verdict.reasons;
             const confirmed = await confirmWithHuman(
               server,
               effectiveRunId,

@@ -1261,7 +1261,7 @@ describe("runPipeline", () => {
     expect(reviewArgs[0]?.pkg.candidateDiff).toContain("slice two candidate");
     expect(reviewArgs[0]?.pkg.testEvidence).toContain('"sliceIndex":1');
     expect(reviewArgs[0]?.pkg.testEvidence).toContain('"sliceIndex":2');
-    expect(path.basename(reviewArgs[0]?.worktreePath ?? "")).toBe(`${runId}-composed-review`);
+    expect(path.basename(reviewArgs[0]?.worktreePath ?? "")).toBe(`${runId}-round-1-review`);
 
     expect(result).toMatchObject({
       status: "decision-ready",
@@ -1672,7 +1672,7 @@ describe("runPipeline", () => {
     expect(reviewerArgs.map(args => path.basename(args.worktreePath))).toEqual([
       `${runId}-slice-1-attempt-0-review`,
       `${runId}-slice-2-attempt-0-review`,
-      `${runId}-composed-review`,
+      `${runId}-round-1-review`,
     ]);
     expect(reviewerArgs[0]?.baseSpec.objective).toBe("Implement slice one only.");
     expect(reviewerArgs[0]?.pkg.candidateDiff).toContain("slice one candidate");
@@ -2843,6 +2843,50 @@ describe("runPipeline", () => {
     });
   }, 120_000);
 
+  it("gives every fixer a fresh worktree that no earlier role could leave residue in", async () => {
+    const repo = await initRepo();
+    const worktrees: Array<{ role: string; path: string; residue: boolean }> = [];
+    const base = roundReviews([
+      { correctness: blocker, systems: approve },
+      { correctness: blocker, systems: approve },
+      { correctness: approve, systems: approve },
+    ], async (args, round) => {
+      const commit = await commitFix(args, `fixed ${round}\n`);
+      // Ignored residue (a build cache, say) passes provenance, and a shared
+      // worktree would carry it into the next fixer.
+      const commonDir = await runGit(args.worktreePath, ["rev-parse", "--git-common-dir"]);
+      await mkdir(path.resolve(args.worktreePath, commonDir, "info"), { recursive: true });
+      await writeFile(path.resolve(args.worktreePath, commonDir, "info", "exclude"), "residue.txt\n");
+      await writeFile(path.join(args.worktreePath, "residue.txt"), "left behind\n");
+      return success(fenced({
+        reportVersion: "1",
+        candidateCommit: commit,
+        dispositions: [{ findingId: "F-001", disposition: "fixed", evidence: "Fixed.", commit }],
+      }));
+    });
+    const roleRunner = async (args: RoleRunArgs): Promise<RoleRunResult> => {
+      const residue = await readFile(path.join(args.worktreePath, "residue.txt")).then(() => true, () => false);
+      worktrees.push({ role: args.role, path: args.worktreePath, residue });
+      return await base(args);
+    };
+
+    const result = await runPipeline(
+      repo,
+      validSpec({ reviewers: ["correctness", "systems"], maxRounds: 3 }),
+      dependencies({ runId: "pipeline-fresh-fixers", roleRunner }),
+    );
+
+    // Two blockers at one location end at the non-convergence gate; what
+    // matters here is where each role ran.
+    expect(result.rounds).toHaveLength(3);
+    const fixers = worktrees.filter(entry => entry.role === "fixer");
+    expect(fixers.map(entry => path.basename(entry.path))).toEqual([
+      "pipeline-fresh-fixers-round-1-fix",
+      "pipeline-fresh-fixers-round-2-fix",
+    ]);
+    expect(worktrees.every(entry => !entry.residue)).toBe(true);
+  });
+
   it("fixes a blocker and returns decision-ready after a clean re-review", async () => {
     const repo = await initRepo();
     let privateObjectsDir = "";
@@ -3688,6 +3732,29 @@ describe("detectWeakenedTests", () => {
       "+it.skip(\"was passing\", () => {});",
     ].join("\n");
     expect(detectWeakenedTests(diff)).toEqual({ testsDeleted: 1, testsSkipped: 1 });
+  });
+
+  it.each([
+    ["tests/test_api.py", "@pytest.mark.skip(reason=\"flaky\")"],
+    ["tests/test_api.py", "    self.skipTest(\"later\")"],
+    ["pkg/api_test.go", "\tt.Skip(\"later\")"],
+    ["tests/api.rs", "#[ignore]"],
+    ["src/test/java/ApiTest.java", "  @Disabled"],
+    ["Tests/ApiTests.cs", "  [Ignore(\"later\")]"],
+    ["spec/api_spec.rb", "    skip \"later\""],
+    ["tests/api.test.ts", "xdescribe(\"api\", () => {"],
+  ])("counts a skip added to %s", (file, added) => {
+    const diff = [`diff --git a/${file} b/${file}`, `+${added}`].join("\n");
+    expect(detectWeakenedTests(diff)).toEqual({ testsDeleted: 0, testsSkipped: 1 });
+  });
+
+  it("does not count ordinary identifiers that resemble skip markers", () => {
+    const diff = [
+      "diff --git a/pkg/api_test.go b/pkg/api_test.go",
+      "+\tskip := len(cases) == 0",
+      "+\tpending := 3",
+    ].join("\n");
+    expect(detectWeakenedTests(diff)).toEqual({ testsDeleted: 0, testsSkipped: 0 });
   });
 
   it("ignores skips in non-test files", () => {

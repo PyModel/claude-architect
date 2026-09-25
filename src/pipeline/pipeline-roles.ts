@@ -16,7 +16,7 @@ import type {
   ReviewReport,
 } from "./report-types.js";
 import type { FailureClassification } from "../protocol/attempt-result.js";
-import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
+import type { PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import type { ProducerRegistry } from "../producers/producer-registry.js";
 

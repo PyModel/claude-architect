@@ -1,4 +1,6 @@
-import { git, type GitExecOptions, type GitResult } from "../git/git-exec.js";
+import { git } from "../git/git-exec.js";
+import { gitChecked as checkedGit, reviewDiff } from "../git/checked-git.js";
+import { candidateReviewPatch } from "../git/candidate-tree.js";
 import { RuntimeError } from "../util/errors.js";
 import { globMatches } from "../util/glob.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
@@ -13,7 +15,7 @@ import {
   recomputeManifest,
 } from "../verify/structural-verifier.js";
 import { AcceptanceVerifier } from "../verify/acceptance-verifier.js";
-import type { VerificationReport } from "./report-types.js";
+import { isTestPath } from "../verify/verification-inputs.js";
 
 export interface WeakenedTestEvidence {
   testsDeleted: number;
@@ -21,20 +23,26 @@ export interface WeakenedTestEvidence {
   authorizedTestDeletions: string[];
 }
 
-function gitFailure(action: string, result: GitResult): RuntimeError {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2_000);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
 
-async function checkedGit(
-  cwd: string,
-  args: string[],
-  options?: GitExecOptions,
-): Promise<string> {
-  const result = await git(cwd, args, options);
-  if (result.exitCode !== 0) throw gitFailure(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
+
+/**
+ * Added lines that disable a test, per ecosystem: JS/TS (it/test/describe
+ * .skip/.todo, xit, xdescribe), Python (pytest/unittest skip markers), Go
+ * (t.Skip), Rust (#[ignore]), JVM (@Disabled/@Ignore), .NET ([Ignore], Skip =),
+ * and RSpec (skip/pending). Anything else is out of reach of a line scan, which
+ * is why verification inputs a candidate touches also route to a person.
+ */
+const SKIP_MARKERS: readonly RegExp[] = [
+  /\b(?:it|test|describe|context|suite)\.(?:skip|todo)\(/u,
+  /\bx(?:it|describe|test|context)\(/u,
+  /@(?:pytest\.mark\.(?:skip|skipif|xfail)|unittest\.(?:skip|skipIf|skipUnless|expectedFailure))\b/u,
+  /\b(?:pytest|self)\.skip(?:Test)?\(/u,
+  /\bt\.Skip(?:Now|f)?\(/u,
+  /#\[ignore\b/u,
+  /@(?:Disabled|Ignore)\b/u,
+  /\[Ignore\b|\bSkip\s*=\s*"/u,
+  /^\s*(?:skip|pending)(?:\s*\(|\s+["'])/u,
+];
 
 export function analyzeWeakenedTests(
   diff: string,
@@ -44,38 +52,31 @@ export function analyzeWeakenedTests(
   let testsDeleted = 0;
   let testsSkipped = 0;
   const authorizedTestDeletions: string[] = [];
-  let currentFileIsTest = false;
-  let currentPath: string | null = null;
-  for (const line of diff.split("\n")) {
-    if (deletedPaths === undefined && /^deleted file mode/.test(line)) {
-      if (currentFileIsTest && currentPath !== null) {
-        const deletedPath = currentPath;
-        if (allowedTestDeletions.some(pattern => globMatches(pattern, deletedPath))) {
-          authorizedTestDeletions.push(deletedPath);
-        } else {
-          testsDeleted++;
-        }
-      }
-    }
-    const diffHeader = /^diff --git a\/(\S+) b\/\S+$/.exec(line);
-    if (diffHeader !== null) {
-      currentPath = diffHeader[1] ?? null;
-      currentFileIsTest = currentPath !== null
-        && /(^|\/)tests?\/|\.test\.|\.spec\./.test(currentPath);
-    } else if (/^diff --git /.test(line)) {
-      currentPath = null;
-      currentFileIsTest = /(^|\/)tests?\/|\.test\.|\.spec\./.test(line);
-    }
-    if (currentFileIsTest && /^\+.*\b(it|test|describe)\.(skip|todo)\(/.test(line)) testsSkipped++;
-    if (currentFileIsTest && /^\+.*\bxit\(|^\+.*\bxdescribe\(/.test(line)) testsSkipped++;
-  }
-  for (const deletedPath of deletedPaths ?? []) {
-    if (!/(^|\/)tests?\/|\.test\.|\.spec\./.test(deletedPath)) continue;
+  const recordDeletion = (deletedPath: string): void => {
     if (allowedTestDeletions.some(pattern => globMatches(pattern, deletedPath))) {
       authorizedTestDeletions.push(deletedPath);
     } else {
       testsDeleted++;
     }
+  };
+  let currentFileIsTest = false;
+  let currentPath: string | null = null;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      currentPath = /^diff --git a\/(\S+) b\/\S+$/u.exec(line)?.[1] ?? null;
+      currentFileIsTest = currentPath !== null ? isTestPath(currentPath) : /test|spec/u.test(line);
+      continue;
+    }
+    if (!currentFileIsTest) continue;
+    if (deletedPaths === undefined && line.startsWith("deleted file mode") && currentPath !== null) {
+      recordDeletion(currentPath);
+    } else if (line.startsWith("+") && !line.startsWith("+++")) {
+      const added = line.slice(1);
+      if (SKIP_MARKERS.some(marker => marker.test(added))) testsSkipped++;
+    }
+  }
+  for (const deletedPath of deletedPaths ?? []) {
+    if (isTestPath(deletedPath)) recordDeletion(deletedPath);
   }
   return { testsDeleted, testsSkipped, authorizedTestDeletions };
 }
@@ -112,12 +113,11 @@ export function parseDeletedPaths(nameStatus: string): string[] {
   return deletedPaths;
 }
 
-async function candidateArtifact(args: {
+export async function candidateArtifact(args: {
   worktreePath: string;
   baselineCommit: string;
   candidateCommit: string;
   anchorRef: string;
-  diffText: string;
 }): Promise<CandidateArtifact> {
   const artifact: CandidateArtifact = {
     baseCommitOid: args.baselineCommit,
@@ -129,7 +129,11 @@ async function candidateArtifact(args: {
     anchorRef: args.anchorRef,
     manifestHash: "",
     changedPaths: [],
-    patch: args.diffText,
+    patch: await candidateReviewPatch(
+      args.worktreePath,
+      args.baselineCommit,
+      args.candidateCommit,
+    ),
   };
   const canonical = await recomputeManifest({
     worktreePath: args.worktreePath,
@@ -176,13 +180,8 @@ export async function verifyCandidate(args: {
     commit: args.candidateCommit,
     cleanupFailureMessage: "pipeline verification worktree could not be cleaned up",
     run: async worktreePath => {
-      const [diffText, , nameStatus, status, ancestry] = await Promise.all([
-        checkedGit(worktreePath, ["diff", `${args.baselineCommit}..${args.candidateCommit}`]),
-        checkedGit(worktreePath, [
-          "diff",
-          "--name-only",
-          `${args.baselineCommit}..${args.candidateCommit}`,
-        ]),
+      const [diffText, nameStatus, status, ancestry] = await Promise.all([
+        reviewDiff(worktreePath, args.baselineCommit, args.candidateCommit),
         checkedGit(worktreePath, [
           "diff",
           "--name-status",
@@ -203,7 +202,6 @@ export async function verifyCandidate(args: {
         baselineCommit: args.baselineCommit,
         candidateCommit: args.candidateCommit,
         anchorRef: args.attempt.candidate?.anchorRef ?? "",
-        diffText,
       });
       const verifier = new AcceptanceVerifier({ mode: "composed-slice" });
       const acceptance = await verifier.verify({

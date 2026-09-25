@@ -1,4 +1,4 @@
-import path from "node:path";
+import { gitFailure, reviewDiff } from "../git/checked-git.js";
 import type { Slice, DelegationSpec } from "../protocol/delegation-spec.js";
 import type { AttemptResult, FailureClassification } from "../protocol/attempt-result.js";
 import { consolidate, type ConsolidationResult } from "./consolidator.js";
@@ -9,7 +9,6 @@ import { composeSliceOntoHead } from "./slice-composer.js";
 import type { PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import type { RunContext } from "./run-context.js";
-import type { PipelineRole } from "./role-prompts.js";
 import type { ReviewerKind } from "../protocol/delegation-spec.js";
 import { WorktreeManager, withManagedWorktree } from "../runtime/worktree-manager.js";
 import {
@@ -45,7 +44,7 @@ import {
   importPromotedObjects,
   validateCandidateProvenance,
 } from "./candidate-provenance.js";
-import { git, type GitExecOptions, type GitResult } from "../git/git-exec.js";
+import { git } from "../git/git-exec.js";
 import { SLICE_REF_PREFIX } from "../git/ref-namespace.js";
 import { RuntimeError } from "../util/errors.js";
 import type { ArtifactStore } from "../runtime/artifact-store.js";
@@ -82,20 +81,7 @@ export function scopeSpecToSlice(spec: DelegationSpec, slice: Slice): Delegation
   return scoped;
 }
 
-function gitFailure(action: string, result: GitResult): RuntimeError {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2_000);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
 
-async function checkedGit(
-  cwd: string,
-  args: string[],
-  options?: GitExecOptions,
-): Promise<string> {
-  const result = await git(cwd, args, options);
-  if (result.exitCode !== 0) throw gitFailure(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
 
 export function temporarySliceRef(runId: string, index: number, attempt: number): string {
   return `${SLICE_REF_PREFIX}${runId}/slice-${index}-attempt-${attempt}`;
@@ -220,10 +206,7 @@ export async function runSliceReview(args: {
     commit: args.candidateCommit,
     cleanupFailureMessage: "slice review failed and its worktree could not be cleaned up",
     run: async worktreePath => {
-      const diffText = await checkedGit(worktreePath, [
-        "diff",
-        `${args.baselineCommit}..${args.candidateCommit}`,
-      ]);
+      const diffText = await reviewDiff(worktreePath, args.baselineCommit, args.candidateCommit);
       const reviewRun = await runReviews({
         reviewers: args.reviewers,
         spec: args.spec,
@@ -295,11 +278,6 @@ export interface SlicePhaseResult {
   finalCandidateCommit: string;
   haltedSliceIndex: number | null;
   temporarySliceRefs?: TemporarySliceRef[] | undefined;
-}
-
-interface SliceOutcome {
-  slice: PipelineSlice;
-  advanced: boolean;
 }
 
 

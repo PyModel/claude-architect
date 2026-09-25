@@ -1,24 +1,11 @@
 import path from "node:path";
-import { git, type GitExecOptions, type GitResult } from "../git/git-exec.js";
-import { RuntimeError } from "../util/errors.js";
+import { gitChecked as checkedGit } from "../git/checked-git.js";
+import { git } from "../git/git-exec.js";
 import type { FailureClassification } from "../protocol/attempt-result.js";
 import type { LinkedWorktreeGitAccess } from "./git-writable-roots.js";
 import type { FixReport } from "./report-types.js";
 
-function gitFailure(action: string, result: GitResult): RuntimeError {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2_000);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
 
-async function checkedGit(
-  cwd: string,
-  args: string[],
-  options?: GitExecOptions,
-): Promise<string> {
-  const result = await git(cwd, args, options);
-  if (result.exitCode !== 0) throw gitFailure(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
 
 export function privateObjectReadOptions(access: LinkedWorktreeGitAccess): {
   env: { GIT_ALTERNATE_OBJECT_DIRECTORIES: string };

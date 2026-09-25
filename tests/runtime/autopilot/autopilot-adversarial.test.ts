@@ -55,25 +55,12 @@ import { ProducerRegistry } from "../../../src/producers/producer-registry.js";
 import { ArtifactStore } from "../../../src/runtime/artifact-store.js";
 import type { AttemptRuntimeDependencies } from "../../../src/runtime/attempt-runtime.js";
 import { createReviewSnapshot } from "../../../src/runtime/review-snapshot.js";
-import {
-  InMemoryHostingAdapter,
-  type InMemoryHostingOperations,
-} from "../../../src/ship/github-cli-adapter.js";
-import type {
-  ChecksRequest,
-  DraftPullRequestRequest,
-  HostingTarget,
-  MarkReadyRequest,
-  PushRequest,
-} from "../../../src/ship/hosting-adapter.js";
 import { AcceptanceVerifier } from "../../../src/verify/acceptance-verifier.js";
 import { structuralVerify } from "../../../src/verify/structural-verifier.js";
 
 const editFixture = fileURLToPath(new URL("../fixtures/edit-file.mjs", import.meta.url));
 const NOW = "2026-07-21T12:00:00.000Z";
 const REMOTE_URL = "https://github.com/example/autopilot-adversarial.git";
-const REPOSITORY = "example/autopilot-adversarial";
-const OTHER_HEAD = "f".repeat(40);
 const temporaryPaths: string[] = [];
 const originalEnvironment = new Map<string, string | undefined>();
 let sandboxState: "certified" | "tested" | "unsupported" | undefined;
@@ -264,7 +251,7 @@ function delegation(overrides: Partial<DelegationSpec> = {}): DelegationSpec {
 
 function autopilotSpec(overrides: Partial<AutopilotSpec> = {}): AutopilotSpec {
   return {
-    specVersion: "1",
+    specVersion: "2",
     topic: "adversarial",
     base: { remote: "origin", branch: "main" },
     tasks: [{
@@ -282,33 +269,15 @@ function autopilotSpec(overrides: Partial<AutopilotSpec> = {}): AutopilotSpec {
       network: "denied",
       expectedExitCodes: [0],
     }],
-    shipping: {
-      provider: "github",
-      draft: true,
-      markReadyWhenRequiredChecksPass: true,
-      requiredChecksTimeoutMs: 600_000,
-      pullRequestTitle: "Adversarial workflow",
-      pullRequestBody: "Verified adversarial fixture.",
-    },
     ...overrides,
   };
-}
-
-interface RecordedHostingCall {
-  operation: "preflight" | "push" | "draft-pr" | "checks" | "mark-ready";
-  request: object;
 }
 
 interface HarnessOptions {
   mode?: ProducerMode;
   abortSignal?: AbortSignal;
-  checkHead?: string;
-  duplicatePullRequest?: boolean;
-  pushHead?: string;
   afterEligibility?: (runId: string, state: AutopilotWorkflowState) => Promise<void>;
   afterPromotion?: () => void;
-  afterRequiredChecks?: () => void;
-  pendingRequiredChecks?: boolean;
 }
 
 async function createHarness(options: HarnessOptions = {}) {
@@ -338,61 +307,9 @@ async function createHarness(options: HarnessOptions = {}) {
     remoteTransport: localRemoteTransport(fixture.bareRemote),
   });
   const workflowStore = (id: string) => new WorkflowStore(id);
-  const hostingCalls: RecordedHostingCall[] = [];
-  let shippedHead = "";
-  let shippedBranch = "";
-  const target: HostingTarget = {
-    provider: "github",
-    repository: REPOSITORY,
-    canonicalHttpsUrl: REMOTE_URL,
-  };
-  const hosting: InMemoryHostingOperations = {
-    preflight: async request => {
-      hostingCalls.push({ operation: "preflight", request });
-      return target;
-    },
-    pushBranch: async request => {
-      hostingCalls.push({ operation: "push", request });
-      shippedHead = request.headCommitOid;
-      shippedBranch = request.branch;
-      return { remoteHead: options.pushHead ?? request.headCommitOid };
-    },
-    ensureDraftPullRequest: async request => {
-      hostingCalls.push({ operation: "draft-pr", request });
-      return {
-        number: 17,
-        url: "https://github.com/example/autopilot-adversarial/pull/17",
-        repository: REPOSITORY,
-        baseBranch: request.baseBranch,
-        headBranch: options.duplicatePullRequest ? `${request.headBranch}-forged` : request.headBranch,
-        headCommitOid: request.headCommitOid,
-        draft: true,
-      };
-    },
-    requiredChecks: async request => {
-      hostingCalls.push({ operation: "checks", request });
-      options.afterRequiredChecks?.();
-      return {
-        result: options.pendingRequiredChecks ? "pending" : "passed",
-        headCommitOid: options.checkHead ?? request.headCommitOid,
-        checks: options.pendingRequiredChecks
-          ? [{ bucket: "pending", name: "test", state: "IN_PROGRESS", link: null }]
-          : [{ bucket: "pass", name: "test", state: "SUCCESS", link: null }],
-      };
-    },
-    markReady: async request => {
-      hostingCalls.push({ operation: "mark-ready", request });
-      return {
-        number: 17,
-        url: "https://github.com/example/autopilot-adversarial/pull/17",
-        repository: REPOSITORY,
-        baseBranch: "main",
-        headBranch: shippedBranch,
-        headCommitOid: shippedHead,
-        draft: false,
-      };
-    },
-  };
+  // The hand-off (cleanup that keeps the final-reviewed branch) is the one
+  // consequential mutation left after promotion; attacks must never reach it.
+  const handoffs: string[] = [];
   const dependencies: AutopilotControllerDependencies = {
     workflowId: () => workflowId,
     now: () => NOW,
@@ -404,7 +321,15 @@ async function createHarness(options: HarnessOptions = {}) {
       const canonical = await platformServices.canonicalizePath(checkoutPath);
       return canonical.gitCommonDir ?? canonical.canonical;
     },
-    branchManager,
+    branchManager: {
+      create: request => branchManager.create(request),
+      load: workflowId => branchManager.load(workflowId),
+      revalidate: (identity, expectedHead) => branchManager.revalidate(identity, expectedHead),
+      cleanup: async (identity, expectedHead, cleanupOptions) => {
+        if (cleanupOptions?.retainBranch === true) handoffs.push(expectedHead ?? identity.baseCommitOid);
+        return await branchManager.cleanup(identity, expectedHead, cleanupOptions);
+      },
+    },
     pipelineRunner: {
       run: (checkoutPath, spec) => runPipeline(checkoutPath, spec, pipelineDependencies),
     },
@@ -458,9 +383,6 @@ async function createHarness(options: HarnessOptions = {}) {
       roleRunner: approvingRoleRunner,
       now: () => NOW,
     }),
-    hostingAdapter: new InMemoryHostingAdapter(hosting),
-    requiredChecksPollIntervalMs: 100,
-    sleep: async () => {},
     ...(options.abortSignal === undefined ? {} : { abortSignal: options.abortSignal }),
   };
   return {
@@ -469,7 +391,7 @@ async function createHarness(options: HarnessOptions = {}) {
     workflowId,
     store: new WorkflowStore(workflowId),
     producer,
-    hostingCalls,
+    handoffs,
     branchManager,
   };
 }
@@ -513,11 +435,6 @@ afterEach(async () => {
   await Promise.all(temporaryPaths.splice(0).map(directory =>
     rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })));
 });
-
-function shippingMutations(calls: RecordedHostingCall[]): string[] {
-  return calls.map(call => call.operation).filter(operation =>
-    operation === "push" || operation === "draft-pr" || operation === "mark-ready");
-}
 
 async function candidateWorktreeFixture() {
   const root = temporaryPaths[0]!;
@@ -574,7 +491,7 @@ describe("autopilot adversarial trust boundaries", () => {
   it.each([
     ["candidate/pipeline", "result.json"],
     ["advisor/eligibility", path.join("pipeline", "post-pipeline-autopilot.json")],
-  ])("detects %s persisted-byte tampering and fails before shipping", async (_label, relative) => {
+  ])("detects %s persisted-byte tampering and fails before hand-off", async (_label, relative) => {
     const harness = await createHarness({
       afterEligibility: async runId => {
         const store = new ArtifactStore(runId);
@@ -583,7 +500,7 @@ describe("autopilot adversarial trust boundaries", () => {
     });
     await expect(harness.controller.start(harness.fixture.checkout, autopilotSpec()))
       .rejects.toBeDefined();
-    expect(shippingMutations(harness.hostingCalls)).toEqual([]);
+    expect(harness.handoffs).toEqual([]);
     await expect(harness.store.read()).resolves.toMatchObject({
       terminal: { classification: expect.stringMatching(/failed|human-decision-required/u) },
     });
@@ -597,16 +514,6 @@ describe("autopilot adversarial trust boundaries", () => {
     await expect(new ArtifactStore(runId).readDecision()).rejects.toBeDefined();
     await writeFile(harness.store.statePath, "{}\n");
     await expect(harness.store.read()).rejects.toBeDefined();
-  }, 120_000);
-
-  it.each([
-    ["stale checks", { checkHead: OTHER_HEAD }],
-    ["duplicate branch PR", { duplicatePullRequest: true }],
-  ])("rejects %s and never marks ready", async (_label, options) => {
-    const harness = await createHarness(options);
-    await expect(harness.controller.start(harness.fixture.checkout, autopilotSpec()))
-      .rejects.toBeDefined();
-    expect(harness.hostingCalls.some(call => call.operation === "mark-ready")).toBe(false);
   }, 120_000);
 
   it.each([
@@ -657,7 +564,7 @@ describe("autopilot adversarial trust boundaries", () => {
     expect(result.failures).toContain(finding);
   });
 
-  it("detects registration, ref, and rewritten-remote substitution", async () => {
+  it("detects registration and ref substitution", async () => {
     const harness = await createHarness();
     const workflowId = `${harness.workflowId}-branch-substitution`;
     const branch = await harness.branchManager.create({
@@ -680,13 +587,6 @@ describe("autopilot adversarial trust boundaries", () => {
     await writeFile(ownershipPath, ownershipBytes);
     await runGit(branch.worktreePath, ["checkout", "--detach", "-q"]);
     await expect(harness.branchManager.revalidate(branch)).resolves.toMatchObject({ ok: false });
-    await runGit(harness.fixture.checkout, [
-      "config", "url.https://attacker.invalid/.insteadOf", "https://github.com/",
-    ]);
-    await expect(harness.branchManager.revalidate(branch)).resolves.toMatchObject({
-      ok: false,
-      classification: "remote-identity-changed",
-    });
   });
 
   // Spec-level rejection only: no commit is created here, so this cannot speak
@@ -724,7 +624,7 @@ describe("autopilot adversarial trust boundaries", () => {
     await expect(harness.branchManager.load(harness.workflowId)).resolves.toBeNull();
   }, 120_000);
 
-  it("persists terminal cancellation and performs no later shipping mutation", async () => {
+  it("persists terminal cancellation and performs no later hand-off", async () => {
     const abort = new AbortController();
     const harness = await createHarness({ mode: "cancel", abortSignal: abort.signal });
     let producerStarted: (() => void) | undefined;
@@ -743,13 +643,13 @@ describe("autopilot adversarial trust boundaries", () => {
     });
     expect(durable.cleanup).toBeNull();
     await expect(harness.branchManager.load(harness.workflowId)).resolves.not.toBeNull();
-    expect(shippingMutations(harness.hostingCalls)).toEqual([]);
+    expect(harness.handoffs).toEqual([]);
     // Unlike the sibling cancellation tests, this one aborts while the Producer
     // is mid-flight, so it also pays for terminating a live process tree —
     // markedly slower on Windows, where 120s was not enough.
   }, 240_000);
 
-  it("halts durably when cancellation fires after promotion and before push", async () => {
+  it("halts durably when cancellation fires after promotion and before hand-off", async () => {
     const abort = new AbortController();
     const harness = await createHarness({
       abortSignal: abort.signal,
@@ -762,33 +662,16 @@ describe("autopilot adversarial trust boundaries", () => {
       phase: "cancelled",
       terminal: { classification: "cancelled", reason: "cancelled" },
     });
-    expect(shippingMutations(harness.hostingCalls)).toEqual([]);
+    expect(harness.handoffs).toEqual([]);
   }, 120_000);
 
-  it("halts during required-check polling before mark-ready", async () => {
-    const abort = new AbortController();
-    const harness = await createHarness({
-      abortSignal: abort.signal,
-      pendingRequiredChecks: true,
-      afterRequiredChecks: () => abort.abort(),
-    });
-
-    await expect(harness.controller.start(harness.fixture.checkout, autopilotSpec()))
-      .rejects.toMatchObject({ classification: "cancelled" });
-    await expect(harness.store.read()).resolves.toMatchObject({
-      phase: "cancelled",
-      terminal: { classification: "cancelled", reason: "cancelled" },
-    });
-    expect(harness.hostingCalls.filter(call => call.operation === "mark-ready")).toEqual([]);
-  }, 120_000);
-
-  it("bounds oversized producer output and fails closed before shipping", async () => {
+  it("bounds oversized producer output and fails closed before hand-off", async () => {
     const harness = await createHarness({ mode: "oversize" });
     await expect(harness.controller.start(harness.fixture.checkout, autopilotSpec()))
       .rejects.toBeDefined();
     const durable = await harness.store.read();
     expect(["failed", "human-decision-required"]).toContain(durable.phase);
-    expect(shippingMutations(harness.hostingCalls)).toEqual([]);
+    expect(harness.handoffs).toEqual([]);
   }, 120_000);
 
   it("serializes duplicate workflow starts and rejects a live-owner resume", async () => {
@@ -808,7 +691,7 @@ describe("autopilot adversarial trust boundaries", () => {
     abort.abort();
     await expect(first).rejects.toMatchObject({ classification: "cancelled" });
     await expect(second).resolves.toMatchObject({ phase: "cancelled" });
-    expect(shippingMutations(harness.hostingCalls)).toEqual([]);
+    expect(harness.handoffs).toEqual([]);
     // Same reason as the terminal-cancellation test above: aborting while the
     // Producer is mid-flight pays for tearing down a live process tree, which
     // is far slower on Windows than the 120s this suite assumed.
@@ -823,9 +706,7 @@ describe("autopilot adversarial trust boundaries", () => {
 
     expect(starts.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(starts.filter(result => result.status === "rejected")).toHaveLength(1);
-    expect(harness.hostingCalls.filter(call => call.operation === "push")).toHaveLength(1);
-    expect(harness.hostingCalls.filter(call => call.operation === "draft-pr")).toHaveLength(1);
-    expect(harness.hostingCalls.filter(call => call.operation === "mark-ready")).toHaveLength(1);
+    expect(harness.handoffs).toHaveLength(1);
   }, 120_000);
 
   it("serializes checkout-lock contenders without interleaving branch creation", async () => {
@@ -867,13 +748,6 @@ describe("autopilot adversarial trust boundaries", () => {
     await manager.cleanup(second);
   });
 
-  it("detects a branch-head race before accepting push observation", async () => {
-    const harness = await createHarness({ pushHead: OTHER_HEAD });
-    await expect(harness.controller.start(harness.fixture.checkout, autopilotSpec()))
-      .rejects.toMatchObject({ classification: "push-head-mismatch" });
-    expect(harness.hostingCalls.some(call => call.operation === "draft-pr")).toBe(false);
-  }, 120_000);
-
   it("rejects cross-repository workflow access", async () => {
     const harness = await createHarness();
     await harness.controller.start(harness.fixture.checkout, autopilotSpec());
@@ -882,21 +756,17 @@ describe("autopilot adversarial trust boundaries", () => {
       .rejects.toMatchObject({ classification: "repository-identity-mismatch" });
   }, 120_000);
 
-  it("exposes no force-push, no-verify, merge, close, delete, or arbitrary argv operation", async () => {
+  it("never publishes anything: the remote gains no ref from a complete workflow", async () => {
     const harness = await createHarness();
-    await harness.controller.start(harness.fixture.checkout, autopilotSpec());
-    const allowed = new Set(["preflight", "push", "draft-pr", "checks", "mark-ready"]);
-    expect(harness.hostingCalls.every(call => allowed.has(call.operation))).toBe(true);
-    const encoded = JSON.stringify(harness.hostingCalls).toLowerCase();
-    for (const forbidden of ["force-push", "--force", "--no-verify", "merge", "close", "delete", "argv"]) {
-      expect(encoded).not.toContain(forbidden);
-    }
-    const requests: Array<
-      PushRequest | DraftPullRequestRequest | ChecksRequest | MarkReadyRequest
-    > = harness.hostingCalls
-      .filter(call => call.operation !== "preflight")
-      .map(call => call.request as PushRequest | DraftPullRequestRequest | ChecksRequest | MarkReadyRequest);
-    expect(requests.every(request => !("argv" in request))).toBe(true);
+    const remoteBefore = await runGit(harness.fixture.bareRemote, ["show-ref"]);
+
+    const result = await harness.controller.start(harness.fixture.checkout, autopilotSpec());
+
+    expect(result.phase).toBe("ready-for-human-review");
+    expect(harness.handoffs).toEqual([result.headCommitOid]);
+    expect(await runGit(harness.fixture.bareRemote, ["show-ref"])).toBe(remoteBefore);
+    expect(await runGit(harness.fixture.checkout, ["rev-parse", `refs/heads/${result.branch}`]))
+      .toBe(result.headCommitOid);
   }, 120_000);
 
   it("does not follow symlink-substituted workflow state", async () => {

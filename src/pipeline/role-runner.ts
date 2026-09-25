@@ -52,19 +52,7 @@ export const READ_ONLY_ROLES: ReadonlySet<PipelineRole> = new Set<PipelineRole>(
   "verifier",
   "advisor",
 ]);
-const MAX_PRODUCER_OUTPUT_BYTES = 1_000_000;
 
-function preCancelledExit(): SupervisedExit {
-  return {
-    exitCode: null,
-    signal: null,
-    timedOut: false,
-    cancelled: true,
-    stdout: "",
-    stderr: "",
-    truncated: { stdout: false, stderr: false },
-  };
-}
 
 function definedEnvironment(
   environment: Record<string, string | undefined> | undefined,

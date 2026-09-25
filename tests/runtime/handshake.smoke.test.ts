@@ -287,7 +287,7 @@ describe("MCP server handshake", () => {
         name: "delegate",
         arguments: {
           checkoutPath: "/unused-invalid-spec",
-          protocolVersion: "1.3.0",
+          protocolVersion: "2.0.0",
           spec: { specVersion: "1" },
         },
       });
@@ -330,8 +330,8 @@ describe("MCP server handshake", () => {
         issues: expect.any(Array),
       });
       expect(mismatchDiagnostic).toContain("protocol version mismatch");
-      expect(mismatchDiagnostic).toContain("received 1.3.0");
-      expect(mismatchDiagnostic).toContain("expected 2.0.0");
+      expect(mismatchDiagnostic).toContain("received 2.0.0");
+      expect(mismatchDiagnostic).toContain("expected 3.0.0");
       expect(stdout.trim().split(/\r?\n/).every(line => {
         try {
           JSON.parse(line);

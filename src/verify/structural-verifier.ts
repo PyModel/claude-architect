@@ -1,4 +1,5 @@
-import { git, type GitResult } from "../git/git-exec.js";
+import { git } from "../git/git-exec.js";
+import { gitChecked as checkedGit } from "../git/checked-git.js";
 import {
   foldPathForCollision,
   inspectChangedPathManifest,
@@ -7,11 +8,8 @@ import {
   type RawDiffEntry,
 } from "../git/changed-path-manifest.js";
 import type { CandidateArtifact, ChangedPath } from "../protocol/attempt-result.js";
-import { redact } from "../runtime/redaction.js";
-import { RuntimeError } from "../util/errors.js";
 import { globMatches } from "../util/glob.js";
 
-const MAX_DIAGNOSTIC_LENGTH = 2_000;
 
 export type StructuralFailure =
   | "manifest-divergence"
@@ -104,22 +102,7 @@ export interface StructuralVerifyResult {
   checkoutDrift?: CheckoutDrift;
 }
 
-function gitFailure(action: string, result: GitResult): RuntimeError {
-  const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, MAX_DIAGNOSTIC_LENGTH);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
 
-async function checkedGit(cwd: string, args: string[]): Promise<string> {
-  const result = await git(cwd, args);
-  if (result.exitCode !== 0) throw gitFailure(`git ${args[0] ?? "command"}`, result);
-  // Truncated output is a partial answer, and every caller here treats what it
-  // gets as the complete path set — a clipped `ls-tree` would silently hide a
-  // real case collision. Proof cannot rest on a truncated read.
-  if (result.truncated?.stdout === true || result.truncated?.stderr === true) {
-    throw gitFailure(`git ${args[0] ?? "command"}`, { ...result, stderr: "output truncated" });
-  }
-  return result.stdout;
-}
 
 
 

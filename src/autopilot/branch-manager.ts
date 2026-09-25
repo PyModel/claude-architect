@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { gitSucceeded as succeeded } from "../git/checked-git.js";
 import { constants } from "node:fs";
 import { chmod, link, lstat, mkdir, mkdtemp, open, realpath, rm } from "node:fs/promises";
 import path from "node:path";
@@ -90,9 +91,7 @@ interface WorkflowBranchRegistration extends WorkflowBranchIdentity {
 export type BranchRevalidationClassification =
   | "ownership-mismatch"
   | "repository-identity-changed"
-  | "remote-identity-changed"
   | "base-ref-changed"
-  | "remote-base-changed"
   | "worktree-missing"
   | "worktree-path-changed"
   | "worktree-registration-changed"
@@ -107,9 +106,19 @@ export type BranchRevalidationResult =
   | { ok: true }
   | { ok: false; classification: BranchRevalidationClassification };
 
+/**
+ * Postconditions, not actions: `worktreeRemoved` and `refsRemoved` say the
+ * worktree and every ref cleanup owns are gone, whether this call removed
+ * them or an interrupted earlier call already had.
+ */
 export type BranchCleanupResult =
   | { ok: true; worktreeRemoved: boolean; refsRemoved: boolean }
   | { ok: false; classification: "cleanup-failed" };
+
+export interface BranchCleanupOptions {
+  /** Keep the workflow branch itself: it is the final-reviewed hand-off. */
+  retainBranch?: boolean;
+}
 
 export class WorkflowBranchError extends RuntimeError {
   constructor(readonly classification: string, message = classification) {
@@ -123,11 +132,6 @@ interface RemoteIdentity {
   ownerRepo: string;
 }
 
-function succeeded(result: GitResult): boolean {
-  return result.exitCode === 0
-    && result.truncated?.stdout !== true
-    && result.truncated?.stderr !== true;
-}
 
 function transportFailure(action: string): GitResult {
   return { exitCode: 2, stdout: "", stderr: `${action} failed in isolated transport` };
@@ -522,15 +526,6 @@ export async function workflowWorktreeOwnershipClaim(
   };
 }
 
-/** Validate a durable workflow registration as the owner of one managed worktree. */
-export async function workflowOwnershipClaimsWorktree(
-  ownershipPath: string,
-  worktreePath: string,
-): Promise<boolean> {
-  await workflowWorktreeOwnershipClaim(ownershipPath, worktreePath);
-  return true;
-}
-
 function operationFailure(action: string, result: GitResult): never {
   const diagnostic = boundedRedactedDiagnostic(
     (result.stderr || result.stdout).trim(),
@@ -697,7 +692,6 @@ export class WorkflowBranchManager {
     let fetchedOidForCleanup: string | undefined;
     let completedIdentity: WorkflowBranchIdentity | undefined;
     let operationError: unknown;
-    const workflowHash = createHash("sha256").update(request.workflowId).digest("hex");
     const remoteIdentity = await this.resolveRemote(initial.canonical);
     const safety = new PlatformSafety(this.platformServices as PlatformServices);
     try {
@@ -906,16 +900,6 @@ export class WorkflowBranchManager {
       return { ok: false, classification: "worktree-path-changed" };
     }
 
-    let remoteIdentity: RemoteIdentity;
-    try {
-      remoteIdentity = await this.resolveRemote(identity.checkoutPath);
-    } catch {
-      return { ok: false, classification: "remote-identity-changed" };
-    }
-    if (remoteIdentity.url !== identity.remoteUrl || remoteIdentity.ownerRepo !== identity.ownerRepo) {
-      return { ok: false, classification: "remote-identity-changed" };
-    }
-
     const registered = await this.runGit(identity.checkoutPath, [
       "worktree", "list", "--porcelain", "-z",
     ]);
@@ -959,17 +943,6 @@ export class WorkflowBranchManager {
     const base = await this.runGit(identity.checkoutPath, ["rev-parse", "--verify", identity.baseRef]);
     if (!succeeded(base) || base.stdout.trim() !== identity.baseCommitOid) {
       return { ok: false, classification: "base-ref-changed" };
-    }
-    const remote = await this.remoteTransport.listHeads(identity.checkoutPath, identity.remoteUrl);
-    if (!succeeded(remote)) return { ok: false, classification: "git-command-failed" };
-    let remoteHeads: Map<string, string>;
-    try {
-      remoteHeads = parseRemoteHeads(remote.stdout);
-    } catch {
-      return { ok: false, classification: "git-command-failed" };
-    }
-    if (remoteHeads.get(identity.baseBranch) !== identity.baseCommitOid) {
-      return { ok: false, classification: "remote-base-changed" };
     }
     return { ok: true };
   }
@@ -1047,10 +1020,9 @@ export class WorkflowBranchManager {
     identity: WorkflowBranchIdentity,
     expectedHead: string,
     checkoutLease: CheckoutLock,
+    retainBranch: boolean,
   ): Promise<BranchCleanupResult> {
-    if (!await this.readOwnership(identity)) {
-      return { ok: false, classification: "cleanup-failed" };
-    }
+    const owned = await this.readOwnership(identity);
     const checkout = await this.platformServices.canonicalizePath(identity.checkoutPath);
     if (checkout.gitCommonDir !== identity.gitCommonDir) {
       return { ok: false, classification: "cleanup-failed" };
@@ -1128,24 +1100,39 @@ export class WorkflowBranchManager {
     const basePresence = await this.runGit(identity.checkoutPath, [
       "show-ref", "--verify", "--quiet", identity.baseRef,
     ]);
-    const refsPresent = branchPresence.exitCode === 0 && basePresence.exitCode === 0;
-    const refsAbsent = branchPresence.exitCode === 1 && basePresence.exitCode === 1;
-    if ((!refsPresent && !refsAbsent) || (refsAbsent && registrationPresent)) {
+    const presenceKnown = (exitCode: number | null): boolean => exitCode === 0 || exitCode === 1;
+    if (!presenceKnown(branchPresence.exitCode) || !presenceKnown(basePresence.exitCode)) {
       return { ok: false, classification: "cleanup-failed" };
     }
-    if (refsPresent) {
-      const branch = await this.runGit(identity.checkoutPath, [
-        "rev-parse", "--verify", identity.branchRef,
-      ]);
-      const base = await this.runGit(identity.checkoutPath, [
-        "rev-parse", "--verify", identity.baseRef,
-      ]);
-      if (!succeeded(branch)
-        || !succeeded(base)
-        || branch.stdout.trim() !== expectedHead
-        || base.stdout.trim() !== identity.baseCommitOid) {
-        return { ok: false, classification: "cleanup-failed" };
-      }
+    const branchPresent = branchPresence.exitCode === 0;
+    const basePresent = basePresence.exitCode === 0;
+    if (retainBranch) {
+      // The hand-off branch must survive at exactly the reviewed head.
+      if (!branchPresent) return { ok: false, classification: "cleanup-failed" };
+    } else if (branchPresent !== basePresent || (!branchPresent && registrationPresent)) {
+      return { ok: false, classification: "cleanup-failed" };
+    }
+    const [branch, base] = await Promise.all([
+      branchPresent
+        ? this.runGit(identity.checkoutPath, ["rev-parse", "--verify", identity.branchRef])
+        : null,
+      basePresent
+        ? this.runGit(identity.checkoutPath, ["rev-parse", "--verify", identity.baseRef])
+        : null,
+    ]);
+    if ((branch !== null && (!succeeded(branch) || branch.stdout.trim() !== expectedHead))
+      || (base !== null && (!succeeded(base) || base.stdout.trim() !== identity.baseCommitOid))) {
+      return { ok: false, classification: "cleanup-failed" };
+    }
+    const removeBranch = branchPresent && !retainBranch;
+    const nothingLeft = !registrationPresent && !basePresent && !removeBranch;
+    // An interrupted cleanup can remove the ownership record before its
+    // journal entry lands. With nothing left to remove, that is completion,
+    // not a foreign workflow; with anything left, ownership is required.
+    if (!owned) {
+      return nothingLeft
+        ? { ok: true, worktreeRemoved: true, refsRemoved: true }
+        : { ok: false, classification: "cleanup-failed" };
     }
 
     const manager = new WorktreeManager(
@@ -1167,12 +1154,12 @@ export class WorkflowBranchManager {
         );
       }
     }
-    if (refsPresent) {
+    if (basePresent || removeBranch) {
       const refs = await this.runGit(identity.checkoutPath, ["update-ref", "--stdin"], {
         stdin: [
           "start",
-          `delete ${identity.branchRef} ${expectedHead}`,
-          `delete ${identity.baseRef} ${identity.baseCommitOid}`,
+          ...(removeBranch ? [`delete ${identity.branchRef} ${expectedHead}`] : []),
+          ...(basePresent ? [`delete ${identity.baseRef} ${identity.baseCommitOid}`] : []),
           "prepare",
           "commit",
           "",
@@ -1181,16 +1168,13 @@ export class WorkflowBranchManager {
       if (!succeeded(refs)) return { ok: false, classification: "cleanup-failed" };
     }
     await this.removeOwnership(this.ownershipPath(identity.workflowId));
-    return {
-      ok: true,
-      worktreeRemoved: registrationPresent,
-      refsRemoved: refsPresent,
-    };
+    return { ok: true, worktreeRemoved: true, refsRemoved: true };
   }
 
   async cleanup(
     identity: WorkflowBranchIdentity,
     expectedHead = identity.baseCommitOid,
+    options: BranchCleanupOptions = {},
   ): Promise<BranchCleanupResult> {
     if (!isOid(expectedHead)
       || !isOid(identity.baseCommitOid)
@@ -1207,7 +1191,7 @@ export class WorkflowBranchManager {
         if (lock.repositoryIdentity !== identity.repositoryIdentity) {
           return { ok: false, classification: "cleanup-failed" };
         }
-        return await this.cleanupLocked(identity, expectedHead, lock);
+        return await this.cleanupLocked(identity, expectedHead, lock, options.retainBranch === true);
       }, {
         onReleaseError: (releaseError, res) => {
           logger.warn("checkout lock release failed after workflow branch cleanup", {

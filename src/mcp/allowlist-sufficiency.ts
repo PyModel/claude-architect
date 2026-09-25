@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { gitSucceeded } from "../git/checked-git.js";
 import { git as runGit } from "../git/git-exec.js";
 import { gitNulRecords } from "../git/git-output.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
@@ -78,7 +79,8 @@ export async function checkAllowlistSufficiency(
   deps: AllowlistSufficiencyDependencies = {},
 ): Promise<AllowlistSufficiency> {
   const listed = await (deps.git ?? runGit)(repoRoot, ["ls-files", "-z"]);
-  if (listed.exitCode !== 0) return { allowlisted: 0, gaps: [], omitted: 0 };
+  // A truncated listing would silently hide gaps; treat it like a failure.
+  if (!gitSucceeded(listed)) return { allowlisted: 0, gaps: [], omitted: 0 };
   const tracked = new Set(
     gitNulRecords(listed.stdout, "Git tracked-file list").filter(entry => entry.length > 0),
   );

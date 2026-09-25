@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { sanitizeReviewPatch } from "../git/candidate-tree.js";
+import { gitSucceeded, reviewDiffArgs } from "../git/checked-git.js";
 import { git as runGit, type GitResult } from "../git/git-exec.js";
 import { manifestHashOf } from "../git/changed-path-manifest.js";
 import type { PlatformServices } from "../platform/platform-services.js";
@@ -272,21 +274,15 @@ export async function createReviewSnapshot(run: ReviewSnapshotRun): Promise<Revi
     throw reviewError("candidate anchor no longer matches the archive", "candidate-anchor-mismatch");
   }
 
-  const patch = await git(run.repoRoot, [
-    "diff",
-    "--no-ext-diff",
-    "--no-textconv",
-    "--binary",
-    "--full-index",
+  const patchResult = await git(run.repoRoot, reviewDiffArgs(
     candidate.baseCommitOid,
     candidate.candidateTreeOid,
-    "--",
-  ]);
-  if (patch.exitCode !== 0
-    || patch.truncated?.stdout === true
-    || patch.truncated?.stderr === true) {
+    ["--binary", "--full-index"],
+  ));
+  if (!gitSucceeded(patchResult)) {
     throw reviewError("failed to regenerate candidate patch", "candidate-review-failed");
   }
+  const patch = sanitizeReviewPatch(patchResult.stdout);
 
   const snapshot: ReviewSnapshot = {
     runId: run.runId,
@@ -294,7 +290,7 @@ export async function createReviewSnapshot(run: ReviewSnapshotRun): Promise<Revi
     candidateCommitOid: candidate.candidateCommitOid,
     candidateTreeOid: candidate.candidateTreeOid,
     manifestHash: candidate.manifestHash,
-    patch: patch.stdout,
+    patch,
     changedPaths: candidate.changedPaths.map(change => ({ ...change })),
     evidence: boundEvidence(result.evidence),
     executedVerification: result.executedVerification.map(outcome => ({

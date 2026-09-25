@@ -146,7 +146,7 @@ async function createNonterminalWorkflowState(
     now: () => timestamp,
   });
   await store.create({
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId,
     repositoryIdentity: repo.commonDir,
     baseCommitOid: repo.head,
@@ -166,13 +166,7 @@ async function createNonterminalWorkflowState(
     }],
     intentJournal: { ref: "journal.ndjson", entryCount: 0, lastEntryHash: null },
     finalGate: null,
-    shipping: {
-      branch: `feat/${workflowId}`,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: timestamp,
-    },
-    ciObservations: [],
+    branch: `feat/${workflowId}`,
     cleanup: null,
     terminal: null,
     createdAt: timestamp,
@@ -195,7 +189,7 @@ async function createTerminalWorkflowWithUnverifiableOwner(
   };
   const store = new WorkflowStore(workflowId, options);
   await store.create({
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId,
     repositoryIdentity: repo.commonDir,
     baseCommitOid: repo.head,
@@ -215,13 +209,7 @@ async function createTerminalWorkflowWithUnverifiableOwner(
     }],
     intentJournal: { ref: "journal.ndjson", entryCount: 0, lastEntryHash: null },
     finalGate: null,
-    shipping: {
-      branch: `feat/${workflowId}`,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: timestamp,
-    },
-    ciObservations: [],
+    branch: `feat/${workflowId}`,
     cleanup: null,
     terminal: null,
     createdAt: timestamp,
@@ -612,7 +600,9 @@ describe("startup worktree sweep", () => {
     await expect(access(valid.path)).resolves.toBeUndefined();
     await expect(access(invalid.path)).resolves.toBeUndefined();
     await expect(access(missing.path)).resolves.toBeUndefined();
-    await Promise.all([valid.cleanup(), invalid.cleanup(), missing.cleanup()]);
+    // One checkout lease serializes these; concurrent cleanups can exceed its
+    // acquisition timeout on a loaded host.
+    for (const worktree of [valid, invalid, missing]) await worktree.cleanup();
   });
 
   it("sweeps stale modern and legacy final-review materializations", async () => {
@@ -654,7 +644,7 @@ describe("startup worktree sweep", () => {
       now: () => timestamp,
     });
     await store.create({
-      stateVersion: "1",
+      stateVersion: "2",
       workflowId,
       repositoryIdentity: repo.commonDir,
       baseCommitOid: repo.head,
@@ -678,13 +668,7 @@ describe("startup worktree sweep", () => {
         lastEntryHash: null,
       },
       finalGate: null,
-      shipping: {
-        branch: `feat/${workflowId}`,
-        prNumber: null,
-        prUrl: null,
-        ciDeadlineAt: timestamp,
-      },
-      ciObservations: [],
+      branch: `feat/${workflowId}`,
       cleanup: null,
       terminal: null,
       createdAt: timestamp,
@@ -904,6 +888,27 @@ describe("startup worktree sweep", () => {
     const listed = await git(repo.directory, ["worktree", "list", "--porcelain", "-z"]);
     expect(listed.exitCode, listed.stderr).toBe(0);
     expect(listed.stdout).not.toContain(worktree.path);
+  });
+
+  it("sweeps an orphan in a checkout namespace and leaves user worktrees beside it", async () => {
+    const repo = await initRepo();
+    const userWorktree = path.join(repo.directory, ".worktrees", "user-feature");
+    await runGit(repo.directory, ["worktree", "add", "-q", "--detach", userWorktree, repo.head]);
+    const orphan = await new WorktreeManager(repo.directory, "namespace-orphan").create(repo.head);
+
+    await expect(recoverStaleRuns({ isProcessAlive: () => false })).resolves.toEqual({
+      recovered: [],
+      quarantined: [],
+    });
+
+    await expectMissing(orphan.path);
+    const listed = await git(repo.directory, ["worktree", "list", "--porcelain", "-z"]);
+    expect(listed.stdout).not.toContain(orphan.path);
+    expect(listed.stdout).toContain(await realpath(userWorktree));
+    await expect(readFile(
+      path.join(repo.directory, ".worktrees", "claude-architect", ".gitignore"),
+      "utf8",
+    )).resolves.toBe("*\n");
   });
 
   it("removes stale registrations when the entire managed worktree root vanished", async () => {
@@ -1228,7 +1233,7 @@ describe("worktree lease coverage", () => {
       "src/autopilot/branch-manager.ts#createAttached",
       "src/autopilot/final-branch-reviewer.ts#create",
       "src/pipeline/candidate-verifier.ts#withManagedWorktree",
-      "src/pipeline/pipeline-runtime.ts#create",
+      "src/pipeline/pipeline-runtime.ts#withManagedWorktree",
       "src/pipeline/slice-runner.ts#withManagedWorktree",
       "src/pipeline/slice-runner.ts#withManagedWorktree",
       "src/runtime/attempt-runtime.ts#create",

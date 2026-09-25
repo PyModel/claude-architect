@@ -82,7 +82,6 @@ export async function transitionRunStatusSafely(
 
 export class StatusEmitter {
   private lastPhase: RunStatusPhase | null = null;
-  private pendingEphemeral: string | null = null;
 
   constructor(
     private readonly store: RunStatusTransitionStore,
@@ -107,7 +106,6 @@ export class StatusEmitter {
     >> = {},
   ): Promise<void> {
     this.lastPhase = phase;
-    this.pendingEphemeral = null;
     await transitionRunStatusSafely(this.store, this.runId, phase, fields);
   }
 
@@ -116,7 +114,6 @@ export class StatusEmitter {
    * Coalesced and dispatched to progress listeners without blocking on disk.
    */
   async ephemeral(detail: string): Promise<void> {
-    this.pendingEphemeral = detail;
     this.onProgress?.(detail);
   }
 }

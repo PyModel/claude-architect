@@ -12,6 +12,7 @@ import type { AttemptResult, CandidateArtifact } from "../../src/protocol/attemp
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
 import type { CandidateDecisionV2 } from "../../src/protocol/candidate-decision.js";
 import type { RunManifest } from "../../src/runtime/run-manifest.js";
+import type { JevScreen } from "../../src/mcp/jev-screen.js";
 import type { ReviewSnapshot } from "../../src/runtime/review-snapshot.js";
 
 function minimalResult(runId: string): AttemptResult {
@@ -140,6 +141,7 @@ async function decideVia(
   options: {
     onAcquireLock?: () => void;
     currentResult?: () => AttemptResult;
+    jevScreen?: JevScreen;
   } = {},
 ): Promise<{ output: unknown; decision: CandidateDecisionV2 | null }> {
   let recorded: CandidateDecisionV2 | null = null;
@@ -151,6 +153,8 @@ async function decideVia(
     pruneRuns: async () => {},
     ps: fakePlatform(options.onAcquireLock),
     decisionAuthority: () => authority,
+    // Hermetic by default: the real screen is opt-in and networked.
+    jevScreen: options.jevScreen ?? (async () => ({ status: "disabled" })),
     storeFactory: () => ({
       readResult: async () => options.currentResult?.() ?? result,
       readManifest: async () => ({
@@ -158,6 +162,7 @@ async function decideVia(
         repoRoot: "/canonical/repo",
         baseCommitOid: candidate.baseCommitOid,
         candidateManifestHash: candidate.manifestHash,
+        effectivePolicy: { verificationPolicy: [{ id: "unit", confinement: "macos-seatbelt", skipped: false }] },
       } as unknown as RunManifest),
       writeCandidateDecisionRecord: async (record: CandidateDecisionV2) => {
         recorded = record;
@@ -226,6 +231,27 @@ describe("decideCandidate authority", () => {
     expect(decision?.authority).toBe("policy-autonomous");
   });
 
+  it("lets a Jev concern withdraw autonomy but never grant it", async () => {
+    const concern: JevScreen = async () => ({
+      status: "concern",
+      reasons: ["an independent screen (Jev) flagged security-sensitive changes in the candidate (p=0.91)"],
+    });
+    const flagged = await decideVia(verifiedResult, "autonomous", { jevScreen: concern });
+    expect(flagged.decision).toBeNull();
+    expect(JSON.stringify(flagged.output)).toContain("elicitation");
+
+    for (const status of ["clear", "disabled"] as const) {
+      const { decision } = await decideVia(verifiedResult, "autonomous", {
+        jevScreen: async () => ({ status }),
+      });
+      expect(decision?.authority).toBe("policy-autonomous");
+    }
+    const outage = await decideVia(verifiedResult, "autonomous", {
+      jevScreen: async () => ({ status: "unavailable", reason: "HTTP 529" }),
+    });
+    expect(outage.decision?.authority).toBe("policy-autonomous");
+  });
+
   it("never records a clean candidate without elicitation under human authority", async () => {
     // Same candidate, same client, only the authority differs — the mutation
     // that proves the branch above is why no prompt happened.
@@ -292,6 +318,7 @@ describe("decideCandidate authority", () => {
               repoRoot: "/canonical/repo",
               baseCommitOid: candidate.baseCommitOid,
               candidateManifestHash: candidate.manifestHash,
+              effectivePolicy: { verificationPolicy: [{ id: "unit", confinement: "macos-seatbelt", skipped: false }] },
             } as unknown as RunManifest),
             writeCandidateDecisionRecord: async (record: CandidateDecisionV2) => {
               await persistentStore.writeCandidateDecisionRecord(record);

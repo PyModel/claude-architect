@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { git, type GitResult } from "../git/git-exec.js";
 import { RUNTIME_VERSION } from "../protocol/versions.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode } from "../util/errors.js";
 import { redact } from "./redaction.js";
 import type {
   PackagedVerifierInput,
@@ -85,7 +85,7 @@ function defaultVerifierModuleUrls(): URL[] {
 }
 
 function isMissingModule(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException).code;
+  const code = errorCode(error);
   return code === "ENOENT" || code === "ENOTDIR";
 }
 

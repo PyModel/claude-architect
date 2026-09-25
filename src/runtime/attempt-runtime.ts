@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { freezeCandidate } from "../git/candidate-tree.js";
 import { git } from "../git/git-exec.js";
@@ -10,7 +10,6 @@ import type {
   PlatformServices,
   SupervisedExit,
 } from "../platform/platform-services.js";
-import { supervise } from "../platform/process-supervisor.js";
 import { selectSandboxBackend } from "../platform/sandbox/backends.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import type {
@@ -23,7 +22,6 @@ import type {
 import { classifyFailure } from "../protocol/attempt-result.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { specSha256 } from "../protocol/spec-hash.js";
-import { probeAll } from "../producers/capability-probe.js";
 import {
   detectEnvironmentType,
   type CapabilityReport,
@@ -42,7 +40,6 @@ import { logger } from "../util/logger.js";
 import { verifyBaseline } from "../verify/baseline-verifier.js";
 import { ArtifactStore } from "./artifact-store.js";
 import {
-  buildEnvironment,
   registerSensitiveEnvironment,
   type BuiltEnvironment,
   type EnvProvenance,
@@ -60,10 +57,8 @@ import {
 } from "./run-manifest.js";
 import {
   initializeRunStart,
-  parentDeathWatchdogInvocation,
   type RunStartContext,
   type RunStartRecord,
-  withRunStartPidRecording,
 } from "./run-start.js";
 import {
   writeRunStatusSafely,
@@ -71,7 +66,6 @@ import {
   type RunStatusPhase,
 } from "./run-status.js";
 
-const MAX_PRODUCER_OUTPUT_BYTES = 1_000_000;
 const MAX_SNAPSHOT_DIFF_BYTES = 100_000;
 
 // Best-effort salvage evidence for attempts that end without a frozen candidate
@@ -234,17 +228,6 @@ function producerLog(exit: SupervisedExit | null): string {
   ].join("\n");
 }
 
-function preCancelledExit(): SupervisedExit {
-  return {
-    exitCode: null,
-    signal: null,
-    timedOut: false,
-    cancelled: true,
-    stdout: "",
-    stderr: "",
-    truncated: { stdout: false, stderr: false },
-  };
-}
 
 
 async function archiveTerminal(context: TerminalContext): Promise<AttemptResult> {
@@ -298,7 +281,11 @@ async function archiveTerminal(context: TerminalContext): Promise<AttemptResult>
             configurationProfile: context.profile,
             temporaryHomeApplied: context.temporaryHomeApplied,
           }),
-        verificationPolicy: context.evidence.verificationPolicy ?? [],
+        // Absent stays absent: "the verifier recorded nothing" must not read as
+        // "no command ran", which the decision policy treats as confined.
+        ...(context.evidence.verificationPolicy === undefined
+          ? {}
+          : { verificationPolicy: context.evidence.verificationPolicy }),
       },
       repositoryInstructions: context.repositoryInstructions,
       prompt: context.invocation?.stdin ?? `${context.spec.objective}\n${context.spec.context}`,

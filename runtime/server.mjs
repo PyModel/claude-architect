@@ -419,11 +419,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants15) {
+      optimizeNames(names, constants18) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants15);
+          this.rhs = optimizeExpr(this.rhs, names, constants18);
         return this;
       }
       get names() {
@@ -440,10 +440,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants15) {
+      optimizeNames(names, constants18) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants15);
+        this.rhs = optimizeExpr(this.rhs, names, constants18);
         return this;
       }
       get names() {
@@ -504,8 +504,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants15) {
-        this.code = optimizeExpr(this.code, names, constants15);
+      optimizeNames(names, constants18) {
+        this.code = optimizeExpr(this.code, names, constants18);
         return this;
       }
       get names() {
@@ -534,12 +534,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants15) {
+      optimizeNames(names, constants18) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants15))
+          if (n.optimizeNames(names, constants18))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -592,12 +592,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants15) {
+      optimizeNames(names, constants18) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants15);
-        if (!(super.optimizeNames(names, constants15) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants18);
+        if (!(super.optimizeNames(names, constants18) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants15);
+        this.condition = optimizeExpr(this.condition, names, constants18);
         return this;
       }
       get names() {
@@ -620,10 +620,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants15) {
-        if (!super.optimizeNames(names, constants15))
+      optimizeNames(names, constants18) {
+        if (!super.optimizeNames(names, constants18))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants15);
+        this.iteration = optimizeExpr(this.iteration, names, constants18);
         return this;
       }
       get names() {
@@ -659,10 +659,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants15) {
-        if (!super.optimizeNames(names, constants15))
+      optimizeNames(names, constants18) {
+        if (!super.optimizeNames(names, constants18))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants15);
+        this.iterable = optimizeExpr(this.iterable, names, constants18);
         return this;
       }
       get names() {
@@ -704,11 +704,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants15) {
+      optimizeNames(names, constants18) {
         var _a3, _b;
-        super.optimizeNames(names, constants15);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants15);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants15);
+        super.optimizeNames(names, constants18);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants18);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants18);
         return this;
       }
       get names() {
@@ -1009,7 +1009,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants15) {
+    function optimizeExpr(expr, names, constants18) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1024,14 +1024,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants15[n.str];
+        const c = constants18[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants15[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants18[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -3238,8 +3238,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path35) {
-      let input = path35;
+    function removeDotSegments(path43) {
+      let input = path43;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3491,8 +3491,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path35, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path35 && path35 !== "/" ? path35 : void 0;
+        const [path43, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path43 && path43 !== "/" ? path43 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -4352,15 +4352,15 @@ var require_core = __commonJS({
         }
         return metaSchema;
       }
-      _removeAllSchemas(schemas7, regex) {
-        for (const keyRef in schemas7) {
-          const sch = schemas7[keyRef];
+      _removeAllSchemas(schemas6, regex) {
+        for (const keyRef in schemas6) {
+          const sch = schemas6[keyRef];
           if (!regex || regex.test(keyRef)) {
             if (typeof sch == "string") {
-              delete schemas7[keyRef];
+              delete schemas6[keyRef];
             } else if (sch && !sch.meta) {
               this._cache.delete(sch.schema);
-              delete schemas7[keyRef];
+              delete schemas6[keyRef];
             }
           }
         }
@@ -8176,8 +8176,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path35, errorMaps, issueData } = params;
-  const fullPath = [...path35, ...issueData.path || []];
+  const { data, path: path43, errorMaps, issueData } = params;
+  const fullPath = [...path43, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -8292,11 +8292,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path35, key) {
+  constructor(parent, value, path43, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path35;
+    this._path = path43;
     this._key = key;
   }
   get path() {
@@ -10748,12 +10748,12 @@ var ZodTuple = class _ZodTuple extends ZodType {
     });
   }
 };
-ZodTuple.create = (schemas7, params) => {
-  if (!Array.isArray(schemas7)) {
+ZodTuple.create = (schemas6, params) => {
+  if (!Array.isArray(schemas6)) {
     throw new Error("You must pass an array of schemas to z.tuple([ ... ])");
   }
   return new ZodTuple({
-    items: schemas7,
+    items: schemas6,
     typeName: ZodFirstPartyTypeKind.ZodTuple,
     rest: null,
     ...processCreateParams(params)
@@ -12216,10 +12216,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path35) {
-  if (!path35)
+function getElementAtPath(obj, path43) {
+  if (!path43)
     return obj;
-  return path35.reduce((acc, key) => acc?.[key], obj);
+  return path43.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12628,11 +12628,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path35, issues) {
+function prefixIssues(path43, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path35);
+    iss.path.unshift(path43);
     return iss;
   });
 }
@@ -12779,16 +12779,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path35 = []) => {
+  const processError = (error52, path43 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path35, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path43, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path35, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path43, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path35, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path43, ...issue2.path]);
       } else {
-        const fullpath = [...path35, ...issue2.path];
+        const fullpath = [...path43, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -12815,17 +12815,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path35 = []) => {
+  const processError = (error52, path43 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path35, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path43, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path35, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path43, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path35, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path43, ...issue2.path]);
       } else {
-        const fullpath = [...path35, ...issue2.path];
+        const fullpath = [...path43, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -12857,8 +12857,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path35 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path35) {
+  const path43 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path43) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -23736,7 +23736,7 @@ function toJSONSchema(input, params) {
       const [_, schema] = entry;
       process2(schema, ctx2);
     }
-    const schemas7 = {};
+    const schemas6 = {};
     const external = {
       registry: registry3,
       uri: params?.uri,
@@ -23746,15 +23746,15 @@ function toJSONSchema(input, params) {
     for (const entry of registry3._idmap.entries()) {
       const [key, schema] = entry;
       extractDefs(ctx2, schema);
-      schemas7[key] = finalize(ctx2, schema);
+      schemas6[key] = finalize(ctx2, schema);
     }
     if (Object.keys(defs).length > 0) {
       const defsSegment = ctx2.target === "draft-2020-12" ? "$defs" : "definitions";
-      schemas7.__shared = {
+      schemas6.__shared = {
         [defsSegment]: defs
       };
     }
-    return { schemas: schemas7 };
+    return { schemas: schemas6 };
   }
   const ctx = initializeContext({ ...params, processors: allProcessors });
   process2(input, ctx);
@@ -23970,11 +23970,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path35) {
-  if (path35.length === 0) {
+function getDotPath(path43) {
+  if (path43.length === 0) {
     return "object root";
   }
-  return path35.reduce((acc, seg, index) => {
+  return path43.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -25999,13 +25999,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path35 = ref.slice(1).split("/").filter(Boolean);
-  if (path35.length === 0) {
+  const path43 = ref.slice(1).split("/").filter(Boolean);
+  if (path43.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path35[0] === defsKey) {
-    const key = path35[1];
+  if (path43[0] === defsKey) {
+    const key = path43[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -31795,166 +31795,88 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
-import process3 from "node:process";
-
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
-var STDIO_DEFAULT_MAX_BUFFER_SIZE = 10 * 1024 * 1024;
-var ReadBuffer = class {
-  constructor(options) {
-    this._maxBufferSize = options?.maxBufferSize ?? STDIO_DEFAULT_MAX_BUFFER_SIZE;
-  }
-  append(chunk) {
-    const newSize = (this._buffer?.length ?? 0) + chunk.length;
-    if (newSize > this._maxBufferSize) {
-      this.clear();
-      throw new Error(`ReadBuffer exceeded maximum size of ${this._maxBufferSize} bytes`);
-    }
-    this._buffer = this._buffer ? Buffer.concat([this._buffer, chunk]) : chunk;
-  }
-  readMessage() {
-    if (!this._buffer) {
-      return null;
-    }
-    const index = this._buffer.indexOf("\n");
-    if (index === -1) {
-      return null;
-    }
-    const line = this._buffer.toString("utf8", 0, index).replace(/\r$/, "");
-    this._buffer = this._buffer.subarray(index + 1);
-    return deserializeMessage(line);
-  }
-  clear() {
-    this._buffer = void 0;
-  }
-};
-function deserializeMessage(line) {
-  return JSONRPCMessageSchema.parse(JSON.parse(line));
-}
-function serializeMessage(message) {
-  return JSON.stringify(message) + "\n";
-}
-
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
-var StdioServerTransport = class {
-  constructor(_stdin = process3.stdin, _stdout = process3.stdout, options) {
-    this._stdin = _stdin;
-    this._stdout = _stdout;
-    this._started = false;
-    this._ondata = (chunk) => {
-      try {
-        this._readBuffer.append(chunk);
-        this.processReadBuffer();
-      } catch (error51) {
-        this.onerror?.(error51);
-        this.close().catch(() => {
-        });
-      }
-    };
-    this._onerror = (error51) => {
-      this.onerror?.(error51);
-    };
-    this._readBuffer = new ReadBuffer({ maxBufferSize: options?.maxBufferSize });
-  }
-  /**
-   * Starts listening for messages on stdin.
-   */
-  async start() {
-    if (this._started) {
-      throw new Error("StdioServerTransport already started! If using Server class, note that connect() calls start() automatically.");
-    }
-    this._started = true;
-    this._stdin.on("data", this._ondata);
-    this._stdin.on("error", this._onerror);
-  }
-  processReadBuffer() {
-    while (true) {
-      try {
-        const message = this._readBuffer.readMessage();
-        if (message === null) {
-          break;
-        }
-        this.onmessage?.(message);
-      } catch (error51) {
-        this.onerror?.(error51);
-      }
-    }
-  }
-  async close() {
-    this._stdin.off("data", this._ondata);
-    this._stdin.off("error", this._onerror);
-    const remainingDataListeners = this._stdin.listenerCount("data");
-    if (remainingDataListeners === 0) {
-      this._stdin.pause();
-    }
-    this._readBuffer.clear();
-    this.onclose?.();
-  }
-  send(message) {
-    return new Promise((resolve2) => {
-      const json2 = serializeMessage(message);
-      if (this._stdout.write(json2)) {
-        resolve2();
-      } else {
-        this._stdout.once("drain", resolve2);
-      }
-    });
-  }
-};
-
-// src/mcp/server.ts
-import path34 from "node:path";
-
-// src/protocol/versions.ts
-var PROTOCOL_VERSION = "2.0.0";
-var DELEGATION_SPEC_VERSION = "1";
-var ATTEMPT_RESULT_VERSION = "1";
-var RUNTIME_VERSION = "0.52.0";
-
-// src/protocol/attempt-result.ts
-var FAILURE_PRECEDENCE = [
-  "invalid-specification",
-  "environment-defect",
-  // clean baseline verification failed
-  "unavailable",
-  // pre-launch unavailability
-  "authentication-required",
-  // pre-launch; never triggers fallback
-  "spawn-failure",
-  "cancelled",
-  // per the initiating runtime event
-  "timeout",
-  "sandbox-violation",
-  "invalid-output",
-  "producer-failure",
-  "verification-failure"
-];
-function classifyFailure(s) {
-  for (const reason of FAILURE_PRECEDENCE) if (s[reason]) return reason;
-  return null;
-}
-
-// src/mcp/doctor.ts
-import { createHash as createHash5 } from "node:crypto";
+// src/runtime/managed-worktree-root.ts
+import { createHash as createHash3 } from "node:crypto";
 import { constants as constants6 } from "node:fs";
-import { lstat as lstat6, open as open6, readdir as readdir4, realpath as realpath5 } from "node:fs/promises";
-import path14 from "node:path";
-import nodeProcess5 from "node:process";
+import { lstat as lstat6, mkdir as mkdir3, open as open5, readdir as readdir3, realpath as realpath2 } from "node:fs/promises";
+import path8 from "node:path";
 
-// src/autopilot/workflow-store.ts
-import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
-import { constants as constants4 } from "node:fs";
-import {
-  lstat as lstat4,
-  link as link2,
-  mkdir as mkdir2,
-  open as open3,
-  readdir as readdir3,
-  realpath as realpath2,
-  rename,
-  rm as rm2
-} from "node:fs/promises";
-import path6 from "node:path";
+// src/platform/durable-directory.ts
+import { constants as constants3 } from "node:fs";
+import { lstat as lstat3, mkdir, open as open2, readdir as readdir2 } from "node:fs/promises";
+import path5 from "node:path";
+
+// src/protocol/delegation-spec.ts
+var DEFAULT_REVIEW_CONFIG = {
+  reviewers: ["correctness", "systems"],
+  maxRounds: 2
+};
+var DEFAULT_IMPLEMENTATION_CONFIG = {
+  maxIncrements: 1
+};
+function resolveReviewConfig(spec) {
+  return spec.review ?? DEFAULT_REVIEW_CONFIG;
+}
+function resolveImplementationConfig(spec) {
+  return spec.implementation ?? DEFAULT_IMPLEMENTATION_CONFIG;
+}
+function resolveSlices(spec) {
+  return spec.slices ?? [];
+}
+var DEFAULT_SLICE_CONCURRENCY = 1;
+function resolveSliceConcurrency(spec) {
+  return spec.sliceConcurrency ?? DEFAULT_SLICE_CONCURRENCY;
+}
+function resolveSliceDependencies(slices, index) {
+  const declared = slices[index - 1]?.dependsOn;
+  if (declared === void 0) {
+    return Array.from({ length: index - 1 }, (_, offset) => offset + 1);
+  }
+  return [...declared].sort((left, right) => left - right);
+}
+var RUNTIME_MAX_TIMEOUT_MS = 18e5;
+var RUNTIME_MIN_EDIT_TIMEOUT_MS = 6e5;
+
+// src/platform/process-supervisor.ts
+async function supervise(ps, req, opts) {
+  if (!(req.timeoutMs > 0 && req.timeoutMs <= RUNTIME_MAX_TIMEOUT_MS)) throw new Error("invalid timeout");
+  const proc = await ps.spawnSupervised(req);
+  let timedOut = false, cancelled = false;
+  let settled = false;
+  const grace = opts.graceMs ?? 3e3;
+  const graceTimers = /* @__PURE__ */ new Set();
+  const escalate = () => {
+    if (settled) return;
+    const timer2 = setTimeout(() => {
+      graceTimers.delete(timer2);
+      if (!settled) void ps.terminateProcessTree(proc).catch(() => {
+      });
+    }, grace);
+    graceTimers.add(timer2);
+  };
+  const cancelCooperatively = () => {
+    void Promise.resolve().then(() => ps.requestCooperativeCancellation(proc)).catch(() => {
+    }).then(escalate);
+  };
+  const timer = setTimeout(() => {
+    timedOut = true;
+    cancelCooperatively();
+  }, req.timeoutMs);
+  const onAbort = () => {
+    cancelled = true;
+    cancelCooperatively();
+  };
+  opts.onCancel?.addEventListener("abort", onAbort, { once: true });
+  try {
+    const exit = await proc.done;
+    return { ...exit, timedOut: timedOut || exit.timedOut, cancelled: cancelled || exit.cancelled };
+  } finally {
+    settled = true;
+    clearTimeout(timer);
+    for (const t of graceTimers) clearTimeout(t);
+    opts.onCancel?.removeEventListener("abort", onAbort);
+  }
+}
 
 // src/platform/posix-platform-services.ts
 import { spawn, execFile } from "node:child_process";
@@ -32009,6 +31931,12 @@ var NestedDelegationError = class extends RuntimeError {
     this.name = "NestedDelegationError";
   }
 };
+function errorCode(error51) {
+  return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
+}
+function isMissing(error51) {
+  return errorCode(error51) === "ENOENT";
+}
 
 // src/git/git-output.ts
 function gitNulRecords(stdout, description) {
@@ -32068,12 +31996,6 @@ var LOCK_RETRY_MS = 30;
 var LOCK_TIMEOUT_MS = nodeProcess2.platform === "win32" ? 15e3 : 2500;
 var OWNER_PROBE_TIMEOUT_MS = 1e3;
 var SAFE_RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-function isMissing(error51) {
-  return errorCode(error51) === "ENOENT";
-}
-function errorCode(error51) {
-  return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
-}
 function delay(ms) {
   return new Promise((resolve2) => setTimeout(resolve2, ms));
 }
@@ -32082,9 +32004,6 @@ function isRecord(value) {
 }
 function isPlainDirectory(metadata) {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
-}
-function sameIdentity(left, right) {
-  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
 }
 async function plainDirectoryIdentity(directoryPath) {
   try {
@@ -32154,7 +32073,7 @@ async function readHandleBytes(handle, length) {
 }
 async function removeLockIfUnchanged(lockPath, handle, expectedIdentity, expectedContents, expectedLinks = 1) {
   const beforeMetadata = await handle.stat({ bigint: true });
-  if (!beforeMetadata.isFile() || beforeMetadata.isSymbolicLink() || !sameIdentity(beforeMetadata, expectedIdentity) || beforeMetadata.nlink !== BigInt(expectedLinks) || beforeMetadata.size !== BigInt(expectedContents.byteLength)) {
+  if (!beforeMetadata.isFile() || beforeMetadata.isSymbolicLink() || !sameDirectoryIdentity(beforeMetadata, expectedIdentity) || beforeMetadata.nlink !== BigInt(expectedLinks) || beforeMetadata.size !== BigInt(expectedContents.byteLength)) {
     return false;
   }
   const currentBytes = await readHandleBytes(handle, expectedContents.byteLength);
@@ -32230,7 +32149,6 @@ async function reclaimDeadCheckoutLocks(locksRoot, isProcessAlive2, getProcessSt
     await reclaimDeadLock(lockPath, isProcessAlive2, getProcessStartToken);
   }
 }
-var reclaimLocks = reclaimDeadCheckoutLocks;
 async function lockIsOwnedByLiveProcess(locksRoot, lockKey, isProcessAlive2, getProcessStartToken) {
   let contents;
   try {
@@ -32312,6 +32230,10 @@ async function describeLockContention(key, getProcessStartToken) {
   const self = owner.pid === nodeProcess2.pid ? " (this same process)" : "";
   return `it is held by live pid ${owner.pid}${self}${extras}`;
 }
+var LOCK_CONTENDED = "lock-contended";
+function isLockContention(error51) {
+  return error51 instanceof RuntimeError && error51.detail?.classification === LOCK_CONTENDED;
+}
 async function withLockContentionDetail(error51, key, getProcessStartToken) {
   if (!(error51 instanceof RuntimeError)) return error51;
   let description;
@@ -32326,8 +32248,8 @@ async function withLockContentionDetail(error51, key, getProcessStartToken) {
 async function acquireWxFileLock(key, timeoutMessage, ownerToken = null, owner = {}) {
   const targetLockPath = lockFilePath(key);
   const locksDir = path.dirname(targetLockPath);
-  const { mkdir: mkdir10 } = await import("node:fs/promises");
-  await mkdir10(locksDir, { recursive: true });
+  const { mkdir: mkdir11 } = await import("node:fs/promises");
+  await mkdir11(locksDir, { recursive: true });
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   for (; ; ) {
     try {
@@ -32362,7 +32284,10 @@ async function acquireWxFileLock(key, timeoutMessage, ownerToken = null, owner =
     } catch (error51) {
       if (errorCode(error51) !== "EEXIST") throw error51;
       if (Date.now() >= deadline) {
-        throw new RuntimeError(timeoutMessage ?? `lock is held: ${key}`, { key });
+        throw new RuntimeError(timeoutMessage ?? `lock is held: ${key}`, {
+          key,
+          classification: LOCK_CONTENDED
+        });
       }
       await delay(LOCK_RETRY_MS);
     }
@@ -32370,12 +32295,12 @@ async function acquireWxFileLock(key, timeoutMessage, ownerToken = null, owner =
 }
 async function validateLockParentIdentity(parentPath, expectedIdentity) {
   const metadata = await lstat(parentPath, { bigint: true });
-  if (!isPlainDirectory(metadata) || !sameIdentity(metadata, expectedIdentity)) {
+  if (!isPlainDirectory(metadata) || !sameDirectoryIdentity(metadata, expectedIdentity)) {
     throw new RuntimeError("recovery lock parent identity changed");
   }
 }
 function isExpectedLockMetadata(metadata, expectedIdentity, expectedSize, expectedLinks) {
-  return metadata.isFile() && !metadata.isSymbolicLink() && metadata.nlink === BigInt(expectedLinks) && sameIdentity(metadata, expectedIdentity) && metadata.size === BigInt(expectedSize) && metadata.size <= MAX_STATE_FILE_BYTES_BIGINT;
+  return metadata.isFile() && !metadata.isSymbolicLink() && metadata.nlink === BigInt(expectedLinks) && sameDirectoryIdentity(metadata, expectedIdentity) && metadata.size === BigInt(expectedSize) && metadata.size <= MAX_STATE_FILE_BYTES_BIGINT;
 }
 async function validateOwnedLockState(handle, namedPaths, expectedIdentity, expectedContents, expectedLinks, parentPath, parentIdentity) {
   const validateHandle = async () => {
@@ -32441,7 +32366,7 @@ async function removeExpectedLockPath(filename, expectedIdentity, expectedConten
 async function pathNamesLockIdentity(filename, expectedIdentity) {
   try {
     const metadata = await lstat(filename, { bigint: true });
-    return metadata.isFile() && !metadata.isSymbolicLink() && sameIdentity(metadata, expectedIdentity);
+    return metadata.isFile() && !metadata.isSymbolicLink() && sameDirectoryIdentity(metadata, expectedIdentity);
   } catch (error51) {
     if (isMissing(error51)) return false;
     throw error51;
@@ -32684,9 +32609,6 @@ async function releaseOwnedLock(lock) {
 
 // src/platform/posix-platform-services.ts
 var CLEANUP_JOURNAL_LOCK_KEY = createHash("sha256").update("claude-architect:cleanup-journal:v1").digest("hex");
-function errorCode2(error51) {
-  return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
-}
 async function gitCommonDir(cwd) {
   return new Promise((resolve2, reject) => {
     execFile("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd }, (error51, stdout) => {
@@ -32709,7 +32631,7 @@ function killProcessGroup(pid, signal) {
   try {
     nodeProcess3.kill(-pid, signal);
   } catch (error51) {
-    if (errorCode2(error51) !== "ESRCH") throw error51;
+    if (errorCode(error51) !== "ESRCH") throw error51;
   }
 }
 var PosixPlatformServices = class {
@@ -32794,8 +32716,8 @@ var PosixPlatformServices = class {
     if (!Number.isSafeInteger(pid) || pid <= 1) return null;
     if (nodeProcess3.platform === "linux") {
       try {
-        const stat = await fs.readFile(`/proc/${pid}/stat`, "utf8");
-        const afterComm = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+        const stat2 = await fs.readFile(`/proc/${pid}/stat`, "utf8");
+        const afterComm = stat2.slice(stat2.lastIndexOf(")") + 2).split(" ");
         const starttime = afterComm[19];
         return starttime ? `linux:${starttime}` : null;
       } catch {
@@ -32871,9 +32793,9 @@ import { execFile as execFile2, spawn as spawn2 } from "node:child_process";
 import { createHash as createHash2 } from "node:crypto";
 import { promises as fs2 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
-import path5 from "node:path";
+import path3 from "node:path";
 import nodeProcess4 from "node:process";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { fileURLToPath } from "node:url";
 
 // src/platform/windows-env.ts
 var CANONICAL = new Map(["Path", "SystemRoot", "ComSpec", "TEMP", "TMP", "USERPROFILE", "APPDATA", "LOCALAPPDATA"].map((name) => [name.toLowerCase(), name]));
@@ -32893,438 +32815,10 @@ function windowsEssentialEnvironment(env = process.env) {
   );
 }
 
-// src/platform/durable-directory.ts
-import { constants as constants3 } from "node:fs";
-import { lstat as lstat3, mkdir, open as open2, readdir as readdir2 } from "node:fs/promises";
-import path4 from "node:path";
-
-// src/protocol/delegation-spec.ts
-var DEFAULT_REVIEW_CONFIG = {
-  reviewers: ["correctness", "systems"],
-  maxRounds: 2
-};
-var DEFAULT_IMPLEMENTATION_CONFIG = {
-  maxIncrements: 1
-};
-function resolveReviewConfig(spec) {
-  return spec.review ?? DEFAULT_REVIEW_CONFIG;
-}
-function resolveImplementationConfig(spec) {
-  return spec.implementation ?? DEFAULT_IMPLEMENTATION_CONFIG;
-}
-function resolveSlices(spec) {
-  return spec.slices ?? [];
-}
-var DEFAULT_SLICE_CONCURRENCY = 1;
-function resolveSliceConcurrency(spec) {
-  return spec.sliceConcurrency ?? DEFAULT_SLICE_CONCURRENCY;
-}
-function resolveSliceDependencies(slices, index) {
-  const declared = slices[index - 1]?.dependsOn;
-  if (declared === void 0) {
-    return Array.from({ length: index - 1 }, (_, offset) => offset + 1);
-  }
-  return [...declared].sort((left, right) => left - right);
-}
-var RUNTIME_MAX_TIMEOUT_MS = 18e5;
-var RUNTIME_MIN_EDIT_TIMEOUT_MS = 6e5;
-
-// src/platform/process-supervisor.ts
-async function supervise(ps, req, opts) {
-  if (!(req.timeoutMs > 0 && req.timeoutMs <= RUNTIME_MAX_TIMEOUT_MS)) throw new Error("invalid timeout");
-  const proc = await ps.spawnSupervised(req);
-  let timedOut = false, cancelled = false;
-  let settled = false;
-  const grace = opts.graceMs ?? 3e3;
-  const graceTimers = /* @__PURE__ */ new Set();
-  const escalate = () => {
-    if (settled) return;
-    const timer2 = setTimeout(() => {
-      graceTimers.delete(timer2);
-      if (!settled) void ps.terminateProcessTree(proc).catch(() => {
-      });
-    }, grace);
-    graceTimers.add(timer2);
-  };
-  const cancelCooperatively = () => {
-    void Promise.resolve().then(() => ps.requestCooperativeCancellation(proc)).catch(() => {
-    }).then(escalate);
-  };
-  const timer = setTimeout(() => {
-    timedOut = true;
-    cancelCooperatively();
-  }, req.timeoutMs);
-  const onAbort = () => {
-    cancelled = true;
-    cancelCooperatively();
-  };
-  opts.onCancel?.addEventListener("abort", onAbort, { once: true });
-  try {
-    const exit = await proc.done;
-    return { ...exit, timedOut: timedOut || exit.timedOut, cancelled: cancelled || exit.cancelled };
-  } finally {
-    settled = true;
-    clearTimeout(timer);
-    for (const t of graceTimers) clearTimeout(t);
-    opts.onCancel?.removeEventListener("abort", onAbort);
-  }
-}
-
-// src/platform/windows-filesystem-helper.ts
-import { access, lstat as lstat2, realpath } from "node:fs/promises";
-import path3 from "node:path";
-import { fileURLToPath } from "node:url";
-async function pluginRoot() {
-  let directory = path3.dirname(fileURLToPath(import.meta.url));
-  for (; ; ) {
-    try {
-      const packagePath = path3.join(directory, "package.json");
-      const metadata = await lstat2(packagePath);
-      if (metadata.isFile() && !metadata.isSymbolicLink()) return directory;
-    } catch {
-    }
-    const parent = path3.dirname(directory);
-    if (parent === directory) {
-      throw new RuntimeError("unable to locate plugin root for Windows filesystem helper", {
-        classification: "cleanup-backend-unavailable",
-        toolError: "cleanup-backend-unavailable"
-      });
-    }
-    directory = parent;
-  }
-}
-async function resolveWindowsFilesystemHelper(arch = process.arch) {
-  if (arch !== "x64" && arch !== "arm64") {
-    throw new RuntimeError(`Windows filesystem helper does not support ${arch}`, {
-      classification: "cleanup-backend-unavailable",
-      toolError: "cleanup-backend-unavailable"
-    });
-  }
-  const root = await pluginRoot();
-  const expected = path3.join(root, "native", "bin", `win32-filesystem-${arch}.exe`);
-  let canonical;
-  try {
-    await access(expected);
-    canonical = await realpath(expected);
-    const metadata = await lstat2(canonical);
-    if (!metadata.isFile() || metadata.isSymbolicLink()) {
-      throw new RuntimeError("Windows filesystem helper is not a stable regular file");
-    }
-  } catch (error51) {
-    throw new RuntimeError("Windows filesystem helper is unavailable", {
-      classification: "cleanup-backend-unavailable",
-      toolError: "cleanup-backend-unavailable",
-      cause: error51
-    });
-  }
-  if (path3.win32.normalize(canonical).toLowerCase() !== path3.win32.normalize(expected).toLowerCase()) {
-    throw new RuntimeError("Windows filesystem helper escaped the plugin package", {
-      classification: "cleanup-backend-unavailable",
-      toolError: "cleanup-backend-unavailable"
-    });
-  }
-  return {
-    kind: "native",
-    command: canonical,
-    prefixArgs: [],
-    resolvedFrom: "plugin-native-filesystem-helper"
-  };
-}
-
-// src/platform/durable-directory.ts
-var WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS = 3e4;
-var WINDOWS_UNSUPPORTED_DIRECTORY_CODES = /* @__PURE__ */ new Set(["EISDIR", "EINVAL", "ENOTSUP", "EPERM"]);
-function windowsHelperFailure(result) {
-  const condition = result.spawnError !== void 0 ? "spawnError" : result.exitCode !== 0 ? `exitCode=${result.exitCode}` : result.signal !== null ? `signal=${result.signal}` : result.timedOut ? "timedOut=true" : result.cancelled ? "cancelled=true" : result.truncated.stdout ? "stdoutTruncated=true" : "stderrTruncated=true";
-  const stderr = result.stderr.slice(0, 512);
-  return ` (${condition})${stderr.length === 0 ? "" : `: ${stderr}`}`;
-}
-async function assertWindowsDirectoryAcl(command, directory, expectedIdentity, platformServices) {
-  const helper = await resolveWindowsFilesystemHelper();
-  for (let attempt = 1; ; attempt += 1) {
-    const result = await supervise(platformServices, {
-      executable: helper,
-      args: [
-        command,
-        path4.toNamespacedPath(directory),
-        expectedIdentity.dev.toString(),
-        expectedIdentity.ino.toString(),
-        expectedIdentity.birthtimeNs.toString()
-      ],
-      cwd: path4.dirname(directory),
-      env: windowsEssentialEnvironment(),
-      timeoutMs: WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS,
-      maxOutputBytes: 16384
-    }, { graceMs: 1e3 });
-    if (result.spawnError === void 0 && result.exitCode === 0 && result.signal === null && !result.timedOut && !result.cancelled && !result.truncated.stdout && !result.truncated.stderr) {
-      return;
-    }
-    if (result.exitCode === 3 && attempt < 50) {
-      await new Promise((resolve2) => setTimeout(resolve2, 200));
-      continue;
-    }
-    throw new RuntimeError(
-      `Windows directory ACL validation failed: ${command}${windowsHelperFailure(result)}`
-    );
-  }
-}
-async function assertWindowsPrivateDirectory(directory, expectedIdentity, platformServices = getPlatformServices()) {
-  await assertWindowsDirectoryAcl(
-    "validate-private-directory",
-    directory,
-    expectedIdentity,
-    platformServices
-  );
-}
-async function assertWindowsDirectoryWriteIntegrity(directory, expectedIdentity, platformServices = getPlatformServices()) {
-  await assertWindowsDirectoryAcl(
-    "validate-directory-write-integrity",
-    directory,
-    expectedIdentity,
-    platformServices
-  );
-}
-async function ensurePrivateDirectory(directory, options) {
-  const platformServices = options.platformServices ?? getPlatformServices();
-  const syncDirectory4 = options.syncDirectory ?? syncDirectoryMetadata;
-  let created = false;
-  if (options.create !== false) {
-    try {
-      await mkdir(directory, { mode: 448 });
-      created = true;
-    } catch (error51) {
-      if (errorCode3(error51) !== "EEXIST") throw error51;
-    }
-  }
-  const metadata = await lstat3(directory, { bigint: true });
-  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
-    throw new RuntimeError(`${options.description} must be a plain directory`);
-  }
-  if (metadata.birthtimeNs <= 0n) {
-    throw new RuntimeError(`${options.description} lacks stable identity`);
-  }
-  const identity = {
-    dev: metadata.dev,
-    ino: metadata.ino,
-    birthtimeNs: metadata.birthtimeNs
-  };
-  if (platformServices.os === "win32") {
-    await assertWindowsPrivateDirectory(directory, identity, platformServices);
-  } else {
-    const uid = process.getuid?.();
-    if (uid === void 0 || metadata.uid !== BigInt(uid)) {
-      throw new RuntimeError(`${options.description} is not owned by the current user`);
-    }
-    if ((metadata.mode & 0o022n) !== 0n) {
-      throw new RuntimeError(`${options.description} is writable by another principal`);
-    }
-    if ((metadata.mode & 0o077n) !== 0n) {
-      if (options.migratePermissions !== true) {
-        throw new RuntimeError(`${options.description} is not private`);
-      }
-      const handle = await open2(
-        directory,
-        constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0)
-      );
-      let primaryError;
-      try {
-        const opened = await handle.stat({ bigint: true });
-        if (!opened.isDirectory() || opened.dev !== identity.dev || opened.ino !== identity.ino || opened.birthtimeNs !== identity.birthtimeNs) {
-          throw new RuntimeError(
-            `${options.description} identity changed before tightening permissions`
-          );
-        }
-        await handle.chmod(448);
-        await handle.sync();
-        const tightened = await handle.stat({ bigint: true });
-        if (tightened.uid !== metadata.uid || (tightened.mode & 0o077n) !== 0n) {
-          throw new RuntimeError(`${options.description} permissions could not be tightened`);
-        }
-      } catch (error51) {
-        primaryError = error51;
-      }
-      try {
-        await handle.close();
-      } catch (closeError) {
-        if (primaryError !== void 0) {
-          throw new AggregateError(
-            [primaryError, closeError],
-            `${options.description} permission update and handle close failed`
-          );
-        }
-        throw closeError;
-      }
-      if (primaryError !== void 0) throw primaryError;
-      await syncDirectory4(directory);
-    }
-  }
-  if (created) await syncDirectory4(path4.dirname(directory));
-  const settled = await lstat3(directory, { bigint: true });
-  if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== identity.dev || settled.ino !== identity.ino || settled.birthtimeNs !== identity.birthtimeNs) {
-    throw new RuntimeError(`${options.description} identity changed during privacy validation`);
-  }
-  return identity;
-}
-function errorCode3(error51) {
-  return error51.code;
-}
-async function closeDirectoryHandle(handle, primaryError) {
-  try {
-    await handle?.close();
-  } catch (closeError) {
-    if (primaryError !== void 0) {
-      throw new AggregateError(
-        [primaryError, closeError],
-        "directory sync failed and its handle could not be closed"
-      );
-    }
-    throw closeError;
-  }
-}
-async function syncWindowsDirectoryMetadata(directory, expectedIdentity, platformServices = getPlatformServices()) {
-  const helper = await resolveWindowsFilesystemHelper();
-  const result = await supervise(platformServices, {
-    executable: helper,
-    args: [
-      "sync-directory",
-      path4.toNamespacedPath(directory),
-      expectedIdentity.dev.toString(),
-      expectedIdentity.ino.toString(),
-      expectedIdentity.birthtimeNs.toString()
-    ],
-    cwd: path4.dirname(directory),
-    env: windowsEssentialEnvironment(),
-    timeoutMs: WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS,
-    maxOutputBytes: 16384
-  }, { graceMs: 1e3 });
-  if (result.spawnError !== void 0 || result.exitCode !== 0 || result.signal !== null || result.timedOut || result.cancelled || result.truncated.stdout || result.truncated.stderr) {
-    throw new RuntimeError(
-      `Windows directory metadata sync failed${windowsHelperFailure(result)}`
-    );
-  }
-}
-async function syncDirectoryMetadata(directory, dependencies = {}) {
-  const platform = dependencies.platform ?? process.platform;
-  const openDirectory = dependencies.open ?? open2;
-  const inspectPath = dependencies.lstat ?? lstat3;
-  const initial = await inspectPath(directory, { bigint: true });
-  if (!initial.isDirectory() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
-    throw new RuntimeError("directory sync target lacks stable plain-directory identity");
-  }
-  const expectedIdentity = {
-    dev: initial.dev,
-    ino: initial.ino,
-    birthtimeNs: initial.birthtimeNs
-  };
-  let handle;
-  let primaryError;
-  let windowsFallbackRequired = false;
-  try {
-    handle = await openDirectory(directory, constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0));
-    const opened = await handle.stat({ bigint: true });
-    if (!opened.isDirectory() || opened.dev !== expectedIdentity.dev || opened.ino !== expectedIdentity.ino || opened.birthtimeNs !== expectedIdentity.birthtimeNs) {
-      throw new RuntimeError("directory sync target identity changed before flush");
-    }
-    await handle.sync();
-  } catch (error51) {
-    if (platform === "win32" && WINDOWS_UNSUPPORTED_DIRECTORY_CODES.has(errorCode3(error51) ?? "")) {
-      windowsFallbackRequired = true;
-    } else {
-      primaryError = error51;
-    }
-  }
-  await closeDirectoryHandle(handle, primaryError);
-  if (primaryError !== void 0) throw primaryError;
-  if (windowsFallbackRequired) {
-    await (dependencies.syncWindowsDirectory ?? syncWindowsDirectoryMetadata)(
-      directory,
-      expectedIdentity
-    );
-  }
-  const settled = await inspectPath(directory, { bigint: true });
-  if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== expectedIdentity.dev || settled.ino !== expectedIdentity.ino || settled.birthtimeNs !== expectedIdentity.birthtimeNs) {
-    throw new RuntimeError("directory sync target identity changed during flush");
-  }
-}
-async function syncDirectoryTreeMetadata(directory, options = {}) {
-  const maxDepth = options.maxDepth ?? 16;
-  const maxEntries = options.maxEntries ?? 1024;
-  const syncDirectory4 = options.syncDirectory ?? syncDirectoryMetadata;
-  let observedEntries = 0;
-  const syncFile = async (filename) => {
-    const initial = await lstat3(filename, { bigint: true });
-    if (!initial.isFile() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
-      throw new RuntimeError("durable directory tree contains a non-regular file");
-    }
-    const handle = await open2(
-      filename,
-      constants3.O_RDWR | (constants3.O_NOFOLLOW ?? 0)
-    );
-    let primaryError;
-    try {
-      const opened = await handle.stat({ bigint: true });
-      if (!opened.isFile() || opened.dev !== initial.dev || opened.ino !== initial.ino || opened.birthtimeNs !== initial.birthtimeNs) {
-        throw new RuntimeError("durable file identity changed before flush");
-      }
-      await handle.sync();
-      const settledHandle = await handle.stat({ bigint: true });
-      if (settledHandle.dev !== initial.dev || settledHandle.ino !== initial.ino || settledHandle.birthtimeNs !== initial.birthtimeNs || settledHandle.size !== initial.size || settledHandle.mtimeNs !== initial.mtimeNs) {
-        throw new RuntimeError("durable file changed during flush");
-      }
-    } catch (error51) {
-      primaryError = error51;
-    }
-    try {
-      await handle.close();
-    } catch (closeError) {
-      if (primaryError !== void 0) {
-        throw new AggregateError(
-          [primaryError, closeError],
-          "durable file flush failed and its handle could not be closed"
-        );
-      }
-      throw closeError;
-    }
-    if (primaryError !== void 0) throw primaryError;
-    const settledPath = await lstat3(filename, { bigint: true });
-    if (!settledPath.isFile() || settledPath.isSymbolicLink() || settledPath.dev !== initial.dev || settledPath.ino !== initial.ino || settledPath.birthtimeNs !== initial.birthtimeNs || settledPath.size !== initial.size || settledPath.mtimeNs !== initial.mtimeNs) {
-      throw new RuntimeError("durable file identity changed after flush");
-    }
-  };
-  const visit = async (current, depth) => {
-    if (depth > maxDepth) throw new RuntimeError("durable directory tree exceeds depth limit");
-    const initial = await lstat3(current, { bigint: true });
-    if (!initial.isDirectory() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
-      throw new RuntimeError("durable directory tree contains an invalid directory");
-    }
-    const entries = await readdir2(current, { withFileTypes: true });
-    observedEntries += entries.length;
-    if (observedEntries > maxEntries) {
-      throw new RuntimeError("durable directory tree exceeds entry limit");
-    }
-    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      const entryPath = path4.join(current, entry.name);
-      if (entry.isDirectory() && !entry.isSymbolicLink()) {
-        await visit(entryPath, depth + 1);
-      } else if (entry.isFile() && !entry.isSymbolicLink()) {
-        await syncFile(entryPath);
-      } else {
-        throw new RuntimeError("durable directory tree contains an unsupported entry");
-      }
-    }
-    await syncDirectory4(current);
-    const settled = await lstat3(current, { bigint: true });
-    if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== initial.dev || settled.ino !== initial.ino || settled.birthtimeNs !== initial.birthtimeNs) {
-      throw new RuntimeError("durable directory identity changed during tree flush");
-    }
-  };
-  await visit(directory, 0);
-}
-
 // src/platform/windows-platform-services.ts
 var childHandles = /* @__PURE__ */ new WeakMap();
 function resolveJobKillHelper(pluginRoot2, arch) {
-  const helperPath = path5.join(pluginRoot2, "native", "bin", `win32-job-kill-${arch}.exe`);
+  const helperPath = path3.join(pluginRoot2, "native", "bin", `win32-job-kill-${arch}.exe`);
   return {
     path: helperPath,
     async checkAvailable() {
@@ -33338,33 +32832,33 @@ function resolveJobKillHelper(pluginRoot2, arch) {
   };
 }
 async function findPluginRoot() {
-  let directory = path5.dirname(fileURLToPath2(import.meta.url));
+  let directory = path3.dirname(fileURLToPath(import.meta.url));
   for (; ; ) {
     try {
-      await fs2.access(path5.join(directory, "package.json"));
+      await fs2.access(path3.join(directory, "package.json"));
       return directory;
     } catch {
     }
-    const parent = path5.dirname(directory);
+    const parent = path3.dirname(directory);
     if (parent === directory) throw new RuntimeError("unable to locate plugin root");
     directory = parent;
   }
 }
 async function packageBinEntries(request, directory, fileSystem) {
-  const packageDirectory = path5.win32.join(directory, "node_modules", request.name);
-  const packagePath = path5.win32.join(packageDirectory, "package.json");
+  const packageDirectory = path3.win32.join(directory, "node_modules", request.name);
+  const packagePath = path3.win32.join(packageDirectory, "package.json");
   if (!await fileSystem.isFile(packagePath.toLowerCase())) return [];
   try {
     const parsed = JSON.parse(await fileSystem.readFile(packagePath));
     if (typeof parsed !== "object" || parsed === null || !("bin" in parsed)) return [];
     const bin = parsed.bin;
     if (typeof bin === "string") {
-      return [path5.win32.relative(directory, path5.win32.join(packageDirectory, bin))];
+      return [path3.win32.relative(directory, path3.win32.join(packageDirectory, bin))];
     }
     if (typeof bin !== "object" || bin === null) return [];
     const namedBin = bin[request.name];
     if (typeof namedBin === "string") {
-      return [path5.win32.relative(directory, path5.win32.join(packageDirectory, namedBin))];
+      return [path3.win32.relative(directory, path3.win32.join(packageDirectory, namedBin))];
     }
   } catch {
     return [];
@@ -33387,7 +32881,7 @@ async function resolveWindowsExecutable(request, deps) {
   }
   for (const directory of deps.pathEntries) {
     for (const extension of deps.pathext) {
-      const candidate = path5.win32.join(directory, `${request.name}${extension.toLowerCase()}`);
+      const candidate = path3.win32.join(directory, `${request.name}${extension.toLowerCase()}`);
       if (!await deps.fs.isFile(candidate.toLowerCase())) continue;
       const normalizedExtension = extension.toLowerCase();
       if (normalizedExtension === ".exe" || normalizedExtension === ".com") {
@@ -33401,7 +32895,7 @@ async function resolveWindowsExecutable(request, deps) {
       if (normalizedExtension === ".cmd" || normalizedExtension === ".bat") {
         const entries = deps.npmEntryProbe ?? await packageBinEntries(request, directory, deps.fs);
         for (const entry of entries) {
-          const absoluteEntry = path5.win32.join(directory, entry);
+          const absoluteEntry = path3.win32.join(directory, entry);
           if (await deps.fs.isFile(absoluteEntry.toLowerCase())) {
             return {
               kind: "node-entrypoint",
@@ -33446,10 +32940,10 @@ function canonicalizeForScope(candidate, root) {
     (match) => match.toUpperCase()
   );
   const normalizedCandidate = normalizeVolume(
-    path5.win32.normalize(stripExtendedLengthPrefix(candidate))
+    path3.win32.normalize(stripExtendedLengthPrefix(candidate))
   );
-  let normalizedRoot = normalizeVolume(path5.win32.normalize(stripExtendedLengthPrefix(root)));
-  if (normalizedRoot.endsWith("\\") && path5.win32.parse(normalizedRoot).root !== normalizedRoot) {
+  let normalizedRoot = normalizeVolume(path3.win32.normalize(stripExtendedLengthPrefix(root)));
+  if (normalizedRoot.endsWith("\\") && path3.win32.parse(normalizedRoot).root !== normalizedRoot) {
     normalizedRoot = normalizedRoot.slice(0, -1);
   }
   return normalizedCandidate === normalizedRoot || normalizedCandidate.startsWith(`${normalizedRoot}\\`);
@@ -33637,7 +33131,7 @@ var WindowsPlatformServices = class {
     return acquireWxFileLock(CLEANUP_JOURNAL_LOCK_KEY, "cleanup journal is locked", ownerToken);
   }
   async createSecureTempDirectory() {
-    return fs2.mkdtemp(path5.join(tmpdir3(), "claude-architect-"));
+    return fs2.mkdtemp(path3.join(tmpdir3(), "claude-architect-"));
   }
   async assertDirectoryWriteIntegrity(directory, expectedIdentity) {
     await assertWindowsDirectoryWriteIntegrity(directory, expectedIdentity, this);
@@ -33660,6 +33154,905 @@ function getPlatformServices() {
   if (!services) services = process.platform === "win32" ? new WindowsPlatformServices() : new PosixPlatformServices();
   return services;
 }
+
+// src/platform/windows-filesystem-helper.ts
+import { access, lstat as lstat2, realpath } from "node:fs/promises";
+import path4 from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
+async function pluginRoot() {
+  let directory = path4.dirname(fileURLToPath2(import.meta.url));
+  for (; ; ) {
+    try {
+      const packagePath = path4.join(directory, "package.json");
+      const metadata = await lstat2(packagePath);
+      if (metadata.isFile() && !metadata.isSymbolicLink()) return directory;
+    } catch {
+    }
+    const parent = path4.dirname(directory);
+    if (parent === directory) {
+      throw new RuntimeError("unable to locate plugin root for Windows filesystem helper", {
+        classification: "cleanup-backend-unavailable",
+        toolError: "cleanup-backend-unavailable"
+      });
+    }
+    directory = parent;
+  }
+}
+async function resolveWindowsFilesystemHelper(arch = process.arch) {
+  if (arch !== "x64" && arch !== "arm64") {
+    throw new RuntimeError(`Windows filesystem helper does not support ${arch}`, {
+      classification: "cleanup-backend-unavailable",
+      toolError: "cleanup-backend-unavailable"
+    });
+  }
+  const root = await pluginRoot();
+  const expected = path4.join(root, "native", "bin", `win32-filesystem-${arch}.exe`);
+  let canonical;
+  try {
+    await access(expected);
+    canonical = await realpath(expected);
+    const metadata = await lstat2(canonical);
+    if (!metadata.isFile() || metadata.isSymbolicLink()) {
+      throw new RuntimeError("Windows filesystem helper is not a stable regular file");
+    }
+  } catch (error51) {
+    throw new RuntimeError("Windows filesystem helper is unavailable", {
+      classification: "cleanup-backend-unavailable",
+      toolError: "cleanup-backend-unavailable",
+      cause: error51
+    });
+  }
+  if (path4.win32.normalize(canonical).toLowerCase() !== path4.win32.normalize(expected).toLowerCase()) {
+    throw new RuntimeError("Windows filesystem helper escaped the plugin package", {
+      classification: "cleanup-backend-unavailable",
+      toolError: "cleanup-backend-unavailable"
+    });
+  }
+  return {
+    kind: "native",
+    command: canonical,
+    prefixArgs: [],
+    resolvedFrom: "plugin-native-filesystem-helper"
+  };
+}
+
+// src/platform/durable-directory.ts
+var WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS = 3e4;
+var WINDOWS_UNSUPPORTED_DIRECTORY_CODES = /* @__PURE__ */ new Set(["EISDIR", "EINVAL", "ENOTSUP", "EPERM"]);
+function windowsHelperFailure(result) {
+  const condition = result.spawnError !== void 0 ? "spawnError" : result.exitCode !== 0 ? `exitCode=${result.exitCode}` : result.signal !== null ? `signal=${result.signal}` : result.timedOut ? "timedOut=true" : result.cancelled ? "cancelled=true" : result.truncated.stdout ? "stdoutTruncated=true" : "stderrTruncated=true";
+  const stderr = result.stderr.slice(0, 512);
+  return ` (${condition})${stderr.length === 0 ? "" : `: ${stderr}`}`;
+}
+async function assertWindowsDirectoryAcl(command, directory, expectedIdentity, platformServices) {
+  const helper = await resolveWindowsFilesystemHelper();
+  for (let attempt = 1; ; attempt += 1) {
+    const result = await supervise(platformServices, {
+      executable: helper,
+      args: [
+        command,
+        path5.toNamespacedPath(directory),
+        expectedIdentity.dev.toString(),
+        expectedIdentity.ino.toString(),
+        expectedIdentity.birthtimeNs.toString()
+      ],
+      cwd: path5.dirname(directory),
+      env: windowsEssentialEnvironment(),
+      timeoutMs: WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS,
+      maxOutputBytes: 16384
+    }, { graceMs: 1e3 });
+    if (result.spawnError === void 0 && result.exitCode === 0 && result.signal === null && !result.timedOut && !result.cancelled && !result.truncated.stdout && !result.truncated.stderr) {
+      return;
+    }
+    if (result.exitCode === 3 && attempt < 50) {
+      await new Promise((resolve2) => setTimeout(resolve2, 200));
+      continue;
+    }
+    throw new RuntimeError(
+      `Windows directory ACL validation failed: ${command}${windowsHelperFailure(result)}`
+    );
+  }
+}
+async function assertWindowsPrivateDirectory(directory, expectedIdentity, platformServices = getPlatformServices()) {
+  await assertWindowsDirectoryAcl(
+    "validate-private-directory",
+    directory,
+    expectedIdentity,
+    platformServices
+  );
+}
+async function assertWindowsDirectoryWriteIntegrity(directory, expectedIdentity, platformServices = getPlatformServices()) {
+  await assertWindowsDirectoryAcl(
+    "validate-directory-write-integrity",
+    directory,
+    expectedIdentity,
+    platformServices
+  );
+}
+async function ensurePrivateDirectory(directory, options) {
+  const platformServices = options.platformServices ?? getPlatformServices();
+  const syncDirectory = options.syncDirectory ?? syncDirectoryMetadata;
+  let created = false;
+  if (options.create !== false) {
+    try {
+      await mkdir(directory, { mode: 448 });
+      created = true;
+    } catch (error51) {
+      if (errorCode(error51) !== "EEXIST") throw error51;
+    }
+  }
+  const metadata = await lstat3(directory, { bigint: true });
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw new RuntimeError(`${options.description} must be a plain directory`);
+  }
+  if (metadata.birthtimeNs <= 0n) {
+    throw new RuntimeError(`${options.description} lacks stable identity`);
+  }
+  const identity = {
+    dev: metadata.dev,
+    ino: metadata.ino,
+    birthtimeNs: metadata.birthtimeNs
+  };
+  if (platformServices.os === "win32") {
+    await assertWindowsPrivateDirectory(directory, identity, platformServices);
+  } else {
+    const uid = process.getuid?.();
+    if (uid === void 0 || metadata.uid !== BigInt(uid)) {
+      throw new RuntimeError(`${options.description} is not owned by the current user`);
+    }
+    if ((metadata.mode & 0o022n) !== 0n) {
+      throw new RuntimeError(`${options.description} is writable by another principal`);
+    }
+    if ((metadata.mode & 0o077n) !== 0n) {
+      if (options.migratePermissions !== true) {
+        throw new RuntimeError(`${options.description} is not private`);
+      }
+      const handle = await open2(
+        directory,
+        constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0)
+      );
+      let primaryError;
+      try {
+        const opened = await handle.stat({ bigint: true });
+        if (!opened.isDirectory() || opened.dev !== identity.dev || opened.ino !== identity.ino || opened.birthtimeNs !== identity.birthtimeNs) {
+          throw new RuntimeError(
+            `${options.description} identity changed before tightening permissions`
+          );
+        }
+        await handle.chmod(448);
+        await handle.sync();
+        const tightened = await handle.stat({ bigint: true });
+        if (tightened.uid !== metadata.uid || (tightened.mode & 0o077n) !== 0n) {
+          throw new RuntimeError(`${options.description} permissions could not be tightened`);
+        }
+      } catch (error51) {
+        primaryError = error51;
+      }
+      try {
+        await handle.close();
+      } catch (closeError) {
+        if (primaryError !== void 0) {
+          throw new AggregateError(
+            [primaryError, closeError],
+            `${options.description} permission update and handle close failed`
+          );
+        }
+        throw closeError;
+      }
+      if (primaryError !== void 0) throw primaryError;
+      await syncDirectory(directory);
+    }
+  }
+  if (created) await syncDirectory(path5.dirname(directory));
+  const settled = await lstat3(directory, { bigint: true });
+  if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== identity.dev || settled.ino !== identity.ino || settled.birthtimeNs !== identity.birthtimeNs) {
+    throw new RuntimeError(`${options.description} identity changed during privacy validation`);
+  }
+  return identity;
+}
+async function closeDirectoryHandle(handle, primaryError) {
+  try {
+    await handle?.close();
+  } catch (closeError) {
+    if (primaryError !== void 0) {
+      throw new AggregateError(
+        [primaryError, closeError],
+        "directory sync failed and its handle could not be closed"
+      );
+    }
+    throw closeError;
+  }
+}
+async function syncWindowsDirectoryMetadata(directory, expectedIdentity, platformServices = getPlatformServices()) {
+  const helper = await resolveWindowsFilesystemHelper();
+  const result = await supervise(platformServices, {
+    executable: helper,
+    args: [
+      "sync-directory",
+      path5.toNamespacedPath(directory),
+      expectedIdentity.dev.toString(),
+      expectedIdentity.ino.toString(),
+      expectedIdentity.birthtimeNs.toString()
+    ],
+    cwd: path5.dirname(directory),
+    env: windowsEssentialEnvironment(),
+    timeoutMs: WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS,
+    maxOutputBytes: 16384
+  }, { graceMs: 1e3 });
+  if (result.spawnError !== void 0 || result.exitCode !== 0 || result.signal !== null || result.timedOut || result.cancelled || result.truncated.stdout || result.truncated.stderr) {
+    throw new RuntimeError(
+      `Windows directory metadata sync failed${windowsHelperFailure(result)}`
+    );
+  }
+}
+async function flushDirectory(directory) {
+  let handle;
+  try {
+    handle = await open2(directory, constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0));
+    await handle.sync();
+  } catch (error51) {
+    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode(error51) ?? "");
+    if (!unsupportedOnWindows) throw error51;
+  } finally {
+    await handle?.close();
+  }
+}
+function sameDirectoryIdentity(left, right) {
+  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
+}
+async function syncDirectoryMetadata(directory, dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform;
+  const openDirectory = dependencies.open ?? open2;
+  const inspectPath = dependencies.lstat ?? lstat3;
+  const initial = await inspectPath(directory, { bigint: true });
+  if (!initial.isDirectory() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
+    throw new RuntimeError("directory sync target lacks stable plain-directory identity");
+  }
+  const expectedIdentity = {
+    dev: initial.dev,
+    ino: initial.ino,
+    birthtimeNs: initial.birthtimeNs
+  };
+  let handle;
+  let primaryError;
+  let windowsFallbackRequired = false;
+  try {
+    handle = await openDirectory(directory, constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0));
+    const opened = await handle.stat({ bigint: true });
+    if (!opened.isDirectory() || opened.dev !== expectedIdentity.dev || opened.ino !== expectedIdentity.ino || opened.birthtimeNs !== expectedIdentity.birthtimeNs) {
+      throw new RuntimeError("directory sync target identity changed before flush");
+    }
+    await handle.sync();
+  } catch (error51) {
+    if (platform === "win32" && WINDOWS_UNSUPPORTED_DIRECTORY_CODES.has(errorCode(error51) ?? "")) {
+      windowsFallbackRequired = true;
+    } else {
+      primaryError = error51;
+    }
+  }
+  await closeDirectoryHandle(handle, primaryError);
+  if (primaryError !== void 0) throw primaryError;
+  if (windowsFallbackRequired) {
+    await (dependencies.syncWindowsDirectory ?? syncWindowsDirectoryMetadata)(
+      directory,
+      expectedIdentity
+    );
+  }
+  const settled = await inspectPath(directory, { bigint: true });
+  if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== expectedIdentity.dev || settled.ino !== expectedIdentity.ino || settled.birthtimeNs !== expectedIdentity.birthtimeNs) {
+    throw new RuntimeError("directory sync target identity changed during flush");
+  }
+}
+async function syncDirectoryTreeMetadata(directory, options = {}) {
+  const maxDepth = options.maxDepth ?? 16;
+  const maxEntries = options.maxEntries ?? 1024;
+  const syncDirectory = options.syncDirectory ?? syncDirectoryMetadata;
+  let observedEntries = 0;
+  const syncFile = async (filename) => {
+    const initial = await lstat3(filename, { bigint: true });
+    if (!initial.isFile() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
+      throw new RuntimeError("durable directory tree contains a non-regular file");
+    }
+    const handle = await open2(
+      filename,
+      constants3.O_RDWR | (constants3.O_NOFOLLOW ?? 0)
+    );
+    let primaryError;
+    try {
+      const opened = await handle.stat({ bigint: true });
+      if (!opened.isFile() || opened.dev !== initial.dev || opened.ino !== initial.ino || opened.birthtimeNs !== initial.birthtimeNs) {
+        throw new RuntimeError("durable file identity changed before flush");
+      }
+      await handle.sync();
+      const settledHandle = await handle.stat({ bigint: true });
+      if (settledHandle.dev !== initial.dev || settledHandle.ino !== initial.ino || settledHandle.birthtimeNs !== initial.birthtimeNs || settledHandle.size !== initial.size || settledHandle.mtimeNs !== initial.mtimeNs) {
+        throw new RuntimeError("durable file changed during flush");
+      }
+    } catch (error51) {
+      primaryError = error51;
+    }
+    try {
+      await handle.close();
+    } catch (closeError) {
+      if (primaryError !== void 0) {
+        throw new AggregateError(
+          [primaryError, closeError],
+          "durable file flush failed and its handle could not be closed"
+        );
+      }
+      throw closeError;
+    }
+    if (primaryError !== void 0) throw primaryError;
+    const settledPath = await lstat3(filename, { bigint: true });
+    if (!settledPath.isFile() || settledPath.isSymbolicLink() || settledPath.dev !== initial.dev || settledPath.ino !== initial.ino || settledPath.birthtimeNs !== initial.birthtimeNs || settledPath.size !== initial.size || settledPath.mtimeNs !== initial.mtimeNs) {
+      throw new RuntimeError("durable file identity changed after flush");
+    }
+  };
+  const visit = async (current, depth) => {
+    if (depth > maxDepth) throw new RuntimeError("durable directory tree exceeds depth limit");
+    const initial = await lstat3(current, { bigint: true });
+    if (!initial.isDirectory() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
+      throw new RuntimeError("durable directory tree contains an invalid directory");
+    }
+    const entries = await readdir2(current, { withFileTypes: true });
+    observedEntries += entries.length;
+    if (observedEntries > maxEntries) {
+      throw new RuntimeError("durable directory tree exceeds entry limit");
+    }
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+      const entryPath = path5.join(current, entry.name);
+      if (entry.isDirectory() && !entry.isSymbolicLink()) {
+        await visit(entryPath, depth + 1);
+      } else if (entry.isFile() && !entry.isSymbolicLink()) {
+        await syncFile(entryPath);
+      } else {
+        throw new RuntimeError("durable directory tree contains an unsupported entry");
+      }
+    }
+    await syncDirectory(current);
+    const settled = await lstat3(current, { bigint: true });
+    if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== initial.dev || settled.ino !== initial.ino || settled.birthtimeNs !== initial.birthtimeNs) {
+      throw new RuntimeError("durable directory identity changed during tree flush");
+    }
+  };
+  await visit(directory, 0);
+}
+
+// src/platform/durable-write.ts
+import { randomUUID as randomUUID2 } from "node:crypto";
+import { constants as constants4 } from "node:fs";
+import { link as link2, lstat as lstat4, mkdir as mkdir2, open as open3, readFile as readFile2, rename, rm as rm2 } from "node:fs/promises";
+import path6 from "node:path";
+import nodeProcess5 from "node:process";
+var NO_FOLLOW2 = constants4.O_NOFOLLOW ?? 0;
+var SAFE_COMPONENT = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
+function isAlreadyPresent(error51) {
+  return typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "EEXIST";
+}
+function sameIdentity(left, right) {
+  if (left.dev !== right.dev || left.ino !== right.ino) return false;
+  if (left.birthtimeNs <= 0n || right.birthtimeNs <= 0n) return true;
+  return left.birthtimeNs === right.birthtimeNs;
+}
+var DurableDirectorySession = class {
+  directory;
+  identity;
+  policy;
+  handle;
+  closed = false;
+  constructor(directory, identity, policy = {}, handle) {
+    this.directory = directory;
+    this.identity = identity;
+    this.policy = policy;
+    this.handle = handle;
+  }
+  async assertIdentity() {
+    if (this.closed) {
+      throw new RuntimeError("durable directory session is closed");
+    }
+    const current = await lstat4(this.directory, { bigint: true });
+    if (!current.isDirectory() || current.isSymbolicLink() || !sameIdentity(current, this.identity)) {
+      throw new RuntimeError("durable directory session identity changed");
+    }
+  }
+  async sync() {
+    if (this.closed) {
+      throw new RuntimeError("durable directory session is closed");
+    }
+    if (this.policy.syncDirectory !== void 0) {
+      await this.policy.syncDirectory(this.directory);
+      return;
+    }
+    if (this.handle !== void 0) {
+      try {
+        await this.handle.sync();
+        return;
+      } catch {
+      }
+    }
+    await syncDirectoryMetadata(this.directory);
+  }
+  async close() {
+    this.closed = true;
+    if (this.handle !== void 0) {
+      try {
+        await this.handle.close();
+      } catch {
+      }
+      this.handle = void 0;
+    }
+  }
+};
+async function openDurableDirectorySession(directory, options = {}) {
+  let identity;
+  if (options.privateDirectory === true) {
+    identity = await ensurePrivateDirectory(directory, {
+      description: options.description ?? "durable directory",
+      create: options.create ?? false,
+      migratePermissions: true,
+      ...options.policy?.syncDirectory === void 0 ? {} : { syncDirectory: options.policy.syncDirectory }
+    });
+  } else {
+    if (options.create !== false) {
+      try {
+        await mkdir2(directory, { recursive: true, mode: 448 });
+      } catch (error51) {
+        if (!isAlreadyPresent(error51)) throw error51;
+      }
+    }
+    const metadata = await lstat4(directory, { bigint: true });
+    if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+      throw new RuntimeError(`${options.description ?? "durable directory"} must be a plain directory`);
+    }
+    identity = {
+      dev: metadata.dev,
+      ino: metadata.ino,
+      birthtimeNs: metadata.birthtimeNs
+    };
+  }
+  let handle;
+  if (options.policy?.platform !== "win32" && nodeProcess5.platform !== "win32") {
+    try {
+      handle = await open3(directory, constants4.O_RDONLY | NO_FOLLOW2);
+    } catch {
+    }
+  }
+  return new DurableDirectorySession(directory, identity, options.policy, handle);
+}
+async function renameWithRetry(source, destination, platform = nodeProcess5.platform, maxAttempts = 50) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await rename(source, destination);
+      return;
+    } catch (error51) {
+      const code = typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
+      const isTransientWin32 = platform === "win32" && (code === "EPERM" || code === "EACCES" || code === "EBUSY");
+      if (isTransientWin32 && attempt < maxAttempts) {
+        await new Promise((resolve2) => setTimeout(resolve2, 50));
+        continue;
+      }
+      throw error51;
+    }
+  }
+}
+async function writeAtomic(session, name, bytes, mode) {
+  if (path6.isAbsolute(name) || path6.basename(name) !== name || !SAFE_COMPONENT.test(name)) {
+    throw new RuntimeError(`atomic write target must be a safe leaf name: ${name}`);
+  }
+  const destination = path6.join(session.directory, name);
+  const temporaryPath = path6.join(session.directory, `.${name}.${randomUUID2()}.tmp`);
+  let handle;
+  let temporaryCreated = false;
+  try {
+    await session.assertIdentity();
+    handle = await open3(
+      temporaryPath,
+      constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
+      384
+    );
+    temporaryCreated = true;
+    await session.assertIdentity();
+    if (typeof bytes === "string") {
+      await handle.writeFile(bytes, { encoding: "utf8" });
+    } else {
+      await handle.writeFile(bytes);
+    }
+    await handle.sync();
+    await handle.close();
+    handle = void 0;
+    await session.assertIdentity();
+    if (mode === "immutable") {
+      try {
+        await link2(temporaryPath, destination);
+      } catch (error51) {
+        if (!isAlreadyPresent(error51)) throw error51;
+        await session.assertIdentity();
+        const present = await lstat4(destination, { bigint: true });
+        if (!present.isFile() || present.isSymbolicLink()) {
+          throw new RuntimeError(`archive entry is not a plain file: ${name}`);
+        }
+        const existing = await readFile2(destination);
+        const expected = typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes;
+        if (!existing.equals(expected)) {
+          throw new RuntimeError(`archive entry already exists with different content: ${name}`);
+        }
+      }
+      await rm2(temporaryPath, { force: true });
+      temporaryCreated = false;
+    } else if (mode === "replace") {
+      await renameWithRetry(temporaryPath, destination);
+      temporaryCreated = false;
+    }
+    await session.sync();
+    await session.assertIdentity();
+  } finally {
+    if (handle !== void 0) {
+      try {
+        await handle.close();
+      } catch {
+      }
+    }
+    if (temporaryCreated) {
+      try {
+        await rm2(temporaryPath, { force: true });
+      } catch {
+      }
+    }
+  }
+}
+
+// src/util/platform-path.ts
+import path7 from "node:path";
+function stripWindowsExtendedPrefix(value) {
+  if (value.toLowerCase().startsWith("\\\\?\\unc\\")) return `\\\\${value.slice(8)}`;
+  return value.startsWith("\\\\?\\") ? value.slice(4) : value;
+}
+function platformPathsEqual(left, right, platform = process.platform) {
+  if (platform !== "win32") return path7.resolve(left) === path7.resolve(right);
+  return path7.win32.normalize(stripWindowsExtendedPrefix(left)) === path7.win32.normalize(stripWindowsExtendedPrefix(right));
+}
+
+// src/util/stable-file.ts
+import { constants as constants5 } from "node:fs";
+import { lstat as lstat5, open as open4 } from "node:fs/promises";
+async function readStableRegularFile(filename, maxBytes, dependencies = {}) {
+  const handle = await (dependencies.open ?? open4)(
+    filename,
+    constants5.O_RDONLY | (constants5.O_NOFOLLOW ?? 0) | (constants5.O_NONBLOCK ?? 0)
+  );
+  let primaryError;
+  try {
+    const metadata = await handle.stat({ bigint: true });
+    const named = await (dependencies.lstat ?? lstat5)(filename, { bigint: true });
+    if (!metadata.isFile() || metadata.nlink !== 1n || metadata.birthtimeNs <= 0n || metadata.size > maxBytes || !named.isFile() || named.isSymbolicLink() || named.birthtimeNs <= 0n || named.nlink !== 1n || named.dev !== metadata.dev || named.ino !== metadata.ino || named.birthtimeNs !== metadata.birthtimeNs || named.size !== metadata.size) return null;
+    if (maxBytes < 0n || maxBytes >= BigInt(Number.MAX_SAFE_INTEGER)) return null;
+    const limit = Math.min(Number(maxBytes) + 1, Number(metadata.size) + 1);
+    const buffer = Buffer.alloc(limit);
+    let bytesRead = 0;
+    while (bytesRead < limit) {
+      const read = await handle.read(buffer, bytesRead, limit - bytesRead, null);
+      if (read.bytesRead === 0) break;
+      bytesRead += read.bytesRead;
+    }
+    if (bytesRead > Number(maxBytes)) return null;
+    const contents = buffer.subarray(0, bytesRead);
+    const settled = await handle.stat({ bigint: true });
+    const settledNamed = await (dependencies.lstat ?? lstat5)(filename, { bigint: true });
+    if (!settled.isFile() || settled.nlink !== 1n || settled.birthtimeNs <= 0n || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs || settled.size !== metadata.size || settled.mtimeNs !== metadata.mtimeNs || settled.ctimeNs !== metadata.ctimeNs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.birthtimeNs <= 0n || settledNamed.nlink !== 1n || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino || settledNamed.birthtimeNs !== metadata.birthtimeNs || settledNamed.size !== metadata.size || settledNamed.mtimeNs !== settled.mtimeNs || settledNamed.ctimeNs !== settled.ctimeNs || BigInt(contents.byteLength) !== metadata.size) return null;
+    return contents;
+  } catch (error51) {
+    primaryError = error51;
+    throw error51;
+  } finally {
+    try {
+      await handle.close();
+    } catch (closeError) {
+      if (primaryError === void 0) throw closeError;
+      throw new AggregateError(
+        [primaryError, closeError],
+        "stable file read failed and its handle could not be closed"
+      );
+    }
+  }
+}
+
+// src/runtime/managed-worktree-root.ts
+var WORKTREES_DIRECTORY = ".worktrees";
+var WORKTREE_NAMESPACE = "claude-architect";
+var IGNORE_FILE = ".gitignore";
+var IGNORE_CONTENTS = "*\n";
+var ROOT_RECORDS_DIRECTORY = "worktree-roots";
+var MAX_ROOT_RECORD_BYTES = 4096n;
+var ROOT_RECORD_NAME = /^[0-9a-f]{64}$/u;
+function managedWorktreeRootFor(checkoutRoot) {
+  return path8.join(path8.resolve(checkoutRoot), WORKTREES_DIRECTORY, WORKTREE_NAMESPACE);
+}
+async function repositoryNamespaceRoot(checkoutRoot, runGit) {
+  const listed = await runGit(checkoutRoot, ["worktree", "list", "--porcelain", "-z"]);
+  if (listed.exitCode !== 0 || listed.truncated?.stdout === true || listed.truncated?.stderr === true) {
+    throw new RuntimeError("repository worktrees could not be listed");
+  }
+  const records = listed.stdout.split("\0");
+  const main = records[0];
+  if (main === void 0 || !main.startsWith("worktree ")) {
+    throw new RuntimeError("repository main worktree could not be identified");
+  }
+  const firstBlockEnd = records.indexOf("");
+  const firstBlock = records.slice(0, firstBlockEnd === -1 ? records.length : firstBlockEnd);
+  const base = firstBlock.includes("bare") ? checkoutRoot : main.slice("worktree ".length);
+  return managedWorktreeRootFor(await realpath2(base));
+}
+function legacyManagedWorktreeRoot(stateRoot2 = resolveStateDir()) {
+  return path8.join(path8.resolve(stateRoot2), "worktrees");
+}
+function isManagedWorktreeNamespace(root) {
+  return path8.basename(root) === WORKTREE_NAMESPACE && path8.basename(path8.dirname(root)) === WORKTREES_DIRECTORY;
+}
+function isNamespaceControlEntry(name) {
+  return name === IGNORE_FILE;
+}
+function rootRecordName(root) {
+  return createHash3("sha256").update(root).digest("hex");
+}
+async function plainDirectory(directory, description) {
+  const metadata = await lstat6(directory);
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw new RuntimeError(`${description} must be a plain directory`);
+  }
+}
+async function prepareManagedWorktreeRoot(root, options = {}) {
+  if (!isManagedWorktreeNamespace(root) || !path8.isAbsolute(root)) {
+    throw new RuntimeError("managed worktree root is outside the managed namespace");
+  }
+  const shared = path8.dirname(root);
+  try {
+    await mkdir3(shared);
+  } catch (error51) {
+    if (errorCode(error51) !== "EEXIST") throw error51;
+  }
+  await plainDirectory(shared, "checkout worktrees directory");
+  const identity = await ensurePrivateDirectory(root, {
+    description: "managed worktree root",
+    migratePermissions: true,
+    ...options.syncDirectory === void 0 ? {} : { syncDirectory: options.syncDirectory }
+  });
+  await ensureNamespaceIgnored(root, options.syncDirectory ?? syncDirectoryMetadata);
+  await recordManagedWorktreeRoot(root, options);
+  return identity;
+}
+async function ensureNamespaceIgnored(root, syncDirectory) {
+  const ignorePath = path8.join(root, IGNORE_FILE);
+  try {
+    const handle = await open5(
+      ignorePath,
+      constants6.O_WRONLY | constants6.O_CREAT | constants6.O_EXCL | (constants6.O_NOFOLLOW ?? 0),
+      384
+    );
+    try {
+      await handle.writeFile(IGNORE_CONTENTS, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await syncDirectory(root);
+  } catch (error51) {
+    if (errorCode(error51) !== "EEXIST") throw error51;
+  }
+  const existing = await readStableRegularFile(ignorePath, MAX_ROOT_RECORD_BYTES);
+  if (existing === null || existing.toString("utf8") !== IGNORE_CONTENTS) {
+    throw new RuntimeError("managed worktree root ignore file was replaced");
+  }
+}
+async function recordManagedWorktreeRoot(root, options) {
+  const session = await openDurableDirectorySession(
+    path8.join(resolveStateDir(), ROOT_RECORDS_DIRECTORY),
+    {
+      description: "managed worktree root records",
+      privateDirectory: true,
+      create: true,
+      ...options.syncDirectory === void 0 ? {} : { policy: { syncDirectory: options.syncDirectory } }
+    }
+  );
+  try {
+    await writeAtomic(session, rootRecordName(root), `${root}
+`, "immutable");
+  } finally {
+    await session.close();
+  }
+}
+async function managedWorktreeRoots() {
+  const roots = [legacyManagedWorktreeRoot()];
+  const malformed = [];
+  const recordsDirectory = path8.join(resolveStateDir(), ROOT_RECORDS_DIRECTORY);
+  let names;
+  try {
+    names = await readdir3(recordsDirectory);
+  } catch (error51) {
+    if (isMissing(error51)) return { roots, malformed };
+    throw error51;
+  }
+  for (const name of names.sort()) {
+    if (name.startsWith(".")) continue;
+    const recordPath = path8.join(recordsDirectory, name);
+    const bytes = ROOT_RECORD_NAME.test(name) ? await readStableRegularFile(recordPath, MAX_ROOT_RECORD_BYTES) : null;
+    const root = bytes?.toString("utf8").replace(/\n$/u, "") ?? "";
+    if (bytes === null || !path8.isAbsolute(root) || path8.resolve(root) !== root || !isManagedWorktreeNamespace(root) || rootRecordName(root) !== name) {
+      malformed.push(recordPath);
+      continue;
+    }
+    roots.push(root);
+  }
+  return { roots, malformed };
+}
+async function isManagedWorktreeRoot(root) {
+  const legacy = legacyManagedWorktreeRoot();
+  const canonicalLegacy = await realpath2(legacy).catch(() => legacy);
+  if (platformPathsEqual(root, legacy) || platformPathsEqual(root, canonicalLegacy)) return true;
+  if (!isManagedWorktreeNamespace(root)) return false;
+  const { roots } = await managedWorktreeRoots();
+  return roots.some((candidate) => platformPathsEqual(candidate, root));
+}
+
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+import process3 from "node:process";
+
+// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
+var STDIO_DEFAULT_MAX_BUFFER_SIZE = 10 * 1024 * 1024;
+var ReadBuffer = class {
+  constructor(options) {
+    this._maxBufferSize = options?.maxBufferSize ?? STDIO_DEFAULT_MAX_BUFFER_SIZE;
+  }
+  append(chunk) {
+    const newSize = (this._buffer?.length ?? 0) + chunk.length;
+    if (newSize > this._maxBufferSize) {
+      this.clear();
+      throw new Error(`ReadBuffer exceeded maximum size of ${this._maxBufferSize} bytes`);
+    }
+    this._buffer = this._buffer ? Buffer.concat([this._buffer, chunk]) : chunk;
+  }
+  readMessage() {
+    if (!this._buffer) {
+      return null;
+    }
+    const index = this._buffer.indexOf("\n");
+    if (index === -1) {
+      return null;
+    }
+    const line = this._buffer.toString("utf8", 0, index).replace(/\r$/, "");
+    this._buffer = this._buffer.subarray(index + 1);
+    return deserializeMessage(line);
+  }
+  clear() {
+    this._buffer = void 0;
+  }
+};
+function deserializeMessage(line) {
+  return JSONRPCMessageSchema.parse(JSON.parse(line));
+}
+function serializeMessage(message) {
+  return JSON.stringify(message) + "\n";
+}
+
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+var StdioServerTransport = class {
+  constructor(_stdin = process3.stdin, _stdout = process3.stdout, options) {
+    this._stdin = _stdin;
+    this._stdout = _stdout;
+    this._started = false;
+    this._ondata = (chunk) => {
+      try {
+        this._readBuffer.append(chunk);
+        this.processReadBuffer();
+      } catch (error51) {
+        this.onerror?.(error51);
+        this.close().catch(() => {
+        });
+      }
+    };
+    this._onerror = (error51) => {
+      this.onerror?.(error51);
+    };
+    this._readBuffer = new ReadBuffer({ maxBufferSize: options?.maxBufferSize });
+  }
+  /**
+   * Starts listening for messages on stdin.
+   */
+  async start() {
+    if (this._started) {
+      throw new Error("StdioServerTransport already started! If using Server class, note that connect() calls start() automatically.");
+    }
+    this._started = true;
+    this._stdin.on("data", this._ondata);
+    this._stdin.on("error", this._onerror);
+  }
+  processReadBuffer() {
+    while (true) {
+      try {
+        const message = this._readBuffer.readMessage();
+        if (message === null) {
+          break;
+        }
+        this.onmessage?.(message);
+      } catch (error51) {
+        this.onerror?.(error51);
+      }
+    }
+  }
+  async close() {
+    this._stdin.off("data", this._ondata);
+    this._stdin.off("error", this._onerror);
+    const remainingDataListeners = this._stdin.listenerCount("data");
+    if (remainingDataListeners === 0) {
+      this._stdin.pause();
+    }
+    this._readBuffer.clear();
+    this.onclose?.();
+  }
+  send(message) {
+    return new Promise((resolve2) => {
+      const json2 = serializeMessage(message);
+      if (this._stdout.write(json2)) {
+        resolve2();
+      } else {
+        this._stdout.once("drain", resolve2);
+      }
+    });
+  }
+};
+
+// src/mcp/server.ts
+import path42 from "node:path";
+
+// src/protocol/versions.ts
+var PROTOCOL_VERSION = "3.0.0";
+var DELEGATION_SPEC_VERSION = "1";
+var ATTEMPT_RESULT_VERSION = "1";
+var RUNTIME_VERSION = "0.52.0";
+
+// src/protocol/attempt-result.ts
+var FAILURE_PRECEDENCE = [
+  "invalid-specification",
+  "environment-defect",
+  // clean baseline verification failed
+  "unavailable",
+  // pre-launch unavailability
+  "authentication-required",
+  // pre-launch; never triggers fallback
+  "spawn-failure",
+  "cancelled",
+  // per the initiating runtime event
+  "timeout",
+  "sandbox-violation",
+  "invalid-output",
+  "producer-failure",
+  "verification-failure"
+];
+function classifyFailure(s) {
+  for (const reason of FAILURE_PRECEDENCE) if (s[reason]) return reason;
+  return null;
+}
+
+// src/mcp/doctor.ts
+import { createHash as createHash6 } from "node:crypto";
+import { constants as constants9 } from "node:fs";
+import { lstat as lstat9, open as open9, readdir as readdir5, realpath as realpath6 } from "node:fs/promises";
+import path17 from "node:path";
+import nodeProcess6 from "node:process";
+
+// src/autopilot/workflow-store.ts
+import { createHash as createHash4, randomUUID as randomUUID3 } from "node:crypto";
+import { constants as constants7 } from "node:fs";
+import {
+  lstat as lstat7,
+  link as link3,
+  mkdir as mkdir4,
+  open as open6,
+  readdir as readdir4,
+  realpath as realpath3,
+  rename as rename2,
+  rm as rm3
+} from "node:fs/promises";
+import path9 from "node:path";
 
 // src/protocol/schema-loader.ts
 var import__ = __toESM(require__(), 1);
@@ -33695,6 +34088,7 @@ var delegation_spec_v1_default = {
     },
     writeAllowlist: {
       type: "array",
+      maxItems: 512,
       items: {
         type: "string"
       },
@@ -33702,6 +34096,7 @@ var delegation_spec_v1_default = {
     },
     allowedTestDeletions: {
       type: "array",
+      maxItems: 512,
       items: {
         type: "string",
         minLength: 1
@@ -33709,12 +34104,14 @@ var delegation_spec_v1_default = {
     },
     forbiddenScope: {
       type: "array",
+      maxItems: 512,
       items: {
         type: "string"
       }
     },
     successCriteria: {
       type: "array",
+      maxItems: 64,
       items: {
         type: "string",
         minLength: 1
@@ -33723,6 +34120,7 @@ var delegation_spec_v1_default = {
     },
     verification: {
       type: "array",
+      maxItems: 32,
       items: {
         type: "object",
         additionalProperties: false,
@@ -33744,6 +34142,7 @@ var delegation_spec_v1_default = {
           },
           args: {
             type: "array",
+            maxItems: 256,
             items: {
               type: "string"
             }
@@ -33770,6 +34169,7 @@ var delegation_spec_v1_default = {
           },
           expectedExitCodes: {
             type: "array",
+            maxItems: 32,
             items: {
               type: "integer"
             }
@@ -33779,6 +34179,7 @@ var delegation_spec_v1_default = {
           },
           baselineFailureExitCodes: {
             type: "array",
+            maxItems: 32,
             items: { type: "integer" },
             minItems: 1
           },
@@ -33788,6 +34189,7 @@ var delegation_spec_v1_default = {
             properties: {
               os: {
                 type: "array",
+                maxItems: 8,
                 items: {
                   enum: [
                     "darwin",
@@ -33798,6 +34200,7 @@ var delegation_spec_v1_default = {
               },
               arch: {
                 type: "array",
+                maxItems: 8,
                 items: {
                   type: "string"
                 }
@@ -33816,6 +34219,7 @@ var delegation_spec_v1_default = {
     },
     slices: {
       type: "array",
+      maxItems: 32,
       minItems: 1,
       items: {
         type: "object",
@@ -33838,6 +34242,7 @@ var delegation_spec_v1_default = {
           },
           writeAllowlist: {
             type: "array",
+            maxItems: 512,
             items: {
               type: "string"
             },
@@ -33845,6 +34250,7 @@ var delegation_spec_v1_default = {
           },
           allowedTestDeletions: {
             type: "array",
+            maxItems: 512,
             items: {
               type: "string",
               minLength: 1
@@ -33852,12 +34258,14 @@ var delegation_spec_v1_default = {
           },
           forbiddenScope: {
             type: "array",
+            maxItems: 512,
             items: {
               type: "string"
             }
           },
           successCriteria: {
             type: "array",
+            maxItems: 64,
             items: {
               type: "string",
               minLength: 1
@@ -33869,6 +34277,7 @@ var delegation_spec_v1_default = {
           },
           dependsOn: {
             type: "array",
+            maxItems: 32,
             items: { type: "integer", minimum: 1 },
             uniqueItems: true,
             description: "1-based indices of the slices this slice must observe before it runs. Omit to depend on every preceding slice, which reproduces sequential execution."
@@ -33886,6 +34295,7 @@ var delegation_spec_v1_default = {
     },
     producerPreferences: {
       type: "array",
+      maxItems: 16,
       items: {
         type: "string"
       }
@@ -33915,6 +34325,7 @@ var delegation_spec_v1_default = {
       properties: {
         reviewers: {
           type: "array",
+          maxItems: 8,
           minItems: 1,
           items: {
             enum: [
@@ -33930,6 +34341,7 @@ var delegation_spec_v1_default = {
         },
         focus: {
           type: "array",
+          maxItems: 32,
           minItems: 1,
           items: {
             type: "string",
@@ -33980,10 +34392,10 @@ var delegation_spec_v1_default = {
   ]
 };
 
-// runtime/schemas/autopilot-spec.v1.json
-var autopilot_spec_v1_default = {
+// runtime/schemas/autopilot-spec.v2.json
+var autopilot_spec_v2_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  $id: "autopilot-spec.v1.json",
+  $id: "autopilot-spec.v2.json",
   type: "object",
   additionalProperties: false,
   required: [
@@ -33992,12 +34404,11 @@ var autopilot_spec_v1_default = {
     "base",
     "tasks",
     "finalSuccessCriteria",
-    "finalVerification",
-    "shipping"
+    "finalVerification"
   ],
   properties: {
     specVersion: {
-      const: "1"
+      const: "2"
     },
     topic: {
       type: "string",
@@ -34059,44 +34470,6 @@ var autopilot_spec_v1_default = {
     },
     finalVerification: {
       $ref: "delegation-spec.v1.json#/properties/verification"
-    },
-    shipping: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "provider",
-        "draft",
-        "markReadyWhenRequiredChecksPass",
-        "requiredChecksTimeoutMs",
-        "pullRequestTitle",
-        "pullRequestBody"
-      ],
-      properties: {
-        provider: {
-          const: "github"
-        },
-        draft: {
-          const: true
-        },
-        markReadyWhenRequiredChecksPass: {
-          const: true
-        },
-        requiredChecksTimeoutMs: {
-          type: "integer",
-          minimum: 6e5,
-          maximum: 36e5
-        },
-        pullRequestTitle: {
-          type: "string",
-          minLength: 1,
-          maxLength: 256
-        },
-        pullRequestBody: {
-          type: "string",
-          minLength: 1,
-          maxLength: 4e3
-        }
-      }
     }
   }
 };
@@ -34593,10 +34966,10 @@ var autopilot_eligibility_v1_default = {
   }
 };
 
-// runtime/schemas/autopilot-workflow-state.v1.json
-var autopilot_workflow_state_v1_default = {
+// runtime/schemas/autopilot-workflow-state.v2.json
+var autopilot_workflow_state_v2_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  $id: "autopilot-workflow-state.v1.json",
+  $id: "autopilot-workflow-state.v2.json",
   type: "object",
   additionalProperties: false,
   required: [
@@ -34613,60 +34986,108 @@ var autopilot_workflow_state_v1_default = {
     "tasks",
     "intentJournal",
     "finalGate",
-    "shipping",
-    "ciObservations",
+    "branch",
     "cleanup",
     "terminal",
     "createdAt",
     "updatedAt"
   ],
   properties: {
-    stateVersion: { const: "1" },
-    workflowId: { type: "string", minLength: 1, maxLength: 128 },
-    repositoryIdentity: { type: "string", minLength: 1, maxLength: 4096 },
-    baseCommitOid: { $ref: "#/$defs/commitOid" },
+    stateVersion: {
+      const: "2"
+    },
+    workflowId: {
+      type: "string",
+      minLength: 1,
+      maxLength: 128
+    },
+    repositoryIdentity: {
+      type: "string",
+      minLength: 1,
+      maxLength: 4096
+    },
+    baseCommitOid: {
+      $ref: "#/$defs/commitOid"
+    },
     workflowRef: {
       type: "string",
       pattern: "^refs/heads/[^\\u0000-\\u0020~^:?*\\\\[\\]]+$",
       maxLength: 1024
     },
-    worktreePath: { type: "string", minLength: 1, maxLength: 4096 },
-    autopilotSpecHash: { $ref: "#/$defs/hash" },
-    revision: { type: "integer", minimum: 0 },
-    phase: { $ref: "#/$defs/phase" },
-    currentTaskIndex: { type: "integer", minimum: 0 },
+    worktreePath: {
+      type: "string",
+      minLength: 1,
+      maxLength: 4096
+    },
+    autopilotSpecHash: {
+      $ref: "#/$defs/hash"
+    },
+    revision: {
+      type: "integer",
+      minimum: 0
+    },
+    phase: {
+      $ref: "#/$defs/phase"
+    },
+    currentTaskIndex: {
+      type: "integer",
+      minimum: 0
+    },
     tasks: {
       type: "array",
       minItems: 1,
       maxItems: 32,
-      items: { $ref: "#/$defs/task" }
+      items: {
+        $ref: "#/$defs/task"
+      }
     },
-    intentJournal: { $ref: "#/$defs/intentJournal" },
+    intentJournal: {
+      $ref: "#/$defs/intentJournal"
+    },
     finalGate: {
       anyOf: [
-        { $ref: "#/$defs/finalGate" },
-        { type: "null" }
+        {
+          $ref: "#/$defs/finalGate"
+        },
+        {
+          type: "null"
+        }
       ]
     },
-    shipping: { $ref: "#/$defs/shipping" },
-    ciObservations: {
-      type: "array",
-      items: { $ref: "#/$defs/ciObservation" }
+    branch: {
+      type: "string",
+      minLength: 1,
+      maxLength: 1e3,
+      pattern: "^[^\\u0000-\\u0020~^:?*\\\\[\\]]+$"
     },
     cleanup: {
       anyOf: [
-        { $ref: "#/$defs/cleanup" },
-        { type: "null" }
+        {
+          $ref: "#/$defs/cleanup"
+        },
+        {
+          type: "null"
+        }
       ]
     },
     terminal: {
       anyOf: [
-        { $ref: "#/$defs/terminal" },
-        { type: "null" }
+        {
+          $ref: "#/$defs/terminal"
+        },
+        {
+          type: "null"
+        }
       ]
     },
-    createdAt: { type: "string", format: "date-time" },
-    updatedAt: { type: "string", format: "date-time" }
+    createdAt: {
+      type: "string",
+      format: "date-time"
+    },
+    updatedAt: {
+      type: "string",
+      format: "date-time"
+    }
   },
   $defs: {
     hash: {
@@ -34683,10 +35104,6 @@ var autopilot_workflow_state_v1_default = {
         "running-task",
         "promoting-task",
         "final-review",
-        "pushing",
-        "creating-draft-pr",
-        "waiting-required-checks",
-        "marking-ready",
         "cleaning-up",
         "ready-for-human-review",
         "human-decision-required",
@@ -34706,46 +35123,85 @@ var autopilot_workflow_state_v1_default = {
         "status"
       ],
       properties: {
-        id: { type: "string", minLength: 1, maxLength: 128 },
+        id: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128
+        },
         runId: {
-          type: ["string", "null"],
+          type: [
+            "string",
+            "null"
+          ],
           minLength: 1,
           maxLength: 128
         },
         candidateManifestHash: {
           anyOf: [
-            { $ref: "#/$defs/hash" },
-            { type: "null" }
+            {
+              $ref: "#/$defs/hash"
+            },
+            {
+              type: "null"
+            }
           ]
         },
         eligibilityHash: {
           anyOf: [
-            { $ref: "#/$defs/hash" },
-            { type: "null" }
+            {
+              $ref: "#/$defs/hash"
+            },
+            {
+              type: "null"
+            }
           ]
         },
         promotionCommitOid: {
           anyOf: [
-            { $ref: "#/$defs/commitOid" },
-            { type: "null" }
+            {
+              $ref: "#/$defs/commitOid"
+            },
+            {
+              type: "null"
+            }
           ]
         },
         status: {
-          enum: ["pending", "running", "promoted", "halted"]
+          enum: [
+            "pending",
+            "running",
+            "promoted",
+            "halted"
+          ]
         }
       }
     },
     intentJournal: {
       type: "object",
       additionalProperties: false,
-      required: ["ref", "entryCount", "lastEntryHash"],
+      required: [
+        "ref",
+        "entryCount",
+        "lastEntryHash"
+      ],
       properties: {
-        ref: { type: "string", minLength: 1, maxLength: 4096 },
-        entryCount: { type: "integer", minimum: 0 },
+        ref: {
+          type: "string",
+          minLength: 1,
+          maxLength: 4096
+        },
+        entryCount: {
+          type: "integer",
+          minimum: 0
+        },
         lastEntryHash: {
           anyOf: [
-            { $ref: "#/$defs/hash" },
-            { type: "null" }
+            {
+              $ref: "#/$defs/hash"
+            },
+            {
+              type: "null"
+            }
           ]
         }
       }
@@ -34753,81 +35209,75 @@ var autopilot_workflow_state_v1_default = {
     finalGate: {
       type: "object",
       additionalProperties: false,
-      required: ["reportRef", "reportHash", "headCommitOid", "eligibilityHash"],
+      required: [
+        "reportRef",
+        "reportHash",
+        "headCommitOid",
+        "eligibilityHash"
+      ],
       properties: {
-        reportRef: { type: "string", minLength: 1, maxLength: 4096 },
-        reportHash: { $ref: "#/$defs/hash" },
-        headCommitOid: { $ref: "#/$defs/commitOid" },
-        eligibilityHash: { $ref: "#/$defs/hash" }
-      }
-    },
-    shipping: {
-      type: "object",
-      additionalProperties: false,
-      required: ["branch", "prNumber", "prUrl", "ciDeadlineAt"],
-      properties: {
-        branch: { type: "string", minLength: 1, maxLength: 255 },
-        prNumber: {
-          type: ["integer", "null"],
-          minimum: 1
-        },
-        prUrl: {
-          type: ["string", "null"],
+        reportRef: {
+          type: "string",
           minLength: 1,
           maxLength: 4096
         },
-        ciDeadlineAt: { type: "string", format: "date-time" }
-      }
-    },
-    ciCheck: {
-      type: "object",
-      additionalProperties: false,
-      required: ["bucket", "name", "state", "link"],
-      properties: {
-        bucket: { enum: ["pass", "pending", "fail", "cancel", "skipping"] },
-        name: { type: "string", minLength: 1, maxLength: 512 },
-        state: { type: "string", minLength: 1, maxLength: 128 },
-        link: {
-          type: ["string", "null"],
-          minLength: 1,
-          maxLength: 4096
-        }
-      }
-    },
-    ciObservation: {
-      type: "object",
-      additionalProperties: false,
-      required: ["observedAt", "result", "headCommitOid", "checks"],
-      properties: {
-        observedAt: { type: "string", format: "date-time" },
-        result: { enum: ["missing", "pending", "failed", "passed"] },
-        headCommitOid: { $ref: "#/$defs/commitOid" },
-        checks: {
-          type: "array",
-          items: { $ref: "#/$defs/ciCheck" }
+        reportHash: {
+          $ref: "#/$defs/hash"
+        },
+        headCommitOid: {
+          $ref: "#/$defs/commitOid"
+        },
+        eligibilityHash: {
+          $ref: "#/$defs/hash"
         }
       }
     },
     cleanup: {
       type: "object",
       additionalProperties: false,
-      required: ["status", "worktreeRemoved", "lockReleased", "error", "completedAt"],
+      required: [
+        "status",
+        "worktreeRemoved",
+        "lockReleased",
+        "error",
+        "completedAt"
+      ],
       properties: {
-        status: { enum: ["succeeded", "failed"] },
-        worktreeRemoved: { type: "boolean" },
-        lockReleased: { type: "boolean" },
+        status: {
+          enum: [
+            "succeeded",
+            "failed"
+          ]
+        },
+        worktreeRemoved: {
+          type: "boolean"
+        },
+        lockReleased: {
+          type: "boolean"
+        },
         error: {
-          type: ["string", "null"],
+          type: [
+            "string",
+            "null"
+          ],
           minLength: 1,
           maxLength: 4e3
         },
-        completedAt: { type: "string", format: "date-time" }
+        completedAt: {
+          type: "string",
+          format: "date-time"
+        }
       }
     },
     terminal: {
       type: "object",
       additionalProperties: false,
-      required: ["classification", "reason", "evidenceRefs", "completedAt"],
+      required: [
+        "classification",
+        "reason",
+        "evidenceRefs",
+        "completedAt"
+      ],
       properties: {
         classification: {
           enum: [
@@ -34838,15 +35288,25 @@ var autopilot_workflow_state_v1_default = {
           ]
         },
         reason: {
-          type: ["string", "null"],
+          type: [
+            "string",
+            "null"
+          ],
           minLength: 1,
           maxLength: 4e3
         },
         evidenceRefs: {
           type: "array",
-          items: { type: "string", minLength: 1, maxLength: 4096 }
+          items: {
+            type: "string",
+            minLength: 1,
+            maxLength: 4096
+          }
         },
-        completedAt: { type: "string", format: "date-time" }
+        completedAt: {
+          type: "string",
+          format: "date-time"
+        }
       }
     }
   }
@@ -34977,7 +35437,7 @@ function loadSchemas() {
   }
   return {
     delegationSpec,
-    autopilotSpec: ajv.compile(autopilot_spec_v1_default),
+    autopilotSpec: ajv.compile(autopilot_spec_v2_default),
     candidateDecision: ajv.compile(candidate_decision_v2_default),
     attemptResult: ajv.compile(attempt_result_v1_default),
     reviewReport: ajv.compile(review_report_v1_default),
@@ -34986,7 +35446,7 @@ function loadSchemas() {
     verificationReport: ajv.compile(verification_report_v1_default),
     advisorReport: ajv.compile(advisor_report_v1_default),
     autopilotEligibility: ajv.compile(autopilot_eligibility_v1_default),
-    autopilotWorkflowState: ajv.compile(autopilot_workflow_state_v1_default),
+    autopilotWorkflowState: ajv.compile(autopilot_workflow_state_v2_default),
     runStatus: ajv.compile(run_status_v1_default),
     pipelineGateCleared: ajv.compile(pipeline_gate_cleared_v1_default)
   };
@@ -35002,7 +35462,7 @@ function checkVersionCompat(skillProtocolVersion) {
 }
 
 // src/autopilot/workflow-store.ts
-var NO_FOLLOW2 = constants4.O_NOFOLLOW ?? 0;
+var NO_FOLLOW3 = constants7.O_NOFOLLOW ?? 0;
 var MAX_WRITER_LOCK_BYTES = 512;
 var MAX_WORKFLOW_OWNER_BYTES = 1024;
 var MAX_WORKFLOW_STATE_BYTES = 1e6;
@@ -35023,21 +35483,7 @@ var LEGAL_WORKFLOW_PHASE_EDGES = Object.freeze({
     "failed",
     "cancelled"
   ],
-  "final-review": ["pushing", "human-decision-required", "failed", "cancelled"],
-  pushing: ["creating-draft-pr", "human-decision-required", "failed", "cancelled"],
-  "creating-draft-pr": [
-    "waiting-required-checks",
-    "human-decision-required",
-    "failed",
-    "cancelled"
-  ],
-  "waiting-required-checks": [
-    "marking-ready",
-    "human-decision-required",
-    "failed",
-    "cancelled"
-  ],
-  "marking-ready": ["cleaning-up", "human-decision-required", "failed", "cancelled"],
+  "final-review": ["cleaning-up", "human-decision-required", "failed", "cancelled"],
   "cleaning-up": ["ready-for-human-review", "human-decision-required", "failed", "cancelled"],
   "ready-for-human-review": [],
   "human-decision-required": [],
@@ -35047,12 +35493,6 @@ var LEGAL_WORKFLOW_PHASE_EDGES = Object.freeze({
 function workflowError(message, toolError) {
   return new RuntimeError(message, { toolError });
 }
-function errorCode4(error51) {
-  return error51.code;
-}
-function isMissing2(error51) {
-  return errorCode4(error51) === "ENOENT";
-}
 function isPlainDirectory2(metadata) {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
 }
@@ -35061,7 +35501,7 @@ function isProcessAlive(pid) {
     process.kill(pid, 0);
     return true;
   } catch (error51) {
-    return errorCode4(error51) !== "ESRCH";
+    return errorCode(error51) !== "ESRCH";
   }
 }
 async function isWriterAlive(record2) {
@@ -35105,7 +35545,7 @@ function sameIdentity2(metadata, identity) {
   return metadata.dev === identity.dev && metadata.ino === identity.ino;
 }
 async function inspectPlainDirectory(directory) {
-  const metadata = await lstat4(directory);
+  const metadata = await lstat7(directory);
   if (!isPlainDirectory2(metadata)) {
     throw workflowError(
       "workflow state directory must be a plain directory",
@@ -35115,28 +35555,16 @@ async function inspectPlainDirectory(directory) {
   return {
     dev: metadata.dev,
     ino: metadata.ino,
-    canonicalPath: await realpath2(directory)
+    canonicalPath: await realpath3(directory)
   };
 }
 async function assertDirectoryIdentity(directory, expected) {
   const [metadata, canonicalPath] = await Promise.all([
-    lstat4(directory),
-    realpath2(directory)
+    lstat7(directory),
+    realpath3(directory)
   ]);
   if (!isPlainDirectory2(metadata) || !sameIdentity2(metadata, expected) || canonicalPath !== expected.canonicalPath) {
     throw workflowError("workflow state directory identity changed", "unsafe-workflow-state");
-  }
-}
-async function syncDirectory(directory) {
-  let handle;
-  try {
-    handle = await open3(directory, constants4.O_RDONLY | NO_FOLLOW2);
-    await handle.sync();
-  } catch (error51) {
-    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode4(error51) ?? "");
-    if (!unsupportedOnWindows) throw error51;
-  } finally {
-    await handle?.close();
   }
 }
 async function readHandleBytes2(handle, size) {
@@ -35153,6 +35581,18 @@ async function readHandleBytes2(handle, size) {
   return bytes;
 }
 var SAFE_WORKFLOW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+async function readSingleLinkFile(handle, filename, limits, errors) {
+  const metadata = await handle.stat();
+  const named = await lstat7(filename);
+  if (metadata.isFile() && metadata.size > limits.maxBytes) throw errors.oversized();
+  if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size < limits.minBytes || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) throw errors.unsafe();
+  const first = await readHandleBytes2(handle, metadata.size);
+  const second = await readHandleBytes2(handle, metadata.size);
+  const settled = await handle.stat();
+  const settledNamed = await lstat7(filename);
+  if (!first.equals(second) || !settled.isFile() || settled.nlink !== 1 || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino || settledNamed.size !== metadata.size) throw errors.changed();
+  return { bytes: first, metadata };
+}
 function assertWorkflowId(workflowId) {
   if (!SAFE_WORKFLOW_ID.test(workflowId)) {
     throw workflowError("workflow id is not a safe path component", "invalid-workflow-state");
@@ -35182,6 +35622,12 @@ function assertSemanticState(state, workflowId) {
 }
 var validateWorkflowState = loadSchemas().autopilotWorkflowState;
 function validateState(value, workflowId) {
+  if (isRecord2(value) && value.stateVersion === "1") {
+    throw workflowError(
+      "workflow was created by a runtime that shipped branches itself (state v1); finish or cancel it with that runtime, or start a new workflow",
+      "workflow-state-version-unsupported"
+    );
+  }
   if (!validateWorkflowState(value)) {
     throw workflowError("workflow state does not match its schema", "invalid-workflow-state");
   }
@@ -35235,7 +35681,7 @@ function canonicalJson(value) {
   return JSON.stringify(normalizeJournalJson(value, "workflow journal record"));
 }
 function journalEntryHash(entry) {
-  return createHash3("sha256").update(canonicalJson(entry), "utf8").digest("hex");
+  return createHash4("sha256").update(canonicalJson(entry), "utf8").digest("hex");
 }
 function serializeJournalEntry(entry) {
   const complete = {
@@ -35402,13 +35848,13 @@ var WorkflowStore = class {
   constructor(workflowId, options = {}) {
     assertWorkflowId(workflowId);
     this.workflowId = workflowId;
-    this.stateRoot = path6.resolve(options.stateDirectory ?? resolveStateDir());
-    this.workflowsDirectory = path6.join(this.stateRoot, "workflows");
-    this.workflowDirectory = path6.join(this.workflowsDirectory, workflowId);
-    this.statePath = path6.join(this.workflowDirectory, "state.json");
-    this.journalPath = path6.join(this.workflowDirectory, "journal.ndjson");
-    this.lockPath = path6.join(this.workflowDirectory, "state.lock");
-    this.ownerPath = path6.join(this.workflowDirectory, "owner.json");
+    this.stateRoot = path9.resolve(options.stateDirectory ?? resolveStateDir());
+    this.workflowsDirectory = path9.join(this.stateRoot, "workflows");
+    this.workflowDirectory = path9.join(this.workflowsDirectory, workflowId);
+    this.statePath = path9.join(this.workflowDirectory, "state.json");
+    this.journalPath = path9.join(this.workflowDirectory, "journal.ndjson");
+    this.lockPath = path9.join(this.workflowDirectory, "state.lock");
+    this.ownerPath = path9.join(this.workflowDirectory, "owner.json");
     this.now = options.now ?? (() => (/* @__PURE__ */ new Date()).toISOString());
     this.maxStateBytes = options.maxStateBytes ?? MAX_WORKFLOW_STATE_BYTES;
     this.maxJournalBytes = options.maxJournalBytes ?? MAX_WORKFLOW_JOURNAL_BYTES;
@@ -35676,7 +36122,7 @@ var WorkflowStore = class {
       next.autopilotSpecHash = current.autopilotSpecHash;
       next.intentJournal = structuredClone(current.intentJournal);
       next.createdAt = current.createdAt;
-      next.shipping.ciDeadlineAt = current.shipping.ciDeadlineAt;
+      next.branch = current.branch;
       next.revision = current.revision + 1;
       next.phase = transitionTo ?? current.phase;
       next.updatedAt = this.now();
@@ -35696,20 +36142,20 @@ var WorkflowStore = class {
   }
   async ensureWorkflowDirectory() {
     const root = await inspectPlainDirectory(this.stateRoot);
-    await mkdir2(this.workflowsDirectory, { mode: 448 }).catch((error51) => {
-      if (errorCode4(error51) !== "EEXIST") throw error51;
+    await mkdir4(this.workflowsDirectory, { mode: 448 }).catch((error51) => {
+      if (errorCode(error51) !== "EEXIST") throw error51;
     });
     await assertDirectoryIdentity(this.stateRoot, root);
     const workflows = await inspectPlainDirectory(this.workflowsDirectory);
-    if (path6.dirname(workflows.canonicalPath) !== root.canonicalPath) {
+    if (path9.dirname(workflows.canonicalPath) !== root.canonicalPath) {
       throw workflowError("workflows directory escapes plugin data", "unsafe-workflow-state");
     }
-    await mkdir2(this.workflowDirectory, { mode: 448 }).catch((error51) => {
-      if (errorCode4(error51) !== "EEXIST") throw error51;
+    await mkdir4(this.workflowDirectory, { mode: 448 }).catch((error51) => {
+      if (errorCode(error51) !== "EEXIST") throw error51;
     });
     await assertDirectoryIdentity(this.workflowsDirectory, workflows);
     const workflow = await inspectPlainDirectory(this.workflowDirectory);
-    if (path6.dirname(workflow.canonicalPath) !== workflows.canonicalPath) {
+    if (path9.dirname(workflow.canonicalPath) !== workflows.canonicalPath) {
       throw workflowError("workflow directory escapes plugin data", "unsafe-workflow-state");
     }
     return workflow;
@@ -35718,7 +36164,7 @@ var WorkflowStore = class {
     const root = await inspectPlainDirectory(this.stateRoot);
     const workflows = await inspectPlainDirectory(this.workflowsDirectory);
     const workflow = await inspectPlainDirectory(this.workflowDirectory);
-    if (path6.dirname(workflows.canonicalPath) !== root.canonicalPath || path6.dirname(workflow.canonicalPath) !== workflows.canonicalPath) {
+    if (path9.dirname(workflows.canonicalPath) !== root.canonicalPath || path9.dirname(workflow.canonicalPath) !== workflows.canonicalPath) {
       throw workflowError("workflow state path escapes plugin data", "unsafe-workflow-state");
     }
     return workflow;
@@ -35741,13 +36187,13 @@ var WorkflowStore = class {
     }
     let handle;
     try {
-      handle = await open3(
+      handle = await open6(
         this.ownerPath,
-        constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
+        constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW3,
         384
       );
     } catch (error51) {
-      if (errorCode4(error51) === "EEXIST") {
+      if (errorCode(error51) === "EEXIST") {
         throw workflowError("workflow already has an owner", "workflow-lease-conflict");
       }
       throw error51;
@@ -35757,7 +36203,7 @@ var WorkflowStore = class {
       await handle.writeFile(bytes);
       await handle.sync();
       const metadata = await handle.stat();
-      const named = await lstat4(this.ownerPath);
+      const named = await lstat7(this.ownerPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size !== bytes.byteLength || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError("workflow owner was substituted", "unsafe-workflow-owner");
       }
@@ -35776,7 +36222,7 @@ var WorkflowStore = class {
     if (identity === void 0) {
       throw workflowError("workflow owner was not created", "unsafe-workflow-owner");
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     return structuredClone(record2);
   }
@@ -35784,26 +36230,25 @@ var WorkflowStore = class {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     let handle;
     try {
-      handle = await open3(this.ownerPath, constants4.O_RDONLY | NO_FOLLOW2);
+      handle = await open6(this.ownerPath, constants7.O_RDONLY | NO_FOLLOW3);
     } catch (error51) {
-      if (isMissing2(error51)) {
+      if (isMissing(error51)) {
         throw workflowError("workflow owner does not exist", "workflow-lease-not-found");
       }
       throw error51;
     }
     try {
-      const metadata = await handle.stat();
-      const named = await lstat4(this.ownerPath);
-      if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size < 1 || metadata.size > MAX_WORKFLOW_OWNER_BYTES || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
-        throw workflowError("workflow owner is unsafe", "unsafe-workflow-owner");
-      }
-      const first = await readHandleBytes2(handle, metadata.size);
-      const second = await readHandleBytes2(handle, metadata.size);
-      const settled = await handle.stat();
-      const settledNamed = await lstat4(this.ownerPath);
-      if (!first.equals(second) || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino || settledNamed.size !== metadata.size) {
-        throw workflowError("workflow owner changed during read", "unsafe-workflow-owner");
-      }
+      const unsafe = () => workflowError("workflow owner is unsafe", "unsafe-workflow-owner");
+      const { bytes: first, metadata } = await readSingleLinkFile(
+        handle,
+        this.ownerPath,
+        { minBytes: 1, maxBytes: MAX_WORKFLOW_OWNER_BYTES },
+        {
+          unsafe,
+          oversized: unsafe,
+          changed: () => workflowError("workflow owner changed during read", "unsafe-workflow-owner")
+        }
+      );
       return {
         dev: metadata.dev,
         ino: metadata.ino,
@@ -35820,27 +36265,27 @@ var WorkflowStore = class {
   async removeWorkflowOwner(identity, directory) {
     let handle;
     try {
-      handle = await open3(this.ownerPath, constants4.O_RDONLY | NO_FOLLOW2);
+      handle = await open6(this.ownerPath, constants7.O_RDONLY | NO_FOLLOW3);
     } catch (error51) {
-      if (isMissing2(error51)) return false;
+      if (isMissing(error51)) return false;
       throw error51;
     }
     try {
       const metadata = await handle.stat();
-      let named = await lstat4(this.ownerPath);
+      let named = await lstat7(this.ownerPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.dev !== identity.dev || metadata.ino !== identity.ino || metadata.size !== identity.size || metadata.mtimeMs !== identity.mtimeMs || metadata.ctimeMs !== identity.ctimeMs || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== identity.dev || named.ino !== identity.ino) return false;
       const bytes = await readHandleBytes2(handle, metadata.size);
       const settled = await handle.stat();
-      named = await lstat4(this.ownerPath);
+      named = await lstat7(this.ownerPath);
       if (!bytes.equals(identity.bytes) || settled.dev !== identity.dev || settled.ino !== identity.ino || settled.size !== identity.size || settled.mtimeMs !== identity.mtimeMs || settled.ctimeMs !== identity.ctimeMs || named.dev !== identity.dev || named.ino !== identity.ino) return false;
-      await rm2(this.ownerPath);
+      await rm3(this.ownerPath);
     } catch (error51) {
-      if (isMissing2(error51)) return false;
+      if (isMissing(error51)) return false;
       throw error51;
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     return true;
   }
@@ -35851,11 +36296,11 @@ var WorkflowStore = class {
     let operationError;
     try {
       for (let attempt = 0; attempt < 4; attempt += 1) {
-        const token = randomUUID2();
-        const ownerPath = path6.join(this.workflowDirectory, `.state.lock.${token}.owner`);
-        ownerHandle = await open3(
+        const token = randomUUID3();
+        const ownerPath = path9.join(this.workflowDirectory, `.state.lock.${token}.owner`);
+        ownerHandle = await open6(
           ownerPath,
-          constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
+          constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW3,
           384
         );
         const record2 = {
@@ -35868,17 +36313,17 @@ var WorkflowStore = class {
 `, "utf8");
         await ownerHandle.sync();
         const ownerMetadata = await ownerHandle.stat();
-        const namedOwner = await lstat4(ownerPath);
+        const namedOwner = await lstat7(ownerPath);
         if (!ownerMetadata.isFile() || ownerMetadata.nlink !== 1 || ownerMetadata.size > MAX_WRITER_LOCK_BYTES || !namedOwner.isFile() || namedOwner.isSymbolicLink() || namedOwner.dev !== ownerMetadata.dev || namedOwner.ino !== ownerMetadata.ino) {
           throw workflowError("workflow state lock owner was substituted", "unsafe-workflow-state");
         }
         try {
-          await link2(ownerPath, this.lockPath);
+          await link3(ownerPath, this.lockPath);
         } catch (error51) {
           await ownerHandle.close();
           ownerHandle = void 0;
-          await rm2(ownerPath, { force: true });
-          if (errorCode4(error51) !== "EEXIST") throw error51;
+          await rm3(ownerPath, { force: true });
+          if (errorCode(error51) !== "EEXIST") throw error51;
           const existing = await this.readWriterLock(directory);
           if (await isWriterAlive(existing.record)) {
             throw workflowError(
@@ -35891,7 +36336,7 @@ var WorkflowStore = class {
           }
           continue;
         }
-        const namedLock = await lstat4(this.lockPath);
+        const namedLock = await lstat7(this.lockPath);
         if (!namedLock.isFile() || namedLock.isSymbolicLink() || namedLock.dev !== ownerMetadata.dev || namedLock.ino !== ownerMetadata.ino) {
           throw workflowError("workflow state lock was substituted", "unsafe-workflow-state");
         }
@@ -35901,7 +36346,7 @@ var WorkflowStore = class {
           ownerPath,
           record: record2
         };
-        await syncDirectory(this.workflowDirectory);
+        await flushDirectory(this.workflowDirectory);
         break;
       }
       if (lockIdentity === void 0) {
@@ -35918,8 +36363,8 @@ var WorkflowStore = class {
         await ownerHandle?.close();
         if (lockIdentity !== void 0) {
           await this.retireWriterLock(lockIdentity, directory);
-          await rm2(lockIdentity.ownerPath, { force: true });
-          await syncDirectory(this.workflowDirectory);
+          await rm3(lockIdentity.ownerPath, { force: true });
+          await flushDirectory(this.workflowDirectory);
         }
       } catch (cleanupError) {
         if (operationError === void 0) throw cleanupError;
@@ -35932,10 +36377,10 @@ var WorkflowStore = class {
   }
   async readWriterLock(directory) {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open3(this.lockPath, constants4.O_RDONLY | NO_FOLLOW2);
+    const handle = await open6(this.lockPath, constants7.O_RDONLY | NO_FOLLOW3);
     try {
       const metadata = await handle.stat();
-      const named = await lstat4(this.lockPath);
+      const named = await lstat7(this.lockPath);
       if (!metadata.isFile() || metadata.nlink < 1 || metadata.nlink > 2 || metadata.size < 1 || metadata.size > MAX_WRITER_LOCK_BYTES || !named.isFile() || named.isSymbolicLink() || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError("workflow state lock is unsafe", "unsafe-workflow-state");
       }
@@ -35949,7 +36394,7 @@ var WorkflowStore = class {
       return {
         dev: metadata.dev,
         ino: metadata.ino,
-        ownerPath: path6.join(this.workflowDirectory, `.state.lock.${record2.token}.owner`),
+        ownerPath: path9.join(this.workflowDirectory, `.state.lock.${record2.token}.owner`),
         record: record2
       };
     } finally {
@@ -35959,72 +36404,72 @@ var WorkflowStore = class {
   async retireWriterLock(identity, directory) {
     let handle;
     try {
-      handle = await open3(this.lockPath, constants4.O_RDONLY | NO_FOLLOW2);
+      handle = await open6(this.lockPath, constants7.O_RDONLY | NO_FOLLOW3);
     } catch (error51) {
-      if (isMissing2(error51)) return false;
+      if (isMissing(error51)) return false;
       throw error51;
     }
     try {
       const metadata = await handle.stat();
-      let named = await lstat4(this.lockPath);
+      let named = await lstat7(this.lockPath);
       if (!metadata.isFile() || metadata.dev !== identity.dev || metadata.ino !== identity.ino || !named.isFile() || named.isSymbolicLink() || named.dev !== identity.dev || named.ino !== identity.ino) return false;
       const contents = await readHandleBytes2(handle, metadata.size);
       const record2 = parseWriterLock(contents);
       if (record2.pid !== identity.record.pid || record2.processToken !== identity.record.processToken || record2.token !== identity.record.token) return false;
       const settled = await handle.stat();
-      named = await lstat4(this.lockPath);
+      named = await lstat7(this.lockPath);
       if (settled.dev !== identity.dev || settled.ino !== identity.ino || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || named.dev !== identity.dev || named.ino !== identity.ino) return false;
-      await rm2(this.lockPath);
+      await rm3(this.lockPath);
     } catch (error51) {
-      if (isMissing2(error51)) return false;
+      if (isMissing(error51)) return false;
       throw error51;
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     return true;
   }
   async retireWriterOwner(identity, directory) {
     let handle;
     try {
-      handle = await open3(identity.ownerPath, constants4.O_RDONLY | NO_FOLLOW2);
+      handle = await open6(identity.ownerPath, constants7.O_RDONLY | NO_FOLLOW3);
     } catch (error51) {
-      if (isMissing2(error51)) return false;
+      if (isMissing(error51)) return false;
       throw error51;
     }
     try {
       const metadata = await handle.stat();
-      let named = await lstat4(identity.ownerPath);
+      let named = await lstat7(identity.ownerPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.dev !== identity.dev || metadata.ino !== identity.ino || metadata.size < 1 || metadata.size > MAX_WRITER_LOCK_BYTES || !named.isFile() || named.isSymbolicLink() || named.dev !== identity.dev || named.ino !== identity.ino) return false;
       const contents = await readHandleBytes2(handle, metadata.size);
       const record2 = parseWriterLock(contents);
       if (record2.pid !== identity.record.pid || record2.processToken !== identity.record.processToken || record2.token !== identity.record.token) return false;
       const settled = await handle.stat();
-      named = await lstat4(identity.ownerPath);
+      named = await lstat7(identity.ownerPath);
       if (settled.nlink !== 1 || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || named.dev !== identity.dev || named.ino !== identity.ino) return false;
-      await rm2(identity.ownerPath);
+      await rm3(identity.ownerPath);
     } catch (error51) {
-      if (isMissing2(error51)) return false;
+      if (isMissing(error51)) return false;
       throw error51;
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     return true;
   }
   async recoverAbandonedStateFiles(directory) {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const names = (await readdir3(this.workflowDirectory)).filter((name) => /^\.state\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:tmp|publish)$/u.test(name));
+    const names = (await readdir4(this.workflowDirectory)).filter((name) => /^\.state\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:tmp|publish)$/u.test(name));
     if (names.length === 0) return;
     const artifacts = [];
     for (const name of names) {
-      const filePath = path6.join(this.workflowDirectory, name);
-      const handle = await open3(filePath, constants4.O_RDONLY | NO_FOLLOW2);
+      const filePath = path9.join(this.workflowDirectory, name);
+      const handle = await open6(filePath, constants7.O_RDONLY | NO_FOLLOW3);
       try {
         const metadata = await handle.stat();
-        const named = await lstat4(filePath);
+        const named = await lstat7(filePath);
         if (!metadata.isFile() || metadata.nlink < 1 || metadata.nlink > 2 || metadata.size > this.maxStateBytes || !named.isFile() || named.isSymbolicLink() || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
           throw workflowError("abandoned workflow state file is unsafe", "unsafe-workflow-state");
         }
@@ -36033,8 +36478,8 @@ var WorkflowStore = class {
         await handle.close();
       }
     }
-    const stateMetadata = await lstat4(this.statePath).catch((error51) => {
-      if (isMissing2(error51)) return null;
+    const stateMetadata = await lstat7(this.statePath).catch((error51) => {
+      if (isMissing(error51)) return null;
       throw error51;
     });
     const linksByIdentity = /* @__PURE__ */ new Map();
@@ -36053,13 +36498,13 @@ var WorkflowStore = class {
       }
     }
     for (const artifact of artifacts) {
-      const named = await lstat4(artifact.filePath);
+      const named = await lstat7(artifact.filePath);
       if (!named.isFile() || named.isSymbolicLink() || named.dev !== artifact.metadata.dev || named.ino !== artifact.metadata.ino) {
         throw workflowError("abandoned workflow state file changed", "unsafe-workflow-state");
       }
-      await rm2(artifact.filePath);
+      await rm3(artifact.filePath);
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
   async readFromDirectory(directory) {
@@ -36067,26 +36512,22 @@ var WorkflowStore = class {
     let handle;
     try {
       try {
-        handle = await open3(this.statePath, constants4.O_RDONLY | NO_FOLLOW2);
+        handle = await open6(this.statePath, constants7.O_RDONLY | NO_FOLLOW3);
       } catch (error51) {
-        if (isMissing2(error51)) return null;
+        if (isMissing(error51)) return null;
         throw error51;
       }
-      const metadata = await handle.stat();
-      const named = await lstat4(this.statePath);
-      if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size > this.maxStateBytes || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
-        throw workflowError(
-          "workflow state must be a bounded regular single-link file",
-          metadata.size > this.maxStateBytes ? "workflow-state-too-large" : "unsafe-workflow-state"
-        );
-      }
-      const first = await readHandleBytes2(handle, metadata.size);
-      const second = await readHandleBytes2(handle, metadata.size);
-      const settled = await handle.stat();
-      const settledNamed = await lstat4(this.statePath);
-      if (!first.equals(second) || !settled.isFile() || settled.nlink !== 1 || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino) {
-        throw workflowError("workflow state changed during read", "unsafe-workflow-state");
-      }
+      const message = "workflow state must be a bounded regular single-link file";
+      const { bytes: first } = await readSingleLinkFile(
+        handle,
+        this.statePath,
+        { minBytes: 0, maxBytes: this.maxStateBytes },
+        {
+          unsafe: () => workflowError(message, "unsafe-workflow-state"),
+          oversized: () => workflowError(message, "workflow-state-too-large"),
+          changed: () => workflowError("workflow state changed during read", "unsafe-workflow-state")
+        }
+      );
       let parsed;
       try {
         parsed = JSON.parse(first.toString("utf8"));
@@ -36096,7 +36537,7 @@ var WorkflowStore = class {
       await assertDirectoryIdentity(this.workflowDirectory, directory);
       return validateState(parsed, this.workflowId);
     } catch (error51) {
-      if (isMissing2(error51)) return null;
+      if (isMissing(error51)) return null;
       throw error51;
     } finally {
       await handle?.close();
@@ -36153,9 +36594,9 @@ var WorkflowStore = class {
     let handle;
     try {
       try {
-        handle = await open3(this.journalPath, constants4.O_RDONLY | NO_FOLLOW2);
+        handle = await open6(this.journalPath, constants7.O_RDONLY | NO_FOLLOW3);
       } catch (error51) {
-        if (isMissing2(error51)) {
+        if (isMissing(error51)) {
           await assertDirectoryIdentity(this.workflowDirectory, directory);
           return {
             entries: [],
@@ -36170,21 +36611,17 @@ var WorkflowStore = class {
         }
         throw error51;
       }
-      const metadata = await handle.stat();
-      const named = await lstat4(this.journalPath);
-      if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size > this.maxJournalBytes || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
-        throw workflowError(
-          "workflow journal must be a bounded regular single-link file",
-          metadata.size > this.maxJournalBytes ? "workflow-journal-too-large" : "unsafe-workflow-state"
-        );
-      }
-      const first = await readHandleBytes2(handle, metadata.size);
-      const second = await readHandleBytes2(handle, metadata.size);
-      const settled = await handle.stat();
-      const settledNamed = await lstat4(this.journalPath);
-      if (!first.equals(second) || settled.size !== metadata.size || settled.mtimeMs !== metadata.mtimeMs || settled.ctimeMs !== metadata.ctimeMs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino) {
-        throw workflowError("workflow journal changed during read", "unsafe-workflow-state");
-      }
+      const message = "workflow journal must be a bounded regular single-link file";
+      const { bytes: first, metadata } = await readSingleLinkFile(
+        handle,
+        this.journalPath,
+        { minBytes: 0, maxBytes: this.maxJournalBytes },
+        {
+          unsafe: () => workflowError(message, "unsafe-workflow-state"),
+          oversized: () => workflowError(message, "workflow-journal-too-large"),
+          changed: () => workflowError("workflow journal changed during read", "unsafe-workflow-state")
+        }
+      );
       const finalNewline = first.lastIndexOf(10);
       const tornTail = first.byteLength > 0 && finalNewline !== first.byteLength - 1;
       const completeByteLength = tornTail ? finalNewline + 1 : first.byteLength;
@@ -36216,10 +36653,10 @@ var WorkflowStore = class {
   async truncateTornJournalTail(directory, snapshot) {
     if (!snapshot.tornTail || snapshot.identity === null) return;
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open3(this.journalPath, constants4.O_RDWR | NO_FOLLOW2);
+    const handle = await open6(this.journalPath, constants7.O_RDWR | NO_FOLLOW3);
     try {
       const metadata = await handle.stat();
-      const named = await lstat4(this.journalPath);
+      const named = await lstat7(this.journalPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.dev !== snapshot.identity.dev || metadata.ino !== snapshot.identity.ino || metadata.size !== snapshot.fileSize || metadata.mtimeMs !== snapshot.mtimeMs || metadata.ctimeMs !== snapshot.ctimeMs || !named.isFile() || named.isSymbolicLink() || named.dev !== metadata.dev || named.ino !== metadata.ino) {
         throw workflowError("workflow journal changed during torn-tail repair", "unsafe-workflow-state");
       }
@@ -36228,7 +36665,7 @@ var WorkflowStore = class {
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
   async appendJournalEntry(bytes, directory, expectedSize) {
@@ -36236,14 +36673,14 @@ var WorkflowStore = class {
       throw workflowError("workflow journal exceeds its size limit", "workflow-journal-too-large");
     }
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open3(
+    const handle = await open6(
       this.journalPath,
-      constants4.O_WRONLY | constants4.O_CREAT | constants4.O_APPEND | NO_FOLLOW2,
+      constants7.O_WRONLY | constants7.O_CREAT | constants7.O_APPEND | NO_FOLLOW3,
       384
     );
     try {
       const metadata = await handle.stat();
-      const named = await lstat4(this.journalPath);
+      const named = await lstat7(this.journalPath);
       if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size !== expectedSize || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino) {
         throw workflowError("workflow journal changed before append", "unsafe-workflow-state");
       }
@@ -36257,7 +36694,7 @@ var WorkflowStore = class {
     } finally {
       await handle.close();
     }
-    await syncDirectory(this.workflowDirectory);
+    await flushDirectory(this.workflowDirectory);
     await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
   async assertCurrentRevision(directory, expectedRevision) {
@@ -36267,29 +36704,29 @@ var WorkflowStore = class {
     }
   }
   async publish(bytes, directory, create) {
-    const temporaryPath = path6.join(
+    const temporaryPath = path9.join(
       this.workflowDirectory,
-      `.state.${randomUUID2()}.tmp`
+      `.state.${randomUUID3()}.tmp`
     );
-    const publicationPath = path6.join(
+    const publicationPath = path9.join(
       this.workflowDirectory,
-      `.state.${randomUUID2()}.publish`
+      `.state.${randomUUID3()}.publish`
     );
     let handle;
     let temporaryExists = false;
     let publicationExists = false;
     let temporaryIdentity;
     try {
-      handle = await open3(
+      handle = await open6(
         temporaryPath,
-        constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
+        constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW3,
         384
       );
       temporaryExists = true;
       await handle.writeFile(bytes);
       await handle.sync();
       const metadata = await handle.stat({ bigint: true });
-      const named = await lstat4(temporaryPath, { bigint: true });
+      const named = await lstat7(temporaryPath, { bigint: true });
       if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size !== BigInt(bytes.byteLength) || !named.isFile() || named.isSymbolicLink() || named.dev !== metadata.dev || named.ino !== metadata.ino) {
         throw workflowError("workflow state temporary file changed", "unsafe-workflow-state");
       }
@@ -36299,10 +36736,10 @@ var WorkflowStore = class {
       await assertDirectoryIdentity(this.workflowDirectory, directory);
       if (create) {
         try {
-          await lstat4(this.statePath);
+          await lstat7(this.statePath);
           throw workflowError("workflow state already exists", "workflow-state-conflict");
         } catch (error51) {
-          if (!isMissing2(error51)) throw error51;
+          if (!isMissing(error51)) throw error51;
         }
       }
       await this.stageStatePublication(
@@ -36318,40 +36755,40 @@ var WorkflowStore = class {
         bytes,
         temporaryIdentity
       );
-      await rm2(temporaryPath);
+      await rm3(temporaryPath);
       temporaryExists = false;
-      await rename(publicationPath, this.statePath);
+      await rename2(publicationPath, this.statePath);
       publicationExists = false;
       await this.assertPublishedState(bytes, temporaryIdentity);
-      await syncDirectory(this.workflowDirectory);
+      await flushDirectory(this.workflowDirectory);
       await assertDirectoryIdentity(this.workflowDirectory, directory);
     } finally {
       await handle?.close();
-      if (temporaryExists) await rm2(temporaryPath, { force: true });
-      if (publicationExists) await rm2(publicationPath, { force: true });
+      if (temporaryExists) await rm3(temporaryPath, { force: true });
+      if (publicationExists) await rm3(publicationPath, { force: true });
     }
   }
   async stageStatePublication(temporaryPath, publicationPath, expectedBytes, expectedIdentity) {
     let linked = false;
     try {
-      await link2(temporaryPath, publicationPath);
+      await link3(temporaryPath, publicationPath);
       linked = true;
-      const publication = await lstat4(publicationPath, { bigint: true });
+      const publication = await lstat7(publicationPath, { bigint: true });
       if (!publication.isFile() || publication.isSymbolicLink() || publication.nlink !== 2n || publication.dev !== expectedIdentity.dev || publication.ino !== expectedIdentity.ino || publication.size !== BigInt(expectedBytes.byteLength)) {
         throw workflowError("workflow state publication source changed", "unsafe-workflow-state");
       }
     } catch (error51) {
-      if (linked) await rm2(publicationPath, { force: true });
+      if (linked) await rm3(publicationPath, { force: true });
       throw error51;
     }
   }
   async assertStagedPublication(temporaryPath, publicationPath, expectedBytes, expectedIdentity) {
-    const handle = await open3(publicationPath, constants4.O_RDONLY | NO_FOLLOW2);
+    const handle = await open6(publicationPath, constants7.O_RDONLY | NO_FOLLOW3);
     try {
       const metadata = await handle.stat({ bigint: true });
       const [publication, temporary] = await Promise.all([
-        lstat4(publicationPath, { bigint: true }),
-        lstat4(temporaryPath, { bigint: true })
+        lstat7(publicationPath, { bigint: true }),
+        lstat7(temporaryPath, { bigint: true })
       ]);
       if (!metadata.isFile() || metadata.nlink !== 2n || metadata.size !== BigInt(expectedBytes.byteLength) || metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino || !publication.isFile() || publication.isSymbolicLink() || publication.dev !== expectedIdentity.dev || publication.ino !== expectedIdentity.ino || !temporary.isFile() || temporary.isSymbolicLink() || temporary.dev !== expectedIdentity.dev || temporary.ino !== expectedIdentity.ino) {
         throw workflowError("workflow state publication changed before commit", "unsafe-workflow-state");
@@ -36366,10 +36803,10 @@ var WorkflowStore = class {
     }
   }
   async assertPublishedState(expectedBytes, expectedIdentity) {
-    const handle = await open3(this.statePath, constants4.O_RDONLY | NO_FOLLOW2);
+    const handle = await open6(this.statePath, constants7.O_RDONLY | NO_FOLLOW3);
     try {
       const metadata = await handle.stat({ bigint: true });
-      const named = await lstat4(this.statePath, { bigint: true });
+      const named = await lstat7(this.statePath, { bigint: true });
       if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size !== BigInt(expectedBytes.byteLength) || metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1n || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError("published workflow state identity changed", "unsafe-workflow-state");
       }
@@ -36385,6 +36822,81 @@ var WorkflowStore = class {
 };
 
 // src/git/git-exec.ts
+import path10 from "node:path";
+var RUNTIME_IDENTITY = {
+  GIT_AUTHOR_NAME: "claude-architect",
+  GIT_AUTHOR_EMAIL: "runtime@claude-architect.invalid",
+  GIT_COMMITTER_NAME: "claude-architect",
+  GIT_COMMITTER_EMAIL: "runtime@claude-architect.invalid",
+  GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z",
+  GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z"
+};
+function userConfigEnvironment() {
+  const environment = {};
+  for (const key of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM"]) {
+    const value = process.env[key];
+    if (value !== void 0) environment[key] = value;
+  }
+  return environment;
+}
+var IDENTITY_VARIABLES = /* @__PURE__ */ new Set(["GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"]);
+var IDENT_LINE = /^([^<>\n]+) <([^<>\n]*)> (\d+ [+-]\d{4})$/;
+async function userCommitEnvironment(cwd, run = git) {
+  const environment = {};
+  for (const [role, variable] of [
+    ["AUTHOR", "GIT_AUTHOR_IDENT"],
+    ["COMMITTER", "GIT_COMMITTER_IDENT"]
+  ]) {
+    const result = await run(cwd, ["var", variable], { userIdentity: true });
+    const match = result.exitCode === 0 && result.truncated?.stdout !== true ? IDENT_LINE.exec(result.stdout.trim()) : null;
+    if (match === null) return null;
+    environment[`GIT_${role}_NAME`] = match[1].trim();
+    environment[`GIT_${role}_EMAIL`] = match[2];
+    environment[`GIT_${role}_DATE`] = match[3];
+  }
+  return environment;
+}
+var pinnedWorktrees = /* @__PURE__ */ new Map();
+function pinWorktreeGitDirectory(worktreePath, pin) {
+  pinnedWorktrees.set(path10.resolve(worktreePath), { ...pin });
+}
+function unpinWorktreeGitDirectory(worktreePath) {
+  pinnedWorktrees.delete(path10.resolve(worktreePath));
+}
+function pinnedWorktreeGitDirectory(worktreePath) {
+  const pin = pinnedWorktrees.get(path10.resolve(worktreePath));
+  return pin === void 0 ? void 0 : { ...pin };
+}
+function pinnedEnvironment(cwd) {
+  const resolved = path10.resolve(cwd);
+  for (const [workTree, pin] of pinnedWorktrees) {
+    if (resolved === workTree || resolved.startsWith(`${workTree}${path10.sep}`)) {
+      return { GIT_DIR: pin.gitDir, GIT_COMMON_DIR: pin.commonDir, GIT_WORK_TREE: workTree };
+    }
+  }
+  return {};
+}
+var DRIVER_HONORING_COMMANDS = /* @__PURE__ */ new Set(["diff", "log", "show", "format-patch", "blame"]);
+var DEFAULT_MAX_OUTPUT_BYTES = 8e6;
+var INDEX_LISTING_MAX_BYTES = 512 * 1024 * 1024;
+function subcommandIndex(args) {
+  let index = 0;
+  while (index < args.length && args[index].startsWith("-")) {
+    index += args[index] === "-c" || args[index] === "-C" ? 2 : 1;
+  }
+  return index;
+}
+function gitSubcommand(args) {
+  return args[subcommandIndex(args)];
+}
+function withoutDiffDrivers(args) {
+  const index = subcommandIndex(args);
+  const command = args[index];
+  if (command === void 0 || !DRIVER_HONORING_COMMANDS.has(command)) return args;
+  const flags = command === "blame" ? ["--no-textconv"] : ["--no-textconv", "--no-ext-diff"];
+  const missing = flags.filter((flag) => !args.includes(flag));
+  return [...args.slice(0, index + 1), ...missing, ...args.slice(index + 1)];
+}
 var FILTER_KEY_PATTERN = "^filter\\..*\\.(clean|smudge|process|required)$";
 var LOCAL_DISCOVERY_PATTERN = "^(extensions\\.worktreeconfig|filter\\..*\\.(clean|smudge|process|required))$";
 function toGitResult(exit) {
@@ -36462,25 +36974,30 @@ async function git(cwd, args, indexFileOrOptions) {
   const executable = await resolveGit(platformServices);
   const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
   const options = typeof indexFileOrOptions === "string" ? { indexFile: indexFileOrOptions } : indexFileOrOptions ?? {};
-  const maxOutputBytes = options.maxOutputBytes ?? 8e6;
+  if (options.userIdentity === true && !(args.length === 2 && args[0] === "var" && IDENTITY_VARIABLES.has(args[1]))) {
+    return {
+      stdout: "",
+      stderr: "userIdentity is limited to git var of a commit identity\n",
+      exitCode: 2
+    };
+  }
+  const maxOutputBytes = options.maxOutputBytes ?? (gitSubcommand(args) === "ls-files" ? INDEX_LISTING_MAX_BYTES : DEFAULT_MAX_OUTPUT_BYTES);
   const env = {
     PATH: process.env.PATH ?? "",
-    GIT_CONFIG_GLOBAL: "/dev/null",
-    GIT_CONFIG_SYSTEM: "/dev/null",
-    GIT_CONFIG_NOSYSTEM: "1",
+    ...options.userIdentity === true ? userConfigEnvironment() : {
+      GIT_CONFIG_GLOBAL: nullDevice,
+      GIT_CONFIG_SYSTEM: nullDevice,
+      GIT_CONFIG_NOSYSTEM: "1"
+    },
     GIT_ATTR_NOSYSTEM: "1",
     GIT_OPTIONAL_LOCKS: "0",
     GIT_TERMINAL_PROMPT: "0",
     ...process.env.HOME ? { HOME: process.env.HOME } : {},
     ...process.env.XDG_CONFIG_HOME ? { XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME } : {},
-    GIT_AUTHOR_NAME: "claude-architect",
-    GIT_AUTHOR_EMAIL: "runtime@claude-architect.invalid",
-    GIT_COMMITTER_NAME: "claude-architect",
-    GIT_COMMITTER_EMAIL: "runtime@claude-architect.invalid",
-    GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z",
-    GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
+    ...options.userIdentity === true ? {} : RUNTIME_IDENTITY,
     ...options.indexFile ? { GIT_INDEX_FILE: options.indexFile } : {},
-    ...options.env
+    ...options.env,
+    ...pinnedEnvironment(cwd)
   };
   const hardeningArgs = [
     "-c",
@@ -36543,7 +37060,14 @@ async function git(cwd, args, indexFileOrOptions) {
   if (neutralizations.error !== void 0) return neutralizations.error;
   const exit = await supervise(platformServices, {
     executable,
-    args: [...hardeningArgs, ...neutralizations.args ?? [], ...args],
+    args: [
+      ...hardeningArgs,
+      ...neutralizations.args ?? [],
+      // Never let Git guess `user@host` from the machine: an identity the user
+      // did not configure must surface as missing.
+      ...options.userIdentity === true ? ["-c", "user.useConfigOnly=true"] : [],
+      ...withoutDiffDrivers(args)
+    ],
     cwd,
     env,
     ...options.stdin === void 0 ? {} : { stdin: options.stdin },
@@ -36554,44 +37078,31 @@ async function git(cwd, args, indexFileOrOptions) {
 }
 
 // src/git/worktree-registration.ts
-import { realpath as realpath3 } from "node:fs/promises";
-import path8 from "node:path";
-
-// src/util/platform-path.ts
-import path7 from "node:path";
-function stripWindowsExtendedPrefix(value) {
-  if (value.toLowerCase().startsWith("\\\\?\\unc\\")) return `\\\\${value.slice(8)}`;
-  return value.startsWith("\\\\?\\") ? value.slice(4) : value;
-}
-function platformPathsEqual(left, right, platform = process.platform) {
-  if (platform !== "win32") return path7.resolve(left) === path7.resolve(right);
-  return path7.win32.normalize(stripWindowsExtendedPrefix(left)) === path7.win32.normalize(stripWindowsExtendedPrefix(right));
-}
-
-// src/git/worktree-registration.ts
+import { realpath as realpath4 } from "node:fs/promises";
+import path11 from "node:path";
 async function canonicalizeWorktreePath(pathname, allowMissing) {
-  if (!path8.isAbsolute(pathname)) {
+  if (!path11.isAbsolute(pathname)) {
     throw new RuntimeError("worktree registration path is not absolute");
   }
-  const resolved = path8.resolve(pathname);
+  const resolved = path11.resolve(pathname);
   try {
-    return await realpath3(resolved);
+    return await realpath4(resolved);
   } catch (error51) {
-    if (!allowMissing || error51.code !== "ENOENT") throw error51;
+    if (!allowMissing || !isMissing(error51)) throw error51;
   }
   const missingSegments = [];
   let ancestor = resolved;
   for (; ; ) {
-    const parent = path8.dirname(ancestor);
+    const parent = path11.dirname(ancestor);
     if (parent === ancestor) {
       throw new RuntimeError("worktree registration path has no existing ancestor");
     }
-    missingSegments.unshift(path8.basename(ancestor));
+    missingSegments.unshift(path11.basename(ancestor));
     ancestor = parent;
     try {
-      return path8.join(await realpath3(ancestor), ...missingSegments);
+      return path11.join(await realpath4(ancestor), ...missingSegments);
     } catch (error51) {
-      if (error51.code !== "ENOENT") throw error51;
+      if (!isMissing(error51)) throw error51;
     }
   }
 }
@@ -36607,7 +37118,7 @@ async function findWorktreeRegistration(fields, worktreePath, allowMissing = fal
         allowMissing
       );
     } catch (error51) {
-      if (error51.code === "ENOENT") continue;
+      if (isMissing(error51)) continue;
       throw error51;
     }
     if (platformPathsEqual(reported, expected)) return index;
@@ -36657,7 +37168,7 @@ import { homedir } from "node:os";
 import { join as join2 } from "node:path";
 
 // src/producers/plain-text.ts
-import { open as open4 } from "node:fs/promises";
+import { open as open7 } from "node:fs/promises";
 
 // src/producers/skill-bootstrap.ts
 import { existsSync } from "node:fs";
@@ -36837,7 +37348,7 @@ async function normalizeNodeShim(executable) {
   if (executable.kind !== "native") return executable;
   let handle;
   try {
-    handle = await open4(executable.command, "r");
+    handle = await open7(executable.command, "r");
     const buffer = Buffer.alloc(256);
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
     const firstLine = buffer.subarray(0, bytesRead).toString("utf8").split(/\r?\n/u, 1)[0] ?? "";
@@ -37840,10 +38351,10 @@ var registry2 = new ProducerRegistry([new CodexAdapter(), new OpenCodeAdapter(),
 // src/producers/producer-runtime.ts
 import { existsSync as existsSync7, statSync as statSync2 } from "node:fs";
 import { homedir as homedir8 } from "node:os";
-import path11 from "node:path";
+import path14 from "node:path";
 
 // src/runtime/environment-policy.ts
-import path9 from "node:path";
+import path12 from "node:path";
 
 // src/runtime/redaction.ts
 var registeredSecrets = /* @__PURE__ */ new Map();
@@ -38090,14 +38601,14 @@ function buildEnvironment(args) {
           env,
           provenance,
           "APPDATA",
-          path9.win32.join(args.tempHome, "AppData", "Roaming"),
+          path12.win32.join(args.tempHome, "AppData", "Roaming"),
           "platform"
         );
         setEnvironmentValue(
           env,
           provenance,
           "LOCALAPPDATA",
-          path9.win32.join(args.tempHome, "AppData", "Local"),
+          path12.win32.join(args.tempHome, "AppData", "Local"),
           "platform"
         );
       } else {
@@ -38120,6 +38631,9 @@ function buildEnvironment(args) {
       setEnvironmentValue(env, provenance, name, value, "adapter");
     }
     for (const [name, value] of Object.entries(args.specAdditions ?? {})) {
+      if (provenance.get(name) === "platform") {
+        throw new RuntimeError(`delegation environment may not override ${JSON.stringify(name)}`);
+      }
       setEnvironmentValue(env, provenance, name, value, "spec");
     }
     setEnvironmentValue(
@@ -38130,12 +38644,16 @@ function buildEnvironment(args) {
       "platform"
     );
     const environmentSecretRegistration = registerSensitiveEnvironment(env);
+    const passedValueRegistration = combineSecretRegistrations(
+      [...provenance.entries()].filter(([name, source]) => (source === "adapter" || source === "spec") && !path12.isAbsolute(env[name] ?? "")).map(([name]) => registerSecretValue(env[name] ?? ""))
+    );
     return {
       env,
       provenance: [...provenance.entries()].map(([name, source]) => ({ name, source })).sort((left, right) => compareNames(left.name, right.name)),
       secretRegistration: combineSecretRegistrations([
         hostSecretRegistration,
-        environmentSecretRegistration
+        environmentSecretRegistration,
+        passedValueRegistration
       ])
     };
   } catch (error51) {
@@ -38167,14 +38685,14 @@ function buildWriteSeatbeltPolicy(args) {
     extraWritableRoots: [...args.extraWritableRoots]
   };
 }
-function sbPath(path35) {
-  for (const character of path35) {
+function sbPath(path43) {
+  for (const character of path43) {
     const codePoint = character.codePointAt(0);
     if (codePoint !== void 0 && (codePoint < 32 || codePoint === 127)) {
-      throw new Error(`seatbelt: control character in path: ${JSON.stringify(path35)}`);
+      throw new Error(`seatbelt: control character in path: ${JSON.stringify(path43)}`);
     }
   }
-  return `"${path35.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
+  return `"${path43.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
 }
 function isDeclaredStateRoot(normalized, invocation, policy) {
   const roots = [];
@@ -38225,14 +38743,14 @@ function isDeclaredStateRoot(normalized, invocation, policy) {
   const winUserHomePattern = /^[a-zA-Z]:\\Users\\[^\\]+(?:\\.*)?$/u;
   return userHomePattern.test(normalized) || winUserHomePattern.test(normalized);
 }
-function isValidInheritedStatePath(path35, invocation, policy) {
-  if (typeof path35 !== "string" || path35.trim().length === 0) return false;
-  if (!isAbsolute(path35)) return false;
-  const parsed = parse3(path35);
-  if (path35 === "/" || path35 === parsed.root) return false;
-  const normalized = normalize(path35);
+function isValidInheritedStatePath(path43, invocation, policy) {
+  if (typeof path43 !== "string" || path43.trim().length === 0) return false;
+  if (!isAbsolute(path43)) return false;
+  const parsed = parse3(path43);
+  if (path43 === "/" || path43 === parsed.root) return false;
+  const normalized = normalize(path43);
   if (normalized === "/" || normalized === parsed.root) return false;
-  if (resolve(path35) === "/" || resolve(path35) === parsed.root) return false;
+  if (resolve(path43) === "/" || resolve(path43) === parsed.root) return false;
   return isDeclaredStateRoot(normalized, invocation, policy);
 }
 function inheritedStateWritablePaths(invocation, policy) {
@@ -38246,28 +38764,52 @@ function inheritedStateWritablePaths(invocation, policy) {
   }
   return [...declared];
 }
+var CREDENTIAL_PATHS = [
+  ".ssh",
+  ".aws",
+  ".azure",
+  ".gnupg",
+  ".kube",
+  ".docker",
+  ".netrc",
+  ".git-credentials",
+  ".config/gh",
+  ".config/gcloud"
+];
+function credentialReadDenials() {
+  const home = process.env.HOME ?? homedir7();
+  if (!isAbsolute(home) || resolve(home) === "/") return [];
+  return [...new Set(CREDENTIAL_PATHS.flatMap((entry) => {
+    const candidate = resolve(home, entry);
+    try {
+      return [candidate, realpathSync2(candidate)];
+    } catch {
+      return [candidate];
+    }
+  }))];
+}
 function buildProfile(policy, additionalWritable) {
   const writable = [...new Set([
     policy.worktreePath,
     policy.tempHome,
-    process.env.TMPDIR ?? "/private/tmp",
-    "/private/tmp",
+    ...policy.sharedTemp === false ? [] : [process.env.TMPDIR ?? "/private/tmp", "/private/tmp"],
     "/dev",
     ...policy.extraWritableRoots ?? [],
     ...additionalWritable
-  ].filter((path35) => typeof path35 === "string" && path35.length > 0).flatMap((path35) => {
+  ].filter((path43) => typeof path43 === "string" && path43.length > 0).flatMap((path43) => {
     try {
-      return [path35, realpathSync2(path35)];
+      return [path43, realpathSync2(path43)];
     } catch {
-      return [path35];
+      return [path43];
     }
   }))];
   const lines = [
     "(version 1)",
     "(allow default)",
     "(deny file-write*)",
-    ...writable.map((path35) => `(allow file-write* (subpath ${sbPath(path35)}))`),
-    '(allow file-write* (literal "/dev/null") (literal "/dev/tty"))'
+    ...writable.map((path43) => `(allow file-write* (subpath ${sbPath(path43)}))`),
+    '(allow file-write* (literal "/dev/null") (literal "/dev/tty"))',
+    ...credentialReadDenials().map((path43) => `(deny file-read* (subpath ${sbPath(path43)}))`)
   ];
   if (!policy.allowNetwork) lines.push("(deny network*)");
   return lines.join("\n");
@@ -38290,24 +38832,30 @@ function wrapInvocationWithSeatbelt(invocation, policy) {
     args: ["-p", profile, ...inner]
   };
 }
+function seatbeltArgv(policy, argv) {
+  const profile = buildProfile({
+    worktreePath: policy.worktreePath,
+    tempHome: policy.scratchDir,
+    allowNetwork: true,
+    sharedTemp: false
+  }, []);
+  return { command: "/usr/bin/sandbox-exec", args: ["-p", profile, ...argv] };
+}
 
 // src/runtime/run-start.ts
-import { randomUUID as randomUUID3 } from "node:crypto";
-import { constants as constants5 } from "node:fs";
+import { randomUUID as randomUUID4 } from "node:crypto";
+import { constants as constants8 } from "node:fs";
 import {
   access as access2,
-  lstat as lstat5,
-  open as open5,
-  realpath as realpath4,
-  rename as rename2,
-  rm as rm3
+  lstat as lstat8,
+  open as open8,
+  realpath as realpath5,
+  rename as rename3,
+  rm as rm4
 } from "node:fs/promises";
-import path10 from "node:path";
+import path13 from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
-var NO_FOLLOW3 = constants5.O_NOFOLLOW ?? 0;
-function errorCode5(error51) {
-  return error51.code;
-}
+var NO_FOLLOW4 = constants8.O_NOFOLLOW ?? 0;
 async function resolveWatchdogPath() {
   const candidates = [
     new URL("../../runtime/watchdog.mjs", import.meta.url),
@@ -38344,35 +38892,23 @@ async function parentDeathWatchdogInvocation(executable, args) {
 }
 function assertDirectoryIdentity2(target) {
   return Promise.all([
-    lstat5(target.publicDirectory),
-    realpath4(target.publicDirectory)
+    lstat8(target.publicDirectory),
+    realpath5(target.publicDirectory)
   ]).then(([metadata, canonical]) => {
     if (!metadata.isDirectory() || metadata.isSymbolicLink() || metadata.dev !== target.identity.dev || metadata.ino !== target.identity.ino || canonical !== target.canonicalDirectory) {
       throw new RuntimeError("run archive directory identity changed");
     }
   });
 }
-async function syncDirectory2(directory) {
-  let handle;
-  try {
-    handle = await open5(directory, constants5.O_RDONLY | NO_FOLLOW3);
-    await handle.sync();
-  } catch (error51) {
-    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode5(error51) ?? "");
-    if (!unsupportedOnWindows) throw error51;
-  } finally {
-    await handle?.close();
-  }
-}
 async function writeRunStart(target, record2, create) {
   await assertDirectoryIdentity2(target);
-  const destination = path10.join(target.canonicalDirectory, "run-start.json");
+  const destination = path13.join(target.canonicalDirectory, "run-start.json");
   const serialized = `${JSON.stringify(record2, null, 2)}
 `;
   if (create) {
-    const handle2 = await open5(
+    const handle2 = await open8(
       destination,
-      constants5.O_WRONLY | constants5.O_CREAT | constants5.O_EXCL | NO_FOLLOW3,
+      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | NO_FOLLOW4,
       384
     );
     try {
@@ -38381,20 +38917,20 @@ async function writeRunStart(target, record2, create) {
     } finally {
       await handle2.close();
     }
-    await syncDirectory2(target.canonicalDirectory);
+    await flushDirectory(target.canonicalDirectory);
     await assertDirectoryIdentity2(target);
     return;
   }
-  const temporaryPath = path10.join(
+  const temporaryPath = path13.join(
     target.canonicalDirectory,
-    `.run-start.${randomUUID3()}.tmp`
+    `.run-start.${randomUUID4()}.tmp`
   );
   let created = false;
   let handle;
   try {
-    handle = await open5(
+    handle = await open8(
       temporaryPath,
-      constants5.O_WRONLY | constants5.O_CREAT | constants5.O_EXCL | NO_FOLLOW3,
+      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | NO_FOLLOW4,
       384
     );
     created = true;
@@ -38403,19 +38939,19 @@ async function writeRunStart(target, record2, create) {
     await handle.close();
     handle = void 0;
     await assertDirectoryIdentity2(target);
-    await rename2(temporaryPath, destination);
+    await rename3(temporaryPath, destination);
     created = false;
-    await syncDirectory2(target.canonicalDirectory);
+    await flushDirectory(target.canonicalDirectory);
     await assertDirectoryIdentity2(target);
   } finally {
     await handle?.close();
-    if (created) await rm3(temporaryPath, { force: true });
+    if (created) await rm4(temporaryPath, { force: true });
   }
 }
 async function initializeRunStart(store, record2) {
   await store.writeLog("lifecycle", "attempt lock acquired\n");
-  const canonicalDirectory = await realpath4(store.runDirectory);
-  const metadata = await lstat5(store.runDirectory);
+  const canonicalDirectory = await realpath5(store.runDirectory);
+  const metadata = await lstat8(store.runDirectory);
   if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
     throw new RuntimeError("run archive directory is not a plain directory");
   }
@@ -38603,7 +39139,7 @@ var ProducerRuntime = class {
       ...request.extraWritableRoots && request.extraWritableRoots.length > 0 ? { extraWritableRoots: request.extraWritableRoots } : {},
       ...request.gitObjectAccess ? {
         gitObjectDirectory: request.gitObjectAccess.privateObjectsDir,
-        gitAlternateObjectDirectories: Array.isArray(request.gitObjectAccess.sharedObjectsDir) ? request.gitObjectAccess.sharedObjectsDir.join(path11.delimiter) : request.gitObjectAccess.sharedObjectsDir
+        gitAlternateObjectDirectories: Array.isArray(request.gitObjectAccess.sharedObjectsDir) ? request.gitObjectAccess.sharedObjectsDir.join(path14.delimiter) : request.gitObjectAccess.sharedObjectsDir
       } : {}
     };
     let invocation = adapter.buildInvocation(request.spec, invocationContext);
@@ -38632,7 +39168,7 @@ var ProducerRuntime = class {
         ...request.envAdditions ?? {},
         ...request.gitObjectAccess ? {
           GIT_OBJECT_DIRECTORY: request.gitObjectAccess.privateObjectsDir,
-          GIT_ALTERNATE_OBJECT_DIRECTORIES: Array.isArray(request.gitObjectAccess.sharedObjectsDir) ? request.gitObjectAccess.sharedObjectsDir.join(path11.delimiter) : request.gitObjectAccess.sharedObjectsDir
+          GIT_ALTERNATE_OBJECT_DIRECTORIES: Array.isArray(request.gitObjectAccess.sharedObjectsDir) ? request.gitObjectAccess.sharedObjectsDir.join(path14.delimiter) : request.gitObjectAccess.sharedObjectsDir
         } : {}
       },
       ...tempHome === null ? {} : { tempHome }
@@ -38685,13 +39221,21 @@ async function probeAll(ctx, producerRegistry = registry2, options) {
 
 // src/verify/dependency-link.ts
 import { execFile as execFile3 } from "node:child_process";
-import { access as access3, mkdir as mkdir3, mkdtemp, readFile as readFile2, rm as rm4, writeFile } from "node:fs/promises";
+import { access as access3, mkdir as mkdir5, mkdtemp, readFile as readFile3, rm as rm5, stat, writeFile } from "node:fs/promises";
 import { tmpdir as tmpdir5 } from "node:os";
-import path12 from "node:path";
+import path15 from "node:path";
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile3);
 var LOCKFILES = ["package-lock.json", "bun.lockb", "pnpm-lock.yaml", "yarn.lock"];
 var COPY_TIMEOUT_MS = 12e4;
+var MAX_LOCKFILE_BYTES = 64 * 1024 * 1024;
+var SYSTEM_CP = ["/bin/cp", "/usr/bin/cp"];
+async function systemCp() {
+  for (const candidate of SYSTEM_CP) {
+    if (await exists(candidate)) return candidate;
+  }
+  throw new Error("system cp is unavailable");
+}
 function cowClone(platform, source, target) {
   if (platform === "darwin") {
     return { args: ["-Rc", source, target], strategy: "clonefile" };
@@ -38714,30 +39258,32 @@ async function probeCowSupport(dependencies = {}) {
   if (platform !== "darwin" && platform !== "linux") {
     return { cowSupported: false, strategy: "unsupported" };
   }
-  const probeRoot = await mkdtemp(path12.join(tmpdir5(), "ca-cow-probe-"));
+  const probeRoot = await mkdtemp(path15.join(tmpdir5(), "ca-cow-probe-"));
   try {
-    const source = path12.join(probeRoot, "source");
-    const target = path12.join(probeRoot, "target");
+    const source = path15.join(probeRoot, "source");
+    const target = path15.join(probeRoot, "target");
     const clone2 = cowClone(platform, source, target);
     if (clone2 === null) return { cowSupported: false, strategy: "unsupported" };
-    await mkdir3(source);
-    await writeFile(path12.join(source, "sentinel"), "probe\n");
+    await mkdir5(source);
+    await writeFile(path15.join(source, "sentinel"), "probe\n");
     try {
-      await (dependencies.execFile ?? execFileAsync)("cp", clone2.args, { timeout: COPY_TIMEOUT_MS });
+      await (dependencies.execFile ?? execFileAsync)(await systemCp(), clone2.args, {
+        timeout: COPY_TIMEOUT_MS
+      });
       return { cowSupported: true, strategy: clone2.strategy };
     } catch {
       return { cowSupported: false, strategy: clone2.strategy };
     }
   } finally {
-    await rm4(probeRoot, { recursive: true, force: true });
+    await rm5(probeRoot, { recursive: true, force: true });
   }
 }
 async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies = {}) {
-  const primaryModules = path12.join(primaryRepo, "node_modules");
+  const primaryModules = path15.join(primaryRepo, "node_modules");
   if (!await exists(primaryModules)) return "none";
   const [primaryLockfiles, worktreeLockfiles] = await Promise.all([
-    Promise.all(LOCKFILES.map((lockfile) => exists(path12.join(primaryRepo, lockfile)))),
-    Promise.all(LOCKFILES.map((lockfile) => exists(path12.join(worktreePath, lockfile))))
+    Promise.all(LOCKFILES.map((lockfile) => exists(path15.join(primaryRepo, lockfile)))),
+    Promise.all(LOCKFILES.map((lockfile) => exists(path15.join(worktreePath, lockfile))))
   ]);
   if (!primaryLockfiles.some(Boolean)) return "none";
   if (primaryLockfiles.some((present, index) => present !== worktreeLockfiles[index])) {
@@ -38746,9 +39292,14 @@ async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies =
   try {
     const comparisons = await Promise.all(LOCKFILES.map(async (lockfile, index) => {
       if (!primaryLockfiles[index]) return true;
+      const sizes = await Promise.all([
+        stat(path15.join(primaryRepo, lockfile)),
+        stat(path15.join(worktreePath, lockfile))
+      ]);
+      if (sizes.some((entry) => entry.size > MAX_LOCKFILE_BYTES) || sizes[0].size !== sizes[1].size) return false;
       const [primaryLock, worktreeLock] = await Promise.all([
-        readFile2(path12.join(primaryRepo, lockfile)),
-        readFile2(path12.join(worktreePath, lockfile))
+        readFile3(path15.join(primaryRepo, lockfile)),
+        readFile3(path15.join(worktreePath, lockfile))
       ]);
       return primaryLock.equals(worktreeLock);
     }));
@@ -38756,23 +39307,25 @@ async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies =
   } catch {
     return "skipped-lockfile-mismatch";
   }
-  const targetModules = path12.join(worktreePath, "node_modules");
+  const targetModules = path15.join(worktreePath, "node_modules");
   const platform = dependencies.platform ?? process.platform;
   const clone2 = cowClone(platform, primaryModules, targetModules);
   if (clone2 === null) return "skipped-cow-unsupported";
   try {
-    await (dependencies.execFile ?? execFileAsync)("cp", clone2.args, { timeout: COPY_TIMEOUT_MS });
+    await (dependencies.execFile ?? execFileAsync)(await systemCp(), clone2.args, {
+      timeout: COPY_TIMEOUT_MS
+    });
     return "inherited";
   } catch {
-    await rm4(targetModules, { recursive: true, force: true });
+    await rm5(targetModules, { recursive: true, force: true });
     return "skipped-cow-unsupported";
   }
 }
 
 // src/mcp/live-bundle.ts
-import { createHash as createHash4 } from "node:crypto";
-import { readFile as readFile3 } from "node:fs/promises";
-import path13 from "node:path";
+import { createHash as createHash5 } from "node:crypto";
+import { readFile as readFile4 } from "node:fs/promises";
+import path16 from "node:path";
 var NOT_SELF_HOSTED = {
   selfHosted: false,
   runningVersion: RUNTIME_VERSION,
@@ -38788,7 +39341,7 @@ async function readOrNull(read, target) {
   }
 }
 function sha256(contents) {
-  return createHash4("sha256").update(contents).digest("hex");
+  return createHash5("sha256").update(contents).digest("hex");
 }
 function declaredName(manifest) {
   try {
@@ -38800,18 +39353,18 @@ function declaredName(manifest) {
   }
 }
 async function checkLiveBundle(checkoutPath, deps = {}) {
-  const read = deps.readFile ?? ((target) => readFile3(target));
+  const read = deps.readFile ?? ((target) => readFile4(target));
   const runningVersion = deps.runningVersion ?? RUNTIME_VERSION;
-  const manifest = await readOrNull(read, path13.join(checkoutPath, ".claude-plugin", "plugin.json"));
+  const manifest = await readOrNull(read, path16.join(checkoutPath, ".claude-plugin", "plugin.json"));
   if (manifest === null) return { ...NOT_SELF_HOSTED, runningVersion };
   const declared = declaredName(manifest);
   if (declared === null || declared.name !== "claude-architect") {
     return { ...NOT_SELF_HOSTED, runningVersion };
   }
   const repositoryVersion = typeof declared.version === "string" ? declared.version : null;
-  const repositoryBundle = await readOrNull(read, path13.join(checkoutPath, "runtime", "server.mjs"));
+  const repositoryBundle = await readOrNull(read, path16.join(checkoutPath, "runtime", "server.mjs"));
   const runningBundlePath = deps.runningBundlePath ?? process.argv[1];
-  const runningBundle = runningBundlePath === void 0 || path13.basename(runningBundlePath) !== "server.mjs" ? null : await readOrNull(read, runningBundlePath);
+  const runningBundle = runningBundlePath === void 0 || path16.basename(runningBundlePath) !== "server.mjs" ? null : await readOrNull(read, runningBundlePath);
   const bundleMatches = repositoryBundle === null || runningBundle === null ? null : sha256(repositoryBundle) === sha256(runningBundle);
   return {
     selfHosted: true,
@@ -38830,12 +39383,11 @@ function liveBundleDiagnostic(status) {
 // src/mcp/doctor.ts
 var POSIX_HOME_PATH = /\/(?:Users|home)\/[^/\\\s"']+(?:\/[^/\\\s"']+)*/g;
 var WINDOWS_HOME_PATH = /[A-Za-z]:\\Users\\[^/\\\s"']+(?:\\[^/\\\s"']+)*/gi;
-var CHECKOUT_LOCK_NAME = CHECKOUT_LOCK_NAME_PATTERN;
 var MAX_CHECKOUT_LOCK_BYTES = 4096;
 var MAX_AUTOPILOT_OWNER_BYTES = 1024;
 var MAX_AUTOPILOT_REGISTRATION_BYTES = 32768;
 var MAX_AUTOPILOT_SCAN_ENTRIES = 1024;
-var NO_FOLLOW4 = constants6.O_NOFOLLOW ?? 0;
+var NO_FOLLOW5 = constants9.O_NOFOLLOW ?? 0;
 var WORKFLOW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 var OID = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
 var AUTOPILOT_ISSUE_ORDER = [
@@ -38844,8 +39396,6 @@ var AUTOPILOT_ISSUE_ORDER = [
   "autopilot-worktree-orphaned",
   "autopilot-branch-mismatch",
   "autopilot-promotion-incomplete",
-  "autopilot-remote-recovery-required",
-  "autopilot-pr-recovery-required",
   "autopilot-state-malformed",
   "autopilot-scan-truncated"
 ];
@@ -38872,16 +39422,18 @@ function nodeIsSupported(version2) {
 function gitVersion(stdout) {
   return /^git version ([^\s]+)(?:\s|$)/u.exec(stdout.trim())?.[1] ?? null;
 }
-function errorCode6(error51) {
-  return error51.code;
+function gitMeetsFloor(version2) {
+  const [major, minor] = version2.split(".").map((part) => Number.parseInt(part, 10));
+  if (!Number.isInteger(major) || !Number.isInteger(minor)) return false;
+  return major > 2 || major === 2 && minor >= 40;
 }
 function defaultIsProcessAlive2(pid) {
   try {
-    nodeProcess5.kill(pid, 0);
+    nodeProcess6.kill(pid, 0);
     return true;
   } catch (error51) {
-    if (errorCode6(error51) === "EPERM") return true;
-    if (errorCode6(error51) === "ESRCH") return false;
+    if (errorCode(error51) === "EPERM") return true;
+    if (errorCode(error51) === "ESRCH") return false;
     throw error51;
   }
 }
@@ -38917,16 +39469,16 @@ async function readCheckoutLock(handle) {
 }
 async function checkoutLockIssues(stateDir, ps, isProcessAlive2) {
   if (stateDir === void 0) return [];
-  const locksRoot = path14.join(stateDir, "locks");
+  const locksRoot = path17.join(stateDir, "locks");
   let entries;
   try {
-    entries = await readdir4(locksRoot, { withFileTypes: true });
+    entries = await readdir5(locksRoot, { withFileTypes: true });
   } catch (error51) {
-    return errorCode6(error51) === "ENOENT" ? [] : ["checkout-lock-scan-failed"];
+    return errorCode(error51) === "ENOENT" ? [] : ["checkout-lock-scan-failed"];
   }
   const issues = /* @__PURE__ */ new Set();
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const match = CHECKOUT_LOCK_NAME.exec(entry.name);
+    const match = CHECKOUT_LOCK_NAME_PATTERN.exec(entry.name);
     if (match === null || match[1] === CLEANUP_JOURNAL_LOCK_KEY) continue;
     if (!entry.isFile() || entry.isSymbolicLink()) {
       issues.add("checkout-lock-malformed");
@@ -38934,7 +39486,7 @@ async function checkoutLockIssues(stateDir, ps, isProcessAlive2) {
     }
     let handle;
     try {
-      handle = await open6(path14.join(locksRoot, entry.name), constants6.O_RDONLY | NO_FOLLOW4);
+      handle = await open9(path17.join(locksRoot, entry.name), constants9.O_RDONLY | NO_FOLLOW5);
       const metadataBeforeRead = await handle.stat();
       if (!metadataBeforeRead.isFile() || metadataBeforeRead.size > MAX_CHECKOUT_LOCK_BYTES) {
         issues.add("checkout-lock-malformed");
@@ -38958,7 +39510,7 @@ async function checkoutLockIssues(stateDir, ps, isProcessAlive2) {
       const liveToken = owner.processToken === null ? null : await ps.getProcessStartToken(owner.pid);
       issues.add(owner.processToken !== null && liveToken !== null && liveToken !== owner.processToken ? "checkout-lock-leaked" : "checkout-lock-held");
     } catch (error51) {
-      if (errorCode6(error51) !== "ENOENT") issues.add("checkout-lock-malformed");
+      if (errorCode(error51) !== "ENOENT") issues.add("checkout-lock-malformed");
     } finally {
       try {
         await handle?.close();
@@ -38978,9 +39530,9 @@ async function readBoundedRegularFile(filename, maxBytes) {
   let handle;
   let outcome = { status: "malformed" };
   try {
-    handle = await open6(filename, constants6.O_RDONLY | NO_FOLLOW4);
+    handle = await open9(filename, constants9.O_RDONLY | NO_FOLLOW5);
     const before = await handle.stat();
-    const named = await lstat6(filename);
+    const named = await lstat9(filename);
     if (!before.isFile() || before.nlink !== 1 || before.size > maxBytes || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== before.dev || named.ino !== before.ino || named.size !== before.size) return outcome;
     const bytes = Buffer.alloc(before.size);
     let offset = 0;
@@ -38990,11 +39542,11 @@ async function readBoundedRegularFile(filename, maxBytes) {
       offset += bytesRead;
     }
     const after = await handle.stat();
-    const settledNamed = await lstat6(filename);
+    const settledNamed = await lstat9(filename);
     if (offset !== before.size || after.dev !== before.dev || after.ino !== before.ino || after.nlink !== 1 || after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs || settledNamed.dev !== before.dev || settledNamed.ino !== before.ino || settledNamed.nlink !== 1 || settledNamed.size !== before.size) return outcome;
     outcome = { status: "ok", text: bytes.toString("utf8") };
   } catch (error51) {
-    if (errorCode6(error51) === "ENOENT") outcome = { status: "missing" };
+    if (errorCode(error51) === "ENOENT") outcome = { status: "missing" };
   } finally {
     try {
       await handle?.close();
@@ -39030,7 +39582,7 @@ function parseRegistration(text) {
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const record2 = value;
-  if (record2.ownershipVersion !== "1" || typeof record2.workflowId !== "string" || !WORKFLOW_ID.test(record2.workflowId) || typeof record2.checkoutPath !== "string" || !path14.isAbsolute(record2.checkoutPath) || typeof record2.gitCommonDir !== "string" || !path14.isAbsolute(record2.gitCommonDir) || typeof record2.repositoryIdentity !== "string" || typeof record2.worktreePath !== "string" || !path14.isAbsolute(record2.worktreePath) || typeof record2.worktreeGitDir !== "string" || !path14.isAbsolute(record2.worktreeGitDir) || typeof record2.branch !== "string" || record2.branchRef !== `refs/heads/${record2.branch}` || record2.baseRef !== `refs/claude-architect/autopilot/${record2.workflowId}/base` || typeof record2.baseBranch !== "string" || typeof record2.baseCommitOid !== "string" || !OID.test(record2.baseCommitOid) || record2.remote !== "origin" || typeof record2.remoteUrl !== "string" || typeof record2.ownerRepo !== "string" || !isBootstrapOwner(record2.bootstrapOwner, record2.workflowId)) return null;
+  if (record2.ownershipVersion !== "1" || typeof record2.workflowId !== "string" || !WORKFLOW_ID.test(record2.workflowId) || typeof record2.checkoutPath !== "string" || !path17.isAbsolute(record2.checkoutPath) || typeof record2.gitCommonDir !== "string" || !path17.isAbsolute(record2.gitCommonDir) || typeof record2.repositoryIdentity !== "string" || typeof record2.worktreePath !== "string" || !path17.isAbsolute(record2.worktreePath) || typeof record2.worktreeGitDir !== "string" || !path17.isAbsolute(record2.worktreeGitDir) || typeof record2.branch !== "string" || record2.branchRef !== `refs/heads/${record2.branch}` || record2.baseRef !== `refs/claude-architect/autopilot/${record2.workflowId}/base` || typeof record2.baseBranch !== "string" || typeof record2.baseCommitOid !== "string" || !OID.test(record2.baseCommitOid) || record2.remote !== "origin" || typeof record2.remoteUrl !== "string" || typeof record2.ownerRepo !== "string" || !isBootstrapOwner(record2.bootstrapOwner, record2.workflowId)) return null;
   return record2;
 }
 async function ownerStatus(owner, ps, isProcessAlive2) {
@@ -39050,27 +39602,27 @@ function sameOwner(lease, bootstrap) {
   return lease.workflowId === bootstrap.workflowId && lease.pid === bootstrap.pid && lease.processToken === bootstrap.processToken;
 }
 function registrationFilename(workflowId) {
-  return `${createHash5("sha256").update(workflowId).digest("hex")}.json`;
+  return `${createHash6("sha256").update(workflowId).digest("hex")}.json`;
 }
 async function safeDirectoryEntries(directory, issues) {
   try {
-    const metadata = await lstat6(directory);
+    const metadata = await lstat9(directory);
     if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
       issues.add("autopilot-state-malformed");
       return [];
     }
-    const entries = await readdir4(directory, { withFileTypes: true });
+    const entries = await readdir5(directory, { withFileTypes: true });
     if (entries.length > MAX_AUTOPILOT_SCAN_ENTRIES) {
       issues.add("autopilot-state-malformed");
     }
     return entries.sort((left, right) => left.name.localeCompare(right.name)).slice(0, MAX_AUTOPILOT_SCAN_ENTRIES);
   } catch (error51) {
-    if (errorCode6(error51) !== "ENOENT") issues.add("autopilot-state-malformed");
+    if (errorCode(error51) !== "ENOENT") issues.add("autopilot-state-malformed");
     return [];
   }
 }
 async function scanRegistrations(stateRoot2, issues) {
-  const root = path14.join(stateRoot2, "autopilot-branches");
+  const root = path17.join(stateRoot2, "autopilot-branches");
   const entries = await safeDirectoryEntries(root, issues);
   const registrations = /* @__PURE__ */ new Map();
   const filenames = /* @__PURE__ */ new Set();
@@ -39081,7 +39633,7 @@ async function scanRegistrations(stateRoot2, issues) {
       continue;
     }
     const read = await readBoundedRegularFile(
-      path14.join(root, entry.name),
+      path17.join(root, entry.name),
       MAX_AUTOPILOT_REGISTRATION_BYTES
     );
     if (read.status !== "ok") {
@@ -39098,7 +39650,7 @@ async function scanRegistrations(stateRoot2, issues) {
   return { registrations, filenames };
 }
 function branchMatchesState(registration, state) {
-  return registration.workflowId === state.workflowId && registration.repositoryIdentity === state.repositoryIdentity && registration.baseCommitOid === state.baseCommitOid && registration.branchRef === state.workflowRef && registration.worktreePath === state.worktreePath && registration.branch === state.shipping.branch;
+  return registration.workflowId === state.workflowId && registration.repositoryIdentity === state.repositoryIdentity && registration.baseCommitOid === state.baseCommitOid && registration.branchRef === state.workflowRef && registration.worktreePath === state.worktreePath && registration.branch === state.branch;
 }
 function expectedHead(state, registration) {
   if (state === null) return null;
@@ -39108,14 +39660,14 @@ function expectedHead(state, registration) {
 async function observedBranchMatches(registration, state, git2) {
   try {
     const [checkoutMetadata, worktreeMetadata] = await Promise.all([
-      lstat6(registration.checkoutPath),
-      lstat6(registration.worktreePath)
+      lstat9(registration.checkoutPath),
+      lstat9(registration.worktreePath)
     ]);
     if (!checkoutMetadata.isDirectory() || checkoutMetadata.isSymbolicLink() || !worktreeMetadata.isDirectory() || worktreeMetadata.isSymbolicLink()) return false;
     const [checkout, worktree, common] = await Promise.all([
-      realpath5(registration.checkoutPath),
-      realpath5(registration.worktreePath),
-      realpath5(registration.gitCommonDir)
+      realpath6(registration.checkoutPath),
+      realpath6(registration.worktreePath),
+      realpath6(registration.gitCommonDir)
     ]);
     if (checkout !== registration.checkoutPath || worktree !== registration.worktreePath || common !== registration.gitCommonDir) return false;
     const [observedCommon, worktrees, symbolic, head, branchRef, baseRef] = await Promise.all([
@@ -39127,7 +39679,7 @@ async function observedBranchMatches(registration, state, git2) {
       git2(registration.checkoutPath, ["rev-parse", "--verify", registration.baseRef])
     ]);
     if ([observedCommon, worktrees, symbolic, head, branchRef, baseRef].some((result) => result.exitCode !== 0 || result.truncated?.stdout === true || result.truncated?.stderr === true)) return false;
-    if (await realpath5(gitPathOutput(
+    if (await realpath6(gitPathOutput(
       observedCommon.stdout,
       "workflow common directory"
     )) !== registration.gitCommonDir || symbolic.stdout.trim() !== registration.branch || head.stdout.trim() !== branchRef.stdout.trim() || baseRef.stdout.trim() !== registration.baseCommitOid) return false;
@@ -39145,11 +39697,11 @@ async function observedBranchMatches(registration, state, git2) {
 }
 async function autopilotIssues(stateDir, ps, isProcessAlive2, git2) {
   if (stateDir === void 0) return [];
-  const stateRoot2 = path14.resolve(stateDir);
+  const stateRoot2 = path17.resolve(stateDir);
   const issues = /* @__PURE__ */ new Set();
   let probes = 0;
   const registrationScan = await scanRegistrations(stateRoot2, issues);
-  const workflowsRoot = path14.join(stateRoot2, "workflows");
+  const workflowsRoot = path17.join(stateRoot2, "workflows");
   const workflowEntries = await safeDirectoryEntries(workflowsRoot, issues);
   const states = /* @__PURE__ */ new Map();
   for (const entry of workflowEntries) {
@@ -39202,19 +39754,13 @@ async function autopilotIssues(stateDir, ps, isProcessAlive2, git2) {
       );
       if (bootstrapStatus !== leaseStatus) issues.add("autopilot-state-malformed");
     }
-    if (leaseStatus === "dead" && state.phase === "pushing") {
-      issues.add("autopilot-remote-recovery-required");
-    }
-    if (leaseStatus === "dead" && (state.phase === "creating-draft-pr" || state.phase === "marking-ready")) {
-      issues.add("autopilot-pr-recovery-required");
-    }
     let worktreeExists = false;
     try {
-      const metadata = await lstat6(state.worktreePath);
+      const metadata = await lstat9(state.worktreePath);
       worktreeExists = metadata.isDirectory() && !metadata.isSymbolicLink();
       if (!worktreeExists) issues.add("autopilot-state-malformed");
     } catch (error51) {
-      if (errorCode6(error51) !== "ENOENT") issues.add("autopilot-state-malformed");
+      if (errorCode(error51) !== "ENOENT") issues.add("autopilot-state-malformed");
     }
     if (worktreeExists && registrationMissing) {
       issues.add("autopilot-worktree-orphaned");
@@ -39286,15 +39832,16 @@ async function doctor(deps = {}) {
   try {
     const result = await gitRunner(process.cwd(), ["--version"]);
     const version2 = result.exitCode === 0 && result.truncated?.stdout !== true ? gitVersion(result.stdout) : null;
-    let path35 = null;
+    let path43 = null;
     try {
-      path35 = (await ps.resolveExecutable({ name: "git" })).command;
+      path43 = (await ps.resolveExecutable({ name: "git" })).command;
     } catch {
     }
-    git2 = { version: version2, ok: version2 !== null, path: path35 };
+    git2 = { version: version2, ok: version2 !== null, path: path43 };
   } catch {
   }
   if (!git2.ok) issues.push("git-unavailable");
+  else if (!gitMeetsFloor(git2.version)) issues.push("git-too-old");
   let dependencyClone;
   try {
     dependencyClone = await (deps.probeCowSupport ?? probeCowSupport)();
@@ -39439,10 +39986,22 @@ function gitChangedFiles(checkoutPath, deps = {}) {
 }
 
 // src/autopilot/autopilot-controller.ts
-import { randomUUID as randomUUID10 } from "node:crypto";
+import { randomUUID as randomUUID9 } from "node:crypto";
+
+// src/mcp/decision-authority.ts
+var DECISION_AUTHORITY_ENV = "CLAUDE_ARCHITECT_DECISION_AUTHORITY";
+function decisionAuthority(env = process.env, warn = (message) => console.error(message)) {
+  const raw = env[DECISION_AUTHORITY_ENV];
+  if (raw === void 0 || raw === "") return "autonomous";
+  if (raw === "autonomous" || raw === "human") return raw;
+  warn(
+    `${DECISION_AUTHORITY_ENV}="${raw}" is not a recognized decision authority; requiring human confirmation. Valid values: "autonomous", "human".`
+  );
+  return "human";
+}
 
 // src/protocol/spec-validator.ts
-import path15 from "node:path";
+import path18 from "node:path";
 var schemas = loadSchemas();
 function allowlistCovers(top, glob) {
   return top.some((pattern) => {
@@ -39453,7 +40012,7 @@ function allowlistCovers(top, glob) {
   });
 }
 function isSafeRepositoryGlob(glob) {
-  return glob.length > 0 && !path15.posix.isAbsolute(glob) && !path15.win32.isAbsolute(glob) && !glob.split(/[\\/]/).includes("..");
+  return glob.length > 0 && !path18.posix.isAbsolute(glob) && !path18.win32.isAbsolute(glob) && !glob.split(/[\\/]/).includes("..");
 }
 function sliceDependencyError(sliceIndex, dependencyIndex, message) {
   return {
@@ -39535,8 +40094,8 @@ function validateSpec(input) {
     );
     if (topLevelDeletionError !== null) return topLevelDeletionError;
     for (const [index, command] of spec.verification.entries()) {
-      const normalizedCwd = path15.posix.normalize(command.cwd);
-      if (path15.isAbsolute(command.cwd) || normalizedCwd === ".." || normalizedCwd.startsWith("../")) {
+      const normalizedCwd = path18.posix.normalize(command.cwd);
+      if (path18.isAbsolute(command.cwd) || normalizedCwd === ".." || normalizedCwd.startsWith("../")) {
         return {
           ok: false,
           errors: [{
@@ -39564,8 +40123,8 @@ function validateSpec(input) {
         }
       }
       for (const [commandIndex, command] of slice.verification.entries()) {
-        const normalizedCwd = path15.posix.normalize(command.cwd);
-        if (path15.isAbsolute(command.cwd) || normalizedCwd === ".." || normalizedCwd.startsWith("../")) {
+        const normalizedCwd = path18.posix.normalize(command.cwd);
+        if (path18.isAbsolute(command.cwd) || normalizedCwd === ".." || normalizedCwd.startsWith("../")) {
           return {
             ok: false,
             errors: [{
@@ -39634,6 +40193,15 @@ function taskIdForDelegationPath(input, instancePath) {
   return idLength >= 1 && idLength <= 128 ? task.id : void 0;
 }
 function validateAutopilotSpec(input) {
+  if (isRecord4(input) && input.specVersion === "1") {
+    return {
+      ok: false,
+      errors: [{
+        path: "#/specVersion",
+        message: 'autopilot spec v1 is unsupported: Autopilot now ends at a final-reviewed local branch; remove `shipping` and set specVersion to "2"'
+      }]
+    };
+  }
   const schemaValid = schemas.autopilotSpec(input);
   const errors = (schemas.autopilotSpec.errors ?? []).filter((error51) => taskIdForDelegationPath(input, error51.instancePath) === void 0).map((error51) => ({
     path: error51.instancePath || error51.schemaPath,
@@ -39669,10 +40237,10 @@ function validateAutopilotSpec(input) {
 }
 
 // src/autopilot/autopilot-eligibility.ts
-import { createHash as createHash8 } from "node:crypto";
+import { createHash as createHash9 } from "node:crypto";
 
 // src/git/changed-path-manifest.ts
-import { createHash as createHash6 } from "node:crypto";
+import { createHash as createHash7 } from "node:crypto";
 function splitNul(value) {
   const fields = value.split("\0");
   if (fields.at(-1) === "") fields.pop();
@@ -39727,9 +40295,9 @@ function sortChangedPaths(changedPaths) {
 function deriveChangedPaths(inputs) {
   const rawEntries = new Map(inputs.rawDiff.map((entry) => [entry.path, entry]));
   const treeEntries = parseTree(inputs.treeOutput);
-  return sortChangedPaths(parseNameStatus(inputs.nameStatusOutput).map(({ path: path35, status }) => {
-    const treeEntry = treeEntries.get(path35);
-    const rawEntry = rawEntries.get(path35);
+  return sortChangedPaths(parseNameStatus(inputs.nameStatusOutput).map(({ path: path43, status }) => {
+    const treeEntry = treeEntries.get(path43);
+    const rawEntry = rawEntries.get(path43);
     if (treeEntry === void 0 && status !== "D") {
       throw new RuntimeError("candidate tree is missing a changed path");
     }
@@ -39737,7 +40305,7 @@ function deriveChangedPaths(inputs) {
       throw new RuntimeError("git diff-tree outputs disagree");
     }
     return {
-      path: path35,
+      path: path43,
       changeType: changeType(status),
       mode: treeEntry?.mode ?? rawEntry.oldMode,
       contentHash: treeEntry?.oid ?? null
@@ -39764,8 +40332,8 @@ function validateChangedPaths(changedPaths) {
 }
 function manifestHashOf(changedPaths) {
   validateChangedPaths(changedPaths);
-  const canonical = changedPaths.map(({ path: path35, changeType: changeType2, mode, contentHash }) => ({ path: path35, changeType: changeType2, mode, contentHash }));
-  return createHash6("sha256").update(JSON.stringify(canonical)).digest("hex");
+  const canonical = changedPaths.map(({ path: path43, changeType: changeType2, mode, contentHash }) => ({ path: path43, changeType: changeType2, mode, contentHash }));
+  return createHash7("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 function inspectChangedPathManifest(inputs) {
   const changedPaths = deriveChangedPaths(inputs);
@@ -39784,7 +40352,263 @@ function computeChangedPathManifest(inputs) {
 }
 
 // src/runtime/review-snapshot.ts
-import { createHash as createHash7 } from "node:crypto";
+import { createHash as createHash8 } from "node:crypto";
+
+// src/git/candidate-tree.ts
+import { lstat as lstat10, mkdtemp as mkdtemp2, rm as rm6 } from "node:fs/promises";
+import { tmpdir as tmpdir6 } from "node:os";
+import path19 from "node:path";
+
+// src/util/glob.ts
+function escapeRegex2(character) {
+  return /[\\^$.*+?()[\]{}|]/.test(character) ? `\\${character}` : character;
+}
+function globMatches(pattern, candidate, caseInsensitive = false) {
+  let expression = "^";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === void 0) break;
+    if (character !== "*") {
+      expression += escapeRegex2(character);
+      continue;
+    }
+    if (pattern[index + 1] !== "*") {
+      expression += "[^/]*";
+      continue;
+    }
+    index += 1;
+    if (pattern[index + 1] === "/") {
+      expression += "(?:.*/)?";
+      index += 1;
+    } else {
+      expression += ".*";
+    }
+  }
+  return new RegExp(`${expression}$`, caseInsensitive ? "i" : void 0).test(candidate);
+}
+
+// src/git/checked-git.ts
+var MAX_DIAGNOSTIC_LENGTH2 = 2e3;
+function gitFailure(action, result) {
+  const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, MAX_DIAGNOSTIC_LENGTH2);
+  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
+}
+function gitSucceeded(result) {
+  return result.exitCode === 0 && result.truncated?.stdout !== true && result.truncated?.stderr !== true;
+}
+async function gitChecked(cwd, args, options) {
+  const result = await git(cwd, args, options);
+  const command = gitSubcommand(args) ?? "command";
+  if (result.exitCode !== 0) throw gitFailure(`git ${command}`, result);
+  if (!gitSucceeded(result)) {
+    throw new RuntimeError(`git ${command} output exceeded the runtime bound`, {
+      command,
+      truncated: result.truncated
+    });
+  }
+  return result.stdout;
+}
+function reviewDiffArgs(base, head, extra = []) {
+  return [
+    `--attr-source=${base}`,
+    "diff",
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    ...extra,
+    base,
+    head,
+    "--"
+  ];
+}
+async function reviewDiff(cwd, base, head, options) {
+  return await gitChecked(cwd, reviewDiffArgs(base, head), options);
+}
+
+// src/git/candidate-tree.ts
+var MAX_REJECT_PATHS = 25;
+var BINARY_PATCH_PAYLOAD_MARKER = "[[BINARY_PATCH_PAYLOAD_OMITTED]]";
+async function checkedGit(cwd, args, indexFile) {
+  return await gitChecked(cwd, args, indexFile === void 0 ? void 0 : { indexFile });
+}
+function parsePorcelainPaths(output, kind) {
+  const fields = splitNul(output);
+  const paths = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    const entry = fields[index];
+    const status = entry.slice(0, 2);
+    const entryPath = entry.slice(3);
+    if (kind === "ignored" !== (status === "!!")) {
+      if (status.includes("R")) index += 1;
+      continue;
+    }
+    paths.push(entryPath);
+    if (status.includes("R")) {
+      const sourcePath = fields[index + 1];
+      if (sourcePath !== void 0) paths.push(sourcePath);
+      index += 1;
+    }
+  }
+  return [...new Set(paths)];
+}
+async function inventoryWorktree(worktreePath) {
+  const changed = await checkedGit(worktreePath, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all"
+  ]);
+  const ignored = await checkedGit(worktreePath, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--ignored",
+    "--untracked-files=all"
+  ]);
+  return {
+    changedPaths: parsePorcelainPaths(changed, "changed"),
+    ignoredPaths: parsePorcelainPaths(ignored, "ignored")
+  };
+}
+function isAllowed(pathname, writeAllowlist, forbiddenScope, opaqueDirectory = false) {
+  const scopePaths = opaqueDirectory ? [pathname, `${pathname}/`] : [pathname];
+  return writeAllowlist.some((pattern) => scopePaths.some((candidate) => globMatches(pattern, candidate))) && !forbiddenScope.some((pattern) => scopePaths.some((candidate) => globMatches(pattern, candidate, true)));
+}
+async function advisoryLstatScan(worktreePath, changedPaths) {
+  const symlinkResults = await Promise.all(changedPaths.map(async (changedPath) => {
+    try {
+      return (await lstat10(path19.resolve(worktreePath, changedPath))).isSymbolicLink();
+    } catch (error51) {
+      if (isMissing(error51)) return false;
+      throw error51;
+    }
+  }));
+  return symlinkResults.some(Boolean);
+}
+function sanitizeReviewPatch(patch) {
+  const sanitizedLines = [];
+  let omittingBinaryPayload = false;
+  for (const line of patch.split(/\r?\n/)) {
+    if (line === "GIT binary patch") {
+      sanitizedLines.push(line, BINARY_PATCH_PAYLOAD_MARKER);
+      omittingBinaryPayload = true;
+      continue;
+    }
+    if (omittingBinaryPayload) {
+      if (!line.startsWith("diff --git ")) continue;
+      omittingBinaryPayload = false;
+    }
+    sanitizedLines.push(line);
+  }
+  return redact(sanitizedLines.join("\n"));
+}
+async function candidateReviewPatch(cwd, baseCommitOid, candidate, options) {
+  return sanitizeReviewPatch(await gitChecked(
+    cwd,
+    reviewDiffArgs(baseCommitOid, candidate, ["--binary", "--full-index"]),
+    options
+  ));
+}
+async function freezeCandidate(args) {
+  const inventory = await inventoryWorktree(args.worktreePath);
+  const outOfScope = inventory.changedPaths.filter((changedPath) => !isAllowed(changedPath, args.writeAllowlist, args.forbiddenScope));
+  if (outOfScope.length > 0) {
+    return { ok: false, reason: "out-of-scope-write", paths: outOfScope.slice(0, MAX_REJECT_PATHS) };
+  }
+  if (await advisoryLstatScan(args.worktreePath, inventory.changedPaths)) {
+    return { ok: false, reason: "modified-symlink" };
+  }
+  const indexDirectory = await mkdtemp2(path19.join(tmpdir6(), "claude-architect-index-"));
+  const indexFile = path19.join(indexDirectory, "index");
+  try {
+    await checkedGit(args.worktreePath, ["read-tree", args.baseCommitOid], indexFile);
+    if (inventory.changedPaths.length > 0) {
+      const literalPathspecs = inventory.changedPaths.map((changedPath) => `:(literal)${changedPath}`);
+      await checkedGit(args.worktreePath, ["add", "--all", "--", ...literalPathspecs], indexFile);
+    }
+    const candidateTreeOid = (await checkedGit(args.worktreePath, ["write-tree"], indexFile)).trim();
+    const baseTreeOid = (await checkedGit(
+      args.worktreePath,
+      ["rev-parse", `${args.baseCommitOid}^{tree}`]
+    )).trim();
+    if (candidateTreeOid === baseTreeOid) return { ok: false, reason: "empty-candidate" };
+    const rawDiff = parseRawDiff(await checkedGit(args.worktreePath, [
+      "diff-tree",
+      "-r",
+      "--no-commit-id",
+      "--no-renames",
+      "--raw",
+      "-z",
+      args.baseCommitOid,
+      candidateTreeOid
+    ]));
+    const frozenOutOfScope = rawDiff.filter((entry) => !isAllowed(
+      entry.path,
+      args.writeAllowlist,
+      args.forbiddenScope,
+      entry.oldMode === "160000" || entry.newMode === "160000"
+    )).map((entry) => entry.path);
+    if (frozenOutOfScope.length > 0) {
+      return {
+        ok: false,
+        reason: "out-of-scope-write",
+        paths: frozenOutOfScope.slice(0, MAX_REJECT_PATHS)
+      };
+    }
+    if (rawDiff.some((entry) => [entry.oldMode, entry.newMode].some((mode) => mode === "120000" || mode === "160000"))) {
+      return { ok: false, reason: "modified-symlink" };
+    }
+    const nameStatusOutput = await checkedGit(args.repoRoot, [
+      "diff-tree",
+      "-r",
+      "--no-commit-id",
+      "--no-renames",
+      "--name-status",
+      "-z",
+      args.baseCommitOid,
+      candidateTreeOid
+    ]);
+    const treeOutput = await checkedGit(
+      args.repoRoot,
+      ["ls-tree", "-r", "-z", candidateTreeOid]
+    );
+    const { changedPaths, manifestHash } = computeChangedPathManifest({
+      rawDiff,
+      nameStatusOutput,
+      treeOutput
+    });
+    const patch = await candidateReviewPatch(args.repoRoot, args.baseCommitOid, candidateTreeOid);
+    const anchorRef = `refs/claude-architect/candidates/${args.runId}`;
+    const candidateCommitOid = (await checkedGit(args.repoRoot, [
+      "commit-tree",
+      candidateTreeOid,
+      "-p",
+      args.baseCommitOid,
+      "-m",
+      `candidate ${args.runId}`
+    ])).trim();
+    await checkedGit(args.repoRoot, ["update-ref", anchorRef, candidateCommitOid]);
+    return {
+      ok: true,
+      artifact: {
+        baseCommitOid: args.baseCommitOid,
+        candidateTreeOid,
+        candidateCommitOid,
+        anchorRef,
+        manifestHash,
+        changedPaths,
+        patch
+      },
+      evidence: {
+        ignoredPaths: inventory.ignoredPaths.map((ignoredPath) => redact(ignoredPath)).sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
+      }
+    };
+  } finally {
+    await rm6(indexDirectory, { recursive: true, force: true });
+  }
+}
+
+// src/runtime/review-snapshot.ts
 var SHA256 = /^[0-9a-f]{64}$/u;
 var GIT_OID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 var REDACTION_MARKER = /\[(?:a|b|e|g|j|k|l|s)\]/u;
@@ -39941,26 +40765,22 @@ async function createReviewSnapshot(run) {
   if (!anchorMissing && (anchor.exitCode !== 0 || anchor.stdout.trim() !== candidate.candidateCommitOid || anchor.truncated?.stdout === true || anchor.truncated?.stderr === true) || tree.exitCode !== 0 || tree.stdout.trim() !== candidate.candidateTreeOid || tree.truncated?.stdout === true || tree.truncated?.stderr === true) {
     throw reviewError("candidate anchor no longer matches the archive", "candidate-anchor-mismatch");
   }
-  const patch = await git2(run.repoRoot, [
-    "diff",
-    "--no-ext-diff",
-    "--no-textconv",
-    "--binary",
-    "--full-index",
+  const patchResult = await git2(run.repoRoot, reviewDiffArgs(
     candidate.baseCommitOid,
     candidate.candidateTreeOid,
-    "--"
-  ]);
-  if (patch.exitCode !== 0 || patch.truncated?.stdout === true || patch.truncated?.stderr === true) {
+    ["--binary", "--full-index"]
+  ));
+  if (!gitSucceeded(patchResult)) {
     throw reviewError("failed to regenerate candidate patch", "candidate-review-failed");
   }
+  const patch = sanitizeReviewPatch(patchResult.stdout);
   const snapshot = {
     runId: run.runId,
     baseCommitOid: candidate.baseCommitOid,
     candidateCommitOid: candidate.candidateCommitOid,
     candidateTreeOid: candidate.candidateTreeOid,
     manifestHash: candidate.manifestHash,
-    patch: patch.stdout,
+    patch,
     changedPaths: candidate.changedPaths.map((change) => ({ ...change })),
     evidence: boundEvidence(result.evidence),
     executedVerification: result.executedVerification.map((outcome) => ({
@@ -39975,13 +40795,12 @@ async function createReviewSnapshot(run) {
 function reviewSnapshotHash(snapshot) {
   const validated = validateReviewSnapshot(snapshot, snapshot.runId);
   assertRedactionInvariants(validated);
-  const hash2 = createHash7("sha256").update(canonicalJsonValue(validated)).digest("hex");
+  const hash2 = createHash8("sha256").update(canonicalJsonValue(validated)).digest("hex");
   if (!SHA256.test(hash2)) throw new RuntimeError("review snapshot hash is invalid");
   return hash2;
 }
 
 // src/autopilot/autopilot-eligibility.ts
-var SHA2562 = /^[0-9a-f]{64}$/u;
 function canonicalJsonValue2(value) {
   if (value === null) return "null";
   if (typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
@@ -40000,7 +40819,7 @@ function canonicalJsonValue2(value) {
 }
 function canonicalArtifactHash(value) {
   const jsonValue = JSON.parse(JSON.stringify(value));
-  return createHash8("sha256").update(canonicalJsonValue2(jsonValue)).digest("hex");
+  return createHash9("sha256").update(canonicalJsonValue2(jsonValue)).digest("hex");
 }
 function pipelineResultHash(result) {
   return canonicalArtifactHash(result);
@@ -40026,50 +40845,22 @@ function autopilotDecisionEligibilityProjection(record2) {
 function addReason(reasons, reason) {
   if (!reasons.includes(reason)) reasons.push(reason);
 }
-function hashesAgree(actual, expected) {
-  return SHA2562.test(actual) && actual === expected;
-}
-function eligibilityInputFromArtifacts(args) {
-  const { pipelineResult, reviewSnapshot, advisor } = args;
+function evaluateAutopilotEligibility(evidence) {
+  const { pipelineResult, reviewSnapshot, advisor } = evidence;
+  const reasons = [];
   const candidate = pipelineResult.attempt.candidate;
   const lastRound = pipelineResult.rounds.at(-1);
-  return {
-    runId: pipelineResult.runId,
-    status: pipelineResult.status,
-    gate: structuredClone(pipelineResult.gate),
-    attemptStatus: pipelineResult.attempt.status,
-    verification: pipelineResult.verification === null ? null : structuredClone(pipelineResult.verification),
-    finalReviews: structuredClone(lastRound?.reviews ?? []),
-    finalFindings: structuredClone(lastRound?.consolidated.findings ?? []),
-    finalFixReReviewed: lastRound?.fix === null,
-    advisor: structuredClone(advisor),
-    baseCommitOid: candidate?.baseCommitOid ?? reviewSnapshot.baseCommitOid,
-    candidateCommitOid: candidate?.candidateCommitOid ?? reviewSnapshot.candidateCommitOid,
-    candidateTreeOid: candidate?.candidateTreeOid ?? reviewSnapshot.candidateTreeOid,
-    candidateManifestHash: candidate?.manifestHash ?? reviewSnapshot.manifestHash,
-    reviewRunId: reviewSnapshot.runId,
-    reviewBaseCommitOid: reviewSnapshot.baseCommitOid,
-    reviewCandidateCommitOid: reviewSnapshot.candidateCommitOid,
-    reviewCandidateTreeOid: reviewSnapshot.candidateTreeOid,
-    reviewManifestHash: reviewSnapshot.manifestHash,
-    reviewSnapshotHash: reviewSnapshotHash(reviewSnapshot),
-    pipelineResultHash: pipelineResultHash(pipelineResult),
-    advisorReportHash: advisorReportHash(advisor),
-    evaluatedAt: args.evaluatedAt,
-    pipelineResult: structuredClone(pipelineResult),
-    reviewSnapshot: structuredClone(reviewSnapshot)
-  };
-}
-function evaluateAutopilotEligibility(input) {
-  const reasons = [];
-  if (input.status !== "decision-ready") addReason(reasons, "pipeline status is not decision-ready");
-  if (!input.gate.decisionReady) addReason(reasons, "pipeline gate is not decision-ready");
-  if (input.gate.requiresHumanDecision) addReason(reasons, "pipeline gate requires human decision");
-  for (const reason of input.gate.reasons) addReason(reasons, `pipeline gate: ${reason}`);
-  if (input.attemptStatus !== "verified-candidate") {
+  const gate = pipelineResult.gate;
+  if (pipelineResult.status !== "decision-ready") {
+    addReason(reasons, "pipeline status is not decision-ready");
+  }
+  if (!gate.decisionReady) addReason(reasons, "pipeline gate is not decision-ready");
+  if (gate.requiresHumanDecision) addReason(reasons, "pipeline gate requires human decision");
+  for (const reason of gate.reasons) addReason(reasons, `pipeline gate: ${reason}`);
+  if (pipelineResult.attempt.status !== "verified-candidate") {
     addReason(reasons, "attempt is not a verified candidate");
   }
-  const verification = input.verification;
+  const verification = pipelineResult.verification;
   if (verification === null) {
     addReason(reasons, "trusted verification is missing");
   } else {
@@ -40089,8 +40880,9 @@ function evaluateAutopilotEligibility(input) {
       addReason(reasons, "trusted verification evidence contains failures");
     }
   }
+  const finalReviews = lastRound?.reviews ?? [];
   for (const reviewer of ["correctness", "systems"]) {
-    const report = input.finalReviews.find((review) => review.reviewer === reviewer)?.report;
+    const report = finalReviews.find((review) => review.reviewer === reviewer)?.report;
     if (report?.verdict !== "approve") {
       addReason(reasons, `final ${reviewer} review does not approve`);
     }
@@ -40098,100 +40890,91 @@ function evaluateAutopilotEligibility(input) {
       addReason(reasons, `final ${reviewer} review has coverage gaps`);
     }
   }
-  if (input.finalFindings.some((finding) => finding.severity === "blocker" || finding.severity === "major")) {
+  if ((lastRound?.consolidated.findings ?? []).some((finding) => finding.severity === "blocker" || finding.severity === "major")) {
     addReason(reasons, "final review contains blocker or major findings");
   }
-  if (!input.finalFixReReviewed) addReason(reasons, "final fix was not independently re-reviewed");
-  if (input.advisor.verdict !== "approve") addReason(reasons, "advisor does not approve");
-  if (input.advisor.risks.some((risk) => risk.severity === "blocker" || risk.severity === "major")) {
+  if (lastRound?.fix !== null) addReason(reasons, "final fix was not independently re-reviewed");
+  if (advisor.verdict !== "approve") addReason(reasons, "advisor does not approve");
+  if (advisor.risks.some((risk) => risk.severity === "blocker" || risk.severity === "major")) {
     addReason(reasons, "advisor reported blocker or major risk");
   }
-  if (input.advisor.coverageGaps.length > 0) addReason(reasons, "advisor reported coverage gaps");
-  if (input.runId !== input.reviewRunId) addReason(reasons, "review snapshot run id mismatch");
-  if (input.baseCommitOid !== input.reviewBaseCommitOid) {
-    addReason(reasons, "review snapshot base commit mismatch");
-  }
-  if (input.candidateCommitOid !== input.reviewCandidateCommitOid) {
-    addReason(reasons, "review snapshot candidate commit mismatch");
-  }
-  if (input.candidateTreeOid !== input.reviewCandidateTreeOid) {
-    addReason(reasons, "review snapshot candidate tree mismatch");
-  }
-  if (input.candidateManifestHash !== input.reviewManifestHash) {
-    addReason(reasons, "review snapshot candidate manifest mismatch");
-  }
-  if (!SHA2562.test(input.reviewSnapshotHash)) addReason(reasons, "review snapshot hash is invalid");
-  if (!SHA2562.test(input.pipelineResultHash)) addReason(reasons, "pipeline result hash is invalid");
-  if (!SHA2562.test(input.advisorReportHash)) addReason(reasons, "advisor report hash is invalid");
-  if (input.reviewSnapshot === void 0) {
-    addReason(reasons, "review snapshot source artifact is missing");
+  if (advisor.coverageGaps.length > 0) addReason(reasons, "advisor reported coverage gaps");
+  if (candidate === null) {
+    addReason(reasons, "pipeline result has no candidate");
   } else {
-    try {
-      if (!hashesAgree(input.reviewSnapshotHash, reviewSnapshotHash(input.reviewSnapshot))) {
-        addReason(reasons, "review snapshot hash mismatch");
-      }
-    } catch {
-      addReason(reasons, "review snapshot is malformed");
+    if (pipelineResult.runId !== reviewSnapshot.runId) {
+      addReason(reasons, "review snapshot run id mismatch");
     }
-  }
-  if (input.pipelineResult === void 0) {
-    addReason(reasons, "pipeline result source artifact is missing");
-  } else {
+    if (candidate.baseCommitOid !== reviewSnapshot.baseCommitOid) {
+      addReason(reasons, "review snapshot base commit mismatch");
+    }
+    if (candidate.candidateCommitOid !== reviewSnapshot.candidateCommitOid) {
+      addReason(reasons, "review snapshot candidate commit mismatch");
+    }
+    if (candidate.candidateTreeOid !== reviewSnapshot.candidateTreeOid) {
+      addReason(reasons, "review snapshot candidate tree mismatch");
+    }
+    if (candidate.manifestHash !== reviewSnapshot.manifestHash) {
+      addReason(reasons, "review snapshot candidate manifest mismatch");
+    }
     try {
-      if (!hashesAgree(input.pipelineResultHash, pipelineResultHash(input.pipelineResult))) {
-        addReason(reasons, "pipeline result hash mismatch");
-      }
-      const sourceLastRound = input.pipelineResult.rounds.at(-1);
-      if (input.pipelineResult.status !== input.status || input.pipelineResult.attempt.status !== input.attemptStatus || canonicalArtifactHash(input.pipelineResult.gate) !== canonicalArtifactHash(input.gate) || canonicalArtifactHash(input.pipelineResult.verification) !== canonicalArtifactHash(input.verification) || canonicalArtifactHash(sourceLastRound?.reviews ?? []) !== canonicalArtifactHash(input.finalReviews) || canonicalArtifactHash(sourceLastRound?.consolidated.findings ?? []) !== canonicalArtifactHash(input.finalFindings) || sourceLastRound?.fix === null !== input.finalFixReReviewed) {
-        addReason(reasons, "pipeline result eligibility projection mismatch");
-      }
-      const candidate = input.pipelineResult.attempt.candidate;
-      if (input.pipelineResult.runId !== input.runId || input.pipelineResult.attempt.runId !== input.runId || input.pipelineResult.finalCandidateCommit !== input.candidateCommitOid || candidate === null || candidate.baseCommitOid !== input.baseCommitOid || candidate.candidateCommitOid !== input.candidateCommitOid || candidate.candidateTreeOid !== input.candidateTreeOid || candidate.manifestHash !== input.candidateManifestHash || manifestHashOf(candidate.changedPaths) !== candidate.manifestHash) {
+      if (pipelineResult.attempt.runId !== pipelineResult.runId || pipelineResult.finalCandidateCommit !== candidate.candidateCommitOid || manifestHashOf(candidate.changedPaths) !== candidate.manifestHash) {
         addReason(reasons, "pipeline result candidate binding mismatch");
       }
     } catch {
       addReason(reasons, "pipeline result is malformed");
     }
   }
+  let reviewSnapshotHash2 = "";
+  let resultHash = "";
+  let advisorHash = "";
   try {
-    if (!hashesAgree(input.advisorReportHash, advisorReportHash(input.advisor))) {
-      addReason(reasons, "advisor report hash mismatch");
-    }
+    reviewSnapshotHash2 = reviewSnapshotHash(reviewSnapshot);
+  } catch {
+    addReason(reasons, "review snapshot is malformed");
+  }
+  try {
+    resultHash = pipelineResultHash(pipelineResult);
+  } catch {
+    addReason(reasons, "pipeline result is malformed");
+  }
+  try {
+    advisorHash = advisorReportHash(advisor);
   } catch {
     addReason(reasons, "advisor report is malformed");
   }
   return {
     recordVersion: "1",
     policyVersion: "1",
-    runId: input.runId,
+    runId: pipelineResult.runId,
     eligible: reasons.length === 0,
     reasons,
-    baseCommitOid: input.baseCommitOid,
-    candidateCommitOid: input.candidateCommitOid,
-    candidateTreeOid: input.candidateTreeOid,
-    candidateManifestHash: input.candidateManifestHash,
-    reviewSnapshotHash: input.reviewSnapshotHash,
-    pipelineResultHash: input.pipelineResultHash,
-    advisorReportHash: input.advisorReportHash,
-    evaluatedAt: input.evaluatedAt
+    baseCommitOid: candidate?.baseCommitOid ?? reviewSnapshot.baseCommitOid,
+    candidateCommitOid: candidate?.candidateCommitOid ?? reviewSnapshot.candidateCommitOid,
+    candidateTreeOid: candidate?.candidateTreeOid ?? reviewSnapshot.candidateTreeOid,
+    candidateManifestHash: candidate?.manifestHash ?? reviewSnapshot.manifestHash,
+    reviewSnapshotHash: reviewSnapshotHash2,
+    pipelineResultHash: resultHash,
+    advisorReportHash: advisorHash,
+    evaluatedAt: evidence.evaluatedAt
   };
 }
 
 // src/autopilot/final-branch-reviewer.ts
-import { createHash as createHash12, randomUUID as randomUUID9 } from "node:crypto";
-import { constants as constants13 } from "node:fs";
-import { link as link7, lstat as lstat16, open as open13, readFile as readFile6, rm as rm10 } from "node:fs/promises";
-import path25 from "node:path";
+import { createHash as createHash12 } from "node:crypto";
+import { constants as constants14 } from "node:fs";
+import { open as open14 } from "node:fs/promises";
+import path28 from "node:path";
 
 // src/runtime/worktree-manager.ts
 import { randomUUID as randomUUID6 } from "node:crypto";
-import { lstat as lstat11, mkdir as mkdir5, readdir as readdir6, realpath as realpath7, rename as rename5 } from "node:fs/promises";
-import path19 from "node:path";
+import { lstat as lstat13, mkdir as mkdir6, readdir as readdir7, realpath as realpath8, rename as rename5 } from "node:fs/promises";
+import path22 from "node:path";
 
 // src/platform/bound-directory-cleanup.ts
-import { constants as constants7 } from "node:fs";
-import { access as access4, lstat as lstat7, open as open7, rmdir } from "node:fs/promises";
-import path16 from "node:path";
+import { constants as constants10 } from "node:fs";
+import { access as access4, lstat as lstat11, open as open10, rmdir } from "node:fs/promises";
+import path20 from "node:path";
 var DEFAULT_EMPTY_DIRECTORY_TIMEOUT_MS = 12e4;
 var EMPTY_DIRECTORY_TIMEOUT_ENV = "CLAUDE_ARCHITECT_EMPTY_DIRECTORY_TIMEOUT_MS";
 function resolveEmptyDirectoryTimeoutMs(env = process.env, warn = (message) => console.error(message)) {
@@ -40245,19 +41028,68 @@ const sameIdentity = (left, right) => left.dev === right.dev
   && left.birthtimeNs === right.birthtimeNs
   && left.isDirectory() === right.isDirectory()
   && left.isSymbolicLink() === right.isSymbolicLink();
-const darwinHandlePath = fd => {
+// One lsof spawn resolves a whole batch of handles; per-directory spawns made
+// large trees (node_modules) blow the cleanup budget.
+const darwinHandlePaths = fds => {
   const output = execFileSync("/usr/sbin/lsof", [
-    "-a", "-p", String(process.pid), "-d", String(fd), "-F0pn",
-  ], { encoding: "utf8", env: {}, maxBuffer: 16_384, timeout: 5_000 });
-  const match = /(?:^|[\n\u0000])n([^\u0000]*)\u0000/u.exec(output);
-  if (match === null) process.exit(50);
-  return match[1];
+    "-a", "-p", String(process.pid), "-d", fds.join(","), "-F0pn",
+  ], { encoding: "utf8", env: {}, maxBuffer: 1_048_576, timeout: 5_000 });
+  const paths = new Map();
+  for (const match of output.matchAll(/(?:^|[\n\u0000])f(\d+)\u0000n([^\u0000]*)\u0000/gu)) {
+    if (paths.has(match[1])) process.exit(50);
+    paths.set(match[1], match[2]);
+  }
+  if (fds.some(fd => !paths.has(String(fd)))) process.exit(50);
+  return paths;
 };
+const identityKey = stats => stats.dev + ":" + stats.ino + ":" + stats.birthtimeNs;
+const DIRECTORY_BATCH = 64;
+const removeDarwinBoundDirectories = async directories => {
+  for (let start = 0; start < directories.length; start += DIRECTORY_BATCH) {
+    const batch = directories.slice(start, start + DIRECTORY_BATCH);
+    const handles = [];
+    try {
+      for (const [entry, expected] of batch) {
+        const handle = await open(entry, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+        handles.push(handle);
+        if (!sameIdentity(await handle.stat({ bigint: true }), expected)) process.exit(51);
+      }
+      const fds = handles.map(handle => handle.fd);
+      const originalPaths = darwinHandlePaths(fds);
+      for (const [index, [entry, expected]] of batch.entries()) {
+        if (!sameIdentity(await lstat(entry, { bigint: true }), expected)) process.exit(61);
+        await rmdir(entry);
+        if (!sameIdentity(await handles[index].stat({ bigint: true }), expected)) process.exit(53);
+      }
+      const removedPaths = darwinHandlePaths(fds);
+      for (const fd of fds) {
+        if (removedPaths.get(String(fd)) !== originalPaths.get(String(fd))) process.exit(55);
+      }
+    } finally {
+      for (const handle of handles) await handle.close();
+    }
+    const removed = new Set(batch.map(([, expected]) => identityKey(expected)));
+    for (const sibling of await readdir(".")) {
+      if (removed.has(identityKey(await lstat(sibling, { bigint: true })))) process.exit(46);
+    }
+  }
+};
+const removeBoundDirectories = async directories => {
+  if (process.platform === "darwin") {
+    await removeDarwinBoundDirectories(directories);
+    return;
+  }
+  for (const [entry, expected] of directories) {
+    await removeBoundEntry(entry, expected, true);
+    for (const sibling of await readdir(".")) {
+      if (sameIdentity(await lstat(sibling, { bigint: true }), expected)) process.exit(46);
+    }
+  }
+};
+// darwin resolves directory handles in batches (removeDarwinBoundDirectories).
 const boundHandlePath = async fd => process.platform === "linux"
   ? await readlink("/proc/self/fd/" + fd)
-  : process.platform === "darwin"
-    ? darwinHandlePath(fd)
-    : null;
+  : null;
 const removeBoundUnopenedEntry = async (entry, expected) => {
   const tombstone = ".remove-symlink-" + randomUUID();
   await rename(entry, tombstone);
@@ -40358,6 +41190,7 @@ const removeBoundEntry = async (entry, expected, directory) => {
 };
 const emptyBoundDirectory = async expected => {
   if (!sameIdentity(await lstat(".", { bigint: true }), expected)) process.exit(41);
+  const emptiedDirectories = [];
   for (const entry of await readdir(".")) {
     const child = await lstat(entry, { bigint: true });
     if (child.birthtimeNs <= 0n) process.exit(42);
@@ -40375,10 +41208,7 @@ const emptyBoundDirectory = async expected => {
       process.chdir("..");
       if (!sameIdentity(await lstat(".", { bigint: true }), parent)) process.exit(44);
       if (!sameIdentity(await lstat(entry, { bigint: true }), child)) process.exit(45);
-      await removeBoundEntry(entry, child, true);
-      for (const sibling of await readdir(".")) {
-        if (sameIdentity(await lstat(sibling, { bigint: true }), child)) process.exit(46);
-      }
+      emptiedDirectories.push([entry, child]);
     } else {
       if (!sameIdentity(await lstat(entry, { bigint: true }), child)) process.exit(47);
       if (!child.isFile() || child.isSymbolicLink()) {
@@ -40388,6 +41218,7 @@ const emptyBoundDirectory = async expected => {
       }
     }
   }
+  await removeBoundDirectories(emptiedDirectories);
   if (!sameIdentity(await lstat(".", { bigint: true }), expected)) process.exit(48);
 };
 (async () => {
@@ -40439,7 +41270,7 @@ async function darwinHandlePath(directory, handle, platformServices) {
       handle.fd.toString(),
       "-F0pn"
     ],
-    cwd: path16.dirname(directory),
+    cwd: path20.dirname(directory),
     env: {},
     timeoutMs: 5e3,
     maxOutputBytes: 16384
@@ -40457,13 +41288,13 @@ async function removeWindowsBoundEmptyDirectory(directory, expectedIdentity, pla
       executable: helper,
       args: [
         "remove",
-        path16.toNamespacedPath(directory),
+        path20.toNamespacedPath(directory),
         expectedIdentity.dev.toString(),
         expectedIdentity.ino.toString(),
         expectedIdentity.birthtimeNs.toString(),
         "true"
       ],
-      cwd: path16.dirname(directory),
+      cwd: path20.dirname(directory),
       env: windowsEssentialEnvironment(),
       timeoutMs: 3e4,
       maxOutputBytes: 16384
@@ -40484,15 +41315,15 @@ async function verifyBoundDirectoryCleanupSupport(platformServices) {
   try {
     if (platformServices.os === "linux") {
       await Promise.all([
-        access4("/proc/self/mountinfo", constants7.R_OK),
-        access4("/proc/self/fd", constants7.R_OK)
+        access4("/proc/self/mountinfo", constants10.R_OK),
+        access4("/proc/self/fd", constants10.R_OK)
       ]);
       return;
     }
     if (platformServices.os === "darwin") {
       await Promise.all([
-        access4("/usr/sbin/lsof", constants7.X_OK),
-        access4("/bin/df", constants7.X_OK)
+        access4("/usr/sbin/lsof", constants10.X_OK),
+        access4("/bin/df", constants10.X_OK)
       ]);
       return;
     }
@@ -40524,21 +41355,21 @@ async function removeBoundEmptyDirectory(directory, expectedIdentity, platformSe
   let handle;
   let primaryError;
   try {
-    const named = await lstat7(directory, { bigint: true });
+    const named = await lstat11(directory, { bigint: true });
     if (!named.isDirectory() || named.isSymbolicLink() || !sameBoundIdentity(named, expectedIdentity)) {
       throw new RuntimeError("directory identity changed before bound removal");
     }
-    handle = await open7(directory, constants7.O_RDONLY | (constants7.O_NOFOLLOW ?? 0));
+    handle = await open10(directory, constants10.O_RDONLY | (constants10.O_NOFOLLOW ?? 0));
     const opened = await handle.stat({ bigint: true });
     if (!opened.isDirectory() || !sameBoundIdentity(opened, expectedIdentity)) {
       throw new RuntimeError("opened directory identity changed before bound removal");
     }
-    const settledNamed = await lstat7(directory, { bigint: true });
+    const settledNamed = await lstat11(directory, { bigint: true });
     if (!settledNamed.isDirectory() || settledNamed.isSymbolicLink() || !sameBoundIdentity(settledNamed, expectedIdentity)) {
       throw new RuntimeError("directory identity changed before final bound removal");
     }
     const darwinPath = platformServices.os === "darwin" ? await darwinHandlePath(directory, handle, platformServices) : void 0;
-    const removalTarget = await lstat7(directory, { bigint: true });
+    const removalTarget = await lstat11(directory, { bigint: true });
     if (!removalTarget.isDirectory() || removalTarget.isSymbolicLink() || !sameBoundIdentity(removalTarget, expectedIdentity)) {
       throw new RuntimeError("directory identity changed at the final removal boundary");
     }
@@ -40600,64 +41431,18 @@ async function emptyBoundDirectory(directory, expectedIdentity, platformServices
 }
 
 // src/runtime/worktree-removal-manifest.ts
-import { randomUUID as randomUUID4 } from "node:crypto";
-import { constants as constants9 } from "node:fs";
+import { randomUUID as randomUUID5 } from "node:crypto";
+import { constants as constants11 } from "node:fs";
 import {
-  link as link3,
-  lstat as lstat9,
-  open as open9,
-  readdir as readdir5,
-  realpath as realpath6,
-  rename as rename3,
-  rm as rm5
+  link as link4,
+  lstat as lstat12,
+  open as open11,
+  readdir as readdir6,
+  realpath as realpath7,
+  rename as rename4,
+  rm as rm7
 } from "node:fs/promises";
-import path17 from "node:path";
-
-// src/util/stable-file.ts
-import { constants as constants8 } from "node:fs";
-import { lstat as lstat8, open as open8 } from "node:fs/promises";
-async function readStableRegularFile(filename, maxBytes, dependencies = {}) {
-  const handle = await (dependencies.open ?? open8)(
-    filename,
-    constants8.O_RDONLY | (constants8.O_NOFOLLOW ?? 0) | (constants8.O_NONBLOCK ?? 0)
-  );
-  let primaryError;
-  try {
-    const metadata = await handle.stat({ bigint: true });
-    const named = await (dependencies.lstat ?? lstat8)(filename, { bigint: true });
-    if (!metadata.isFile() || metadata.nlink !== 1n || metadata.birthtimeNs <= 0n || metadata.size > maxBytes || !named.isFile() || named.isSymbolicLink() || named.birthtimeNs <= 0n || named.nlink !== 1n || named.dev !== metadata.dev || named.ino !== metadata.ino || named.birthtimeNs !== metadata.birthtimeNs || named.size !== metadata.size) return null;
-    if (maxBytes < 0n || maxBytes >= BigInt(Number.MAX_SAFE_INTEGER)) return null;
-    const limit = Math.min(Number(maxBytes) + 1, Number(metadata.size) + 1);
-    const buffer = Buffer.alloc(limit);
-    let bytesRead = 0;
-    while (bytesRead < limit) {
-      const read = await handle.read(buffer, bytesRead, limit - bytesRead, null);
-      if (read.bytesRead === 0) break;
-      bytesRead += read.bytesRead;
-    }
-    if (bytesRead > Number(maxBytes)) return null;
-    const contents = buffer.subarray(0, bytesRead);
-    const settled = await handle.stat({ bigint: true });
-    const settledNamed = await (dependencies.lstat ?? lstat8)(filename, { bigint: true });
-    if (!settled.isFile() || settled.nlink !== 1n || settled.birthtimeNs <= 0n || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs || settled.size !== metadata.size || settled.mtimeNs !== metadata.mtimeNs || settled.ctimeNs !== metadata.ctimeNs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.birthtimeNs <= 0n || settledNamed.nlink !== 1n || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino || settledNamed.birthtimeNs !== metadata.birthtimeNs || settledNamed.size !== metadata.size || settledNamed.mtimeNs !== settled.mtimeNs || settledNamed.ctimeNs !== settled.ctimeNs || BigInt(contents.byteLength) !== metadata.size) return null;
-    return contents;
-  } catch (error51) {
-    primaryError = error51;
-    throw error51;
-  } finally {
-    try {
-      await handle.close();
-    } catch (closeError) {
-      if (primaryError === void 0) throw closeError;
-      throw new AggregateError(
-        [primaryError, closeError],
-        "stable file read failed and its handle could not be closed"
-      );
-    }
-  }
-}
-
-// src/runtime/worktree-removal-manifest.ts
+import path21 from "node:path";
 var MANIFEST_DIRECTORY = "worktree-removals";
 var MANIFEST_NAME = /^([a-z0-9][a-z0-9-]{0,127})\.json$/i;
 var TEMPORARY_MANIFEST_NAME = /^\.([a-z0-9][a-z0-9-]{0,127})\.[0-9a-f-]{36}\.tmp$/i;
@@ -40668,11 +41453,8 @@ var MAX_MANIFEST_BYTES = 32768n;
 function sameIdentity3(metadata, expected) {
   return metadata.dev === expected.dev && metadata.ino === expected.ino && metadata.birthtimeNs > 0n && metadata.birthtimeNs === expected.birthtimeNs;
 }
-function errorCode7(error51) {
-  return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
-}
 function manifestRoot() {
-  return path17.join(resolveStateDir(), MANIFEST_DIRECTORY);
+  return path21.join(resolveStateDir(), MANIFEST_DIRECTORY);
 }
 async function ensurePrivateDirectory2(directory) {
   return await ensurePrivateDirectory(directory, {
@@ -40680,22 +41462,22 @@ async function ensurePrivateDirectory2(directory) {
   });
 }
 async function assertDirectoryIdentity3(directory, expected) {
-  const metadata = await lstat9(directory, { bigint: true });
+  const metadata = await lstat12(directory, { bigint: true });
   if (!metadata.isDirectory() || metadata.isSymbolicLink() || !sameIdentity3(metadata, expected)) {
     throw new RuntimeError("worktree removal manifest directory identity changed");
   }
 }
 async function assertMissing(filename, description) {
   try {
-    await lstat9(filename);
+    await lstat12(filename);
   } catch (error51) {
-    if (errorCode7(error51) === "ENOENT") return;
+    if (errorCode(error51) === "ENOENT") return;
     throw error51;
   }
   throw new RuntimeError(`${description} unexpectedly remains`);
 }
 async function assertManifestIdentity(manifestPath, expected, expectedLinks) {
-  const metadata = await lstat9(manifestPath, { bigint: true });
+  const metadata = await lstat12(manifestPath, { bigint: true });
   if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== expectedLinks || !sameIdentity3(metadata, expected)) {
     throw new RuntimeError("worktree removal manifest publication identity changed");
   }
@@ -40737,8 +41519,8 @@ async function writeSyncedManifest(handle, manifest) {
 }
 function validateManifestPath(manifestPath, transactionId) {
   const root = manifestRoot();
-  const expected = path17.join(root, `${transactionId}.json`);
-  if (!MANIFEST_NAME.test(path17.basename(manifestPath)) || manifestPath !== expected) {
+  const expected = path21.join(root, `${transactionId}.json`);
+  if (!MANIFEST_NAME.test(path21.basename(manifestPath)) || manifestPath !== expected) {
     throw new RuntimeError("worktree removal manifest path is invalid");
   }
   return root;
@@ -40802,7 +41584,7 @@ function parseManifest(contents, transactionId) {
     record2.registrationPath,
     record2.quarantineRoot,
     record2.quarantinePath
-  ].every((value2) => typeof value2 === "string" && path17.isAbsolute(value2)) || record2.physicalPresent === false && (record2.physicalDev !== "0" || record2.physicalIno !== "0" || record2.physicalBirthtimeNs !== "0")) {
+  ].every((value2) => typeof value2 === "string" && path21.isAbsolute(value2)) || record2.physicalPresent === false && (record2.physicalDev !== "0" || record2.physicalIno !== "0" || record2.physicalBirthtimeNs !== "0")) {
     throw new RuntimeError("worktree removal manifest is malformed");
   }
   return record2;
@@ -40810,16 +41592,16 @@ function parseManifest(contents, transactionId) {
 async function verifyWorktreeRemovalManifestStorage() {
   const root = manifestRoot();
   const rootIdentity = await ensurePrivateDirectory2(root);
-  const token = randomUUID4();
-  const sourcePath = path17.join(root, `.hardlink-probe-${token}.source`);
-  const linkedPath = path17.join(root, `.hardlink-probe-${token}.linked`);
+  const token = randomUUID5();
+  const sourcePath = path21.join(root, `.hardlink-probe-${token}.source`);
+  const linkedPath = path21.join(root, `.hardlink-probe-${token}.linked`);
   let sourceExists = false;
   let linkedExists = false;
   let primaryError;
   try {
-    const handle = await open9(
+    const handle = await open11(
       sourcePath,
-      constants9.O_WRONLY | constants9.O_CREAT | constants9.O_EXCL | (constants9.O_NOFOLLOW ?? 0),
+      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | (constants11.O_NOFOLLOW ?? 0),
       384
     );
     sourceExists = true;
@@ -40840,7 +41622,7 @@ async function verifyWorktreeRemovalManifestStorage() {
       await handle.close();
     }
     await assertDirectoryIdentity3(root, rootIdentity);
-    await link3(sourcePath, linkedPath);
+    await link4(sourcePath, linkedPath);
     linkedExists = true;
     await Promise.all([
       assertManifestIdentity(sourcePath, identity, 2n),
@@ -40852,8 +41634,8 @@ async function verifyWorktreeRemovalManifestStorage() {
   const cleanupErrors = [];
   try {
     await assertDirectoryIdentity3(root, rootIdentity);
-    if (linkedExists) await rm5(linkedPath, { force: false });
-    if (sourceExists) await rm5(sourcePath, { force: false });
+    if (linkedExists) await rm7(linkedPath, { force: false });
+    if (sourceExists) await rm7(sourcePath, { force: false });
     await syncDirectoryMetadata(root);
     await assertDirectoryIdentity3(root, rootIdentity);
   } catch (error51) {
@@ -40881,31 +41663,31 @@ async function persistWorktreeRemovalManifest(manifest) {
   validateManifestForWrite(manifest);
   const root = manifestRoot();
   const rootIdentity = await ensurePrivateDirectory2(root);
-  const manifestPath = path17.join(root, `${manifest.transactionId}.json`);
-  const temporaryPath = path17.join(
+  const manifestPath = path21.join(root, `${manifest.transactionId}.json`);
+  const temporaryPath = path21.join(
     root,
-    `.${manifest.transactionId}.${randomUUID4()}.tmp`
+    `.${manifest.transactionId}.${randomUUID5()}.tmp`
   );
   let temporaryExists = false;
   let manifestExists = false;
   try {
-    const handle = await open9(
+    const handle = await open11(
       temporaryPath,
-      constants9.O_WRONLY | constants9.O_CREAT | constants9.O_EXCL | (constants9.O_NOFOLLOW ?? 0),
+      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | (constants11.O_NOFOLLOW ?? 0),
       384
     );
     temporaryExists = true;
     const temporaryIdentity = await writeSyncedManifest(handle, manifest);
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(temporaryPath, temporaryIdentity, 1n);
-    await link3(temporaryPath, manifestPath);
+    await link4(temporaryPath, manifestPath);
     manifestExists = true;
     await assertDirectoryIdentity3(root, rootIdentity);
     await Promise.all([
       assertManifestIdentity(temporaryPath, temporaryIdentity, 2n),
       assertManifestIdentity(manifestPath, temporaryIdentity, 2n)
     ]);
-    await rm5(temporaryPath);
+    await rm7(temporaryPath);
     temporaryExists = false;
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(manifestPath, temporaryIdentity, 1n);
@@ -40924,14 +41706,14 @@ async function persistWorktreeRemovalManifest(manifest) {
     }
     if (temporaryExists) {
       try {
-        await rm5(temporaryPath, { force: true });
+        await rm7(temporaryPath, { force: true });
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }
     }
     if (manifestExists) {
       try {
-        await rm5(manifestPath, { force: true });
+        await rm7(manifestPath, { force: true });
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }
@@ -40949,23 +41731,23 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
   validateManifestForWrite(manifest);
   const root = validateManifestPath(manifestPath, manifest.transactionId);
   const rootIdentity = await ensurePrivateDirectory2(root);
-  const temporaryPath = path17.join(
+  const temporaryPath = path21.join(
     root,
-    `.${manifest.transactionId}.${randomUUID4()}.tmp`
+    `.${manifest.transactionId}.${randomUUID5()}.tmp`
   );
   let temporaryExists = false;
   let primaryError;
   try {
-    const handle = await open9(
+    const handle = await open11(
       temporaryPath,
-      constants9.O_WRONLY | constants9.O_CREAT | constants9.O_EXCL | (constants9.O_NOFOLLOW ?? 0),
+      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | (constants11.O_NOFOLLOW ?? 0),
       384
     );
     temporaryExists = true;
     const temporaryIdentity = await writeSyncedManifest(handle, manifest);
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(temporaryPath, temporaryIdentity, 1n);
-    await rename3(temporaryPath, manifestPath);
+    await rename4(temporaryPath, manifestPath);
     temporaryExists = false;
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(manifestPath, temporaryIdentity, 1n);
@@ -40979,7 +41761,7 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
     if (temporaryExists) {
       try {
         await assertDirectoryIdentity3(root, rootIdentity);
-        await rm5(temporaryPath, { force: true });
+        await rm7(temporaryPath, { force: true });
       } catch (cleanupError) {
         if (primaryError === void 0) throw cleanupError;
         throw new AggregateError(
@@ -40993,7 +41775,7 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
 async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
   const root = validateManifestPath(manifestPath, transactionId);
   const rootIdentity = await ensurePrivateDirectory2(root);
-  const manifestMetadata = await lstat9(manifestPath, { bigint: true });
+  const manifestMetadata = await lstat12(manifestPath, { bigint: true });
   if (!manifestMetadata.isFile() || manifestMetadata.isSymbolicLink() || manifestMetadata.nlink !== 1n || manifestMetadata.birthtimeNs <= 0n) {
     throw new RuntimeError("worktree removal manifest identity is ambiguous before removal");
   }
@@ -41002,21 +41784,21 @@ async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
     ino: manifestMetadata.ino,
     birthtimeNs: manifestMetadata.birthtimeNs
   };
-  const guardPath = path17.join(
+  const guardPath = path21.join(
     root,
-    `.remove-manifest-${transactionId}.${randomUUID4()}.guard`
+    `.remove-manifest-${transactionId}.${randomUUID5()}.guard`
   );
   await assertDirectoryIdentity3(root, rootIdentity);
-  await link3(manifestPath, guardPath);
+  await link4(manifestPath, guardPath);
   await Promise.all([
     assertManifestIdentity(manifestPath, identity, 2n),
     assertManifestIdentity(guardPath, identity, 2n)
   ]);
-  await rm5(manifestPath, { force: false });
+  await rm7(manifestPath, { force: false });
   await assertDirectoryIdentity3(root, rootIdentity);
   await assertMissing(manifestPath, "worktree removal manifest");
   await assertManifestIdentity(guardPath, identity, 1n);
-  await rm5(guardPath, { force: false });
+  await rm7(guardPath, { force: false });
   await syncDirectoryMetadata(root);
   await assertDirectoryIdentity3(root, rootIdentity);
   await Promise.all([
@@ -41025,16 +41807,16 @@ async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
   ]);
 }
 async function readLinkedManifest(temporaryPath, manifestPath) {
-  const handle = await open9(
+  const handle = await open11(
     manifestPath,
-    constants9.O_RDONLY | (constants9.O_NOFOLLOW ?? 0)
+    constants11.O_RDONLY | (constants11.O_NOFOLLOW ?? 0)
   );
   let primaryError;
   try {
     const [opened, temporary, published] = await Promise.all([
       handle.stat({ bigint: true }),
-      lstat9(temporaryPath, { bigint: true }),
-      lstat9(manifestPath, { bigint: true })
+      lstat12(temporaryPath, { bigint: true }),
+      lstat12(manifestPath, { bigint: true })
     ]);
     if (!opened.isFile() || opened.nlink !== 2n || opened.size > MAX_MANIFEST_BYTES || !temporary.isFile() || temporary.isSymbolicLink() || temporary.nlink !== 2n || !published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity3(temporary, opened) || !sameIdentity3(published, opened) || temporary.size !== opened.size || published.size !== opened.size) {
       throw new RuntimeError("linked worktree removal manifest residue is ambiguous");
@@ -41049,8 +41831,8 @@ async function readLinkedManifest(temporaryPath, manifestPath) {
     }
     const [settled, settledTemporary, settledPublished] = await Promise.all([
       handle.stat({ bigint: true }),
-      lstat9(temporaryPath, { bigint: true }),
-      lstat9(manifestPath, { bigint: true })
+      lstat12(temporaryPath, { bigint: true }),
+      lstat12(manifestPath, { bigint: true })
     ]);
     if (offset !== size || !sameIdentity3(settled, opened) || settled.nlink !== 2n || settled.size !== opened.size || settled.mtimeNs !== opened.mtimeNs || settled.ctimeNs !== opened.ctimeNs || !sameIdentity3(settledTemporary, opened) || settledTemporary.nlink !== 2n || !sameIdentity3(settledPublished, opened) || settledPublished.nlink !== 2n) {
       throw new RuntimeError("linked worktree removal manifest residue changed while reading");
@@ -41073,8 +41855,8 @@ async function readLinkedManifest(temporaryPath, manifestPath) {
 }
 async function settleLinkedWorktreeRemovalManifest(manifestPath, temporaryPath, transactionId) {
   const root = validateManifestPath(manifestPath, transactionId);
-  const temporaryMatch = TEMPORARY_MANIFEST_NAME.exec(path17.basename(temporaryPath));
-  if (temporaryMatch?.[1] !== transactionId || path17.dirname(temporaryPath) !== root) {
+  const temporaryMatch = TEMPORARY_MANIFEST_NAME.exec(path21.basename(temporaryPath));
+  if (temporaryMatch?.[1] !== transactionId || path21.dirname(temporaryPath) !== root) {
     throw new RuntimeError("temporary worktree removal manifest path is invalid");
   }
   const rootIdentity = await ensurePrivateDirectory2(root);
@@ -41082,12 +41864,12 @@ async function settleLinkedWorktreeRemovalManifest(manifestPath, temporaryPath, 
   let published;
   try {
     [temporary, published] = await Promise.all([
-      lstat9(temporaryPath, { bigint: true }),
-      lstat9(manifestPath, { bigint: true })
+      lstat12(temporaryPath, { bigint: true }),
+      lstat12(manifestPath, { bigint: true })
     ]);
   } catch (error51) {
-    if (errorCode7(error51) === "ENOENT") {
-      const remaining = await lstat9(manifestPath, { bigint: true }).catch(() => null);
+    if (errorCode(error51) === "ENOENT") {
+      const remaining = await lstat12(manifestPath, { bigint: true }).catch(() => null);
       if (remaining !== null && remaining.isFile() && remaining.nlink === 1n) return;
     }
     throw error51;
@@ -41101,7 +41883,7 @@ async function settleLinkedWorktreeRemovalManifest(manifestPath, temporaryPath, 
     birthtimeNs: published.birthtimeNs
   };
   await assertDirectoryIdentity3(root, rootIdentity);
-  await rm5(temporaryPath, { force: false });
+  await rm7(temporaryPath, { force: false });
   await assertDirectoryIdentity3(root, rootIdentity);
   await assertManifestIdentity(manifestPath, publishedIdentity, 1n);
   await syncDirectoryMetadata(root);
@@ -41115,7 +41897,7 @@ async function readWorktreeRemovalManifest(manifestPath, transactionId) {
   try {
     contents = await readStableRegularFile(manifestPath, MAX_MANIFEST_BYTES);
   } catch (error51) {
-    if (errorCode7(error51) === "ENOENT") return null;
+    if (errorCode(error51) === "ENOENT") return null;
     throw error51;
   }
   await assertDirectoryIdentity3(root, rootIdentity);
@@ -41133,9 +41915,9 @@ async function assertNoPendingWorktreeRemovalForRepository(repositoryIdentity) {
       description: "worktree removal manifest root",
       create: false
     });
-    entries = await readdir5(root, { withFileTypes: true });
+    entries = await readdir6(root, { withFileTypes: true });
   } catch (error51) {
-    if (errorCode7(error51) === "ENOENT") return;
+    if (errorCode(error51) === "ENOENT") return;
     throw error51;
   }
   for (const entry of entries) {
@@ -41146,14 +41928,14 @@ async function assertNoPendingWorktreeRemovalForRepository(repositoryIdentity) {
     if (match === null || !entry.isFile() || entry.isSymbolicLink()) {
       throw new RuntimeError("worktree removal manifest root contains ambiguous residue");
     }
-    const manifestPath = path17.join(root, entry.name);
+    const manifestPath = path21.join(root, entry.name);
     const manifest = await readWorktreeRemovalManifest(manifestPath, match[1]);
     if (manifest === null) {
       throw new RuntimeError("worktree removal manifest changed during lease validation");
     }
     let canonicalCommonDir;
     try {
-      canonicalCommonDir = await realpath6(manifest.commonDir);
+      canonicalCommonDir = await realpath7(manifest.commonDir);
     } catch (error51) {
       throw new RuntimeError("worktree removal repository identity is unavailable", {
         cause: error51
@@ -41169,9 +41951,9 @@ async function readPendingWorktreeRemovalManifests() {
   const root = manifestRoot();
   let initialMetadata;
   try {
-    initialMetadata = await lstat9(root, { bigint: true });
+    initialMetadata = await lstat12(root, { bigint: true });
   } catch (error51) {
-    if (errorCode7(error51) === "ENOENT") return { pending: [], issues: [] };
+    if (errorCode(error51) === "ENOENT") return { pending: [], issues: [] };
     return { pending: [], issues: [{ manifestPath: root, error: error51 }] };
   }
   if (!initialMetadata.isDirectory() || initialMetadata.isSymbolicLink()) {
@@ -41187,7 +41969,7 @@ async function readPendingWorktreeRemovalManifests() {
   let entries;
   try {
     rootIdentity = await ensurePrivateDirectory2(root);
-    entries = await readdir5(root, { withFileTypes: true });
+    entries = await readdir6(root, { withFileTypes: true });
     await assertDirectoryIdentity3(root, rootIdentity);
   } catch (error51) {
     return { pending: [], issues: [{ manifestPath: root, error: error51 }] };
@@ -41199,23 +41981,23 @@ async function readPendingWorktreeRemovalManifests() {
   for (const entry of sortedEntries) {
     const guardMatch = MANIFEST_REMOVAL_GUARD.exec(entry.name);
     if (guardMatch === null) continue;
-    const guardPath = path17.join(root, entry.name);
-    const publishedPath = path17.join(root, `${guardMatch[1]}.json`);
+    const guardPath = path21.join(root, entry.name);
+    const publishedPath = path21.join(root, `${guardMatch[1]}.json`);
     try {
       await assertDirectoryIdentity3(root, rootIdentity);
-      const guard = await lstat9(guardPath, { bigint: true });
+      const guard = await lstat12(guardPath, { bigint: true });
       if (!guard.isFile() || guard.isSymbolicLink() || guard.birthtimeNs <= 0n || guard.nlink !== 1n && guard.nlink !== 2n) {
         throw new RuntimeError("worktree removal manifest guard is malformed");
       }
       if (guard.nlink === 2n) {
-        const published = await lstat9(publishedPath, { bigint: true });
+        const published = await lstat12(publishedPath, { bigint: true });
         if (!published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity3(published, guard)) {
           throw new RuntimeError("worktree removal manifest guard pair is inconsistent");
         }
       } else {
         await assertMissing(publishedPath, "removed worktree manifest");
       }
-      await rm5(guardPath, { force: false });
+      await rm7(guardPath, { force: false });
       await syncDirectoryMetadata(root);
       await assertDirectoryIdentity3(root, rootIdentity);
     } catch (error51) {
@@ -41227,7 +42009,7 @@ async function readPendingWorktreeRemovalManifests() {
     const match = HARDLINK_PROBE_NAME.exec(entry.name);
     if (match === null) continue;
     const pair = probeEntries.get(match[1]) ?? {};
-    pair[match[2]] = path17.join(root, entry.name);
+    pair[match[2]] = path21.join(root, entry.name);
     probeEntries.set(match[1], pair);
   }
   for (const pair of probeEntries.values()) {
@@ -41236,7 +42018,7 @@ async function readPendingWorktreeRemovalManifests() {
       await assertDirectoryIdentity3(root, rootIdentity);
       const metadata = await Promise.all(paths.map(async (probePath) => ({
         path: probePath,
-        metadata: await lstat9(probePath, { bigint: true })
+        metadata: await lstat12(probePath, { bigint: true })
       })));
       if (metadata.some(({ metadata: value }) => !value.isFile() || value.isSymbolicLink() || value.birthtimeNs <= 0n)) {
         throw new RuntimeError("manifest hard-link probe residue is malformed");
@@ -41249,7 +42031,7 @@ async function readPendingWorktreeRemovalManifests() {
         throw new RuntimeError("manifest hard-link probe pair is inconsistent");
       }
       for (const { path: probePath } of metadata.reverse()) {
-        await rm5(probePath, { force: false });
+        await rm7(probePath, { force: false });
       }
       await syncDirectoryMetadata(root);
       await assertDirectoryIdentity3(root, rootIdentity);
@@ -41260,7 +42042,7 @@ async function readPendingWorktreeRemovalManifests() {
   for (const entry of sortedEntries) {
     const temporaryMatch = TEMPORARY_MANIFEST_NAME.exec(entry.name);
     if (temporaryMatch === null) continue;
-    const temporaryPath = path17.join(root, entry.name);
+    const temporaryPath = path21.join(root, entry.name);
     if (!entry.isFile() || entry.isSymbolicLink()) {
       issues.push({
         manifestPath: temporaryPath,
@@ -41269,16 +42051,16 @@ async function readPendingWorktreeRemovalManifests() {
       continue;
     }
     const transactionId = temporaryMatch[1];
-    const publishedPath = path17.join(root, `${transactionId}.json`);
+    const publishedPath = path21.join(root, `${transactionId}.json`);
     try {
       await assertDirectoryIdentity3(root, rootIdentity);
-      const temporaryMetadata = await lstat9(temporaryPath, { bigint: true });
+      const temporaryMetadata = await lstat12(temporaryPath, { bigint: true });
       if (temporaryMetadata.nlink === 1n) {
         const contents = await readStableRegularFile(temporaryPath, MAX_MANIFEST_BYTES);
         if (contents === null) {
           throw new RuntimeError("unpublished worktree removal manifest is not stable");
         }
-        await rm5(temporaryPath, { force: false });
+        await rm7(temporaryPath, { force: false });
         await syncDirectoryMetadata(root);
         await assertDirectoryIdentity3(root, rootIdentity);
       } else {
@@ -41297,7 +42079,7 @@ async function readPendingWorktreeRemovalManifests() {
   }
   for (const entry of sortedEntries) {
     if (TEMPORARY_MANIFEST_NAME.test(entry.name) || HARDLINK_PROBE_NAME.test(entry.name) || MANIFEST_REMOVAL_GUARD.test(entry.name)) continue;
-    const manifestPath = path17.join(root, entry.name);
+    const manifestPath = path21.join(root, entry.name);
     const match = MANIFEST_NAME.exec(entry.name);
     if (match === null || !entry.isFile() || entry.isSymbolicLink()) {
       issues.push({
@@ -41324,185 +42106,6 @@ async function readPendingWorktreeRemovalManifests() {
   return { pending, issues };
 }
 
-// src/platform/durable-write.ts
-import { randomUUID as randomUUID5 } from "node:crypto";
-import { constants as constants10 } from "node:fs";
-import { link as link4, lstat as lstat10, mkdir as mkdir4, open as open10, readFile as readFile4, rename as rename4, rm as rm6 } from "node:fs/promises";
-import path18 from "node:path";
-import nodeProcess6 from "node:process";
-var NO_FOLLOW5 = constants10.O_NOFOLLOW ?? 0;
-var SAFE_COMPONENT = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
-function isAlreadyPresent(error51) {
-  return typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "EEXIST";
-}
-function sameIdentity4(left, right) {
-  if (left.dev !== right.dev || left.ino !== right.ino) return false;
-  if (left.birthtimeNs <= 0n || right.birthtimeNs <= 0n) return true;
-  return left.birthtimeNs === right.birthtimeNs;
-}
-var DurableDirectorySession = class {
-  directory;
-  identity;
-  policy;
-  handle;
-  closed = false;
-  constructor(directory, identity, policy = {}, handle) {
-    this.directory = directory;
-    this.identity = identity;
-    this.policy = policy;
-    this.handle = handle;
-  }
-  async assertIdentity() {
-    if (this.closed) {
-      throw new RuntimeError("durable directory session is closed");
-    }
-    const current = await lstat10(this.directory, { bigint: true });
-    if (!current.isDirectory() || current.isSymbolicLink() || !sameIdentity4(current, this.identity)) {
-      throw new RuntimeError("durable directory session identity changed");
-    }
-  }
-  async sync() {
-    if (this.closed) {
-      throw new RuntimeError("durable directory session is closed");
-    }
-    if (this.policy.syncDirectory !== void 0) {
-      await this.policy.syncDirectory(this.directory);
-      return;
-    }
-    if (this.handle !== void 0) {
-      try {
-        await this.handle.sync();
-        return;
-      } catch {
-      }
-    }
-    await syncDirectoryMetadata(this.directory);
-  }
-  async close() {
-    this.closed = true;
-    if (this.handle !== void 0) {
-      try {
-        await this.handle.close();
-      } catch {
-      }
-      this.handle = void 0;
-    }
-  }
-};
-async function openDurableDirectorySession(directory, options = {}) {
-  let identity;
-  if (options.privateDirectory === true) {
-    identity = await ensurePrivateDirectory(directory, {
-      description: options.description ?? "durable directory",
-      create: options.create ?? false,
-      migratePermissions: true,
-      ...options.policy?.syncDirectory === void 0 ? {} : { syncDirectory: options.policy.syncDirectory }
-    });
-  } else {
-    if (options.create !== false) {
-      try {
-        await mkdir4(directory, { recursive: true, mode: 448 });
-      } catch (error51) {
-        if (!isAlreadyPresent(error51)) throw error51;
-      }
-    }
-    const metadata = await lstat10(directory, { bigint: true });
-    if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
-      throw new RuntimeError(`${options.description ?? "durable directory"} must be a plain directory`);
-    }
-    identity = {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs
-    };
-  }
-  let handle;
-  if (options.policy?.platform !== "win32" && nodeProcess6.platform !== "win32") {
-    try {
-      handle = await open10(directory, constants10.O_RDONLY | NO_FOLLOW5);
-    } catch {
-    }
-  }
-  return new DurableDirectorySession(directory, identity, options.policy, handle);
-}
-async function renameWithRetry(source, destination, platform = nodeProcess6.platform, maxAttempts = 50) {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      await rename4(source, destination);
-      return;
-    } catch (error51) {
-      const code = typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
-      const isTransientWin32 = platform === "win32" && (code === "EPERM" || code === "EACCES" || code === "EBUSY");
-      if (isTransientWin32 && attempt < maxAttempts) {
-        await new Promise((resolve2) => setTimeout(resolve2, 50));
-        continue;
-      }
-      throw error51;
-    }
-  }
-}
-async function writeAtomic(session, name, bytes, mode) {
-  if (path18.isAbsolute(name) || path18.basename(name) !== name || !SAFE_COMPONENT.test(name)) {
-    throw new RuntimeError(`atomic write target must be a safe leaf name: ${name}`);
-  }
-  const destination = path18.join(session.directory, name);
-  const temporaryPath = path18.join(session.directory, `.${name}.${randomUUID5()}.tmp`);
-  let handle;
-  let temporaryCreated = false;
-  try {
-    await session.assertIdentity();
-    handle = await open10(
-      temporaryPath,
-      constants10.O_WRONLY | constants10.O_CREAT | constants10.O_EXCL | NO_FOLLOW5,
-      384
-    );
-    temporaryCreated = true;
-    await session.assertIdentity();
-    if (typeof bytes === "string") {
-      await handle.writeFile(bytes, { encoding: "utf8" });
-    } else {
-      await handle.writeFile(bytes);
-    }
-    await handle.sync();
-    await handle.close();
-    handle = void 0;
-    await session.assertIdentity();
-    if (mode === "immutable") {
-      try {
-        await link4(temporaryPath, destination);
-      } catch (error51) {
-        if (!isAlreadyPresent(error51)) throw error51;
-        await session.assertIdentity();
-        const existing = await readFile4(destination);
-        const expected = typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes;
-        if (!existing.equals(expected)) {
-          throw new RuntimeError(`archive entry already exists with different content: ${name}`);
-        }
-      }
-      await rm6(temporaryPath, { force: true });
-      temporaryCreated = false;
-    } else if (mode === "replace") {
-      await renameWithRetry(temporaryPath, destination);
-      temporaryCreated = false;
-    }
-    await session.sync();
-    await session.assertIdentity();
-  } finally {
-    if (handle !== void 0) {
-      try {
-        await handle.close();
-      } catch {
-      }
-    }
-    if (temporaryCreated) {
-      try {
-        await rm6(temporaryPath, { force: true });
-      } catch {
-      }
-    }
-  }
-}
-
 // src/platform/platform-safety.ts
 var PlatformSafety = class {
   constructor(platformServices = getPlatformServices()) {
@@ -41513,34 +42116,29 @@ var PlatformSafety = class {
     const lease = await this.platformServices.acquireCheckoutLock(checkout, {
       ...options?.runId === void 0 ? {} : { runId: options.runId }
     });
-    let primaryError;
     let result;
-    let completed = false;
     try {
       await this.assertAmbiguityGate(lease.repositoryIdentity);
       result = await fn(lease);
-      completed = true;
-      return result;
-    } catch (error51) {
-      primaryError = error51;
-      throw error51;
-    } finally {
+    } catch (primaryError) {
       try {
         await lease.release();
       } catch (releaseError) {
-        if (completed && options?.onReleaseError !== void 0) {
-          result = options.onReleaseError(releaseError, result);
-        } else if (primaryError !== void 0) {
-          const primaryMessage = primaryError instanceof Error ? primaryError.message : String(primaryError);
-          throw new AggregateError(
-            [primaryError, releaseError],
-            `${primaryMessage}; checkout lock release failed`
-          );
-        } else {
-          throw releaseError;
-        }
+        const primaryMessage = primaryError instanceof Error ? primaryError.message : String(primaryError);
+        throw new AggregateError(
+          [primaryError, releaseError],
+          `${primaryMessage}; checkout lock release failed`
+        );
       }
+      throw primaryError;
     }
+    try {
+      await lease.release();
+    } catch (releaseError) {
+      if (options?.onReleaseError === void 0) throw releaseError;
+      return options.onReleaseError(releaseError, result);
+    }
+    return result;
   }
   async withRecoveryLease(checkout, fn, options) {
     const lease = await this.platformServices.acquireCheckoutLock(checkout, {
@@ -41668,7 +42266,7 @@ async function coordinateWorktreeRemoval(coordination) {
 }
 
 // src/runtime/worktree-manager.ts
-var MAX_DIAGNOSTIC_LENGTH2 = 2e3;
+var MAX_DIAGNOSTIC_LENGTH3 = 2e3;
 var REMOVE_ATTEMPTS = 5;
 var REMOVE_RETRY_DELAY_MS = 250;
 var SAFE_MANAGED_ID = /^[a-z0-9][a-z0-9._-]*$/;
@@ -41677,35 +42275,32 @@ var WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY = "claude-architect-quarantine";
 function delay2(milliseconds) {
   return new Promise((resolve2) => setTimeout(resolve2, milliseconds));
 }
-function errorCode8(error51) {
-  return typeof error51 === "object" && error51 !== null && "code" in error51 ? String(error51.code) : void 0;
-}
 async function syncChangedDirectories(dependencies, ...directories) {
-  const syncDirectory4 = dependencies.syncDirectory ?? syncDirectoryMetadata;
-  for (const directory of new Set(directories.map((value) => path19.resolve(value)))) {
-    await syncDirectory4(directory);
+  const syncDirectory = dependencies.syncDirectory ?? syncDirectoryMetadata;
+  for (const directory of new Set(directories.map((value) => path22.resolve(value)))) {
+    await syncDirectory(directory);
   }
 }
 function failure(action, result) {
   const output = (result.stderr || result.stdout).trim();
-  const diagnostic = output === "" ? "" : boundedRedactedDiagnostic(output, MAX_DIAGNOSTIC_LENGTH2);
+  const diagnostic = output === "" ? "" : boundedRedactedDiagnostic(output, MAX_DIAGNOSTIC_LENGTH3);
   return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
 }
-function sameDirectoryIdentity(left, right) {
+function sameDirectoryIdentity2(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
 }
 async function quarantinedIdentityRemainsNamed(quarantineRoot, expectedIdentity) {
-  const entries = await readdir6(quarantineRoot, { withFileTypes: true });
+  const entries = await readdir7(quarantineRoot, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const observed = await managedWorktreeDirectoryIdentity(path19.join(quarantineRoot, entry.name));
-    if (observed !== null && sameDirectoryIdentity(observed, expectedIdentity)) return true;
+    const observed = await managedWorktreeDirectoryIdentity(path22.join(quarantineRoot, entry.name));
+    if (observed !== null && sameDirectoryIdentity2(observed, expectedIdentity)) return true;
   }
   return false;
 }
 async function managedWorktreeDirectoryIdentity(directory) {
   try {
-    const metadata = await lstat11(directory, { bigint: true });
+    const metadata = await lstat13(directory, { bigint: true });
     if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
       throw new RuntimeError("managed worktree must be a plain directory");
     }
@@ -41718,7 +42313,7 @@ async function managedWorktreeDirectoryIdentity(directory) {
       birthtimeNs: metadata.birthtimeNs
     };
   } catch (error51) {
-    if (errorCode8(error51) === "ENOENT") return null;
+    if (errorCode(error51) === "ENOENT") return null;
     throw error51;
   }
 }
@@ -41729,14 +42324,14 @@ async function requiredDirectoryIdentity(directory, description) {
 }
 async function assertDirectoryIdentity4(directory, expected, description) {
   const observed = await managedWorktreeDirectoryIdentity(directory);
-  if (observed === null || !sameDirectoryIdentity(observed, expected)) {
+  if (observed === null || !sameDirectoryIdentity2(observed, expected)) {
     throw new RuntimeError(`${description} identity changed`);
   }
 }
 async function removeQuarantinedDirectory(quarantineRoot, quarantinePath, expectedIdentity, options) {
   const rootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
   const initialIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
-  if (rootIdentity === null || initialIdentity === null || !sameDirectoryIdentity(initialIdentity, expectedIdentity)) {
+  if (rootIdentity === null || initialIdentity === null || !sameDirectoryIdentity2(initialIdentity, expectedIdentity)) {
     throw new RuntimeError("managed worktree identity changed before removal");
   }
   await emptyBoundDirectory(
@@ -41746,7 +42341,7 @@ async function removeQuarantinedDirectory(quarantineRoot, quarantinePath, expect
   );
   const emptiedIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
   const emptiedRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (emptiedIdentity === null || !sameDirectoryIdentity(emptiedIdentity, expectedIdentity) || emptiedRootIdentity === null || !sameDirectoryIdentity(emptiedRootIdentity, rootIdentity)) {
+  if (emptiedIdentity === null || !sameDirectoryIdentity2(emptiedIdentity, expectedIdentity) || emptiedRootIdentity === null || !sameDirectoryIdentity2(emptiedRootIdentity, rootIdentity)) {
     throw new RuntimeError("managed worktree identity changed after emptying");
   }
   await removeBoundEmptyDirectory(
@@ -41758,33 +42353,26 @@ async function removeQuarantinedDirectory(quarantineRoot, quarantinePath, expect
   await syncChangedDirectories(options, quarantineRoot);
   const removedIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
   const remainingRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (removedIdentity !== null || remainingRootIdentity === null || !sameDirectoryIdentity(remainingRootIdentity, rootIdentity) || await quarantinedIdentityRemainsNamed(quarantineRoot, expectedIdentity)) {
+  if (removedIdentity !== null || remainingRootIdentity === null || !sameDirectoryIdentity2(remainingRootIdentity, rootIdentity) || await quarantinedIdentityRemainsNamed(quarantineRoot, expectedIdentity)) {
     throw new RuntimeError("managed worktree removal did not settle safely");
   }
 }
 async function managedPath(worktreePath) {
-  const root = path19.resolve(resolveStateDir(), "worktrees");
-  const target = path19.resolve(worktreePath);
-  let canonicalRoot;
-  try {
-    canonicalRoot = await realpath7(root);
-  } catch (error51) {
-    if (errorCode8(error51) !== "ENOENT") throw error51;
-    canonicalRoot = path19.join(await realpath7(path19.dirname(root)), path19.basename(root));
-  }
+  const target = path22.resolve(worktreePath);
   let canonicalTarget;
   try {
     canonicalTarget = await canonicalizeWorktreePath(target, true);
   } catch (error51) {
-    if (errorCode8(error51) !== "ENOENT") throw error51;
-    const targetParent = path19.dirname(target);
-    canonicalTarget = path19.join(
-      await realpath7(path19.dirname(targetParent)),
-      path19.basename(targetParent),
-      path19.basename(target)
+    if (errorCode(error51) !== "ENOENT") throw error51;
+    const targetParent = path22.dirname(target);
+    canonicalTarget = path22.join(
+      await realpath8(path22.dirname(targetParent)),
+      path22.basename(targetParent),
+      path22.basename(target)
     );
   }
-  if (platformPathsEqual(canonicalTarget, canonicalRoot) || !platformPathsEqual(path19.dirname(canonicalTarget), canonicalRoot)) {
+  const canonicalRoot = path22.dirname(canonicalTarget);
+  if (platformPathsEqual(canonicalTarget, canonicalRoot) || !await isManagedWorktreeRoot(canonicalRoot)) {
     throw new RuntimeError("refusing to remove unmanaged worktree path");
   }
   return { root: canonicalRoot, target: canonicalTarget };
@@ -41800,18 +42388,18 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   const observedIdentity = await managedWorktreeDirectoryIdentity(target);
   if (observedIdentity === null) return false;
   const expectedIdentity = options.expectedIdentity ?? observedIdentity;
-  if (!sameDirectoryIdentity(observedIdentity, expectedIdentity)) {
+  if (!sameDirectoryIdentity2(observedIdentity, expectedIdentity)) {
     throw new RuntimeError("managed worktree directory identity changed before quarantine");
   }
   const quarantineToken = (options.uuid ?? randomUUID6)();
   if (!SAFE_QUARANTINE_TOKEN.test(quarantineToken)) {
     throw new RuntimeError("invalid managed worktree quarantine token");
   }
-  const quarantinePath = path19.join(
+  const quarantinePath = path22.join(
     quarantineRoot,
     `.remove-${quarantineLabel}-${quarantineToken}`
   );
-  if (path19.dirname(quarantinePath) !== quarantineRoot) {
+  if (path22.dirname(quarantinePath) !== quarantineRoot) {
     throw new RuntimeError("managed worktree quarantine path escaped its root");
   }
   const move = options.rename ?? rename5;
@@ -41837,7 +42425,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   const quarantinedIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
   const settledRootIdentity = await managedWorktreeDirectoryIdentity(root);
   const settledQuarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (quarantinedIdentity === null || !sameDirectoryIdentity(quarantinedIdentity, expectedIdentity) || settledRootIdentity === null || !sameDirectoryIdentity(settledRootIdentity, rootIdentity) || settledQuarantineRootIdentity === null || !sameDirectoryIdentity(settledQuarantineRootIdentity, quarantineRootIdentity)) {
+  if (quarantinedIdentity === null || !sameDirectoryIdentity2(quarantinedIdentity, expectedIdentity) || settledRootIdentity === null || !sameDirectoryIdentity2(settledRootIdentity, rootIdentity) || settledQuarantineRootIdentity === null || !sameDirectoryIdentity2(settledQuarantineRootIdentity, quarantineRootIdentity)) {
     throw new RuntimeError("managed worktree identity changed during quarantine");
   }
   const rollbackQuarantine = async (operationError, message) => {
@@ -41845,7 +42433,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
       const rollbackIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
       const rollbackRootIdentity = await managedWorktreeDirectoryIdentity(root);
       const rollbackQuarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-      if (rollbackIdentity === null || !sameDirectoryIdentity(rollbackIdentity, expectedIdentity) || rollbackRootIdentity === null || !sameDirectoryIdentity(rollbackRootIdentity, rootIdentity) || rollbackQuarantineRootIdentity === null || !sameDirectoryIdentity(rollbackQuarantineRootIdentity, quarantineRootIdentity) || await managedWorktreeDirectoryIdentity(target) !== null) {
+      if (rollbackIdentity === null || !sameDirectoryIdentity2(rollbackIdentity, expectedIdentity) || rollbackRootIdentity === null || !sameDirectoryIdentity2(rollbackRootIdentity, rootIdentity) || rollbackQuarantineRootIdentity === null || !sameDirectoryIdentity2(rollbackQuarantineRootIdentity, quarantineRootIdentity) || await managedWorktreeDirectoryIdentity(target) !== null) {
         throw new RuntimeError("managed worktree quarantine rollback is unsafe");
       }
       await move(quarantinePath, target);
@@ -41853,7 +42441,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
       const restoredIdentity = await managedWorktreeDirectoryIdentity(target);
       const restoredRootIdentity = await managedWorktreeDirectoryIdentity(root);
       const restoredQuarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-      if (restoredIdentity === null || !sameDirectoryIdentity(restoredIdentity, expectedIdentity) || restoredRootIdentity === null || !sameDirectoryIdentity(restoredRootIdentity, rootIdentity) || restoredQuarantineRootIdentity === null || !sameDirectoryIdentity(restoredQuarantineRootIdentity, quarantineRootIdentity)) {
+      if (restoredIdentity === null || !sameDirectoryIdentity2(restoredIdentity, expectedIdentity) || restoredRootIdentity === null || !sameDirectoryIdentity2(restoredRootIdentity, rootIdentity) || restoredQuarantineRootIdentity === null || !sameDirectoryIdentity2(restoredQuarantineRootIdentity, quarantineRootIdentity)) {
         throw new RuntimeError("managed worktree quarantine rollback changed identity");
       }
     } catch (rollbackError) {
@@ -41881,7 +42469,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   if (options.preserveQuarantine === true) return true;
   const finalRootIdentity = await managedWorktreeDirectoryIdentity(root);
   const finalQuarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (finalRootIdentity === null || !sameDirectoryIdentity(finalRootIdentity, rootIdentity) || finalQuarantineRootIdentity === null || !sameDirectoryIdentity(finalQuarantineRootIdentity, quarantineRootIdentity)) {
+  if (finalRootIdentity === null || !sameDirectoryIdentity2(finalRootIdentity, rootIdentity) || finalQuarantineRootIdentity === null || !sameDirectoryIdentity2(finalQuarantineRootIdentity, quarantineRootIdentity)) {
     throw new RuntimeError("managed worktree root identity changed before removal");
   }
   await removeQuarantinedDirectory(
@@ -41894,7 +42482,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
     managedWorktreeDirectoryIdentity(root),
     managedWorktreeDirectoryIdentity(target)
   ]);
-  if (remainingRootIdentity === null || !sameDirectoryIdentity(remainingRootIdentity, rootIdentity) || replacementIdentity !== null) {
+  if (remainingRootIdentity === null || !sameDirectoryIdentity2(remainingRootIdentity, rootIdentity) || replacementIdentity !== null) {
     throw new RuntimeError("managed worktree root or target changed after removal");
   }
   return true;
@@ -41904,7 +42492,7 @@ async function removeManagedWorktreeDirectory(worktreePath, options = {}) {
   return await removeDirectoryByQuarantine(
     root,
     target,
-    path19.basename(target),
+    path22.basename(target),
     options
   );
 }
@@ -41920,19 +42508,19 @@ async function isRegisteredWorktree(repoRoot, worktreePath, runGit, allowMissing
   ) !== -1;
 }
 async function boundPlainChildDirectory(root, candidate, description) {
-  const resolvedCandidate = path19.resolve(candidate);
-  if (!path19.isAbsolute(candidate) || !platformPathsEqual(path19.dirname(resolvedCandidate), root)) {
+  const resolvedCandidate = path22.resolve(candidate);
+  if (!path22.isAbsolute(candidate) || !platformPathsEqual(path22.dirname(resolvedCandidate), root)) {
     throw new RuntimeError(`${description} escaped its root`);
   }
-  const before = await lstat11(resolvedCandidate, { bigint: true });
+  const before = await lstat13(resolvedCandidate, { bigint: true });
   if (!before.isDirectory() || before.isSymbolicLink() || before.birthtimeNs <= 0n) {
     throw new RuntimeError(`${description} is not a stable plain directory`);
   }
-  const canonical = await realpath7(resolvedCandidate);
-  if (!platformPathsEqual(canonical, resolvedCandidate) || !platformPathsEqual(path19.dirname(canonical), root)) {
+  const canonical = await realpath8(resolvedCandidate);
+  if (!platformPathsEqual(canonical, resolvedCandidate) || !platformPathsEqual(path22.dirname(canonical), root)) {
     throw new RuntimeError(`${description} changed identity during canonicalization`);
   }
-  const after = await lstat11(resolvedCandidate, { bigint: true });
+  const after = await lstat13(resolvedCandidate, { bigint: true });
   if (!after.isDirectory() || after.isSymbolicLink() || after.dev !== before.dev || after.ino !== before.ino || after.birthtimeNs <= 0n || after.birthtimeNs !== before.birthtimeNs) {
     throw new RuntimeError(`${description} changed identity during validation`);
   }
@@ -41948,9 +42536,9 @@ async function boundPlainChildDirectory(root, candidate, description) {
 async function worktreeMarkerRegistrationPath(worktreePath) {
   let contents;
   try {
-    contents = await readStableRegularFile(path19.join(worktreePath, ".git"), 32768n);
+    contents = await readStableRegularFile(path22.join(worktreePath, ".git"), 32768n);
   } catch (error51) {
-    if (errorCode8(error51) === "ENOENT") return null;
+    if (errorCode(error51) === "ENOENT") return null;
     throw error51;
   }
   if (contents === null) return null;
@@ -41959,13 +42547,14 @@ async function worktreeMarkerRegistrationPath(worktreePath) {
     throw new RuntimeError("managed worktree marker is malformed");
   }
   const registrationPath = marker.slice("gitdir: ".length);
-  if (!path19.isAbsolute(registrationPath)) {
+  if (!path22.isAbsolute(registrationPath)) {
     throw new RuntimeError("managed worktree marker registration is not absolute");
   }
-  return path19.resolve(registrationPath);
+  return path22.resolve(registrationPath);
 }
 async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
-  const markerRegistrationPath = await worktreeMarkerRegistrationPath(worktreePath);
+  const pinned = pinnedWorktreeGitDirectory(worktreePath);
+  const markerRegistrationPath = pinned === void 0 ? await worktreeMarkerRegistrationPath(worktreePath) : path22.resolve(pinned.gitDir);
   const commonResult = await runGit(repoRoot, [
     "rev-parse",
     "--path-format=absolute",
@@ -42003,16 +42592,16 @@ async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
     gitDirResult.stdout,
     "worktree administrative directory"
   );
-  if (!path19.isAbsolute(reportedCommonDir) || !path19.isAbsolute(reportedAdministrativePath)) {
+  if (!path22.isAbsolute(reportedCommonDir) || !path22.isAbsolute(reportedAdministrativePath)) {
     throw new RuntimeError("worktree registration lookup returned a non-absolute path");
   }
-  const commonDir = await realpath7(reportedCommonDir);
-  const expectedAdministrativeRoot = path19.join(commonDir, "worktrees");
-  const administrativeRoot = await realpath7(expectedAdministrativeRoot);
+  const commonDir = await realpath8(reportedCommonDir);
+  const expectedAdministrativeRoot = path22.join(commonDir, "worktrees");
+  const administrativeRoot = await realpath8(expectedAdministrativeRoot);
   if (!platformPathsEqual(administrativeRoot, expectedAdministrativeRoot)) {
     throw new RuntimeError("worktree administrative root escaped its repository");
   }
-  if (markerRegistrationPath === null || !platformPathsEqual(path19.resolve(reportedAdministrativePath), markerRegistrationPath)) {
+  if (markerRegistrationPath === null || !platformPathsEqual(path22.resolve(reportedAdministrativePath), markerRegistrationPath)) {
     throw new RuntimeError("worktree marker names a different administrative directory");
   }
   const administrative = await boundPlainChildDirectory(
@@ -42021,7 +42610,7 @@ async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
     "worktree administrative directory"
   );
   const contents = await readStableRegularFile(
-    path19.join(administrative.path, "gitdir"),
+    path22.join(administrative.path, "gitdir"),
     32768n
   );
   if (contents === null) {
@@ -42031,7 +42620,9 @@ async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
     contents.toString("utf8"),
     "worktree registration backlink"
   );
-  if (!path19.isAbsolute(backlink) || await realpath7(backlink) !== await realpath7(path19.join(worktreePath, ".git"))) {
+  const expectedBacklink = pinned === void 0 ? await realpath8(path22.join(worktreePath, ".git")) : path22.join(await canonicalizeWorktreePath(worktreePath, true), ".git");
+  const actualBacklink = pinned === void 0 ? await realpath8(backlink) : path22.join(await canonicalizeWorktreePath(path22.dirname(backlink), true), ".git");
+  if (!path22.isAbsolute(backlink) || path22.basename(backlink) !== ".git" || !platformPathsEqual(actualBacklink, expectedBacklink)) {
     throw new RuntimeError("worktree registration backlink does not match the managed path");
   }
   return {
@@ -42042,7 +42633,7 @@ async function worktreeRegistrationDirectory(repoRoot, worktreePath, runGit) {
   };
 }
 async function registrationQuarantineRoot(commonDir, dependencies) {
-  const quarantineRoot = path19.join(commonDir, WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY);
+  const quarantineRoot = path22.join(commonDir, WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY);
   await ensurePrivateDirectory(quarantineRoot, {
     description: "worktree registration quarantine",
     migratePermissions: true,
@@ -42056,7 +42647,7 @@ async function restoreStagedRegistration(registrationRoot, registrationPath, qua
   const quarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
   const sourceIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
   const destinationIdentity = await managedWorktreeDirectoryIdentity(registrationPath);
-  if (registrationRootIdentity === null || !sameDirectoryIdentity(registrationRootIdentity, expectedRegistrationRootIdentity) || quarantineRootIdentity === null || !sameDirectoryIdentity(quarantineRootIdentity, expectedQuarantineRootIdentity) || sourceIdentity === null || !sameDirectoryIdentity(sourceIdentity, expectedIdentity) || destinationIdentity !== null) {
+  if (registrationRootIdentity === null || !sameDirectoryIdentity2(registrationRootIdentity, expectedRegistrationRootIdentity) || quarantineRootIdentity === null || !sameDirectoryIdentity2(quarantineRootIdentity, expectedQuarantineRootIdentity) || sourceIdentity === null || !sameDirectoryIdentity2(sourceIdentity, expectedIdentity) || destinationIdentity !== null) {
     throw new RuntimeError("staged worktree registration rollback is unsafe");
   }
   const move = dependencies.rename ?? rename5;
@@ -42082,12 +42673,12 @@ async function restoreStagedRegistration(registrationRoot, registrationPath, qua
   const restoredIdentity = await managedWorktreeDirectoryIdentity(registrationPath);
   const settledRegistrationRoot = await managedWorktreeDirectoryIdentity(registrationRoot);
   const settledQuarantineRoot = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (restoredIdentity === null || !sameDirectoryIdentity(restoredIdentity, expectedIdentity) || await managedWorktreeDirectoryIdentity(quarantinePath) !== null || settledRegistrationRoot === null || !sameDirectoryIdentity(settledRegistrationRoot, expectedRegistrationRootIdentity) || settledQuarantineRoot === null || !sameDirectoryIdentity(settledQuarantineRoot, expectedQuarantineRootIdentity)) {
+  if (restoredIdentity === null || !sameDirectoryIdentity2(restoredIdentity, expectedIdentity) || await managedWorktreeDirectoryIdentity(quarantinePath) !== null || settledRegistrationRoot === null || !sameDirectoryIdentity2(settledRegistrationRoot, expectedRegistrationRootIdentity) || settledQuarantineRoot === null || !sameDirectoryIdentity2(settledQuarantineRoot, expectedQuarantineRootIdentity)) {
     throw new RuntimeError("staged worktree registration rollback changed identity");
   }
 }
 async function stageRegistrationDirectory(repoRoot, registration, worktreePath, quarantineRoot, quarantinePath, transactionId, runGit, dependencies, allowMissingWorktree = false) {
-  const quarantineLabel = `registration-${path19.basename(registration.path)}`;
+  const quarantineLabel = `registration-${path22.basename(registration.path)}`;
   const [registrationRootIdentity, quarantineRootIdentity] = await Promise.all([
     requiredDirectoryIdentity(registration.root, "Git registration root"),
     requiredDirectoryIdentity(quarantineRoot, "Git registration quarantine root")
@@ -42119,7 +42710,7 @@ async function stageRegistrationDirectory(repoRoot, registration, worktreePath, 
   } catch (stageError) {
     const originalIdentity = await managedWorktreeDirectoryIdentity(registration.path);
     const quarantineIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
-    if (originalIdentity === null && quarantineIdentity !== null && sameDirectoryIdentity(quarantineIdentity, registration.identity)) {
+    if (originalIdentity === null && quarantineIdentity !== null && sameDirectoryIdentity2(quarantineIdentity, registration.identity)) {
       try {
         await restoreStagedRegistration(
           registration.root,
@@ -42199,12 +42790,12 @@ async function staleWorktreeRegistrationDirectory(repoRoot, worktreePath, worktr
     commonResult.stdout,
     "stale worktree common directory"
   );
-  if (!path19.isAbsolute(reportedCommonDir) || !path19.isAbsolute(worktreeGitDir)) {
+  if (!path22.isAbsolute(reportedCommonDir) || !path22.isAbsolute(worktreeGitDir)) {
     throw new RuntimeError("stale worktree registration paths must be absolute");
   }
-  const commonDir = await realpath7(reportedCommonDir);
-  const expectedRegistrationRoot = path19.join(commonDir, "worktrees");
-  const registrationRoot = await realpath7(expectedRegistrationRoot);
+  const commonDir = await realpath8(reportedCommonDir);
+  const expectedRegistrationRoot = path22.join(commonDir, "worktrees");
+  const registrationRoot = await realpath8(expectedRegistrationRoot);
   if (!platformPathsEqual(registrationRoot, expectedRegistrationRoot)) {
     throw new RuntimeError("stale worktree administrative root escaped its repository");
   }
@@ -42214,8 +42805,8 @@ async function staleWorktreeRegistrationDirectory(repoRoot, worktreePath, worktr
     "stale worktree administrative directory"
   );
   const [gitdirContents, headContents] = await Promise.all([
-    readStableRegularFile(path19.join(registration.path, "gitdir"), 32768n),
-    readStableRegularFile(path19.join(registration.path, "HEAD"), 32768n)
+    readStableRegularFile(path22.join(registration.path, "gitdir"), 32768n),
+    readStableRegularFile(path22.join(registration.path, "HEAD"), 32768n)
   ]);
   if (gitdirContents === null || headContents === null) {
     throw new RuntimeError("stale worktree registration files are not stable");
@@ -42225,12 +42816,12 @@ async function staleWorktreeRegistrationDirectory(repoRoot, worktreePath, worktr
     "stale worktree registration backlink"
   );
   const head = gitPathOutput(headContents.toString("utf8"), "stale worktree HEAD");
-  if (!path19.isAbsolute(backlink) || path19.basename(backlink) !== ".git" || (expectedBranchRef === null ? !(/^ref: refs\//u.test(head) || /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u.test(head)) : head !== `ref: ${expectedBranchRef}`)) {
+  if (!path22.isAbsolute(backlink) || path22.basename(backlink) !== ".git" || (expectedBranchRef === null ? !(/^ref: refs\//u.test(head) || /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u.test(head)) : head !== `ref: ${expectedBranchRef}`)) {
     throw new RuntimeError("stale worktree registration identity is inconsistent");
   }
   const { target } = await managedPath(worktreePath);
   const canonicalBacklinkWorktree = await canonicalizeWorktreePath(
-    path19.dirname(path19.resolve(backlink)),
+    path22.dirname(path22.resolve(backlink)),
     true
   );
   const canonicalExpectedWorktree = await canonicalizeWorktreePath(target, true);
@@ -42258,25 +42849,25 @@ async function discoverStaleWorktreeRegistration(repoRoot, worktreePath, runGit,
     commonResult.stdout,
     "missing worktree common directory"
   );
-  if (!path19.isAbsolute(reportedCommonDir)) {
+  if (!path22.isAbsolute(reportedCommonDir)) {
     throw new RuntimeError("missing worktree common directory is not absolute");
   }
-  const commonDir = await realpath7(reportedCommonDir);
-  const expectedRegistrationRoot = path19.join(commonDir, "worktrees");
-  const registrationRoot = await realpath7(expectedRegistrationRoot);
+  const commonDir = await realpath8(reportedCommonDir);
+  const expectedRegistrationRoot = path22.join(commonDir, "worktrees");
+  const registrationRoot = await realpath8(expectedRegistrationRoot);
   if (!platformPathsEqual(registrationRoot, expectedRegistrationRoot)) {
     throw new RuntimeError("worktree administrative root escaped its repository");
   }
   const expectedWorktree = await canonicalizeWorktreePath(worktreePath, true);
   const matches = [];
-  for (const entry of await readdir6(registrationRoot, { withFileTypes: true })) {
+  for (const entry of await readdir7(registrationRoot, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const registrationPath = path19.join(registrationRoot, entry.name);
+    const registrationPath = path22.join(registrationRoot, entry.name);
     if (expectedRegistrationPath !== null && !platformPathsEqual(registrationPath, expectedRegistrationPath)) {
       continue;
     }
     const contents = await readStableRegularFile(
-      path19.join(registrationPath, "gitdir"),
+      path22.join(registrationPath, "gitdir"),
       32768n
     );
     if (contents === null) continue;
@@ -42286,15 +42877,15 @@ async function discoverStaleWorktreeRegistration(repoRoot, worktreePath, runGit,
     } catch {
       continue;
     }
-    if (!path19.isAbsolute(backlink) || path19.basename(backlink) !== ".git") continue;
+    if (!path22.isAbsolute(backlink) || path22.basename(backlink) !== ".git") continue;
     let candidateWorktree;
     try {
-      candidateWorktree = await canonicalizeWorktreePath(path19.dirname(backlink), true);
+      candidateWorktree = await canonicalizeWorktreePath(path22.dirname(backlink), true);
     } catch {
       continue;
     }
     if (platformPathsEqual(candidateWorktree, expectedWorktree)) {
-      matches.push(await realpath7(registrationPath));
+      matches.push(await realpath8(registrationPath));
     }
   }
   if (matches.length !== 1) {
@@ -42337,17 +42928,17 @@ async function removeStaleWorktreeRegistration(repoRoot, worktreePath, worktreeG
   if (!SAFE_QUARANTINE_TOKEN.test(transactionId)) {
     throw new RuntimeError("invalid stale worktree quarantine token");
   }
-  const physicalQuarantinePath = path19.join(
+  const physicalQuarantinePath = path22.join(
     root,
-    `.remove-${path19.basename(target)}-${transactionId}`
+    `.remove-${path22.basename(target)}-${transactionId}`
   );
   const quarantineRoot = await registrationQuarantineRoot(
     registration.commonDir,
     dependencies
   );
-  const quarantinePath = path19.join(
+  const quarantinePath = path22.join(
     quarantineRoot,
-    `.remove-registration-${path19.basename(registration.path)}-${transactionId}`
+    `.remove-registration-${path22.basename(registration.path)}-${transactionId}`
   );
   const [
     commonDirIdentity,
@@ -42418,7 +43009,7 @@ async function removeStaleWorktreeRegistration(repoRoot, worktreePath, worktreeG
       await assertRemovalRoots();
       await syncChangedDirectories(dependencies, registration.root, quarantineRoot);
       const restored = await managedWorktreeDirectoryIdentity(registration.path);
-      return restored !== null && sameDirectoryIdentity(restored, registration.identity) && await managedWorktreeDirectoryIdentity(quarantinePath) === null;
+      return restored !== null && sameDirectoryIdentity2(restored, registration.identity) && await managedWorktreeDirectoryIdentity(quarantinePath) === null;
     },
     removePhysical: async (markRemovalStarted) => {
       await assertRemovalRoots();
@@ -42436,7 +43027,7 @@ async function removeStaleWorktreeRegistration(repoRoot, worktreePath, worktreeG
 async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {}, expectedIdentity) {
   const runGit = dependencies.git ?? git;
   const observedIdentity = await managedWorktreeDirectoryIdentity(worktreePath);
-  if (expectedIdentity !== void 0 && (observedIdentity === null || !sameDirectoryIdentity(observedIdentity, expectedIdentity))) {
+  if (expectedIdentity !== void 0 && (observedIdentity === null || !sameDirectoryIdentity2(observedIdentity, expectedIdentity))) {
     throw new RuntimeError("managed worktree identity changed before registration removal");
   }
   const identity = expectedIdentity ?? observedIdentity;
@@ -42456,7 +43047,7 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
   }
   const registration = await worktreeRegistrationDirectory(repoRoot, worktreePath, runGit);
   const settledIdentity = await managedWorktreeDirectoryIdentity(worktreePath);
-  if (settledIdentity === null || !sameDirectoryIdentity(settledIdentity, identity)) {
+  if (settledIdentity === null || !sameDirectoryIdentity2(settledIdentity, identity)) {
     throw new RuntimeError("managed worktree identity changed before removal transaction");
   }
   const { root, target } = await managedPath(worktreePath);
@@ -42464,17 +43055,17 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
   if (!SAFE_QUARANTINE_TOKEN.test(transactionId)) {
     throw new RuntimeError("invalid physical worktree quarantine token");
   }
-  const physicalQuarantinePath = path19.join(
+  const physicalQuarantinePath = path22.join(
     root,
-    `.remove-${path19.basename(target)}-${transactionId}`
+    `.remove-${path22.basename(target)}-${transactionId}`
   );
   const quarantineRoot = await registrationQuarantineRoot(
     registration.commonDir,
     dependencies
   );
-  const quarantinePath = path19.join(
+  const quarantinePath = path22.join(
     quarantineRoot,
-    `.remove-registration-${path19.basename(registration.path)}-${transactionId}`
+    `.remove-registration-${path22.basename(registration.path)}-${transactionId}`
   );
   const [
     commonDirIdentity,
@@ -42544,14 +43135,14 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
       await assertRemovalRoots();
       await syncChangedDirectories(dependencies, registration.root, quarantineRoot);
       const restored = await managedWorktreeDirectoryIdentity(registration.path);
-      return restored !== null && sameDirectoryIdentity(restored, registration.identity) && await managedWorktreeDirectoryIdentity(quarantinePath) === null;
+      return restored !== null && sameDirectoryIdentity2(restored, registration.identity) && await managedWorktreeDirectoryIdentity(quarantinePath) === null;
     },
     removePhysical: async (markRemovalStarted) => {
       await assertRemovalRoots();
       const removed = await removeDirectoryByQuarantine(
         root,
         target,
-        path19.basename(target),
+        path22.basename(target),
         {
           ...dependencies,
           uuid: () => transactionId,
@@ -42564,7 +43155,7 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
     physicalIsUnchanged: async () => {
       await assertRemovalRoots();
       const physical = await managedWorktreeDirectoryIdentity(target);
-      return physical !== null && sameDirectoryIdentity(physical, identity) && await managedWorktreeDirectoryIdentity(physicalQuarantinePath) === null;
+      return physical !== null && sameDirectoryIdentity2(physical, identity) && await managedWorktreeDirectoryIdentity(physicalQuarantinePath) === null;
     }
   });
 }
@@ -42609,41 +43200,36 @@ var WorktreeManager = class {
       ...this.runId === void 0 ? {} : { runId: this.runId }
     });
   }
-  managedWorktreePath(stateRoot2 = path19.resolve(resolveStateDir())) {
+  namespaceRoot;
+  async managedRoot() {
+    this.namespaceRoot ??= await repositoryNamespaceRoot(this.repoRoot, git);
+    return this.namespaceRoot;
+  }
+  managedWorktreePath(worktreesRoot) {
     if (!SAFE_MANAGED_ID.test(this.runId)) {
       throw new RuntimeError("invalid worktree run id");
     }
-    const worktreesRoot = path19.resolve(stateRoot2, "worktrees");
-    const worktreePath = path19.resolve(worktreesRoot, this.runId);
-    if (worktreePath === worktreesRoot || !worktreePath.startsWith(`${worktreesRoot}${path19.sep}`)) {
+    const worktreePath = path22.resolve(worktreesRoot, this.runId);
+    if (worktreePath === worktreesRoot || !worktreePath.startsWith(`${worktreesRoot}${path22.sep}`)) {
       throw new RuntimeError("invalid worktree run id");
     }
     return { worktreesRoot, worktreePath };
   }
   async prepareManagedWorktreeRoot() {
     await verifyBoundDirectoryCleanupSupport(this.lockingPlatformServices());
-    const configuredStateRoot = path19.resolve(resolveStateDir());
-    const syncDirectory4 = this.dependencies.syncDirectory ?? syncDirectoryMetadata;
-    const stateRootIdentity = await ensurePrivateDirectory(configuredStateRoot, {
+    const syncDirectory = this.dependencies.syncDirectory ?? syncDirectoryMetadata;
+    await ensurePrivateDirectory(path22.resolve(resolveStateDir()), {
       description: "runtime state root",
       migratePermissions: true,
-      syncDirectory: syncDirectory4,
+      syncDirectory,
       ...this.dependencies.processSupervisor === void 0 ? {} : { platformServices: this.dependencies.processSupervisor }
     });
-    const stateRoot2 = await realpath7(configuredStateRoot);
-    await assertDirectoryIdentity4(stateRoot2, stateRootIdentity, "runtime state root");
-    const { worktreesRoot, worktreePath } = this.managedWorktreePath(stateRoot2);
-    const worktreesRootIdentity = await ensurePrivateDirectory(worktreesRoot, {
-      description: "managed worktree root",
-      migratePermissions: true,
-      syncDirectory: syncDirectory4,
-      ...this.dependencies.processSupervisor === void 0 ? {} : { platformServices: this.dependencies.processSupervisor }
+    const { worktreesRoot, worktreePath } = this.managedWorktreePath(await this.managedRoot());
+    const worktreesRootIdentity = await prepareManagedWorktreeRoot(worktreesRoot, {
+      syncDirectory
     });
     await (this.dependencies.verifyRemovalStorage ?? verifyWorktreeRemovalManifestStorage)();
-    await Promise.all([
-      assertDirectoryIdentity4(stateRoot2, stateRootIdentity, "runtime state root"),
-      assertDirectoryIdentity4(worktreesRoot, worktreesRootIdentity, "managed worktree root")
-    ]);
+    await assertDirectoryIdentity4(worktreesRoot, worktreesRootIdentity, "managed worktree root");
     return {
       worktreesRoot,
       worktreePath,
@@ -42663,22 +43249,22 @@ var WorktreeManager = class {
       commonResult.stdout,
       "worktree creation common directory"
     );
-    if (!path19.isAbsolute(reportedCommonDir)) {
+    if (!path22.isAbsolute(reportedCommonDir)) {
       throw new RuntimeError("worktree creation common directory is not absolute");
     }
-    const commonDir = await realpath7(reportedCommonDir);
-    const registrationRoot = path19.join(commonDir, "worktrees");
+    const commonDir = await realpath8(reportedCommonDir);
+    const registrationRoot = path22.join(commonDir, "worktrees");
     let registrationRootCreated = false;
     try {
-      await mkdir5(registrationRoot, { mode: 448 });
+      await mkdir6(registrationRoot, { mode: 448 });
       registrationRootCreated = true;
     } catch (error51) {
-      if (errorCode8(error51) !== "EEXIST") throw error51;
+      if (errorCode(error51) !== "EEXIST") throw error51;
     }
     if (registrationRootCreated) {
       await (this.dependencies.syncDirectory ?? syncDirectoryMetadata)(commonDir);
     }
-    const registrationMetadata = await lstat11(registrationRoot, { bigint: true });
+    const registrationMetadata = await lstat13(registrationRoot, { bigint: true });
     if (!registrationMetadata.isDirectory() || registrationMetadata.isSymbolicLink() || registrationMetadata.birthtimeNs <= 0n) {
       throw new RuntimeError("Git worktree registration root lacks stable identity");
     }
@@ -42702,17 +43288,17 @@ var WorktreeManager = class {
     if (!SAFE_QUARANTINE_TOKEN.test(transactionId)) {
       throw new RuntimeError("invalid worktree creation transaction token");
     }
-    const registrationPath = path19.join(
+    const registrationPath = path22.join(
       registrationRoot,
       `.creation-${transactionId}`
     );
-    const quarantinePath = path19.join(
+    const quarantinePath = path22.join(
       quarantineRoot,
       `.remove-registration-creation-${transactionId}`
     );
-    const stagingPath = path19.join(
+    const stagingPath = path22.join(
       worktreesRoot,
-      `.create-${path19.basename(worktreePath)}-${transactionId}`
+      `.create-${path22.basename(worktreePath)}-${transactionId}`
     );
     let manifest = {
       manifestVersion: "1",
@@ -42747,7 +43333,7 @@ var WorktreeManager = class {
     };
     const manifestPath = await persistWorktreeRemovalManifest(manifest);
     await assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root");
-    await mkdir5(stagingPath, { mode: 448 });
+    await mkdir6(stagingPath, { mode: 448 });
     await syncChangedDirectories(this.dependencies, worktreesRoot);
     const physicalIdentity = await requiredDirectoryIdentity(
       stagingPath,
@@ -42773,7 +43359,7 @@ var WorktreeManager = class {
   }
   async captureCreatedIdentity(worktreePath, worktreesRoot, expectedRootIdentity) {
     const settledRootIdentity = await managedWorktreeDirectoryIdentity(worktreesRoot);
-    if (settledRootIdentity === null || !sameDirectoryIdentity(settledRootIdentity, expectedRootIdentity)) {
+    if (settledRootIdentity === null || !sameDirectoryIdentity2(settledRootIdentity, expectedRootIdentity)) {
       throw new WorktreeRootChangedError(
         "managed worktree root identity changed during creation"
       );
@@ -42839,14 +43425,14 @@ var WorktreeManager = class {
       commonResult.stdout,
       "worktree registration filesystem"
     );
-    if (!path19.isAbsolute(reported)) {
+    if (!path22.isAbsolute(reported)) {
       throw new RuntimeError("worktree registration filesystem path is not absolute");
     }
-    const commonDir = await realpath7(reported);
+    const commonDir = await realpath8(reported);
     if (await managedWorktreeDirectoryIdentity(commonDir) === null) {
       throw new RuntimeError("worktree registration filesystem identity is unavailable");
     }
-    const registrationRoot = path19.join(commonDir, "worktrees");
+    const registrationRoot = path22.join(commonDir, "worktrees");
     const existingRegistrationRoot = await managedWorktreeDirectoryIdentity(registrationRoot);
     if (existingRegistrationRoot !== null && existingRegistrationRoot.birthtimeNs <= 0n) {
       throw new RuntimeError("worktree registration root lacks stable identity");
@@ -42876,6 +43462,7 @@ var WorktreeManager = class {
         "created Git registration"
       )
     ]);
+    return registration;
   }
   async finishCreatedWorktree(worktreePath, worktreesRoot, rootIdentity, identity) {
     const settled = await this.captureCreatedIdentity(
@@ -42883,7 +43470,7 @@ var WorktreeManager = class {
       worktreesRoot,
       rootIdentity
     );
-    if (!sameDirectoryIdentity(settled, identity)) {
+    if (!sameDirectoryIdentity2(settled, identity)) {
       return await this.failCreatedWorktree(
         worktreePath,
         identity,
@@ -42923,15 +43510,16 @@ var WorktreeManager = class {
       );
     }
     const identity = await this.captureCreatedIdentity(worktreePath, worktreesRoot, rootIdentity);
-    if (!sameDirectoryIdentity(identity, creation.physicalIdentity)) {
+    if (!sameDirectoryIdentity2(identity, creation.physicalIdentity)) {
       return await this.failCreatedWorktree(
         worktreePath,
         creation.physicalIdentity,
         new RuntimeError("created worktree replaced its durable placeholder")
       );
     }
+    let registration;
     try {
-      await this.syncCreatedWorktree(
+      registration = await this.syncCreatedWorktree(
         worktreePath,
         worktreesRoot,
         rootIdentity,
@@ -42957,6 +43545,10 @@ var WorktreeManager = class {
       rootIdentity,
       identity
     );
+    pinWorktreeGitDirectory(worktreePath, {
+      gitDir: registration.path,
+      commonDir: registration.commonDir
+    });
     await removeWorktreeRemovalManifest(creation.manifestPath, creation.transactionId);
     return created;
   }
@@ -42991,15 +43583,16 @@ var WorktreeManager = class {
       );
     }
     const identity = await this.captureCreatedIdentity(worktreePath, worktreesRoot, rootIdentity);
-    if (!sameDirectoryIdentity(identity, creation.physicalIdentity)) {
+    if (!sameDirectoryIdentity2(identity, creation.physicalIdentity)) {
       return await this.failCreatedWorktree(
         worktreePath,
         creation.physicalIdentity,
         new RuntimeError("created worktree replaced its durable placeholder")
       );
     }
+    let registration;
     try {
-      await this.syncCreatedWorktree(
+      registration = await this.syncCreatedWorktree(
         worktreePath,
         worktreesRoot,
         rootIdentity,
@@ -43025,22 +43618,23 @@ var WorktreeManager = class {
       rootIdentity,
       identity
     );
+    pinWorktreeGitDirectory(worktreePath, {
+      gitDir: registration.path,
+      commonDir: registration.commonDir
+    });
     await removeWorktreeRemovalManifest(creation.manifestPath, creation.transactionId);
     return created;
   }
   async removeUnderLease(worktreePath, expectedIdentity) {
-    const expectedWorktreePath = this.managedWorktreePath().worktreePath;
+    const managedRoot = await this.managedRoot();
+    const expectedWorktreePath = this.managedWorktreePath(managedRoot).worktreePath;
     const canonicalWorktreePath = await canonicalizeWorktreePath(worktreePath, true);
     let canonicalExpectedPath;
     try {
       canonicalExpectedPath = await canonicalizeWorktreePath(expectedWorktreePath, true);
     } catch (error51) {
-      if (errorCode8(error51) !== "ENOENT") throw error51;
-      canonicalExpectedPath = path19.join(
-        await realpath7(path19.resolve(resolveStateDir())),
-        "worktrees",
-        path19.basename(expectedWorktreePath)
-      );
+      if (errorCode(error51) !== "ENOENT") throw error51;
+      canonicalExpectedPath = path22.join(managedRoot, path22.basename(expectedWorktreePath));
     }
     if (!platformPathsEqual(canonicalWorktreePath, canonicalExpectedPath)) {
       throw new RuntimeError("refusing to remove unmanaged worktree path");
@@ -43062,6 +43656,7 @@ var WorktreeManager = class {
   }
   async remove(worktreePath, expectedIdentity) {
     await this.withCheckoutLease(async () => await this.removeUnderLease(worktreePath, expectedIdentity));
+    unpinWorktreeGitDirectory(worktreePath);
   }
 };
 async function cleanupWorktree(worktree) {
@@ -43101,10 +43696,10 @@ async function withManagedWorktree(args) {
 }
 
 // src/verify/project-verifier.ts
-import { realpath as realpath8 } from "node:fs/promises";
-import path20 from "node:path";
+import { mkdtemp as mkdtemp3, realpath as realpath9, rm as rm8 } from "node:fs/promises";
+import { tmpdir as tmpdir7 } from "node:os";
+import path23 from "node:path";
 var MAX_COMMAND_OUTPUT_BYTES = 1e6;
-var MAX_DIAGNOSTIC_LENGTH3 = 2e3;
 var POSIX_ESSENTIAL_ENV2 = [
   "HOME",
   "PATH",
@@ -43117,14 +43712,9 @@ var POSIX_ESSENTIAL_ENV2 = [
   "XDG_STATE_HOME",
   "XDG_RUNTIME_DIR"
 ];
-function gitFailure(action, result) {
-  const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, MAX_DIAGNOSTIC_LENGTH3);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-async function checkedGit(cwd, args) {
-  const result = await git(cwd, args);
-  if (result.exitCode !== 0) throw gitFailure(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
+function verificationConfinementBackend(os, arch) {
+  const platform = SANDBOX_BACKENDS.find((backend) => backend.id === "macos-seatbelt")?.platforms.find((candidate) => candidate.os === os && candidate.environmentType === "native" && (candidate.arch === void 0 || candidate.arch === arch));
+  return platform === void 0 || platform.state === "unsupported" ? null : "macos-seatbelt";
 }
 function defineEnvironmentValue(environment, name, value) {
   Object.defineProperty(environment, name, {
@@ -43150,17 +43740,17 @@ function commandEnvironment(command, os) {
 }
 function isWithinScope(root, candidate, os) {
   if (os === "win32") return canonicalizeForScope(candidate, root);
-  const relative2 = path20.posix.relative(root, candidate);
-  return relative2 === "" || !path20.posix.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith("../");
+  const relative2 = path23.posix.relative(root, candidate);
+  return relative2 === "" || !path23.posix.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith("../");
 }
 async function resolveCommandCwd(worktreePath, commandCwd, os) {
-  if (path20.isAbsolute(commandCwd)) return null;
-  const lexical = path20.resolve(worktreePath, commandCwd);
+  if (path23.isAbsolute(commandCwd)) return null;
+  const lexical = path23.resolve(worktreePath, commandCwd);
   if (!isWithinScope(worktreePath, lexical, os)) return null;
   try {
     const [canonicalRoot, canonicalCwd] = await Promise.all([
-      realpath8(worktreePath),
-      realpath8(lexical)
+      realpath9(worktreePath),
+      realpath9(lexical)
     ]);
     return isWithinScope(canonicalRoot, canonicalCwd, os) ? canonicalCwd : null;
   } catch {
@@ -43205,12 +43795,30 @@ async function executeCommand(args) {
     const environment = commandEnvironment(command, ps.os);
     executable = await ps.resolveExecutable({
       name: command.executable,
-      ...path20.isAbsolute(command.executable) ? { explicitPath: command.executable } : {},
+      ...path23.isAbsolute(command.executable) ? { explicitPath: command.executable } : {},
       searchPath: environment.PATH ?? environment.Path ?? ""
     });
+    let spawned = { executable, args: command.args };
+    if (args.confinement) {
+      defineEnvironmentValue(environment, "TMPDIR", args.confinement.scratchDir);
+      const confined = seatbeltArgv(args.confinement, [
+        executable.command,
+        ...executable.prefixArgs,
+        ...command.args
+      ]);
+      spawned = {
+        executable: {
+          kind: "native",
+          command: confined.command,
+          prefixArgs: [],
+          resolvedFrom: `seatbelt:${executable.resolvedFrom}`
+        },
+        args: confined.args
+      };
+    }
     exit = await supervise(ps, {
-      executable,
-      args: command.args,
+      executable: spawned.executable,
+      args: spawned.args,
       cwd,
       env: environment,
       timeoutMs: command.timeoutMs,
@@ -43239,7 +43847,7 @@ async function executeCommand(args) {
       },
       evidence: {
         id: redact(command.id),
-        confinement: "none",
+        confinement: args.confinement?.backend ?? "none",
         networkPolicy: "unenforced",
         requestedNetwork: command.network,
         skipped: false,
@@ -43263,7 +43871,7 @@ async function executeCommand(args) {
 }
 async function scanCommandMutations(args) {
   const [status, currentHead, indexEntries] = await Promise.all([
-    checkedGit(args.worktreePath, [
+    gitChecked(args.worktreePath, [
       "status",
       "--porcelain=v2",
       "-z",
@@ -43271,8 +43879,8 @@ async function scanCommandMutations(args) {
       "--ignored=matching",
       "--ignore-submodules=none"
     ]),
-    checkedGit(args.worktreePath, ["rev-parse", "--verify", "HEAD"]),
-    checkedGit(args.worktreePath, ["ls-files", "-v", "-z"])
+    gitChecked(args.worktreePath, ["rev-parse", "--verify", "HEAD"]),
+    gitChecked(args.worktreePath, ["ls-files", "-v", "-z"])
   ]);
   const statusRecords = status.split("\0").filter((record2) => record2.length > 0 && !(args.dependencyLink === "inherited" && /^[?!] node_modules\/?$/.test(record2)));
   const hiddenIndexRecords = indexEntries.split("\0").filter((record2) => /^(?:S|[a-z]) /.test(record2)).map((record2) => `index ${record2}`);
@@ -43310,10 +43918,14 @@ async function projectVerify(args) {
     args.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.borrowedCheckoutLease }
   );
   const materialized = await manager.create(args.artifact.candidateCommitOid);
+  const backend = verificationConfinementBackend(ps.os, arch);
+  let scratchDir = null;
   let primaryError;
   try {
+    scratchDir = backend === null ? null : await mkdtemp3(path23.join(tmpdir7(), "claude-architect-verify-"));
+    const confinement = backend === null || scratchDir === null ? null : { backend, worktreePath: materialized.path, scratchDir };
     const dependencyLink = await linkPrimaryDependencies(args.repoRoot, materialized.path);
-    const materializedTree = (await checkedGit(
+    const materializedTree = (await gitChecked(
       materialized.path,
       ["rev-parse", "HEAD^{tree}"]
     )).trim();
@@ -43361,6 +43973,7 @@ async function projectVerify(args) {
         cwd,
         ps,
         now,
+        confinement,
         ...args.logNamePrefix === void 0 ? {} : { logNamePrefix: args.logNamePrefix }
       });
       commandOutcomes.push(executed.outcome);
@@ -43390,6 +44003,7 @@ async function projectVerify(args) {
     primaryError = error51;
     throw error51;
   } finally {
+    if (scratchDir !== null) await rm8(scratchDir, { recursive: true, force: true });
     try {
       await materialized.cleanup();
     } catch (cleanupError) {
@@ -43402,36 +44016,7 @@ async function projectVerify(args) {
   }
 }
 
-// src/util/glob.ts
-function escapeRegex2(character) {
-  return /[\\^$.*+?()[\]{}|]/.test(character) ? `\\${character}` : character;
-}
-function globMatches(pattern, candidate, caseInsensitive = false) {
-  let expression = "^";
-  for (let index = 0; index < pattern.length; index += 1) {
-    const character = pattern[index];
-    if (character === void 0) break;
-    if (character !== "*") {
-      expression += escapeRegex2(character);
-      continue;
-    }
-    if (pattern[index + 1] !== "*") {
-      expression += "[^/]*";
-      continue;
-    }
-    index += 1;
-    if (pattern[index + 1] === "/") {
-      expression += "(?:.*/)?";
-      index += 1;
-    } else {
-      expression += ".*";
-    }
-  }
-  return new RegExp(`${expression}$`, caseInsensitive ? "i" : void 0).test(candidate);
-}
-
 // src/verify/structural-verifier.ts
-var MAX_DIAGNOSTIC_LENGTH4 = 2e3;
 var MODE_STRUCTURAL_FAILURES = {
   candidate: [
     "manifest-divergence",
@@ -43459,19 +44044,7 @@ var MODE_STRUCTURAL_FAILURES = {
     "artifact-base-mismatch"
   ]
 };
-function gitFailure2(action, result) {
-  const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, MAX_DIAGNOSTIC_LENGTH4);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-async function checkedGit2(cwd, args) {
-  const result = await git(cwd, args);
-  if (result.exitCode !== 0) throw gitFailure2(`git ${args[0] ?? "command"}`, result);
-  if (result.truncated?.stdout === true || result.truncated?.stderr === true) {
-    throw gitFailure2(`git ${args[0] ?? "command"}`, { ...result, stderr: "output truncated" });
-  }
-  return result.stdout;
-}
-function isAllowed(pathname, writeAllowlist, forbiddenScope, opaqueDirectory = false) {
+function isAllowed2(pathname, writeAllowlist, forbiddenScope, opaqueDirectory = false) {
   const scopePaths = opaqueDirectory ? [pathname, `${pathname}/`] : [pathname];
   return writeAllowlist.some((pattern) => scopePaths.some((candidate) => globMatches(pattern, candidate))) && !forbiddenScope.some((pattern) => scopePaths.some((candidate) => globMatches(pattern, candidate, true)));
 }
@@ -43492,7 +44065,7 @@ function pathsCaseCollide(changedPaths, treePaths) {
 }
 async function candidateHasCaseCollision(args) {
   const [changedOutput, treeOutput] = await Promise.all([
-    checkedGit2(args.worktreePath, [
+    gitChecked(args.worktreePath, [
       "diff-tree",
       "-r",
       "--no-commit-id",
@@ -43502,7 +44075,7 @@ async function candidateHasCaseCollision(args) {
       args.baseCommitOid,
       args.artifact.candidateTreeOid
     ]),
-    checkedGit2(args.worktreePath, [
+    gitChecked(args.worktreePath, [
       "ls-tree",
       "-r",
       "--name-only",
@@ -43514,7 +44087,7 @@ async function candidateHasCaseCollision(args) {
 }
 async function recomputeManifest(args) {
   const [rawOutput, nameStatusOutput, treeOutput] = await Promise.all([
-    checkedGit2(args.worktreePath, [
+    gitChecked(args.worktreePath, [
       "diff-tree",
       "-r",
       "--no-commit-id",
@@ -43524,7 +44097,7 @@ async function recomputeManifest(args) {
       args.baseCommitOid,
       args.artifact.candidateTreeOid
     ]),
-    checkedGit2(args.worktreePath, [
+    gitChecked(args.worktreePath, [
       "diff-tree",
       "-r",
       "--no-commit-id",
@@ -43534,7 +44107,7 @@ async function recomputeManifest(args) {
       args.baseCommitOid,
       args.artifact.candidateTreeOid
     ]),
-    checkedGit2(args.worktreePath, ["ls-tree", "-r", "-z", args.artifact.candidateTreeOid])
+    gitChecked(args.worktreePath, ["ls-tree", "-r", "-z", args.artifact.candidateTreeOid])
   ]);
   const rawDiff = parseRawDiff(rawOutput);
   const { changedPaths, manifestHash } = inspectChangedPathManifest({
@@ -43568,20 +44141,20 @@ async function singleCommitIdentityMatches(args) {
 }
 async function branchIdentityMatches(args) {
   const [sourceHead, materializedHead, candidateTree, sourceStatus, materializedStatus] = await Promise.all([
-    checkedGit2(args.repoRoot, ["rev-parse", "--verify", "HEAD^{commit}"]),
-    checkedGit2(args.worktreePath, ["rev-parse", "--verify", "HEAD^{commit}"]),
-    checkedGit2(args.repoRoot, [
+    gitChecked(args.repoRoot, ["rev-parse", "--verify", "HEAD^{commit}"]),
+    gitChecked(args.worktreePath, ["rev-parse", "--verify", "HEAD^{commit}"]),
+    gitChecked(args.repoRoot, [
       "rev-parse",
       "--verify",
       `${args.artifact.candidateCommitOid}^{tree}`
     ]),
-    checkedGit2(args.repoRoot, [
+    gitChecked(args.repoRoot, [
       "status",
       "--porcelain=v1",
       "-z",
       "--untracked-files=all"
     ]),
-    checkedGit2(args.worktreePath, [
+    gitChecked(args.worktreePath, [
       "status",
       "--porcelain=v1",
       "-z",
@@ -43612,9 +44185,9 @@ async function structuralVerify(args, mode = "candidate") {
     caseCollision
   ] = await Promise.all([
     recomputeManifest(args),
-    checkedGit2(args.repoRoot, ["rev-parse", `${args.baseCommitOid}^{tree}`]),
-    observesCheckoutDrift ? checkedGit2(args.repoRoot, ["rev-parse", "--verify", "HEAD"]) : Promise.resolve(""),
-    observesCheckoutDrift ? checkedGit2(args.repoRoot, [
+    gitChecked(args.repoRoot, ["rev-parse", `${args.baseCommitOid}^{tree}`]),
+    observesCheckoutDrift ? gitChecked(args.repoRoot, ["rev-parse", "--verify", "HEAD"]) : Promise.resolve(""),
+    observesCheckoutDrift ? gitChecked(args.repoRoot, [
       "status",
       "--porcelain=v1",
       "--untracked-files=all",
@@ -43630,7 +44203,7 @@ async function structuralVerify(args, mode = "candidate") {
     manifest.manifestHash === null || JSON.stringify(args.artifact.changedPaths) !== JSON.stringify(manifest.changedPaths) || args.artifact.manifestHash !== manifest.manifestHash
   );
   record2("artifact-divergence", !identityValid);
-  record2("out-of-scope-write", manifest.changedPaths.some((change) => !isAllowed(
+  record2("out-of-scope-write", manifest.changedPaths.some((change) => !isAllowed2(
     change.path,
     args.writeAllowlist,
     args.forbiddenScope,
@@ -43779,8 +44352,36 @@ var AcceptanceVerifier = class {
   }
 };
 
-// src/runtime/run-decision.ts
-import { createHash as createHash10 } from "node:crypto";
+// src/verify/verification-inputs.ts
+var TEST_PATH_PATTERNS = [
+  /(?:^|\/)(?:tests?|__tests__|spec|specs|testdata|fixtures)\//u,
+  /\.(?:test|spec)\.[^/]+$/u,
+  /(?:^|\/)(?:test_[^/]+|[^/]+_test)\.(?:py|go|rb|rs|exs?)$/u,
+  /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift|scala)$/u,
+  /(?:^|\/)conftest\.py$/u
+];
+function isTestPath(candidate) {
+  return TEST_PATH_PATTERNS.some((pattern) => pattern.test(candidate));
+}
+var VERIFICATION_INPUT_PATTERNS = [
+  ...TEST_PATH_PATTERNS,
+  // Test runner, compiler, and task configuration.
+  /(?:^|\/)(?:vitest|vite|jest|mocha|karma|playwright|cypress|ava|babel|webpack|rollup|esbuild)\.config\.[^/]+$/u,
+  /(?:^|\/)\.(?:mocharc|babelrc|nycrc|c8rc)(?:\.[^/]+)?$/u,
+  /(?:^|\/)tsconfig(?:\.[^/]+)?\.json$/u,
+  /(?:^|\/)(?:pytest|tox|setup)\.(?:ini|cfg)$/u,
+  /(?:^|\/)(?:Makefile|GNUmakefile|justfile|Taskfile\.ya?ml|Rakefile|build\.gradle(?:\.kts)?|pom\.xml)$/u,
+  // Dependency manifests and lockfiles.
+  /(?:^|\/)package\.json$/u,
+  /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?)$/u,
+  /(?:^|\/)(?:pyproject\.toml|requirements[^/]*\.txt|Pipfile(?:\.lock)?|poetry\.lock|uv\.lock)$/u,
+  /(?:^|\/)(?:Cargo\.(?:toml|lock)|go\.(?:mod|sum)|Gemfile(?:\.lock)?|mix\.(?:exs|lock))$/u,
+  // Attribute and ignore rules change which bytes Git and tools see.
+  /(?:^|\/)\.git(?:attributes|ignore|modules)$/u
+];
+function verificationInputPaths(changedPaths) {
+  return changedPaths.filter((changed) => VERIFICATION_INPUT_PATTERNS.some((pattern) => pattern.test(changed)));
+}
 
 // src/protocol/pipeline-gate-cleared.ts
 var GIT_OID2 = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
@@ -43810,40 +44411,28 @@ function parsePipelineGateCleared(value) {
   };
 }
 
-// src/mcp/decision-authority.ts
-var DECISION_AUTHORITY_ENV = "CLAUDE_ARCHITECT_DECISION_AUTHORITY";
-function decisionAuthority(env = process.env, warn = (message) => console.error(message)) {
-  const raw = env[DECISION_AUTHORITY_ENV];
-  if (raw === void 0 || raw === "") return "autonomous";
-  if (raw === "autonomous" || raw === "human") return raw;
-  warn(
-    `${DECISION_AUTHORITY_ENV}="${raw}" is not a recognized decision authority; requiring human confirmation. Valid values: "autonomous", "human".`
-  );
-  return "human";
-}
-
 // src/runtime/artifact-store.ts
 import { randomUUID as randomUUID7 } from "node:crypto";
-import { constants as constants11 } from "node:fs";
+import { constants as constants12 } from "node:fs";
 import {
-  lstat as lstat12,
-  mkdir as mkdir6,
-  open as open11,
+  lstat as lstat14,
+  mkdir as mkdir7,
+  open as open12,
   opendir,
-  readdir as readdir7,
-  realpath as realpath9,
+  readdir as readdir8,
+  realpath as realpath10,
   rename as rename6,
-  rm as rm7
+  rm as rm9
 } from "node:fs/promises";
-import path21 from "node:path";
+import path24 from "node:path";
 
 // src/runtime/run-manifest.ts
-import { createHash as createHash9 } from "node:crypto";
+import { createHash as createHash10 } from "node:crypto";
 function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function sha2562(value) {
-  return createHash9("sha256").update(value).digest("hex");
+  return createHash10("sha256").update(value).digest("hex");
 }
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -44019,7 +44608,7 @@ var WINDOWS_RESERVED_COMPONENT = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
 var CANDIDATE_REF_PREFIX = "refs/claude-architect/candidates/";
 var PRUNE_BACKUP_REF_PREFIX = "refs/claude-architect/prune-backups/";
 var CLEANUP_JOURNAL = "cleanup.ndjson";
-var NO_FOLLOW6 = constants11.O_NOFOLLOW ?? 0;
+var NO_FOLLOW6 = constants12.O_NOFOLLOW ?? 0;
 var MAX_ARCHIVE_FILE_BYTES = 8e6;
 var MAX_EVIDENCE_REFERENCES = 4096;
 var MAX_EVIDENCE_DEPTH = 16;
@@ -44041,21 +44630,15 @@ function validateComponent(value, kind) {
     throw new RuntimeError(`invalid ${kind}: ${JSON.stringify(value)}`);
   }
 }
-function errorCode9(error51) {
-  return error51.code;
-}
-function isMissing3(error51) {
-  return errorCode9(error51) === "ENOENT";
-}
 function isAlreadyPresent2(error51) {
-  return errorCode9(error51) === "EEXIST";
+  return errorCode(error51) === "EEXIST";
 }
 async function pathExists(filename) {
   try {
-    await lstat12(filename);
+    await lstat14(filename);
     return true;
   } catch (error51) {
-    if (isMissing3(error51)) return false;
+    if (isMissing(error51)) return false;
     throw error51;
   }
 }
@@ -44071,62 +44654,50 @@ function compareEntries(left, right) {
   return left.runId < right.runId ? -1 : left.runId > right.runId ? 1 : 0;
 }
 function isWithin(root, candidate) {
-  const relative2 = path21.relative(root, candidate);
-  return relative2 === "" || !path21.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith(`..${path21.sep}`);
+  const relative2 = path24.relative(root, candidate);
+  return relative2 === "" || !path24.isAbsolute(relative2) && relative2 !== ".." && !relative2.startsWith(`..${path24.sep}`);
 }
 async function ensurePlainDirectory(directory) {
   let created = false;
   try {
-    await mkdir6(directory, { mode: 448 });
+    await mkdir7(directory, { mode: 448 });
     created = true;
   } catch (error51) {
     if (!isAlreadyPresent2(error51)) throw error51;
   }
-  const metadata = await lstat12(directory);
+  const metadata = await lstat14(directory);
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
   }
-  if (created) await syncDirectory3(path21.dirname(directory));
+  if (created) await flushDirectory(path24.dirname(directory));
   return { dev: metadata.dev, ino: metadata.ino };
 }
 async function ensurePlainDirectoryTree(directory) {
   try {
     return await ensurePlainDirectory(directory);
   } catch (error51) {
-    if (!isMissing3(error51)) throw error51;
-    const parent = path21.dirname(directory);
+    if (!isMissing(error51)) throw error51;
+    const parent = path24.dirname(directory);
     if (parent === directory) throw error51;
     await ensurePlainDirectoryTree(parent);
     return ensurePlainDirectory(directory);
   }
 }
 async function assertDirectoryIdentity5(directory, expected) {
-  const metadata = await lstat12(directory);
+  const metadata = await lstat14(directory);
   if (metadata.isSymbolicLink() || !metadata.isDirectory() || metadata.dev !== expected.dev || metadata.ino !== expected.ino) {
     throw new RuntimeError("archive directory identity changed during operation");
   }
 }
-async function syncDirectory3(directory) {
-  let handle;
-  try {
-    handle = await open11(directory, constants11.O_RDONLY | NO_FOLLOW6);
-    await handle.sync();
-  } catch (error51) {
-    const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode9(error51) ?? "");
-    if (!unsupportedOnWindows) throw error51;
-  } finally {
-    await handle?.close();
-  }
-}
 async function readRegularFile(filename, parentIdentity) {
-  const linkMetadata = await lstat12(filename);
+  const linkMetadata = await lstat14(filename);
   if (linkMetadata.isSymbolicLink()) {
     throw new RuntimeError(`archive entry must not be a symbolic link: ${redact(filename)}`);
   }
-  const handle = await open11(filename, constants11.O_RDONLY | NO_FOLLOW6);
+  const handle = await open12(filename, constants12.O_RDONLY | NO_FOLLOW6);
   try {
     if (parentIdentity !== void 0) {
-      await assertDirectoryIdentity5(path21.dirname(filename), parentIdentity);
+      await assertDirectoryIdentity5(path24.dirname(filename), parentIdentity);
     }
     const metadata = await handle.stat();
     if (!metadata.isFile()) {
@@ -44153,7 +44724,7 @@ async function readRegularFile(filename, parentIdentity) {
       throw new RuntimeError(`archive entry changed while being read: ${redact(filename)}`);
     }
     if (parentIdentity !== void 0) {
-      await assertDirectoryIdentity5(path21.dirname(filename), parentIdentity);
+      await assertDirectoryIdentity5(path24.dirname(filename), parentIdentity);
     }
     return contents.subarray(0, offset).toString("utf8");
   } finally {
@@ -44161,7 +44732,7 @@ async function readRegularFile(filename, parentIdentity) {
   }
 }
 async function directoryBytes(directory, expectedIdentity) {
-  const metadata = await lstat12(directory);
+  const metadata = await lstat14(directory);
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError("archive size accounting requires a plain directory");
   }
@@ -44174,16 +44745,16 @@ async function directoryBytes(directory, expectedIdentity) {
   try {
     entries = await opendir(directory);
   } catch (error51) {
-    if (isMissing3(error51)) return 0;
+    if (isMissing(error51)) return 0;
     throw error51;
   }
   try {
     await assertDirectoryIdentity5(directory, identity);
     for await (const entry of entries) {
       await assertDirectoryIdentity5(directory, identity);
-      const entryPath = path21.join(directory, entry.name);
+      const entryPath = path24.join(directory, entry.name);
       try {
-        const entryMetadata = await lstat12(entryPath);
+        const entryMetadata = await lstat14(entryPath);
         if (entryMetadata.isSymbolicLink()) {
           throw new RuntimeError("archive size accounting encountered a symbolic link");
         }
@@ -44191,13 +44762,13 @@ async function directoryBytes(directory, expectedIdentity) {
         else if (entryMetadata.isFile()) total += entryMetadata.size;
         await assertDirectoryIdentity5(directory, identity);
       } catch (error51) {
-        if (!isMissing3(error51)) throw error51;
+        if (!isMissing(error51)) throw error51;
       }
     }
     await assertDirectoryIdentity5(directory, identity);
   } finally {
     await entries.close().catch((error51) => {
-      if (errorCode9(error51) !== "ERR_DIR_CLOSED") throw error51;
+      if (errorCode(error51) !== "ERR_DIR_CLOSED") throw error51;
     });
   }
   return total;
@@ -44266,7 +44837,7 @@ function preserveNullableIdentity2(value, label) {
 function preserveCandidatePath(value) {
   const candidatePath = preserveIdentity2(value, "candidate path");
   const segments = candidatePath.split("/");
-  if (candidatePath === "" || candidatePath.includes("\\") || candidatePath.includes("\0") || path21.posix.isAbsolute(candidatePath) || path21.win32.isAbsolute(candidatePath) || /^[A-Za-z]:/.test(candidatePath) || segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+  if (candidatePath === "" || candidatePath.includes("\\") || candidatePath.includes("\0") || path24.posix.isAbsolute(candidatePath) || path24.win32.isAbsolute(candidatePath) || /^[A-Za-z]:/.test(candidatePath) || segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
     throw new RuntimeError("candidate path must be a normalized relative Git path");
   }
   return candidatePath;
@@ -44562,14 +45133,14 @@ var POST_PIPELINE_AUTOPILOT = {
 function pipelineArtifact(name) {
   validateComponent(name, "log name");
   return {
-    relativePath: path21.posix.join("pipeline", `${name}.json`),
+    relativePath: path24.posix.join("pipeline", `${name}.json`),
     parse: (value) => value,
     write: { mode: "immutable", prepare: (value) => redactRecord(value) }
   };
 }
 function logReference(name) {
   validateComponent(name, "log name");
-  return path21.posix.join("logs", `${name}.log`);
+  return path24.posix.join("logs", `${name}.log`);
 }
 var ArtifactStore = class _ArtifactStore {
   runDirectory;
@@ -44578,13 +45149,13 @@ var ArtifactStore = class _ArtifactStore {
   constructor(runId) {
     validateComponent(runId, "run id");
     this.runId = runId;
-    this.runsRoot = path21.join(resolveStateDir(), "runs");
-    this.runDirectory = path21.join(this.runsRoot, runId);
+    this.runsRoot = path24.join(resolveStateDir(), "runs");
+    this.runDirectory = path24.join(this.runsRoot, runId);
   }
   async ensureRunsRoot() {
-    await ensurePlainDirectoryTree(path21.dirname(this.runsRoot));
+    await ensurePlainDirectoryTree(path24.dirname(this.runsRoot));
     await ensurePlainDirectory(this.runsRoot);
-    return realpath9(this.runsRoot);
+    return realpath10(this.runsRoot);
   }
   async ensureRunDirectory(create) {
     const canonicalRunsRoot = await this.ensureRunsRoot();
@@ -44592,37 +45163,37 @@ var ArtifactStore = class _ArtifactStore {
       await ensurePlainDirectory(this.runDirectory);
     } else {
       try {
-        const metadata = await lstat12(this.runDirectory);
+        const metadata = await lstat14(this.runDirectory);
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
           throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(this.runDirectory)}`);
         }
       } catch (error51) {
-        if (isMissing3(error51)) return null;
+        if (isMissing(error51)) return null;
         throw error51;
       }
     }
-    const canonicalRunDirectory = await realpath9(this.runDirectory);
+    const canonicalRunDirectory = await realpath10(this.runDirectory);
     if (!isWithin(canonicalRunsRoot, canonicalRunDirectory)) {
       throw new RuntimeError("archive directory escapes plugin data");
     }
     return canonicalRunDirectory;
   }
   async ensureArchiveDirectory(relativePath) {
-    if (path21.isAbsolute(relativePath)) throw new RuntimeError("archive path must be relative");
-    const normalized = path21.normalize(relativePath);
-    if (normalized === ".." || normalized.startsWith(`..${path21.sep}`)) {
+    if (path24.isAbsolute(relativePath)) throw new RuntimeError("archive path must be relative");
+    const normalized = path24.normalize(relativePath);
+    if (normalized === ".." || normalized.startsWith(`..${path24.sep}`)) {
       throw new RuntimeError("archive path escapes run directory");
     }
     const canonicalRunDirectory = await this.ensureRunDirectory(true);
     if (canonicalRunDirectory === null) throw new RuntimeError("failed to create archive directory");
-    const relativeDirectory = path21.dirname(normalized);
+    const relativeDirectory = path24.dirname(normalized);
     if (relativeDirectory === ".") return canonicalRunDirectory;
     let current = canonicalRunDirectory;
-    for (const component of relativeDirectory.split(path21.sep)) {
+    for (const component of relativeDirectory.split(path24.sep)) {
       validateComponent(component, "log name");
-      current = path21.join(current, component);
+      current = path24.join(current, component);
       await ensurePlainDirectory(current);
-      const canonicalCurrent = await realpath9(current);
+      const canonicalCurrent = await realpath10(current);
       if (!isWithin(canonicalRunDirectory, canonicalCurrent)) {
         throw new RuntimeError("archive directory escapes run directory");
       }
@@ -44634,7 +45205,7 @@ var ArtifactStore = class _ArtifactStore {
     const directory = await this.ensureArchiveDirectory(relativePath);
     const session = await openDurableDirectorySession(directory);
     try {
-      await platformSafety.writeAtomic(session, path21.basename(relativePath), text, "immutable");
+      await platformSafety.writeAtomic(session, path24.basename(relativePath), text, "immutable");
     } finally {
       await session.close();
     }
@@ -44664,7 +45235,7 @@ var ArtifactStore = class _ArtifactStore {
       return;
     }
     const leaf = descriptor.relativePath;
-    if (path21.posix.dirname(leaf) !== "." || !isSafeComponent(leaf)) {
+    if (path24.posix.dirname(leaf) !== "." || !isSafeComponent(leaf)) {
       throw new RuntimeError("replacement archive path must be a safe relative leaf");
     }
     const directory = await this.ensureRunDirectory(false);
@@ -44707,7 +45278,7 @@ var ArtifactStore = class _ArtifactStore {
    * caller-supplied reference.
    */
   async readEvidence(reference) {
-    if (typeof reference !== "string" || reference.length < 1 || reference.length > 1024 || path21.posix.isAbsolute(reference) || reference.includes("\\") || /[\0\r\n]/u.test(reference)) {
+    if (typeof reference !== "string" || reference.length < 1 || reference.length > 1024 || path24.posix.isAbsolute(reference) || reference.includes("\\") || /[\0\r\n]/u.test(reference)) {
       throw new RuntimeError("invalid archived evidence reference");
     }
     const components = reference.split("/");
@@ -44721,12 +45292,12 @@ var ArtifactStore = class _ArtifactStore {
     try {
       for (const component of components.slice(0, -1)) {
         await assertDirectoryIdentity5(directory.path, directory.identity);
-        const child = path21.join(directory.path, component);
-        const metadata = await lstat12(child);
+        const child = path24.join(directory.path, component);
+        const metadata = await lstat14(child);
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
           throw new RuntimeError("archived evidence directory is not a plain directory");
         }
-        const canonical = await realpath9(child);
+        const canonical = await realpath10(child);
         if (!isWithin(run.path, canonical)) {
           throw new RuntimeError("archived evidence reference escapes run directory");
         }
@@ -44737,13 +45308,13 @@ var ArtifactStore = class _ArtifactStore {
         await assertDirectoryIdentity5(directory.path, directory.identity);
       }
       const content = await readRegularFile(
-        path21.join(directory.path, components.at(-1)),
+        path24.join(directory.path, components.at(-1)),
         directory.identity
       );
       await assertDirectoryIdentity5(run.path, run.identity);
       return content;
     } catch (error51) {
-      if (isMissing3(error51)) return null;
+      if (isMissing(error51)) return null;
       throw error51;
     }
   }
@@ -44761,12 +45332,12 @@ var ArtifactStore = class _ArtifactStore {
         throw new RuntimeError("archived evidence nesting exceeds the supported limit");
       }
       await assertDirectoryIdentity5(directory.path, directory.identity);
-      const names = (await readdir7(directory.path)).sort();
+      const names = (await readdir8(directory.path)).sort();
       for (const name of names) {
         if (STORE_TEMPORARY_RESIDUE.test(name)) continue;
         validateComponent(name, "log name");
-        const child = path21.join(directory.path, name);
-        const metadata = await lstat12(child);
+        const child = path24.join(directory.path, name);
+        const metadata = await lstat14(child);
         if (metadata.isSymbolicLink()) {
           throw new RuntimeError("archived evidence must not contain symbolic links");
         }
@@ -44775,7 +45346,7 @@ var ArtifactStore = class _ArtifactStore {
           throw new RuntimeError("archived evidence reference is too long");
         }
         if (metadata.isDirectory()) {
-          const canonical = await realpath9(child);
+          const canonical = await realpath10(child);
           if (!isWithin(run.path, canonical)) {
             throw new RuntimeError("archived evidence directory escapes run directory");
           }
@@ -44830,11 +45401,11 @@ var ArtifactStore = class _ArtifactStore {
   async ensureExistingRunDirectory(directory) {
     const canonicalRunsRoot = await this.ensureRunsRoot();
     try {
-      const metadata = await lstat12(directory);
+      const metadata = await lstat14(directory);
       if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
         throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
       }
-      const canonicalDirectory = await realpath9(directory);
+      const canonicalDirectory = await realpath10(directory);
       if (!isWithin(canonicalRunsRoot, canonicalDirectory)) {
         throw new RuntimeError("archive directory escapes plugin data");
       }
@@ -44842,7 +45413,7 @@ var ArtifactStore = class _ArtifactStore {
       await assertDirectoryIdentity5(directory, identity);
       return { path: canonicalDirectory, identity };
     } catch (error51) {
-      if (isMissing3(error51)) return null;
+      if (isMissing(error51)) return null;
       throw error51;
     }
   }
@@ -44885,12 +45456,12 @@ var ArtifactStore = class _ArtifactStore {
       this.readAdvisorReport()
     ]);
     if (pipelineResult === null || reviewSnapshot === null || advisorReport === null) return null;
-    return evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    return evaluateAutopilotEligibility({
       pipelineResult,
       reviewSnapshot,
       advisor: advisorReport,
       evaluatedAt: record2.evaluatedAt
-    }));
+    });
   }
   /**
    * The archived eligibility record, re-derived from the archived evidence it
@@ -44924,12 +45495,12 @@ var ArtifactStore = class _ArtifactStore {
       throw new RuntimeError("advisor report cannot be safely persisted after redaction");
     }
     const record2 = validateAutopilotEligibilityRecord(structuredClone(args.eligibility), this.runId);
-    const expected = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const expected = evaluateAutopilotEligibility({
       pipelineResult: archivedPipelineResult,
       reviewSnapshot: archivedReviewSnapshot,
       advisor: sanitizedReport,
       evaluatedAt: record2.evaluatedAt
-    }));
+    });
     if (canonicalArtifactHash(expected) !== canonicalArtifactHash(record2)) {
       throw new RuntimeError("post-pipeline eligibility was not derived from the supplied frozen evidence");
     }
@@ -45024,18 +45595,18 @@ var ArtifactStore = class _ArtifactStore {
   async clearPipelineActiveMarker() {
     const directory = await this.ensureRunDirectory(false);
     if (directory === null) return;
-    await rm7(path21.join(directory, PIPELINE_ACTIVE_MARKER.relativePath), { force: true });
+    await rm9(path24.join(directory, PIPELINE_ACTIVE_MARKER.relativePath), { force: true });
   }
   async list() {
     await this.ensureRunsRoot();
-    const entries = await readdir7(this.runsRoot, { withFileTypes: true });
+    const entries = await readdir8(this.runsRoot, { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory() && isSafeComponent(entry.name)).map((entry) => entry.name).sort();
   }
   async entries() {
     const entries = await Promise.all((await this.list()).map(async (runId) => {
-      const directory = path21.join(this.runsRoot, runId);
+      const directory = path24.join(this.runsRoot, runId);
       try {
-        const metadata = await lstat12(directory);
+        const metadata = await lstat14(directory);
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) return null;
         return {
           runId,
@@ -45045,7 +45616,7 @@ var ArtifactStore = class _ArtifactStore {
           identity: { dev: metadata.dev, ino: metadata.ino }
         };
       } catch (error51) {
-        if (isMissing3(error51)) return null;
+        if (isMissing(error51)) return null;
         throw error51;
       }
     }));
@@ -45073,7 +45644,7 @@ var ArtifactStore = class _ArtifactStore {
       throw new RuntimeError("archived candidate does not match its run manifest");
     }
     const repositoryTopLevel = await git(canonicalRepoRoot, ["rev-parse", "--show-toplevel"]);
-    if (repositoryTopLevel.exitCode !== 0 || await realpath9(gitPathOutput(
+    if (repositoryTopLevel.exitCode !== 0 || await realpath10(gitPathOutput(
       repositoryTopLevel.stdout,
       "candidate repository root"
     )) !== canonicalRepoRoot) {
@@ -45195,10 +45766,10 @@ var ArtifactStore = class _ArtifactStore {
       try {
         await this.ensureRunsRoot();
         const runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
-        const filename = path21.join(this.runsRoot, CLEANUP_JOURNAL);
-        const handle = await open11(
+        const filename = path24.join(this.runsRoot, CLEANUP_JOURNAL);
+        const handle = await open12(
           filename,
-          constants11.O_WRONLY | constants11.O_CREAT | constants11.O_APPEND | NO_FOLLOW6,
+          constants12.O_WRONLY | constants12.O_CREAT | constants12.O_APPEND | NO_FOLLOW6,
           384
         );
         try {
@@ -45214,7 +45785,7 @@ var ArtifactStore = class _ArtifactStore {
           await handle.close();
         }
         await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
-        await syncDirectory3(this.runsRoot);
+        await flushDirectory(this.runsRoot);
         await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
       } finally {
         await journalLock.release();
@@ -45244,11 +45815,11 @@ var ArtifactStore = class _ArtifactStore {
     await assertDirectoryIdentity5(entry.directory, entry.identity);
     await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
     await rename6(entry.directory, quarantinePath);
-    await syncDirectory3(this.runsRoot);
+    await flushDirectory(this.runsRoot);
     await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
     await assertDirectoryIdentity5(quarantinePath, entry.identity);
-    await rm7(quarantinePath, { recursive: true, force: false });
-    await syncDirectory3(this.runsRoot);
+    await rm9(quarantinePath, { recursive: true, force: false });
+    await flushDirectory(this.runsRoot);
     await this.appendCleanupRecord({
       event: "prune-cleanup-complete",
       runId: entry.runId,
@@ -45275,13 +45846,12 @@ var ArtifactStore = class _ArtifactStore {
       if (attempted.has(entry.runId)) return;
       attempted.add(entry.runId);
       const quarantineName = `.prune-${entry.runId}-${randomUUID7()}`;
-      const quarantinePath = path21.join(this.runsRoot, quarantineName);
+      const quarantinePath = path24.join(this.runsRoot, quarantineName);
       const runStore = new _ArtifactStore(entry.runId);
       let prepared = null;
       let transaction = null;
       let runsRootIdentity = null;
       let archiveRemovalCommitted = false;
-      let lease = null;
       try {
         if (await runStore.readPipelineActiveMarker() !== null) {
           retained.push({ runId: entry.runId, reason: "active-run" });
@@ -45302,7 +45872,7 @@ var ArtifactStore = class _ArtifactStore {
         try {
           canonical = await platformServices.canonicalizePath(initialManifest.repoRoot);
         } catch (error51) {
-          if (errorCode9(error51) !== "ENOENT") throw error51;
+          if (errorCode(error51) !== "ENOENT") throw error51;
           await this.reclaimRepoAbsentArchive(
             entry,
             reason,
@@ -45315,8 +45885,7 @@ var ArtifactStore = class _ArtifactStore {
           return;
         }
         const safety = new PlatformSafety(platformServices);
-        await safety.withCheckoutLease(canonical.canonical, async (acquiredLease) => {
-          lease = acquiredLease;
+        await safety.withCheckoutLease(canonical.canonical, async () => {
           await assertDirectoryIdentity5(entry.directory, entry.identity);
           const currentManifest = await runStore.readManifest();
           if (currentManifest === null || serializeJson(currentManifest) !== serializeJson(initialManifest)) {
@@ -45360,12 +45929,12 @@ var ArtifactStore = class _ArtifactStore {
           await assertDirectoryIdentity5(entry.directory, entry.identity);
           await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
           await rename6(entry.directory, quarantinePath);
-          await syncDirectory3(this.runsRoot);
+          await flushDirectory(this.runsRoot);
           await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
           await assertDirectoryIdentity5(quarantinePath, entry.identity);
           archiveRemovalCommitted = true;
-          await rm7(quarantinePath, { recursive: true, force: false });
-          await syncDirectory3(this.runsRoot);
+          await rm9(quarantinePath, { recursive: true, force: false });
+          await flushDirectory(this.runsRoot);
           await transaction.commit();
           await this.appendCleanupRecord({
             event: "prune-cleanup-complete",
@@ -45406,7 +45975,7 @@ var ArtifactStore = class _ArtifactStore {
               await assertDirectoryIdentity5(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity5(quarantinePath, entry.identity);
               await rename6(quarantinePath, entry.directory);
-              await syncDirectory3(this.runsRoot);
+              await flushDirectory(this.runsRoot);
               await assertDirectoryIdentity5(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity5(entry.directory, entry.identity);
             } else if (runDirectoryExists) {
@@ -45490,7 +46059,10 @@ var RunDecision = class {
         coherenceErrors.push(`failed to read manifest: ${err instanceof Error ? err.message : String(err)}`);
         return null;
       }) : Promise.resolve(null);
-      const readSnapshot = typeof store.readReviewSnapshot === "function" ? store.readReviewSnapshot().catch(() => null) : Promise.resolve(null);
+      const readSnapshot = typeof store.readReviewSnapshot === "function" ? store.readReviewSnapshot().catch((err) => {
+        coherenceErrors.push(`failed to read review snapshot: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      }) : Promise.resolve(null);
       const readGateRecord = typeof store.readPipelineGateCleared === "function" ? store.readPipelineGateCleared().catch((err) => {
         gateRecordError = `the pipeline gate clearance record is malformed: ${err instanceof Error ? err.message : String(err)}`;
         return null;
@@ -45532,7 +46104,12 @@ var RunDecision = class {
         if (manifest.candidateManifestHash !== result.candidate.manifestHash) {
           coherenceErrors.push("archived candidate manifest hash does not match run manifest");
         }
-        const expectedHash = createHash10("sha256").update(JSON.stringify(result.candidate.changedPaths)).digest("hex");
+        let expectedHash;
+        try {
+          expectedHash = manifestHashOf(result.candidate.changedPaths);
+        } catch {
+          expectedHash = null;
+        }
         if (result.candidate.manifestHash !== expectedHash) {
           coherenceErrors.push("archived candidate changed paths hash mismatch");
         }
@@ -45622,9 +46199,20 @@ var RunDecision = class {
       humanReasons.push(`decision authority is "${authority}"`);
     }
     const isPlainDelegate = snapshot.result.evidence?.plainDelegate === true && refusedEvidence === void 0 && incompleteEvidence === void 0 && snapshot.result.evidence?.pipelineGateCleared === void 0 && snapshot.gateRecord === null;
+    if (verificationRanUnconfined(snapshot.manifest)) {
+      humanReasons.push("project verification ran without OS confinement on this platform");
+    }
     if (snapshot.gateRecordError) {
       humanReasons.push(snapshot.gateRecordError);
     } else if (isPlainDelegate) {
+      const touched = verificationInputPaths(
+        snapshot.result.candidate.changedPaths.map((change) => change.path)
+      );
+      if (touched.length > 0) {
+        humanReasons.push(
+          `the candidate changes verification inputs: ${touched.slice(0, 10).join(", ")}`
+        );
+      }
     } else if (snapshot.gateRecord === null) {
       humanReasons.push("the pipeline gate clearance record is missing");
     } else if (snapshot.gateRecord.requiresHumanDecision === true) {
@@ -45640,13 +46228,21 @@ var RunDecision = class {
     return verifier.verify(args);
   }
 };
+var OS_CONFINEMENT = new Set(
+  SANDBOX_BACKENDS.filter((backend) => backend.kind === "os").map((backend) => backend.id)
+);
+function verificationRanUnconfined(manifest) {
+  const policy = isRecord7(manifest.effectivePolicy) ? manifest.effectivePolicy.verificationPolicy : void 0;
+  if (!Array.isArray(policy)) return true;
+  return policy.some((command) => !isRecord7(command) || command.skipped !== true && !(typeof command.confinement === "string" && OS_CONFINEMENT.has(command.confinement)));
+}
 var runDecision = new RunDecision();
 async function readRunDecisionSnapshot(runId, options) {
   return runDecision.readSnapshot(runId, options);
 }
 
 // src/pipeline/role-runner.ts
-import { rm as rm8 } from "node:fs/promises";
+import { rm as rm10 } from "node:fs/promises";
 
 // src/producers/routing-policy.ts
 function route(preferences, reports) {
@@ -45909,8 +46505,8 @@ function buildRoleSpec(role, base, pkg) {
 }
 
 // src/pipeline/git-writable-roots.ts
-import { lstat as lstat13, mkdir as mkdir7, readFile as readFile5, realpath as realpath10 } from "node:fs/promises";
-import path22 from "node:path";
+import { lstat as lstat15, mkdir as mkdir8, readFile as readFile5, realpath as realpath11 } from "node:fs/promises";
+import path25 from "node:path";
 function invalidWritableRoots(message, cause) {
   return new RuntimeError(message, {
     classification: "sandbox-violation",
@@ -45918,21 +46514,21 @@ function invalidWritableRoots(message, cause) {
   });
 }
 async function requirePlainFile(filename, label) {
-  const stats = await lstat13(filename);
+  const stats = await lstat15(filename);
   if (!stats.isFile() || stats.isSymbolicLink()) {
     throw invalidWritableRoots(`${label} must be a plain regular file`);
   }
   return stats;
 }
 async function requirePlainDirectory(directory, label) {
-  const stats = await lstat13(directory);
+  const stats = await lstat15(directory);
   if (!stats.isDirectory() || stats.isSymbolicLink()) {
     throw invalidWritableRoots(`${label} must be a plain directory`);
   }
 }
 function isContainedBy(parent, candidate) {
-  const relative2 = path22.relative(parent, candidate);
-  return relative2 !== "" && relative2 !== ".." && !relative2.startsWith(`..${path22.sep}`) && !path22.isAbsolute(relative2);
+  const relative2 = path25.relative(parent, candidate);
+  return relative2 !== "" && relative2 !== ".." && !relative2.startsWith(`..${path25.sep}`) && !path25.isAbsolute(relative2);
 }
 function sameFileIdentity(before, after) {
   return before.dev === after.dev && before.ino === after.ino;
@@ -45947,16 +46543,16 @@ async function readStablePlainFile(filename, label) {
   return value;
 }
 async function resolveLinkedWorktreeWritableRoots(worktreePath) {
-  const dotGit = path22.join(worktreePath, ".git");
+  const dotGit = path25.join(worktreePath, ".git");
   try {
     const pointer = await readStablePlainFile(dotGit, "linked worktree .git entry");
     const match = /^gitdir: (.+)\r?\n?$/.exec(pointer);
     if (match === null) {
       throw invalidWritableRoots("linked worktree .git pointer is malformed");
     }
-    const gitDir = await realpath10(path22.resolve(worktreePath, match[1]));
+    const gitDir = await realpath11(path25.resolve(worktreePath, match[1]));
     await requirePlainDirectory(gitDir, "linked worktree private git directory");
-    const commonDirPointer = path22.join(gitDir, "commondir");
+    const commonDirPointer = path25.join(gitDir, "commondir");
     const commonDirValue = (await readStablePlainFile(
       commonDirPointer,
       "linked worktree commondir entry"
@@ -45964,19 +46560,19 @@ async function resolveLinkedWorktreeWritableRoots(worktreePath) {
     if (commonDirValue === "" || commonDirValue.includes("\0")) {
       throw invalidWritableRoots("linked worktree commondir pointer is malformed");
     }
-    const commonDir = await realpath10(path22.resolve(gitDir, commonDirValue));
+    const commonDir = await realpath11(path25.resolve(gitDir, commonDirValue));
     await requirePlainDirectory(commonDir, "common git directory");
-    const worktreesDir = await realpath10(path22.join(commonDir, "worktrees"));
+    const worktreesDir = await realpath11(path25.join(commonDir, "worktrees"));
     await requirePlainDirectory(worktreesDir, "common git worktrees directory");
     if (!isContainedBy(worktreesDir, gitDir)) {
       throw invalidWritableRoots("linked worktree private git directory escapes common git worktrees");
     }
-    const sharedObjectsDir = await realpath10(path22.join(commonDir, "objects"));
+    const sharedObjectsDir = await realpath11(path25.join(commonDir, "objects"));
     await requirePlainDirectory(sharedObjectsDir, "common git objects directory");
-    const privateObjectsPath = path22.join(gitDir, "private-objects");
-    await mkdir7(privateObjectsPath, { recursive: true, mode: 448 });
+    const privateObjectsPath = path25.join(gitDir, "private-objects");
+    await mkdir8(privateObjectsPath, { recursive: true, mode: 448 });
     await requirePlainDirectory(privateObjectsPath, "private git objects directory");
-    const privateObjectsDir = await realpath10(privateObjectsPath);
+    const privateObjectsDir = await realpath11(privateObjectsPath);
     if (!isContainedBy(gitDir, privateObjectsDir)) {
       throw invalidWritableRoots("private git objects directory escapes linked worktree git directory");
     }
@@ -46031,7 +46627,7 @@ async function cleanupProcessAttempt(tempHome, builtEnvironment) {
   }
   if (tempHome !== null) {
     try {
-      await rm8(tempHome, { recursive: true, force: true });
+      await rm10(tempHome, { recursive: true, force: true });
     } catch (error51) {
       failures.push(error51);
     }
@@ -46213,13 +46809,13 @@ async function parseStructuredReport(raw, validate, repair) {
 
 // src/autopilot/branch-manager.ts
 import { createHash as createHash11, randomUUID as randomUUID8 } from "node:crypto";
-import { constants as constants12 } from "node:fs";
-import { chmod, link as link6, lstat as lstat15, mkdir as mkdir8, mkdtemp as mkdtemp2, open as open12, realpath as realpath12, rm as rm9 } from "node:fs/promises";
-import path24 from "node:path";
+import { constants as constants13 } from "node:fs";
+import { chmod, link as link5, lstat as lstat17, mkdir as mkdir9, mkdtemp as mkdtemp4, open as open13, realpath as realpath13, rm as rm11 } from "node:fs/promises";
+import path27 from "node:path";
 
 // src/git/repo-preconditions.ts
-import { access as access5, lstat as lstat14, opendir as opendir2, readlink, realpath as realpath11 } from "node:fs/promises";
-import path23 from "node:path";
+import { access as access5, lstat as lstat16, opendir as opendir2, readlink, realpath as realpath12 } from "node:fs/promises";
+import path26 from "node:path";
 var MAX_DETAIL_ENTRIES = 20;
 function boundedDetail(lines) {
   if (lines.length <= MAX_DETAIL_ENTRIES) return lines;
@@ -46235,9 +46831,6 @@ var IN_PROGRESS_PATHS = [
   "BISECT_LOG"
 ];
 var MAX_NESTED_REPOSITORY_SCAN_ENTRIES = 1e4;
-function succeeded(result) {
-  return result.exitCode === 0;
-}
 async function exists2(filePath) {
   try {
     await access5(filePath);
@@ -46255,10 +46848,10 @@ async function checkInProgressOperation(checkoutPath, runGit = git) {
     "--path-format=absolute",
     "--git-dir"
   ]);
-  if (!succeeded(gitDirectoryResult)) return "scan-failed";
+  if (!gitSucceeded(gitDirectoryResult)) return "scan-failed";
   try {
     const gitDirectory = gitPathOutput(gitDirectoryResult.stdout, "Git directory");
-    return (await Promise.all(IN_PROGRESS_PATHS.map((relative2) => exists2(path23.join(gitDirectory, relative2))))).some(Boolean) ? "in-progress" : "clear";
+    return (await Promise.all(IN_PROGRESS_PATHS.map((relative2) => exists2(path26.join(gitDirectory, relative2))))).some(Boolean) ? "in-progress" : "clear";
   } catch {
     return "scan-failed";
   }
@@ -46290,7 +46883,7 @@ function indexPathsWithMode(output, mode) {
   for (const record2 of output.split("\0")) {
     if (!record2.startsWith(`${mode} `)) continue;
     const separator = record2.indexOf("	");
-    if (separator !== -1) paths.add(record2.slice(separator + 1).split(path23.sep).join("/"));
+    if (separator !== -1) paths.add(record2.slice(separator + 1).split(path26.sep).join("/"));
   }
   return paths;
 }
@@ -46298,8 +46891,8 @@ function pathIsWithin(root, candidate) {
   if (getPlatformServices().os === "win32") {
     return canonicalizeForScope(candidate, root);
   }
-  const relative2 = path23.relative(root, candidate);
-  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path23.sep}`) && !path23.isAbsolute(relative2);
+  const relative2 = path26.relative(root, candidate);
+  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path26.sep}`) && !path26.isAbsolute(relative2);
 }
 function pathsIdentifySameLocation(left, right) {
   if (getPlatformServices().os === "win32") {
@@ -46319,21 +46912,21 @@ async function isSafeTrackedFileSymlink(repositoryRoot, symlinkPath, relativePat
     if (hasCode(error51, ["ENOENT", "ENOTDIR", "ELOOP"])) return false;
     throw error51;
   }
-  if (path23.isAbsolute(linkTarget)) return false;
-  const lexicalTarget = path23.resolve(path23.dirname(symlinkPath), linkTarget);
+  if (path26.isAbsolute(linkTarget)) return false;
+  const lexicalTarget = path26.resolve(path26.dirname(symlinkPath), linkTarget);
   if (!pathIsWithin(repositoryRoot, lexicalTarget)) return false;
-  if (pathIsWithin(path23.join(repositoryRoot, ".git"), lexicalTarget)) return false;
+  if (pathIsWithin(path26.join(repositoryRoot, ".git"), lexicalTarget)) return false;
   let target;
   try {
-    target = await realpath11(symlinkPath);
+    target = await realpath12(symlinkPath);
   } catch (error51) {
     if (hasCode(error51, ["ENOENT", "ENOTDIR", "ELOOP"])) return false;
     throw error51;
   }
   if (!pathsIdentifySameLocation(lexicalTarget, target)) return false;
   if (!pathIsWithin(repositoryRoot, target)) return false;
-  if (pathIsWithin(path23.join(repositoryRoot, ".git"), target)) return false;
-  return (await lstat14(target)).isFile();
+  if (pathIsWithin(path26.join(repositoryRoot, ".git"), target)) return false;
+  return (await lstat16(target)).isFile();
 }
 async function findNestedRepositories(repositoryRoot, registeredSubmodules, trackedSymlinks, writeAllowlist) {
   const nested = [...registeredSubmodules].filter((submodulePath) => writeAllowlist.some((pattern) => patternOverlapsRepository(pattern, submodulePath)));
@@ -46343,7 +46936,7 @@ async function findNestedRepositories(repositoryRoot, registeredSubmodules, trac
     const directory = pendingDirectories.pop();
     if (directory.relativePath !== "") {
       try {
-        await lstat14(path23.join(directory.path, ".git"));
+        await lstat16(path26.join(directory.path, ".git"));
         nested.push(directory.relativePath);
         continue;
       } catch (error51) {
@@ -46358,8 +46951,8 @@ async function findNestedRepositories(repositoryRoot, registeredSubmodules, trac
         throw new Error("nested repository scan entry budget exceeded");
       }
       if (entry.name === ".git") continue;
-      const child = path23.join(directory.path, entry.name);
-      const relativeChild = path23.relative(repositoryRoot, child).split(path23.sep).join("/");
+      const child = path26.join(directory.path, entry.name);
+      const relativeChild = path26.relative(repositoryRoot, child).split(path26.sep).join("/");
       if (registeredSubmodules.has(relativeChild)) continue;
       if (!writeAllowlist.some((pattern) => patternOverlapsRepository(pattern, relativeChild))) continue;
       if (entry.isSymbolicLink()) {
@@ -46385,10 +46978,10 @@ async function findNestedRepositories(repositoryRoot, registeredSubmodules, trac
 async function checkPreconditions(repoRoot, options = {}) {
   const { canonical } = await getPlatformServices().canonicalizePath(repoRoot);
   const bare = await git(canonical, ["rev-parse", "--is-bare-repository"]);
-  if (!succeeded(bare)) return { ok: false, reason: "not-a-repository" };
+  if (!gitSucceeded(bare)) return { ok: false, reason: "not-a-repository" };
   if (bare.stdout.trim() === "true") return { ok: false, reason: "bare-repository" };
   const head = await git(canonical, ["rev-parse", "--verify", "HEAD"]);
-  if (!succeeded(head)) return { ok: false, reason: "unborn-repository" };
+  if (!gitSucceeded(head)) return { ok: false, reason: "unborn-repository" };
   const baseCommitOid = head.stdout.trim();
   const inProgress = await checkInProgressOperation(canonical);
   if (inProgress === "in-progress") return { ok: false, reason: "in-progress-operation" };
@@ -46396,7 +46989,7 @@ async function checkPreconditions(repoRoot, options = {}) {
     return { ok: false, reason: "in-progress-operation-scan-failed" };
   }
   const submodules = await git(canonical, ["submodule", "status", "--recursive"]);
-  if (!succeeded(submodules)) return { ok: false, reason: "git-command-failed" };
+  if (!gitSucceeded(submodules)) return { ok: false, reason: "git-command-failed" };
   if (/^[+-]/m.test(submodules.stdout)) {
     return {
       ok: false,
@@ -46410,7 +47003,7 @@ async function checkPreconditions(repoRoot, options = {}) {
     "--untracked-files=all",
     "--ignore-submodules=none"
   ]);
-  if (!succeeded(status)) return { ok: false, reason: "git-command-failed" };
+  if (!gitSucceeded(status)) return { ok: false, reason: "git-command-failed" };
   if (status.stdout.length > 0) {
     return {
       ok: false,
@@ -46424,11 +47017,11 @@ async function checkPreconditions(repoRoot, options = {}) {
   }
   if (sparseCheckout.stdout.trim() === "true") return { ok: false, reason: "sparse-checkout" };
   const indexEntries = await git(canonical, ["ls-files", "-v"]);
-  if (!succeeded(indexEntries)) return { ok: false, reason: "git-command-failed" };
+  if (!gitSucceeded(indexEntries)) return { ok: false, reason: "git-command-failed" };
   if (/^[Ssh] /m.test(indexEntries.stdout)) return { ok: false, reason: "skip-worktree-entries" };
   if (options.writeAllowlist !== void 0 && options.writeAllowlist.length > 0) {
     const stagedEntries = await git(canonical, ["ls-files", "--stage", "-z"]);
-    if (!succeeded(stagedEntries)) return { ok: false, reason: "git-command-failed" };
+    if (!gitSucceeded(stagedEntries)) return { ok: false, reason: "git-command-failed" };
     const registeredSubmodules = indexPathsWithMode(stagedEntries.stdout, "160000");
     const trackedSymlinks = indexPathsWithMode(stagedEntries.stdout, "120000");
     let nestedRepositories;
@@ -46452,8 +47045,8 @@ async function checkPreconditions(repoRoot, options = {}) {
     "--path-format=absolute",
     "--git-common-dir"
   ]);
-  if (!succeeded(commonDirectoryResult)) return { ok: false, reason: "git-command-failed" };
-  const gitCommonDir3 = await realpath11(gitPathOutput(
+  if (!gitSucceeded(commonDirectoryResult)) return { ok: false, reason: "git-command-failed" };
+  const gitCommonDir3 = await realpath12(gitPathOutput(
     commonDirectoryResult.stdout,
     "Git common directory"
   ));
@@ -46474,9 +47067,6 @@ var WorkflowBranchError = class extends RuntimeError {
   }
   classification;
 };
-function succeeded2(result) {
-  return result.exitCode === 0 && result.truncated?.stdout !== true && result.truncated?.stderr !== true;
-}
 function transportFailure(action) {
   return { exitCode: 2, stdout: "", stderr: `${action} failed in isolated transport` };
 }
@@ -46504,14 +47094,14 @@ function createIsolatedRemoteTransport(runGit = git) {
     });
   };
   const createRepository = async () => {
-    const root = path24.join(resolveStateDir(), "autopilot-remote");
-    await mkdir8(root, { recursive: true, mode: 448 });
+    const root = path27.join(resolveStateDir(), "autopilot-remote");
+    await mkdir9(root, { recursive: true, mode: 448 });
     await chmod(root, 448);
-    const repository = await mkdtemp2(path24.join(root, "operation-"));
+    const repository = await mkdtemp4(path27.join(root, "operation-"));
     await chmod(repository, 448);
     const initialized = await runIsolatedGit(repository, ["init", "--bare", "--quiet", "."]);
-    if (!succeeded2(initialized)) {
-      await rm9(repository, { recursive: true, force: true });
+    if (!gitSucceeded(initialized)) {
+      await rm11(repository, { recursive: true, force: true });
       throw new RuntimeError("isolated remote repository initialization failed");
     }
     return repository;
@@ -46528,7 +47118,7 @@ function createIsolatedRemoteTransport(runGit = git) {
       }
       if (repository !== void 0) {
         try {
-          await rm9(repository, { recursive: true });
+          await rm11(repository, { recursive: true });
         } catch {
           return transportFailure("isolated remote repository cleanup");
         }
@@ -46549,24 +47139,24 @@ function createIsolatedRemoteTransport(runGit = git) {
           canonicalUrl,
           `${sourceRef}:${quarantineRef}`
         ]);
-        if (succeeded2(result)) {
+        if (gitSucceeded(result)) {
           const resolved = await runIsolatedGit(repository, ["rev-parse", "--verify", quarantineRef]);
-          if (!succeeded2(resolved) || !isOid(resolved.stdout.trim())) {
-            result = succeeded2(resolved) ? transportFailure("git resolve fetched base") : resolved;
+          if (!gitSucceeded(resolved) || !isOid(resolved.stdout.trim())) {
+            result = gitSucceeded(resolved) ? transportFailure("git resolve fetched base") : resolved;
           } else {
             fetchedOid = resolved.stdout.trim();
-            const bundlePath = path24.join(repository, "base.bundle");
+            const bundlePath = path27.join(repository, "base.bundle");
             const bundled = await runIsolatedGit(
               repository,
               ["bundle", "create", bundlePath, quarantineRef]
             );
-            if (!succeeded2(bundled)) {
+            if (!gitSucceeded(bundled)) {
               result = bundled;
               fetchedOid = void 0;
             } else {
               const imported = await runIsolatedGit(cwd, ["bundle", "unbundle", bundlePath]);
               result = imported;
-              if (!succeeded2(imported)) fetchedOid = void 0;
+              if (!gitSucceeded(imported)) fetchedOid = void 0;
             }
           }
         }
@@ -46575,14 +47165,14 @@ function createIsolatedRemoteTransport(runGit = git) {
       } finally {
         if (repository !== void 0) {
           try {
-            await rm9(repository, { recursive: true });
+            await rm11(repository, { recursive: true });
           } catch {
             result = transportFailure("isolated remote repository cleanup");
             fetchedOid = void 0;
           }
         }
       }
-      if (!succeeded2(result) || fetchedOid === void 0) return result;
+      if (!gitSucceeded(result) || fetchedOid === void 0) return result;
       return runIsolatedGit(cwd, [
         "update-ref",
         destinationRef,
@@ -46624,10 +47214,10 @@ function canonicalGithubUrl(raw) {
     fail("remote-url-invalid");
   }
   const canonicalOwner = owner.toLowerCase();
-  const canonicalRepository2 = repository.toLowerCase();
+  const canonicalRepository = repository.toLowerCase();
   return {
-    url: `https://github.com/${canonicalOwner}/${canonicalRepository2}.git`,
-    ownerRepo: `${canonicalOwner}/${canonicalRepository2}`
+    url: `https://github.com/${canonicalOwner}/${canonicalRepository}.git`,
+    ownerRepo: `${canonicalOwner}/${canonicalRepository}`
   };
 }
 function parseRemoteHeads(output) {
@@ -46657,7 +47247,7 @@ async function parseWorktreeRegistrations(output, allowMissing = false) {
     const separator = field.indexOf(" ");
     const key = separator === -1 ? field : field.slice(0, separator);
     const value = separator === -1 ? "" : field.slice(separator + 1);
-    if (key === "worktree") registration.worktree = path24.resolve(value);
+    if (key === "worktree") registration.worktree = path27.resolve(value);
     else if (key === "HEAD") registration.head = value;
     else if (key === "branch") registration.branch = value;
   }
@@ -46700,7 +47290,7 @@ function parseRegistration2(value, workflowId) {
     "remoteUrl",
     "ownerRepo",
     "bootstrapOwner"
-  ]) || parsed.ownershipVersion !== OWNERSHIP_VERSION || parsed.workflowId !== workflowId || typeof parsed.checkoutPath !== "string" || !path24.isAbsolute(parsed.checkoutPath) || path24.resolve(parsed.checkoutPath) !== parsed.checkoutPath || typeof parsed.gitCommonDir !== "string" || !path24.isAbsolute(parsed.gitCommonDir) || path24.resolve(parsed.gitCommonDir) !== parsed.gitCommonDir || typeof parsed.repositoryIdentity !== "string" || parsed.repositoryIdentity !== parsed.gitCommonDir || typeof parsed.worktreePath !== "string" || !path24.isAbsolute(parsed.worktreePath) || path24.resolve(parsed.worktreePath) !== parsed.worktreePath || typeof parsed.worktreeGitDir !== "string" || !path24.isAbsolute(parsed.worktreeGitDir) || path24.resolve(parsed.worktreeGitDir) !== parsed.worktreeGitDir || typeof parsed.branch !== "string" || parsed.branchRef !== `refs/heads/${parsed.branch}` || parsed.baseRef !== `refs/claude-architect/autopilot/${workflowId}/base` || typeof parsed.baseBranch !== "string" || !isOid(parsed.baseCommitOid ?? "") || parsed.remote !== "origin" || typeof parsed.remoteUrl !== "string" || typeof parsed.ownerRepo !== "string" || !isBootstrapOwnerRecord(parsed.bootstrapOwner, workflowId)) return null;
+  ]) || parsed.ownershipVersion !== OWNERSHIP_VERSION || parsed.workflowId !== workflowId || typeof parsed.checkoutPath !== "string" || !path27.isAbsolute(parsed.checkoutPath) || path27.resolve(parsed.checkoutPath) !== parsed.checkoutPath || typeof parsed.gitCommonDir !== "string" || !path27.isAbsolute(parsed.gitCommonDir) || path27.resolve(parsed.gitCommonDir) !== parsed.gitCommonDir || typeof parsed.repositoryIdentity !== "string" || parsed.repositoryIdentity !== parsed.gitCommonDir || typeof parsed.worktreePath !== "string" || !path27.isAbsolute(parsed.worktreePath) || path27.resolve(parsed.worktreePath) !== parsed.worktreePath || typeof parsed.worktreeGitDir !== "string" || !path27.isAbsolute(parsed.worktreeGitDir) || path27.resolve(parsed.worktreeGitDir) !== parsed.worktreeGitDir || typeof parsed.branch !== "string" || parsed.branchRef !== `refs/heads/${parsed.branch}` || parsed.baseRef !== `refs/claude-architect/autopilot/${workflowId}/base` || typeof parsed.baseBranch !== "string" || !isOid(parsed.baseCommitOid ?? "") || parsed.remote !== "origin" || typeof parsed.remoteUrl !== "string" || typeof parsed.ownerRepo !== "string" || !isBootstrapOwnerRecord(parsed.bootstrapOwner, workflowId)) return null;
   return parsed;
 }
 async function readRegistrationFile(ownershipPath, expectedWorkflowId) {
@@ -46729,22 +47319,22 @@ async function workflowWorktreeOwnershipClaim(ownershipPath, worktreePath) {
     throw new RuntimeError("workflow ownership record is malformed");
   }
   const ownershipHash = createHash11("sha256").update(registration.workflowId).digest("hex");
-  const expectedOwnershipPath = path24.join(
+  const expectedOwnershipPath = path27.join(
     resolveStateDir(),
     "autopilot-branches",
     `${ownershipHash}.json`
   );
-  if (path24.resolve(ownershipPath) !== path24.resolve(expectedOwnershipPath)) {
+  if (path27.resolve(ownershipPath) !== path27.resolve(expectedOwnershipPath)) {
     throw new RuntimeError("workflow ownership filename does not match its workflow id");
   }
   const [canonicalOwnershipPath, canonicalExpectedOwnershipPath, canonicalWorktreePath] = await Promise.all([
-    realpath12(ownershipPath),
-    realpath12(expectedOwnershipPath),
-    realpath12(worktreePath)
+    realpath13(ownershipPath),
+    realpath13(expectedOwnershipPath),
+    realpath13(worktreePath)
   ]);
   let canonicalRegisteredWorktreePath;
   try {
-    canonicalRegisteredWorktreePath = await realpath12(registration.worktreePath);
+    canonicalRegisteredWorktreePath = await realpath13(registration.worktreePath);
   } catch (error51) {
     throw new RuntimeError("workflow ownership worktree path is unavailable", { cause: error51 });
   }
@@ -46753,10 +47343,10 @@ async function workflowWorktreeOwnershipClaim(ownershipPath, worktreePath) {
     throw new RuntimeError("workflow ownership record changed during validation");
   }
   const managedName = `workflow-${ownershipHash.slice(0, 32)}`;
-  const candidateName = path24.basename(canonicalWorktreePath);
+  const candidateName = path27.basename(canonicalWorktreePath);
   const ownsPrimary = candidateName === managedName && canonicalRegisteredWorktreePath === canonicalWorktreePath;
   const legacyFinalName = `final-${createHash11("sha256").update(JSON.stringify(registration.workflowId)).digest("hex").slice(0, 24)}`;
-  const ownsFinalMaterialization = (candidateName === `${managedName}-final` || candidateName === legacyFinalName) && path24.basename(canonicalRegisteredWorktreePath) === managedName && path24.dirname(canonicalRegisteredWorktreePath) === path24.dirname(canonicalWorktreePath);
+  const ownsFinalMaterialization = (candidateName === `${managedName}-final` || candidateName === legacyFinalName) && path27.basename(canonicalRegisteredWorktreePath) === managedName && path27.dirname(canonicalRegisteredWorktreePath) === path27.dirname(canonicalWorktreePath);
   if (canonicalOwnershipPath !== canonicalExpectedOwnershipPath || !ownsPrimary && !ownsFinalMaterialization) {
     throw new RuntimeError("workflow ownership record names a different worktree");
   }
@@ -46782,7 +47372,7 @@ var WorkflowBranchManager = class {
   constructor(dependencies = {}) {
     this.runGit = dependencies.git ?? git;
     this.remoteTransport = dependencies.remoteTransport ?? createIsolatedRemoteTransport(this.runGit);
-    this.removeOwnership = dependencies.removeOwnership ?? ((ownershipPath) => rm9(ownershipPath));
+    this.removeOwnership = dependencies.removeOwnership ?? ((ownershipPath) => rm11(ownershipPath));
     const platformServices = dependencies.platformServices ?? getPlatformServices();
     this.platformServices = platformServices;
     this.getProcessStartToken = platformServices.getProcessStartToken?.bind(platformServices) ?? getPlatformServices().getProcessStartToken.bind(getPlatformServices());
@@ -46793,7 +47383,7 @@ var WorkflowBranchManager = class {
   }
   ownershipPath(workflowId) {
     const name = createHash11("sha256").update(workflowId).digest("hex");
-    return path24.join(resolveStateDir(), "autopilot-branches", `${name}.json`);
+    return path27.join(resolveStateDir(), "autopilot-branches", `${name}.json`);
   }
   async readRegistration(workflowId) {
     try {
@@ -46823,7 +47413,7 @@ var WorkflowBranchManager = class {
   }
   async ownershipExists(workflowId) {
     try {
-      await lstat15(this.ownershipPath(workflowId));
+      await lstat17(this.ownershipPath(workflowId));
       return true;
     } catch (error51) {
       if (typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "ENOENT") {
@@ -46834,17 +47424,17 @@ var WorkflowBranchManager = class {
   }
   async persistOwnership(identity, bootstrapOwner) {
     const ownershipPath = this.ownershipPath(identity.workflowId);
-    const directory = path24.dirname(ownershipPath);
-    await mkdir8(directory, { recursive: true });
-    const temporaryPath = path24.join(directory, `.${path24.basename(ownershipPath)}.${randomUUID8()}.tmp`);
+    const directory = path27.dirname(ownershipPath);
+    await mkdir9(directory, { recursive: true });
+    const temporaryPath = path27.join(directory, `.${path27.basename(ownershipPath)}.${randomUUID8()}.tmp`);
     const bytes = Buffer.from(`${JSON.stringify({ ...identity, bootstrapOwner })}
 `);
     let temporaryExists = false;
     let ownershipLinked = false;
     try {
-      const handle = await open12(
+      const handle = await open13(
         temporaryPath,
-        constants12.O_WRONLY | constants12.O_CREAT | constants12.O_EXCL | (constants12.O_NOFOLLOW ?? 0),
+        constants13.O_WRONLY | constants13.O_CREAT | constants13.O_EXCL | (constants13.O_NOFOLLOW ?? 0),
         384
       );
       temporaryExists = true;
@@ -46855,7 +47445,7 @@ var WorkflowBranchManager = class {
         await handle.close();
       }
       try {
-        await link6(temporaryPath, ownershipPath);
+        await link5(temporaryPath, ownershipPath);
         ownershipLinked = true;
       } catch (error51) {
         if (typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "EEXIST") {
@@ -46863,13 +47453,13 @@ var WorkflowBranchManager = class {
         }
         throw error51;
       }
-      await rm9(temporaryPath);
+      await rm11(temporaryPath);
       temporaryExists = false;
       await syncDirectoryMetadata(directory);
       ownershipLinked = false;
     } finally {
-      if (temporaryExists) await rm9(temporaryPath, { force: true });
-      if (ownershipLinked) await rm9(ownershipPath, { force: true });
+      if (temporaryExists) await rm11(temporaryPath, { force: true });
+      if (ownershipLinked) await rm11(ownershipPath, { force: true });
     }
   }
   async resolveRemote(checkoutPath) {
@@ -46895,7 +47485,7 @@ var WorkflowBranchManager = class {
       "--get-all",
       "remote.origin.url"
     ]);
-    if (!succeeded2(urls)) operationFailure("git config remote URL", urls);
+    if (!gitSucceeded(urls)) operationFailure("git config remote URL", urls);
     const values = urls.stdout.split("\n").filter((value) => value !== "");
     if (values.length !== 1) fail("remote-url-ambiguous");
     return canonicalGithubUrl(values[0]);
@@ -46917,7 +47507,6 @@ var WorkflowBranchManager = class {
     let fetchedOidForCleanup;
     let completedIdentity;
     let operationError;
-    const workflowHash = createHash11("sha256").update(request.workflowId).digest("hex");
     const remoteIdentity = await this.resolveRemote(initial.canonical);
     const safety = new PlatformSafety(this.platformServices);
     try {
@@ -46935,13 +47524,13 @@ var WorkflowBranchManager = class {
             "--branch",
             branch
           ]);
-          if (!succeeded2(checkedBranch)) fail("branch-name-invalid");
+          if (!gitSucceeded(checkedBranch)) fail("branch-name-invalid");
           for (const candidate of [baseRef, fetchedRef]) {
             const checked2 = await this.runGit(initial.canonical, ["check-ref-format", candidate]);
-            if (!succeeded2(checked2)) fail("branch-name-invalid");
+            if (!gitSucceeded(checked2)) fail("branch-name-invalid");
           }
           const localHeads = await this.runGit(initial.canonical, ["for-each-ref", "--format=%(refname)", "refs/heads/"]);
-          if (!succeeded2(localHeads)) operationFailure("git branch scan", localHeads);
+          if (!gitSucceeded(localHeads)) operationFailure("git branch scan", localHeads);
           const localCollision = localHeads.stdout.split("\n").filter(Boolean).some((ref) => ref.toLowerCase() === branchRef.toLowerCase());
           if (localCollision) fail("local-branch-exists");
           for (const privateRef of [baseRef, fetchedRef]) {
@@ -46950,7 +47539,7 @@ var WorkflowBranchManager = class {
             if (exists3.exitCode !== 1) operationFailure("git private ref scan", exists3);
           }
           const advertised = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
-          if (!succeeded2(advertised)) operationFailure("git remote branch scan", advertised);
+          if (!gitSucceeded(advertised)) operationFailure("git remote branch scan", advertised);
           const remoteHeads = parseRemoteHeads(advertised.stdout);
           if ([...remoteHeads.keys()].some((name) => name.toLowerCase() === branch.toLowerCase())) {
             fail("remote-branch-exists");
@@ -46963,18 +47552,18 @@ var WorkflowBranchManager = class {
             `refs/heads/${request.baseBranch}`,
             fetchedRef
           );
-          if (!succeeded2(fetched)) operationFailure("git fetch base", fetched);
+          if (!gitSucceeded(fetched)) operationFailure("git fetch base", fetched);
           fetchedCreated = true;
           const fetchedOidResult = await this.runGit(initial.canonical, ["rev-parse", "--verify", fetchedRef]);
-          if (!succeeded2(fetchedOidResult)) operationFailure("git resolve fetched base", fetchedOidResult);
+          if (!gitSucceeded(fetchedOidResult)) operationFailure("git resolve fetched base", fetchedOidResult);
           const fetchedOid = fetchedOidResult.stdout.trim();
           if (!isOid(fetchedOid)) fail("stale-fetched-base");
           fetchedOidForCleanup = fetchedOid;
           if (fetchedOid !== advertisedBase) fail("stale-fetched-base");
           const commit = await this.runGit(initial.canonical, ["cat-file", "-e", `${fetchedOid}^{commit}`]);
-          if (!succeeded2(commit)) fail("fetched-base-not-commit");
+          if (!gitSucceeded(commit)) fail("fetched-base-not-commit");
           const confirmed = await this.remoteTransport.listHeads(initial.canonical, remoteIdentity.url);
-          if (!succeeded2(confirmed)) operationFailure("git remote base confirmation", confirmed);
+          if (!gitSucceeded(confirmed)) operationFailure("git remote base confirmation", confirmed);
           const confirmedHeads = parseRemoteHeads(confirmed.stdout);
           if ([...confirmedHeads.keys()].some((name) => name.toLowerCase() === branch.toLowerCase())) {
             fail("remote-branch-exists");
@@ -46993,7 +47582,7 @@ var WorkflowBranchManager = class {
               ""
             ].join("\n")
           });
-          if (!succeeded2(transaction)) operationFailure("git create workflow refs", transaction);
+          if (!gitSucceeded(transaction)) operationFailure("git create workflow refs", transaction);
           fetchedCreated = false;
           refsCreated = true;
           const worktreeManager = new WorktreeManager(
@@ -47003,16 +47592,16 @@ var WorkflowBranchManager = class {
             { ...this.worktreeManagerDependencies, borrowedCheckoutLease: lock }
           );
           attached = await worktreeManager.createAttached(branch, fetchedOid);
-          const worktreePath = await realpath12(attached.path);
+          const worktreePath = await realpath13(attached.path);
           const worktreeGitDirResult = await this.runGit(worktreePath, [
             "rev-parse",
             "--path-format=absolute",
             "--git-dir"
           ]);
-          if (!succeeded2(worktreeGitDirResult)) {
+          if (!gitSucceeded(worktreeGitDirResult)) {
             operationFailure("git resolve worktree administrative directory", worktreeGitDirResult);
           }
-          const worktreeGitDir = await realpath12(gitPathOutput(
+          const worktreeGitDir = await realpath13(gitPathOutput(
             worktreeGitDirResult.stdout,
             "workflow worktree Git directory"
           ));
@@ -47058,7 +47647,7 @@ var WorkflowBranchManager = class {
                 ""
               ].join("\n")
             });
-            if (!succeeded2(rollback)) cleanupErrors.push(new RuntimeError("workflow ref rollback failed"));
+            if (!gitSucceeded(rollback)) cleanupErrors.push(new RuntimeError("workflow ref rollback failed"));
           } else if (refsCreated) {
             cleanupErrors.push(new RuntimeError("workflow ref identity unavailable for safe rollback"));
           } else if (fetchedCreated && fetchedOidForCleanup !== void 0) {
@@ -47068,7 +47657,7 @@ var WorkflowBranchManager = class {
               fetchedRef,
               fetchedOidForCleanup
             ]);
-            if (!succeeded2(rollback)) cleanupErrors.push(new RuntimeError("fetched ref rollback failed"));
+            if (!gitSucceeded(rollback)) cleanupErrors.push(new RuntimeError("fetched ref rollback failed"));
           } else if (fetchedCreated) {
             cleanupErrors.push(new RuntimeError("fetched ref identity unavailable for safe rollback"));
           }
@@ -47118,22 +47707,13 @@ var WorkflowBranchManager = class {
     if (worktree.canonical !== identity.worktreePath) {
       return { ok: false, classification: "worktree-path-changed" };
     }
-    let remoteIdentity;
-    try {
-      remoteIdentity = await this.resolveRemote(identity.checkoutPath);
-    } catch {
-      return { ok: false, classification: "remote-identity-changed" };
-    }
-    if (remoteIdentity.url !== identity.remoteUrl || remoteIdentity.ownerRepo !== identity.ownerRepo) {
-      return { ok: false, classification: "remote-identity-changed" };
-    }
     const registered = await this.runGit(identity.checkoutPath, [
       "worktree",
       "list",
       "--porcelain",
       "-z"
     ]);
-    if (!succeeded2(registered)) return { ok: false, classification: "git-command-failed" };
+    if (!gitSucceeded(registered)) return { ok: false, classification: "git-command-failed" };
     const registrations = await parseWorktreeRegistrations(registered.stdout);
     if (registrations === null) return { ok: false, classification: "git-command-failed" };
     const expectedRegistration = registrations.find(
@@ -47148,14 +47728,14 @@ var WorkflowBranchManager = class {
       "--short",
       "HEAD"
     ]);
-    if (!succeeded2(symbolic) || symbolic.stdout.trim() !== identity.branch) {
+    if (!gitSucceeded(symbolic) || symbolic.stdout.trim() !== identity.branch) {
       return { ok: false, classification: "branch-changed" };
     }
     if (expectedRegistration.branch !== identity.branchRef) {
       return { ok: false, classification: "worktree-registration-changed" };
     }
     const head = await this.runGit(identity.worktreePath, ["rev-parse", "--verify", "HEAD"]);
-    if (!succeeded2(head)) return { ok: false, classification: "git-command-failed" };
+    if (!gitSucceeded(head)) return { ok: false, classification: "git-command-failed" };
     if (head.stdout.trim() !== expectedHead2) return { ok: false, classification: "head-changed" };
     const status = await this.runGit(identity.worktreePath, [
       "status",
@@ -47163,7 +47743,7 @@ var WorkflowBranchManager = class {
       "--untracked-files=all",
       "--ignore-submodules=none"
     ]);
-    if (!succeeded2(status)) return { ok: false, classification: "git-command-failed" };
+    if (!gitSucceeded(status)) return { ok: false, classification: "git-command-failed" };
     if (!allowStagedBytes && status.stdout !== "") {
       return { ok: false, classification: "dirty-worktree" };
     }
@@ -47173,19 +47753,8 @@ var WorkflowBranchManager = class {
       return { ok: false, classification: "in-progress-operation-scan-failed" };
     }
     const base = await this.runGit(identity.checkoutPath, ["rev-parse", "--verify", identity.baseRef]);
-    if (!succeeded2(base) || base.stdout.trim() !== identity.baseCommitOid) {
+    if (!gitSucceeded(base) || base.stdout.trim() !== identity.baseCommitOid) {
       return { ok: false, classification: "base-ref-changed" };
-    }
-    const remote = await this.remoteTransport.listHeads(identity.checkoutPath, identity.remoteUrl);
-    if (!succeeded2(remote)) return { ok: false, classification: "git-command-failed" };
-    let remoteHeads;
-    try {
-      remoteHeads = parseRemoteHeads(remote.stdout);
-    } catch {
-      return { ok: false, classification: "git-command-failed" };
-    }
-    if (remoteHeads.get(identity.baseBranch) !== identity.baseCommitOid) {
-      return { ok: false, classification: "remote-base-changed" };
     }
     return { ok: true };
   }
@@ -47241,10 +47810,8 @@ var WorkflowBranchManager = class {
       return { ok: false, classification: "git-command-failed" };
     }
   }
-  async cleanupLocked(identity, expectedHead2, checkoutLease) {
-    if (!await this.readOwnership(identity)) {
-      return { ok: false, classification: "cleanup-failed" };
-    }
+  async cleanupLocked(identity, expectedHead2, checkoutLease, retainBranch) {
+    const owned = await this.readOwnership(identity);
     const checkout = await this.platformServices.canonicalizePath(identity.checkoutPath);
     if (checkout.gitCommonDir !== identity.gitCommonDir) {
       return { ok: false, classification: "cleanup-failed" };
@@ -47262,7 +47829,7 @@ var WorkflowBranchManager = class {
       "check-ref-format",
       identity.baseRef
     ]);
-    if (!succeeded2(checkedBranch) || !succeeded2(checkedBranchRef) || !succeeded2(checkedBaseRef)) {
+    if (!gitSucceeded(checkedBranch) || !gitSucceeded(checkedBranchRef) || !gitSucceeded(checkedBaseRef)) {
       return { ok: false, classification: "cleanup-failed" };
     }
     const registered = await this.runGit(identity.checkoutPath, [
@@ -47271,7 +47838,7 @@ var WorkflowBranchManager = class {
       "--porcelain",
       "-z"
     ]);
-    if (!succeeded2(registered)) return { ok: false, classification: "cleanup-failed" };
+    if (!gitSucceeded(registered)) return { ok: false, classification: "cleanup-failed" };
     const registrations = await parseWorktreeRegistrations(registered.stdout, true);
     if (registrations === null) return { ok: false, classification: "cleanup-failed" };
     const expectedRegistration = registrations.find(
@@ -47299,7 +47866,7 @@ var WorkflowBranchManager = class {
           "--path-format=absolute",
           "--git-dir"
         ]);
-        if (!succeeded2(actualGitDir) || await realpath12(gitPathOutput(
+        if (!gitSucceeded(actualGitDir) || await realpath13(gitPathOutput(
           actualGitDir.stdout,
           "workflow worktree Git directory"
         )) !== identity.worktreeGitDir) {
@@ -47312,7 +47879,7 @@ var WorkflowBranchManager = class {
           "HEAD"
         ]);
         const head = await this.runGit(identity.worktreePath, ["rev-parse", "--verify", "HEAD"]);
-        if (!succeeded2(symbolic) || symbolic.stdout.trim() !== identity.branch || !succeeded2(head) || head.stdout.trim() !== expectedHead2) {
+        if (!gitSucceeded(symbolic) || symbolic.stdout.trim() !== identity.branch || !gitSucceeded(head) || head.stdout.trim() !== expectedHead2) {
           return { ok: false, classification: "cleanup-failed" };
         }
       }
@@ -47331,25 +47898,28 @@ var WorkflowBranchManager = class {
       "--quiet",
       identity.baseRef
     ]);
-    const refsPresent = branchPresence.exitCode === 0 && basePresence.exitCode === 0;
-    const refsAbsent = branchPresence.exitCode === 1 && basePresence.exitCode === 1;
-    if (!refsPresent && !refsAbsent || refsAbsent && registrationPresent) {
+    const presenceKnown = (exitCode) => exitCode === 0 || exitCode === 1;
+    if (!presenceKnown(branchPresence.exitCode) || !presenceKnown(basePresence.exitCode)) {
       return { ok: false, classification: "cleanup-failed" };
     }
-    if (refsPresent) {
-      const branch = await this.runGit(identity.checkoutPath, [
-        "rev-parse",
-        "--verify",
-        identity.branchRef
-      ]);
-      const base = await this.runGit(identity.checkoutPath, [
-        "rev-parse",
-        "--verify",
-        identity.baseRef
-      ]);
-      if (!succeeded2(branch) || !succeeded2(base) || branch.stdout.trim() !== expectedHead2 || base.stdout.trim() !== identity.baseCommitOid) {
-        return { ok: false, classification: "cleanup-failed" };
-      }
+    const branchPresent = branchPresence.exitCode === 0;
+    const basePresent = basePresence.exitCode === 0;
+    if (retainBranch) {
+      if (!branchPresent) return { ok: false, classification: "cleanup-failed" };
+    } else if (branchPresent !== basePresent || !branchPresent && registrationPresent) {
+      return { ok: false, classification: "cleanup-failed" };
+    }
+    const [branch, base] = await Promise.all([
+      branchPresent ? this.runGit(identity.checkoutPath, ["rev-parse", "--verify", identity.branchRef]) : null,
+      basePresent ? this.runGit(identity.checkoutPath, ["rev-parse", "--verify", identity.baseRef]) : null
+    ]);
+    if (branch !== null && (!gitSucceeded(branch) || branch.stdout.trim() !== expectedHead2) || base !== null && (!gitSucceeded(base) || base.stdout.trim() !== identity.baseCommitOid)) {
+      return { ok: false, classification: "cleanup-failed" };
+    }
+    const removeBranch = branchPresent && !retainBranch;
+    const nothingLeft = !registrationPresent && !basePresent && !removeBranch;
+    if (!owned) {
+      return nothingLeft ? { ok: true, worktreeRemoved: true, refsRemoved: true } : { ok: false, classification: "cleanup-failed" };
     }
     const manager = new WorktreeManager(
       identity.checkoutPath,
@@ -47370,27 +47940,23 @@ var WorkflowBranchManager = class {
         );
       }
     }
-    if (refsPresent) {
+    if (basePresent || removeBranch) {
       const refs = await this.runGit(identity.checkoutPath, ["update-ref", "--stdin"], {
         stdin: [
           "start",
-          `delete ${identity.branchRef} ${expectedHead2}`,
-          `delete ${identity.baseRef} ${identity.baseCommitOid}`,
+          ...removeBranch ? [`delete ${identity.branchRef} ${expectedHead2}`] : [],
+          ...basePresent ? [`delete ${identity.baseRef} ${identity.baseCommitOid}`] : [],
           "prepare",
           "commit",
           ""
         ].join("\n")
       });
-      if (!succeeded2(refs)) return { ok: false, classification: "cleanup-failed" };
+      if (!gitSucceeded(refs)) return { ok: false, classification: "cleanup-failed" };
     }
     await this.removeOwnership(this.ownershipPath(identity.workflowId));
-    return {
-      ok: true,
-      worktreeRemoved: registrationPresent,
-      refsRemoved: refsPresent
-    };
+    return { ok: true, worktreeRemoved: true, refsRemoved: true };
   }
-  async cleanup(identity, expectedHead2 = identity.baseCommitOid) {
+  async cleanup(identity, expectedHead2 = identity.baseCommitOid, options = {}) {
     if (!isOid(expectedHead2) || !isOid(identity.baseCommitOid) || !WORKFLOW_ID2.test(identity.workflowId) || typeof identity.worktreeGitDir !== "string" || identity.branchRef !== `refs/heads/${identity.branch}` || identity.baseRef !== `refs/claude-architect/autopilot/${identity.workflowId}/base`) {
       return { ok: false, classification: "cleanup-failed" };
     }
@@ -47401,7 +47967,7 @@ var WorkflowBranchManager = class {
         if (lock.repositoryIdentity !== identity.repositoryIdentity) {
           return { ok: false, classification: "cleanup-failed" };
         }
-        return await this.cleanupLocked(identity, expectedHead2, lock);
+        return await this.cleanupLocked(identity, expectedHead2, lock, options.retainBranch === true);
       }, {
         onReleaseError: (releaseError, res) => {
           logger.warn("checkout lock release failed after workflow branch cleanup", {
@@ -47421,8 +47987,8 @@ var WorkflowBranchManager = class {
 
 // src/autopilot/final-branch-reviewer.ts
 var OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
-var SHA2563 = /^[0-9a-f]{64}$/u;
-var NO_FOLLOW7 = constants13.O_NOFOLLOW ?? 0;
+var SHA2562 = /^[0-9a-f]{64}$/u;
+var NO_FOLLOW7 = constants14.O_NOFOLLOW ?? 0;
 var MAX_FINAL_BRANCH_ARTIFACT_BYTES = 64 * 1024 * 1024;
 var MAX_TASK_EVIDENCE_REFS = 4096;
 var MAX_TASK_EVIDENCE_BYTES = 8 * 1024 * 1024;
@@ -47449,15 +48015,12 @@ var FinalBranchReviewError = class extends RuntimeError {
   classification;
 };
 var schemas3 = loadSchemas();
-function succeeded3(result) {
-  return result.exitCode === 0 && result.truncated?.stdout !== true && result.truncated?.stderr !== true;
-}
 function fail2(classification, message) {
   throw new FinalBranchReviewError(classification, message);
 }
-async function checkedGit3(runGit, cwd, args) {
+async function checkedGit2(runGit, cwd, args) {
   const result = await runGit(cwd, args);
-  if (!succeeded3(result)) fail2("git-command-failed", `git ${args[0] ?? "command"} failed`);
+  if (!gitSucceeded(result)) fail2("git-command-failed", `git ${args[0] ?? "command"} failed`);
   return result.stdout;
 }
 function normalizedEvidenceRefs(references, allowEmpty = false, maximum = 128) {
@@ -47466,7 +48029,7 @@ function normalizedEvidenceRefs(references, allowEmpty = false, maximum = 128) {
   }
   const unique = /* @__PURE__ */ new Set();
   for (const reference of references) {
-    if (typeof reference !== "string" || reference.length < 1 || reference.length > 1024 || path25.posix.isAbsolute(reference) || reference.includes("\\") || reference.split("/").some((component) => component === "" || component === "." || component === "..") || /[\0\r\n]/u.test(reference)) {
+    if (typeof reference !== "string" || reference.length < 1 || reference.length > 1024 || path28.posix.isAbsolute(reference) || reference.includes("\\") || reference.split("/").some((component) => component === "" || component === "." || component === "..") || /[\0\r\n]/u.test(reference)) {
       fail2("missing-task-evidence", "task evidence reference is invalid");
     }
     unique.add(reference);
@@ -47512,12 +48075,12 @@ async function validateArchivedTaskEvidence(task, evidence, context) {
       `${evidence.promotionCommitOid}^{tree}`
     ])
   ]);
-  if (result === null || manifest === null || pipelineResult === null || snapshot === null || advisor === null || eligibility === null || decision === null || candidate === null || result.status !== "verified-candidate" || result.runId !== evidence.runId || manifest.runId !== evidence.runId || manifest.baseCommitOid !== context.expectedParentCommitOid || pipelineResult.runId !== evidence.runId || candidate.baseCommitOid !== context.expectedParentCommitOid || candidate.manifestHash !== evidence.candidateManifestHash || manifest.candidateManifestHash !== evidence.candidateManifestHash || pipelineResult.finalCandidateCommit !== candidate.candidateCommitOid || eligibility.runId !== evidence.runId || eligibility.baseCommitOid !== context.expectedParentCommitOid || eligibility.candidateCommitOid !== candidate.candidateCommitOid || eligibility.candidateTreeOid !== candidate.candidateTreeOid || eligibility.candidateManifestHash !== evidence.candidateManifestHash || !eligibility.eligible || eligibility.reasons.length !== 0 || task.eligibilityHash === null || autopilotEligibilityRecordHash(eligibility) !== task.eligibilityHash || decision.decisionVersion !== "2" || decision.authority !== "autopilot-policy" || decision.decision !== "accepted" || decision.candidateManifestHash !== evidence.candidateManifestHash || decision.evidenceHash !== task.eligibilityHash || !succeeded3(promotionParent) || promotionParent.stdout.trim() !== context.expectedParentCommitOid || !succeeded3(promotionTree) || promotionTree.stdout.trim() !== candidate.candidateTreeOid) {
+  if (result === null || manifest === null || pipelineResult === null || snapshot === null || advisor === null || eligibility === null || decision === null || candidate === null || result.status !== "verified-candidate" || result.runId !== evidence.runId || manifest.runId !== evidence.runId || manifest.baseCommitOid !== context.expectedParentCommitOid || pipelineResult.runId !== evidence.runId || candidate.baseCommitOid !== context.expectedParentCommitOid || candidate.manifestHash !== evidence.candidateManifestHash || manifest.candidateManifestHash !== evidence.candidateManifestHash || pipelineResult.finalCandidateCommit !== candidate.candidateCommitOid || eligibility.runId !== evidence.runId || eligibility.baseCommitOid !== context.expectedParentCommitOid || eligibility.candidateCommitOid !== candidate.candidateCommitOid || eligibility.candidateTreeOid !== candidate.candidateTreeOid || eligibility.candidateManifestHash !== evidence.candidateManifestHash || !eligibility.eligible || eligibility.reasons.length !== 0 || task.eligibilityHash === null || autopilotEligibilityRecordHash(eligibility) !== task.eligibilityHash || decision.decisionVersion !== "2" || decision.authority !== "autopilot-policy" || decision.decision !== "accepted" || decision.candidateManifestHash !== evidence.candidateManifestHash || decision.evidenceHash !== task.eligibilityHash || !gitSucceeded(promotionParent) || promotionParent.stdout.trim() !== context.expectedParentCommitOid || !gitSucceeded(promotionTree) || promotionTree.stdout.trim() !== candidate.candidateTreeOid) {
     fail2("missing-task-evidence", `task evidence identities do not match: ${task.id}`);
   }
 }
 function requirePromotedTask(task) {
-  if (task.status !== "promoted" || task.runId === null || task.candidateManifestHash === null || !SHA2563.test(task.candidateManifestHash) || task.promotionCommitOid === null || !OBJECT_ID.test(task.promotionCommitOid)) {
+  if (task.status !== "promoted" || task.runId === null || task.candidateManifestHash === null || !SHA2562.test(task.candidateManifestHash) || task.promotionCommitOid === null || !OBJECT_ID.test(task.promotionCommitOid)) {
     fail2("workflow-state-mismatch", `task ${task.id} is not durably promoted`);
   }
   return {
@@ -47553,6 +48116,13 @@ function normalizeTaskEvidence(state, supplied) {
 function evidenceHash(content) {
   return createHash12("sha256").update(content, "utf8").digest("hex");
 }
+function reviewEvidenceRefs(archived, declared) {
+  return normalizedEvidenceRefs(
+    [...archived.filter((reference) => !reference.startsWith("logs/")), ...declared],
+    false,
+    MAX_TASK_EVIDENCE_REFS
+  );
+}
 async function freezeTaskEvidence(evidence, evidenceStore) {
   return await Promise.all(evidence.map(async (task) => {
     const store = evidenceStore(task.runId);
@@ -47569,8 +48139,9 @@ async function freezeTaskEvidence(evidence, evidenceStore) {
     if (REQUIRED_TASK_EVIDENCE_REFS.some((reference) => !archivedReferences.includes(reference)) || task.evidenceRefs.some((reference) => !archivedReferences.includes(reference))) {
       fail2("missing-task-evidence", `task evidence archive is incomplete: ${task.taskId}`);
     }
+    const frozenReferences = reviewEvidenceRefs(archivedReferences, task.evidenceRefs);
     let frozenBytes = 0;
-    const frozen = await Promise.all(archivedReferences.map(async (reference) => {
+    const frozen = await Promise.all(frozenReferences.map(async (reference) => {
       let content;
       try {
         content = await store.readEvidence(reference);
@@ -47602,7 +48173,7 @@ async function freezeTaskEvidence(evidence, evidenceStore) {
     if (JSON.stringify(finalReferences) !== JSON.stringify(archivedReferences)) {
       fail2("missing-task-evidence", `task evidence archive changed: ${task.taskId}`);
     }
-    return { ...task, evidenceRefs: archivedReferences, evidence: frozen };
+    return { ...task, evidenceRefs: frozenReferences, evidence: frozen };
   }));
 }
 async function assertTaskEvidenceCurrent(artifact, evidenceStore) {
@@ -47618,7 +48189,7 @@ async function assertTaskEvidenceCurrent(artifact, evidenceStore) {
     } catch {
       fail2("missing-task-evidence", `task evidence archive is unavailable: ${task.taskId}`);
     }
-    if (task.evidence.length !== task.evidenceRefs.length || JSON.stringify(archivedReferences) !== JSON.stringify(task.evidenceRefs) || task.evidence.some((item, index) => item.reference !== task.evidenceRefs[index])) {
+    if (task.evidence.length !== task.evidenceRefs.length || JSON.stringify(reviewEvidenceRefs(archivedReferences, task.evidenceRefs)) !== JSON.stringify(task.evidenceRefs) || task.evidence.some((item, index) => item.reference !== task.evidenceRefs[index])) {
       fail2("missing-task-evidence", "frozen task evidence index is inconsistent");
     }
     for (const item of task.evidence) {
@@ -47647,7 +48218,7 @@ async function provePromotionChain(runGit, checkoutPath, baseCommitOid, headComm
       "--verify",
       `${task.promotionCommitOid}^`
     ]);
-    if (!succeeded3(commit) || commit.stdout.trim() !== task.promotionCommitOid || !succeeded3(parent) || parent.stdout.trim() !== expectedParent) {
+    if (!gitSucceeded(commit) || commit.stdout.trim() !== task.promotionCommitOid || !gitSucceeded(parent) || parent.stdout.trim() !== expectedParent) {
       fail2("workflow-state-mismatch", `task promotion is not in branch order: ${task.taskId}`);
     }
     expectedParent = task.promotionCommitOid;
@@ -47676,12 +48247,12 @@ async function revalidateHead(checkoutPath, expectedHead2, runGit = git, expecte
     fail2("workflow-state-mismatch", "expected final branch head is invalid");
   }
   const result = await runGit(checkoutPath, ["rev-parse", "--verify", "HEAD^{commit}"]);
-  if (!succeeded3(result)) fail2("git-command-failed", "failed to revalidate final branch head");
+  if (!gitSucceeded(result)) fail2("git-command-failed", "failed to revalidate final branch head");
   if (result.stdout.trim() !== expectedHead2) {
     fail2("head-changed", "final branch head changed");
   }
   const tree = await runGit(checkoutPath, ["rev-parse", "--verify", "HEAD^{tree}"]);
-  if (!succeeded3(tree)) fail2("git-command-failed", "failed to revalidate final branch tree");
+  if (!gitSucceeded(tree)) fail2("git-command-failed", "failed to revalidate final branch tree");
   if (expectedTree !== void 0 && tree.stdout.trim() !== expectedTree) {
     fail2("head-changed", "final branch tree changed");
   }
@@ -47691,7 +48262,7 @@ async function revalidateHead(checkoutPath, expectedHead2, runGit = git, expecte
     "-z",
     "--untracked-files=all"
   ]);
-  if (!succeeded3(status)) fail2("git-command-failed", "failed to revalidate final branch status");
+  if (!gitSucceeded(status)) fail2("git-command-failed", "failed to revalidate final branch status");
   if (status.stdout !== "") fail2("head-changed", "final branch checkout is dirty");
 }
 async function withHeadRevalidation(request) {
@@ -47858,98 +48429,59 @@ function freezePackage(value) {
   }
   return value;
 }
-async function persistImmutableJson(workflowDirectory, reference, value) {
-  const destination = path25.join(workflowDirectory, reference);
-  const temporary = path25.join(workflowDirectory, `.${reference}.${randomUUID9()}.tmp`);
+async function persistJson(workflowDirectory, reference, value, mode) {
   const serialized = `${JSON.stringify(value, null, 2)}
 `;
-  let handle;
-  let temporaryExists = false;
   try {
-    handle = await open13(
-      temporary,
-      constants13.O_WRONLY | constants13.O_CREAT | constants13.O_EXCL | NO_FOLLOW7,
-      384
-    );
-    temporaryExists = true;
-    await handle.writeFile(serialized, "utf8");
-    await handle.sync();
-    await handle.close();
-    handle = void 0;
+    const session = await openDurableDirectorySession(workflowDirectory, {
+      description: "workflow directory",
+      create: false
+    });
     try {
-      await link7(temporary, destination);
-    } catch (error51) {
-      if (error51.code !== "EEXIST") throw error51;
-      const metadata = await lstat16(destination);
-      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1 || await readFile6(destination, "utf8") !== serialized) {
-        fail2("artifact-persistence-failed", `a different ${reference} already exists`);
-      }
+      await writeAtomic(session, reference, serialized, mode === "immutable" ? "immutable" : "replace");
+    } finally {
+      await session.close();
     }
-    await rm10(temporary);
-    temporaryExists = false;
-    await syncDirectoryMetadata(workflowDirectory);
-    if (await readFile6(destination, "utf8") !== serialized) {
-      fail2("artifact-persistence-failed", `${reference} was not durably persisted`);
-    }
-  } catch (error51) {
-    if (error51 instanceof FinalBranchReviewError) throw error51;
+  } catch {
     fail2("artifact-persistence-failed", `failed to persist ${reference}`);
-  } finally {
-    await handle?.close();
-    if (temporaryExists) await rm10(temporary, { force: true });
   }
 }
 async function persistFrozenArtifact(workflowDirectory, artifact) {
-  const destination = path25.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
-  const temporary = path25.join(
-    workflowDirectory,
-    `.${FINAL_BRANCH_ARTIFACT_REF}.${randomUUID9()}.tmp`
-  );
-  const serialized = `${JSON.stringify(artifact, null, 2)}
-`;
+  await persistJson(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF, artifact, "immutable");
+}
+async function readPublishedReport(workflowDirectory, artifact) {
   let handle;
-  let temporaryExists = false;
   try {
-    handle = await open13(
-      temporary,
-      constants13.O_WRONLY | constants13.O_CREAT | constants13.O_EXCL | NO_FOLLOW7,
-      384
-    );
-    temporaryExists = true;
-    await handle.writeFile(serialized, "utf8");
-    await handle.sync();
-    await handle.close();
-    handle = void 0;
-    try {
-      await link7(temporary, destination);
-    } catch (error51) {
-      if (error51.code !== "EEXIST") throw error51;
-      const metadata = await lstat16(destination);
-      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1 || await readFile6(destination, "utf8") !== serialized) {
-        fail2("artifact-persistence-failed", "a different final branch artifact already exists");
-      }
+    handle = await open14(path28.join(workflowDirectory, FINAL_BRANCH_REPORT_REF), constants14.O_RDONLY | NO_FOLLOW7);
+  } catch (error51) {
+    if (isMissing(error51)) return null;
+    fail2("artifact-persistence-failed", "final branch report is unavailable");
+  }
+  try {
+    const metadata = await handle.stat();
+    if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size > MAX_FINAL_BRANCH_ARTIFACT_BYTES) {
+      fail2("artifact-persistence-failed", "final branch report is not a safe regular file");
     }
-    await rm10(temporary);
-    temporaryExists = false;
-    await syncDirectoryMetadata(workflowDirectory);
-    const persisted = JSON.parse(await readFile6(destination, "utf8"));
-    const { branchArtifactHash, ...unhashed } = persisted;
-    if (branchArtifactHash !== artifact.branchArtifactHash || branchArtifactHashOf(unhashed) !== artifact.branchArtifactHash) {
-      fail2("artifact-persistence-failed", "final branch artifact was not durably persisted");
+    const report = JSON.parse(await handle.readFile("utf8"));
+    if (report.reportVersion !== "2") {
+      fail2("artifact-persistence-failed", "final branch report version is unsupported");
     }
+    if (report.workflowId !== artifact.workflowId || report.baseCommitOid !== artifact.baseCommitOid || report.headCommitOid !== artifact.headCommitOid || report.branchArtifactHash !== artifact.branchArtifactHash) {
+      fail2("artifact-persistence-failed", "a final branch report for a different artifact exists");
+    }
+    return report;
   } catch (error51) {
     if (error51 instanceof FinalBranchReviewError) throw error51;
-    fail2("artifact-persistence-failed", "failed to persist final branch artifact");
+    fail2("artifact-persistence-failed", "final branch report is unreadable");
   } finally {
-    await handle?.close();
-    if (temporaryExists) await rm10(temporary, { force: true });
+    await handle.close();
   }
 }
 async function assertPersistedArtifact(workflowDirectory, artifact) {
   let handle;
   try {
-    const destination = path25.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
-    handle = await open13(destination, constants13.O_RDONLY | NO_FOLLOW7);
+    const destination = path28.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
+    handle = await open14(destination, constants14.O_RDONLY | NO_FOLLOW7);
     const metadata = await handle.stat();
     if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size > MAX_FINAL_BRANCH_ARTIFACT_BYTES) {
       fail2("artifact-persistence-failed", "final branch artifact is not a safe regular file");
@@ -48024,7 +48556,7 @@ var FinalBranchReviewer = class {
         fail2("workflow-state-mismatch", "final branch ownership does not match workflow state");
       }
       const normalizedTaskEvidence = normalizeTaskEvidence(state, request.taskEvidence);
-      const headCommitOid = (await checkedGit3(
+      const headCommitOid = (await checkedGit2(
         this.runGit,
         state.worktreePath,
         ["rev-parse", "--verify", "HEAD^{commit}"]
@@ -48052,13 +48584,13 @@ var FinalBranchReviewer = class {
         normalizedTaskEvidence,
         this.evidenceStore
       );
-      const headTreeOid = (await checkedGit3(
+      const headTreeOid = (await checkedGit2(
         this.runGit,
         state.worktreePath,
         ["rev-parse", "--verify", `${headCommitOid}^{tree}`]
       )).trim();
       if (!OBJECT_ID.test(headTreeOid)) fail2("git-command-failed", "final branch tree is invalid");
-      const rawDiff = parseRawDiff(await checkedGit3(this.runGit, state.worktreePath, [
+      const rawDiff = parseRawDiff(await checkedGit2(this.runGit, state.worktreePath, [
         "diff-tree",
         "-r",
         "--no-commit-id",
@@ -48069,7 +48601,7 @@ var FinalBranchReviewer = class {
         headTreeOid
       ]));
       const [nameStatusOutput, treeOutput, patch] = await Promise.all([
-        checkedGit3(this.runGit, state.worktreePath, [
+        checkedGit2(this.runGit, state.worktreePath, [
           "diff-tree",
           "-r",
           "--no-commit-id",
@@ -48079,16 +48611,12 @@ var FinalBranchReviewer = class {
           state.baseCommitOid,
           headTreeOid
         ]),
-        checkedGit3(this.runGit, state.worktreePath, ["ls-tree", "-r", "-z", headTreeOid]),
-        checkedGit3(this.runGit, state.worktreePath, [
-          "diff",
-          "--no-ext-diff",
-          "--no-textconv",
-          "--binary",
-          "--full-index",
-          state.baseCommitOid,
-          headTreeOid
-        ])
+        checkedGit2(this.runGit, state.worktreePath, ["ls-tree", "-r", "-z", headTreeOid]),
+        checkedGit2(
+          this.runGit,
+          state.worktreePath,
+          reviewDiffArgs(state.baseCommitOid, headTreeOid, ["--binary", "--full-index"])
+        )
       ]);
       const manifest = computeChangedPathManifest({ rawDiff, nameStatusOutput, treeOutput });
       await revalidateHead(state.worktreePath, headCommitOid, this.runGit, headTreeOid);
@@ -48296,6 +48824,8 @@ var FinalBranchReviewer = class {
     if (state.phase !== "final-review" || state.baseCommitOid !== artifact.baseCommitOid || state.tasks.length !== request.autopilotSpec.tasks.length || state.tasks.some((task, index) => task.id !== request.autopilotSpec.tasks[index]?.id) || canonicalArtifactHash(request.autopilotSpec) !== state.autopilotSpecHash) {
       fail2("workflow-state-mismatch", "final review specification does not match workflow state");
     }
+    const published = await readPublishedReport(store.workflowDirectory, artifact);
+    if (published !== null) return published;
     const spec = finalDelegationSpec(request.autopilotSpec);
     const reasons = [];
     let verification = failedVerification("final verification did not run");
@@ -48329,15 +48859,14 @@ var FinalBranchReviewer = class {
     const frozenEvidence = freezePackage({
       autopilotSpec: structuredClone(request.autopilotSpec),
       artifact: structuredClone(artifact),
-      verification: structuredClone(verification),
-      taskEvidence: structuredClone(artifact.taskEvidence)
+      verification: structuredClone(verification)
     });
     const pkg = freezePackage({
       spec,
       baselineCommit: artifact.baseCommitOid,
       candidateCommit: artifact.headCommitOid,
       candidateDiff: artifact.patch,
-      testEvidence: JSON.stringify(frozenEvidence),
+      testEvidence: JSON.stringify(verification),
       advisorEvidence: frozenEvidence
     });
     const runStructuredFinalRole = async (role, validate) => {
@@ -48387,7 +48916,7 @@ var FinalBranchReviewer = class {
     advisorReasons(advisor, reasons);
     const reviewReports = [correctness, systems];
     const report = {
-      reportVersion: "1",
+      reportVersion: "2",
       workflowId: artifact.workflowId,
       baseCommitOid: artifact.baseCommitOid,
       headCommitOid: artifact.headCommitOid,
@@ -48398,21 +48927,17 @@ var FinalBranchReviewer = class {
       taskEvidenceHashes: artifact.taskEvidence.map((evidence) => canonicalArtifactHash(evidence)),
       eligible: reasons.length === 0,
       reasons,
-      status: reasons.length === 0 ? "ready-to-ship" : "human-decision-required",
+      status: reasons.length === 0 ? "ready-for-human-review" : "human-decision-required",
       evaluatedAt: this.now()
     };
     await this.runHeadBoundPhaseCore(
       artifact,
       "final-evidence-publication",
       async () => {
-        await persistImmutableJson(store.workflowDirectory, FINAL_VERIFICATION_REF, verification);
-        await persistImmutableJson(
-          store.workflowDirectory,
-          FINAL_CORRECTNESS_REVIEW_REF,
-          correctness
-        );
-        await persistImmutableJson(store.workflowDirectory, FINAL_SYSTEMS_REVIEW_REF, systems);
-        await persistImmutableJson(store.workflowDirectory, FINAL_ADVISOR_REF, advisor);
+        await persistJson(store.workflowDirectory, FINAL_VERIFICATION_REF, verification, "replaceable");
+        await persistJson(store.workflowDirectory, FINAL_CORRECTNESS_REVIEW_REF, correctness, "replaceable");
+        await persistJson(store.workflowDirectory, FINAL_SYSTEMS_REVIEW_REF, systems, "replaceable");
+        await persistJson(store.workflowDirectory, FINAL_ADVISOR_REF, advisor, "replaceable");
       },
       request.checkoutPath,
       checkoutLease
@@ -48420,10 +48945,11 @@ var FinalBranchReviewer = class {
     await this.runHeadBoundPhaseCore(
       artifact,
       "final-report-publication",
-      async () => await persistImmutableJson(
+      async () => await persistJson(
         store.workflowDirectory,
         FINAL_BRANCH_REPORT_REF,
-        report
+        report,
+        "immutable"
       ),
       request.checkoutPath,
       checkoutLease
@@ -48441,9 +48967,6 @@ var AutopilotControllerError = class extends RuntimeError {
   }
   classification;
 };
-var DEFAULT_REQUIRED_CHECKS_POLL_INTERVAL_MS = 1e4;
-var MIN_REQUIRED_CHECKS_POLL_INTERVAL_MS = 100;
-var MAX_REQUIRED_CHECKS_POLL_INTERVAL_MS = 6e4;
 var REQUIRED_TASK_EVIDENCE_REFS2 = [
   "decision.json",
   "manifest.json",
@@ -48483,18 +49006,12 @@ function expectedHeadOf(state) {
   );
 }
 function branchMatchesState2(checkoutPath, state, branch) {
-  return branch.workflowId === state.workflowId && branch.checkoutPath === checkoutPath && branch.repositoryIdentity === state.repositoryIdentity && branch.baseCommitOid === state.baseCommitOid && branch.branchRef === state.workflowRef && branch.worktreePath === state.worktreePath && branch.branch === state.shipping.branch;
+  return branch.workflowId === state.workflowId && branch.checkoutPath === checkoutPath && branch.repositoryIdentity === state.repositoryIdentity && branch.baseCommitOid === state.baseCommitOid && branch.branchRef === state.workflowRef && branch.worktreePath === state.worktreePath && branch.branch === state.branch;
 }
 function redactedState(state) {
   const redacted = structuredClone(state);
   redacted.repositoryIdentity = "[redacted]";
   redacted.worktreePath = "[redacted]";
-  if (redacted.shipping.prUrl !== null) redacted.shipping.prUrl = "[redacted]";
-  for (const observation of redacted.ciObservations) {
-    for (const check2 of observation.checks) {
-      if (check2.link !== null) check2.link = "[redacted]";
-    }
-  }
   return redacted;
 }
 function recordedWorkflowFrom(journal) {
@@ -48514,7 +49031,7 @@ function recordedWorkflowFrom(journal) {
 }
 function initialWorkflowState(args) {
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId: args.workflowId,
     repositoryIdentity: args.branch.repositoryIdentity,
     baseCommitOid: args.branch.baseCommitOid,
@@ -48538,13 +49055,7 @@ function initialWorkflowState(args) {
       lastEntryHash: null
     },
     finalGate: null,
-    shipping: {
-      branch: args.branch.branch,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: args.ciDeadlineAt
-    },
-    ciObservations: [],
+    branch: args.branch.branch,
     cleanup: null,
     terminal: null,
     createdAt: args.startedAt,
@@ -48559,20 +49070,6 @@ function finalGateFor(report) {
     headCommitOid: report.headCommitOid,
     eligibilityHash: reportHash
   };
-}
-function pullRequestIdentityMatches(pullRequest, target, branch, expectedHead2) {
-  return Number.isSafeInteger(pullRequest.number) && pullRequest.number > 0 && pullRequest.url.length > 0 && pullRequest.repository === target.repository && pullRequest.baseBranch === branch.baseBranch && pullRequest.headBranch === branch.branch && pullRequest.headCommitOid === expectedHead2;
-}
-function pullRequestMatches(pullRequest, target, branch, expectedHead2, expectedDraft) {
-  return pullRequestIdentityMatches(pullRequest, target, branch, expectedHead2) && pullRequest.draft === expectedDraft;
-}
-function checksAreNonEmptyAndPassing(checks, expectedHead2) {
-  return checks.result === "passed" && checks.headCommitOid === expectedHead2 && checks.checks.length > 0 && checks.checks.every((check2) => check2.bucket === "pass");
-}
-function stateHasPassingChecks(state) {
-  const observation = state.ciObservations.at(-1);
-  const expectedHead2 = state.finalGate?.headCommitOid;
-  return observation !== void 0 && expectedHead2 !== void 0 && checksAreNonEmptyAndPassing(observation, expectedHead2);
 }
 var CLEANUP_INTENT_OPERATION = "cleanup-workflow-branch";
 function cleanupIntentKey(headCommitOid) {
@@ -48591,23 +49088,29 @@ var AutopilotController = class {
   constructor(dependencies) {
     this.dependencies = dependencies;
     this.validator = dependencies.validator ?? validateAutopilotSpec;
-    this.createWorkflowId = dependencies.workflowId ?? randomUUID10;
+    this.createWorkflowId = dependencies.workflowId ?? randomUUID9;
     this.now = dependencies.now ?? (() => (/* @__PURE__ */ new Date()).toISOString());
-    const configuredInterval = dependencies.requiredChecksPollIntervalMs ?? DEFAULT_REQUIRED_CHECKS_POLL_INTERVAL_MS;
-    this.pollIntervalMs = Number.isFinite(configuredInterval) ? Math.min(
-      MAX_REQUIRED_CHECKS_POLL_INTERVAL_MS,
-      Math.max(MIN_REQUIRED_CHECKS_POLL_INTERVAL_MS, Math.trunc(configuredInterval))
-    ) : DEFAULT_REQUIRED_CHECKS_POLL_INTERVAL_MS;
-    this.sleep = dependencies.sleep ?? (async (milliseconds) => {
-      await new Promise((resolve2) => setTimeout(resolve2, milliseconds));
-    });
+    this.decisionAuthority = dependencies.decisionAuthority ?? (() => decisionAuthority());
   }
   dependencies;
   validator;
   createWorkflowId;
   now;
-  pollIntervalMs;
-  sleep;
+  decisionAuthority;
+  /**
+   * Autopilot accepts each task under `autopilot-policy`; it has no person to
+   * ask. Under the `human` authority it therefore refuses to promote rather
+   * than spend Producer work that could only halt at the first promotion. The
+   * promoter enforces the same rule; this only fails fast.
+   */
+  assertPolicyAuthority() {
+    if (this.decisionAuthority() === "human") {
+      throw new AutopilotControllerError(
+        "decision-authority-human",
+        "CLAUDE_ARCHITECT_DECISION_AUTHORITY=human requires a person for every acceptance; Autopilot records policy decisions and cannot run under it"
+      );
+    }
+  }
   async start(checkoutPath, value) {
     this.throwIfAborted();
     const validated = this.validator(value);
@@ -48618,16 +49121,19 @@ var AutopilotController = class {
         { validationErrors: validated.errors }
       );
     }
+    this.assertPolicyAuthority();
+    const identityAvailable = this.dependencies.commitIdentityAvailable ?? (async (path43) => await userCommitEnvironment(path43) !== null);
+    if (!await identityAvailable(checkoutPath)) {
+      throw new AutopilotControllerError(
+        "git-identity-missing",
+        "promotions are committed under your Git identity; configure user.name and user.email"
+      );
+    }
     const spec = validated.spec;
     const startedAt = this.now();
-    const startedAtMs = Date.parse(startedAt);
-    if (!Number.isFinite(startedAtMs)) {
+    if (!Number.isFinite(Date.parse(startedAt))) {
       throw new AutopilotControllerError("clock-invalid", "autopilot clock is invalid");
     }
-    const ciDeadlineAt = new Date(
-      startedAtMs + spec.shipping.requiredChecksTimeoutMs
-    ).toISOString();
-    const ciDeadlineMs = Date.parse(ciDeadlineAt);
     const workflowId = this.createWorkflowId();
     let pendingCleanup = null;
     let bootstrapBranch = null;
@@ -48640,19 +49146,7 @@ var AutopilotController = class {
       completedCleanup = await this.dependencies.workflowLock.runExclusive(
         workflowId,
         async () => {
-          let target;
           this.dependencies.emit?.("preflight");
-          try {
-            target = await this.dependencies.hostingAdapter.preflight({
-              checkoutPath,
-              ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-            });
-          } catch (error51) {
-            throw new AutopilotControllerError(
-              classificationOf(error51, "preflight-failed"),
-              "shipping preflight failed"
-            );
-          }
           let branch;
           try {
             branch = await this.dependencies.branchManager.create({
@@ -48669,19 +49163,12 @@ var AutopilotController = class {
               "workflow branch creation failed"
             );
           }
-          if (branch.ownerRepo !== target.repository || branch.remoteUrl !== target.canonicalHttpsUrl) {
-            throw new AutopilotControllerError(
-              "repository-identity-mismatch",
-              "shipping and workflow repository identities differ"
-            );
-          }
           const store = this.dependencies.workflowStore(workflowId);
-          let state = await store.create(initialWorkflowState({
+          const state = await store.create(initialWorkflowState({
             workflowId,
             spec,
             branch,
-            startedAt,
-            ciDeadlineAt
+            startedAt
           }));
           bootstrapStore = store;
           bootstrapState = state;
@@ -48701,265 +49188,14 @@ var AutopilotController = class {
             }
           });
           bootstrapCompleted = true;
-          let expectedHead2 = branch.baseCommitOid;
           await this.haltIfAborted(store, state);
-          for (const [index, task] of spec.tasks.entries()) {
-            if (state.phase === "preflighting") {
-              state = await store.transition({
-                expectedRevision: state.revision,
-                to: "running-task",
-                update(draft) {
-                  draft.currentTaskIndex = index;
-                  draft.tasks[index].status = "running";
-                }
-              });
-            }
-            await this.haltIfAborted(store, state);
-            this.dependencies.emit?.(`task:${task.id}`);
-            const pipelineResult = await this.dependencies.pipelineRunner.run(
-              branch.worktreePath,
-              task.delegation
-            ).catch(async (error51) => await this.halt(store, state, classificationOf(error51, "pipeline-failed")));
-            if (pipelineResult.status === "failed") {
-              return await this.halt(
-                store,
-                state,
-                pipelineResult.failure === "cancelled" ? "cancelled" : "pipeline-failed"
-              );
-            }
-            if (pipelineResult.status === "human-decision-required" || pipelineResult.gate.requiresHumanDecision) {
-              return await this.halt(store, state, "human-decision-required");
-            }
-            await this.haltIfAborted(store, state);
-            const snapshot = await this.dependencies.reviewSnapshotter.create({
-              workflow: state,
-              branch,
-              task,
-              pipelineResult
-            }).catch(async (error51) => await this.halt(
-              store,
-              state,
-              classificationOf(error51, "candidate-evidence-mismatch")
-            ));
-            if (!snapshotMatchesCandidate(expectedHead2, pipelineResult, snapshot)) {
-              return await this.halt(store, state, "candidate-evidence-mismatch");
-            }
-            await this.haltIfAborted(store, state);
-            const eligibility = await this.dependencies.eligibilityEvaluator.evaluate({
-              workflow: state,
-              branch,
-              task,
-              pipelineResult,
-              reviewSnapshot: snapshot
-            }).catch(async (error51) => await this.halt(store, state, classificationOf(error51, "eligibility-red")));
-            if (!eligibilityMatchesSnapshot(pipelineResult, snapshot, eligibility)) {
-              return await this.halt(store, state, "candidate-evidence-mismatch");
-            }
-            if (!eligibility.eligible || eligibility.reasons.length !== 0) {
-              return await this.halt(store, state, "eligibility-red");
-            }
-            const candidate = candidateFrom(pipelineResult);
-            const eligibilityHash = autopilotEligibilityRecordHash(eligibility);
-            state = await store.transition({
-              expectedRevision: state.revision,
-              to: "promoting-task",
-              update(draft) {
-                const current = draft.tasks[index];
-                current.runId = pipelineResult.runId;
-                current.candidateManifestHash = candidate.manifestHash;
-                current.eligibilityHash = eligibilityHash;
-              }
-            });
-            await this.haltIfAborted(store, state);
-            this.dependencies.emit?.(`promote:${task.id}`);
-            const promotion = await this.dependencies.promoter.promote({
-              workflowId,
-              runId: pipelineResult.runId,
-              workflowCheckoutPath: branch.worktreePath,
-              expectedHead: expectedHead2,
-              expectedArtifactHash: candidate.manifestHash,
-              commitMessage: task.commitMessage
-            }).catch(async (error51) => await this.halt(
-              store,
-              state,
-              classificationOf(error51, "promotion-failed")
-            ));
-            if (promotion.status === "rejected") {
-              return await this.halt(store, state, promotion.classification);
-            }
-            expectedHead2 = promotion.commitOid;
-            const nextPhase = index === spec.tasks.length - 1 ? "final-review" : "running-task";
-            state = await store.transition({
-              expectedRevision: state.revision,
-              to: nextPhase,
-              update(draft) {
-                const current = draft.tasks[index];
-                current.status = "promoted";
-                current.promotionCommitOid = promotion.commitOid;
-                draft.currentTaskIndex = index + 1;
-                if (nextPhase === "running-task") {
-                  draft.tasks[index + 1].status = "running";
-                }
-              }
-            });
-            await this.haltIfAborted(store, state);
-          }
-          await this.haltIfAborted(store, state);
-          this.dependencies.emit?.("final-review");
-          const report = await this.dependencies.finalBranchReviewer.review({
-            workflowId,
-            expectedRevision: state.revision,
-            taskEvidence: state.tasks.map((task) => ({
-              taskId: task.id,
-              runId: task.runId,
-              candidateManifestHash: task.candidateManifestHash,
-              promotionCommitOid: task.promotionCommitOid,
-              evidenceRefs: [...REQUIRED_TASK_EVIDENCE_REFS2]
-            })),
-            autopilotSpec: spec,
-            checkoutPath: branch.worktreePath
-          }).catch(async (error51) => await this.halt(
+          pendingCleanup = await this.resumeActiveWorkflow({
             store,
             state,
-            classificationOf(error51, "final-review-failed")
-          ));
-          if (report.workflowId !== workflowId || report.baseCommitOid !== branch.baseCommitOid || report.headCommitOid !== expectedHead2) {
-            return await this.halt(store, state, "stale-final-review");
-          }
-          if (!report.eligible || report.status !== "ready-to-ship" || report.reasons.length !== 0) {
-            return await this.halt(
-              store,
-              state,
-              "human-decision-required",
-              (draft) => {
-                draft.finalGate = finalGateFor(report);
-              }
-            );
-          }
-          state = await store.transition({
-            expectedRevision: state.revision,
-            to: "pushing",
-            update(draft) {
-              draft.finalGate = finalGateFor(report);
-            }
+            spec,
+            branch,
+            expectedHead: branch.baseCommitOid
           });
-          await this.haltIfAborted(store, state);
-          this.dependencies.emit?.("push");
-          const pushed = await this.dependencies.hostingAdapter.pushBranch({
-            checkoutPath: branch.worktreePath,
-            target,
-            branch: branch.branch,
-            headCommitOid: expectedHead2,
-            ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-          }).catch(async (error51) => await this.halt(store, state, classificationOf(error51, "push-failed")));
-          if (pushed.remoteHead !== expectedHead2) {
-            return await this.halt(store, state, "push-head-mismatch");
-          }
-          state = await store.transition({
-            expectedRevision: state.revision,
-            to: "creating-draft-pr"
-          });
-          await this.haltIfAborted(store, state);
-          this.dependencies.emit?.("draft-pr");
-          const pullRequest = await this.dependencies.hostingAdapter.ensureDraftPullRequest({
-            checkoutPath: branch.worktreePath,
-            target,
-            baseBranch: branch.baseBranch,
-            headBranch: branch.branch,
-            headCommitOid: expectedHead2,
-            title: spec.shipping.pullRequestTitle,
-            body: spec.shipping.pullRequestBody,
-            ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-          }).catch(async (error51) => await this.halt(
-            store,
-            state,
-            classificationOf(error51, "draft-pull-request-failed")
-          ));
-          if (!pullRequestMatches(pullRequest, target, branch, expectedHead2, true)) {
-            return await this.halt(store, state, "draft-pull-request-identity-mismatch");
-          }
-          state = await store.transition({
-            expectedRevision: state.revision,
-            to: "waiting-required-checks",
-            update(draft) {
-              draft.shipping.prNumber = pullRequest.number;
-              draft.shipping.prUrl = pullRequest.url;
-            }
-          });
-          while (true) {
-            await this.haltIfAborted(store, state);
-            const beforePoll = Date.parse(this.now());
-            if (!Number.isFinite(beforePoll) || beforePoll >= ciDeadlineMs) {
-              return await this.halt(store, state, "required-checks-timeout");
-            }
-            const observation = await this.dependencies.hostingAdapter.requiredChecks({
-              checkoutPath: branch.worktreePath,
-              target,
-              pullRequestNumber: pullRequest.number,
-              headCommitOid: expectedHead2,
-              ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-            }).catch(async (error51) => await this.halt(
-              store,
-              state,
-              classificationOf(error51, "required-checks-failed")
-            ));
-            this.dependencies.emit?.(`checks:${observation.result === "passed" ? "pass" : observation.result === "failed" ? "red" : observation.result}`);
-            const observedAt = this.now();
-            const observedAtMs = Date.parse(observedAt);
-            state = await store.update({
-              expectedRevision: state.revision,
-              update(draft) {
-                draft.ciObservations.push({
-                  observedAt,
-                  result: observation.result,
-                  headCommitOid: observation.headCommitOid,
-                  checks: structuredClone(observation.checks)
-                });
-              }
-            });
-            await this.haltIfAborted(store, state);
-            if (!Number.isFinite(observedAtMs) || observedAtMs >= ciDeadlineMs) {
-              return await this.halt(store, state, "required-checks-timeout");
-            }
-            if (checksAreNonEmptyAndPassing(observation, expectedHead2)) break;
-            if (observation.result === "missing" || observation.checks.length === 0) {
-              return await this.halt(store, state, "required-checks-missing");
-            }
-            if (observation.result === "failed" || observation.checks.some((check2) => check2.bucket !== "pass" && check2.bucket !== "pending")) {
-              return await this.halt(store, state, "required-checks-red");
-            }
-            const remainingMs = ciDeadlineMs - observedAtMs;
-            await this.sleep(Math.min(this.pollIntervalMs, remainingMs)).catch(async (error51) => await this.halt(store, state, classificationOf(error51, "checks-wait-failed")));
-          }
-          state = await store.transition({
-            expectedRevision: state.revision,
-            to: "marking-ready"
-          });
-          await this.haltIfAborted(store, state);
-          this.dependencies.emit?.("mark-ready");
-          const readyPullRequest = await this.dependencies.hostingAdapter.markReady({
-            checkoutPath: branch.worktreePath,
-            target,
-            pullRequestNumber: pullRequest.number,
-            headCommitOid: expectedHead2,
-            ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-          }).catch(async (error51) => await this.halt(store, state, classificationOf(error51, "mark-ready-failed")));
-          if (!pullRequestMatches(readyPullRequest, target, branch, expectedHead2, false) || readyPullRequest.number !== pullRequest.number || readyPullRequest.url !== pullRequest.url) {
-            return await this.halt(store, state, "mark-ready-identity-mismatch");
-          }
-          state = await store.transition({
-            expectedRevision: state.revision,
-            to: "cleaning-up"
-          });
-          await this.haltIfAborted(store, state);
-          const cleanup = await this.cleanupBranch(store, state, branch, expectedHead2);
-          pendingCleanup = {
-            store,
-            state,
-            headCommitOid: expectedHead2,
-            pullRequest: readyPullRequest,
-            cleanup
-          };
           return pendingCleanup;
         }
       );
@@ -49015,8 +49251,7 @@ var AutopilotController = class {
     return {
       ...result,
       status: "ready-for-human-review",
-      headCommitOid: completedCleanup.headCommitOid,
-      pullRequest: structuredClone(completedCleanup.pullRequest)
+      headCommitOid: completedCleanup.headCommitOid
     };
   }
   async status(checkoutPath, workflowId) {
@@ -49047,6 +49282,7 @@ var AutopilotController = class {
         let state = await store.read();
         await this.assertRepositoryIdentity(checkoutPath, workflowId, state);
         if (isTerminal2(state)) return state;
+        if (state.phase === "preflighting" || state.phase === "running-task" || state.phase === "promoting-task") this.assertPolicyAuthority();
         await store.adoptLease();
         await this.haltIfAborted(store, state);
         const recordedWorkflow = recordedWorkflowFrom(await store.readIntentJournal());
@@ -49078,30 +49314,11 @@ var AutopilotController = class {
             );
           }
         }
-        let target;
-        try {
-          target = await this.dependencies.hostingAdapter.preflight({
-            checkoutPath,
-            ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-          });
-        } catch (error51) {
-          throw new AutopilotControllerError(
-            classificationOf(error51, "preflight-failed"),
-            "shipping preflight failed"
-          );
-        }
-        if (branch.ownerRepo !== target.repository || branch.remoteUrl !== target.canonicalHttpsUrl) {
-          throw new AutopilotControllerError(
-            "repository-identity-mismatch",
-            "shipping and workflow repository identities differ"
-          );
-        }
         const resumed = await this.resumeActiveWorkflow({
           store,
           state,
           spec: validated.spec,
           branch,
-          target,
           expectedHead: expectedHead2
         });
         pendingCleanup = resumed;
@@ -49140,7 +49357,7 @@ var AutopilotController = class {
     }
   }
   async resumeActiveWorkflow(args) {
-    const { store, spec, branch, target } = args;
+    const { store, spec, branch } = args;
     let state = args.state;
     let expectedHead2 = args.expectedHead;
     while (state.phase === "preflighting" || state.phase === "running-task" || state.phase === "promoting-task") {
@@ -49273,7 +49490,7 @@ var AutopilotController = class {
       if (report.workflowId !== state.workflowId || report.baseCommitOid !== branch.baseCommitOid || report.headCommitOid !== expectedHead2) {
         return await this.halt(store, state, "stale-final-review");
       }
-      if (!report.eligible || report.status !== "ready-to-ship" || report.reasons.length !== 0) {
+      if (!report.eligible || report.status !== "ready-for-human-review" || report.reasons.length !== 0) {
         return await this.halt(
           store,
           state,
@@ -49285,180 +49502,10 @@ var AutopilotController = class {
       }
       state = await store.transition({
         expectedRevision: state.revision,
-        to: "pushing",
+        to: "cleaning-up",
         update(draft) {
           draft.finalGate = finalGateFor(report);
         }
-      });
-    }
-    if (state.phase === "pushing") {
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("push");
-      const pushed = await this.dependencies.hostingAdapter.pushBranch({
-        checkoutPath: branch.worktreePath,
-        target,
-        branch: branch.branch,
-        headCommitOid: expectedHead2,
-        ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-      }).catch(async (error51) => await this.halt(store, state, classificationOf(error51, "push-failed")));
-      if (pushed.remoteHead !== expectedHead2) {
-        return await this.halt(store, state, "push-head-mismatch");
-      }
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "creating-draft-pr"
-      });
-    }
-    let pullRequest;
-    if (state.phase === "creating-draft-pr") {
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("draft-pr");
-      pullRequest = await this.dependencies.hostingAdapter.ensureDraftPullRequest({
-        checkoutPath: branch.worktreePath,
-        target,
-        baseBranch: branch.baseBranch,
-        headBranch: branch.branch,
-        headCommitOid: expectedHead2,
-        title: spec.shipping.pullRequestTitle,
-        body: spec.shipping.pullRequestBody,
-        ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-      }).catch(async (error51) => await this.halt(
-        store,
-        state,
-        classificationOf(error51, "draft-pull-request-failed")
-      ));
-      if (!pullRequestMatches(pullRequest, target, branch, expectedHead2, true)) {
-        return await this.halt(store, state, "draft-pull-request-identity-mismatch");
-      }
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "waiting-required-checks",
-        update(draft) {
-          draft.shipping.prNumber = pullRequest.number;
-          draft.shipping.prUrl = pullRequest.url;
-        }
-      });
-    } else {
-      if (state.shipping.prNumber === null || state.shipping.prUrl === null) {
-        throw new AutopilotControllerError(
-          "workflow-state-mismatch",
-          "shipping identity is incomplete"
-        );
-      }
-      pullRequest = {
-        number: state.shipping.prNumber,
-        url: state.shipping.prUrl,
-        repository: target.repository,
-        baseBranch: branch.baseBranch,
-        headBranch: branch.branch,
-        headCommitOid: expectedHead2,
-        draft: state.phase !== "cleaning-up"
-      };
-      if (state.phase === "marking-ready" && !stateHasPassingChecks(state)) {
-        return await this.halt(store, state, "required-checks-proof-missing");
-      }
-      if (state.phase === "waiting-required-checks" || state.phase === "marking-ready") {
-        const establishedPullRequest = await this.dependencies.hostingAdapter.ensureDraftPullRequest({
-          checkoutPath: branch.worktreePath,
-          target,
-          baseBranch: branch.baseBranch,
-          headBranch: branch.branch,
-          headCommitOid: expectedHead2,
-          title: spec.shipping.pullRequestTitle,
-          body: spec.shipping.pullRequestBody,
-          ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-        }).catch(async (error51) => await this.halt(
-          store,
-          state,
-          classificationOf(error51, "draft-pull-request-failed")
-        ));
-        if (!pullRequestIdentityMatches(
-          establishedPullRequest,
-          target,
-          branch,
-          expectedHead2
-        ) || establishedPullRequest.number !== pullRequest.number || establishedPullRequest.url !== pullRequest.url) {
-          return await this.halt(store, state, "draft-pull-request-identity-mismatch");
-        }
-        pullRequest = establishedPullRequest;
-        if (!pullRequest.draft) {
-          if (!stateHasPassingChecks(state)) {
-            return await this.halt(store, state, "required-checks-proof-missing");
-          }
-          state = await store.transition({
-            expectedRevision: state.revision,
-            to: "cleaning-up"
-          });
-        }
-      }
-    }
-    if (state.phase === "waiting-required-checks") {
-      const deadlineMs = Date.parse(state.shipping.ciDeadlineAt);
-      if (!Number.isFinite(deadlineMs)) {
-        return await this.halt(store, state, "required-checks-timeout");
-      }
-      while (true) {
-        await this.haltIfAborted(store, state);
-        const beforePoll = Date.parse(this.now());
-        if (!Number.isFinite(beforePoll) || beforePoll >= deadlineMs) {
-          return await this.halt(store, state, "required-checks-timeout");
-        }
-        const observation = await this.dependencies.hostingAdapter.requiredChecks({
-          checkoutPath: branch.worktreePath,
-          target,
-          pullRequestNumber: pullRequest.number,
-          headCommitOid: expectedHead2,
-          ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-        }).catch(async (error51) => await this.halt(store, state, classificationOf(error51, "required-checks-failed")));
-        this.dependencies.emit?.(`checks:${observation.result === "passed" ? "pass" : observation.result === "failed" ? "red" : observation.result}`);
-        const observedAt = this.now();
-        const observedAtMs = Date.parse(observedAt);
-        state = await store.update({
-          expectedRevision: state.revision,
-          update(draft) {
-            draft.ciObservations.push({
-              observedAt,
-              result: observation.result,
-              headCommitOid: observation.headCommitOid,
-              checks: structuredClone(observation.checks)
-            });
-          }
-        });
-        await this.haltIfAborted(store, state);
-        if (!Number.isFinite(observedAtMs) || observedAtMs >= deadlineMs) {
-          return await this.halt(store, state, "required-checks-timeout");
-        }
-        if (checksAreNonEmptyAndPassing(observation, expectedHead2)) break;
-        if (observation.result === "missing" || observation.checks.length === 0) {
-          return await this.halt(store, state, "required-checks-missing");
-        }
-        if (observation.result === "failed" || observation.checks.some((check2) => check2.bucket !== "pass" && check2.bucket !== "pending")) {
-          return await this.halt(store, state, "required-checks-red");
-        }
-        const remainingMs = deadlineMs - observedAtMs;
-        await this.sleep(Math.min(this.pollIntervalMs, remainingMs)).catch(async (error51) => await this.halt(store, state, classificationOf(error51, "checks-wait-failed")));
-      }
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "marking-ready"
-      });
-    }
-    if (state.phase === "marking-ready") {
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("mark-ready");
-      const readyPullRequest = await this.dependencies.hostingAdapter.markReady({
-        checkoutPath: branch.worktreePath,
-        target,
-        pullRequestNumber: pullRequest.number,
-        headCommitOid: expectedHead2,
-        ...this.dependencies.abortSignal === void 0 ? {} : { signal: this.dependencies.abortSignal }
-      }).catch(async (error51) => await this.halt(store, state, classificationOf(error51, "mark-ready-failed")));
-      if (!pullRequestMatches(readyPullRequest, target, branch, expectedHead2, false) || readyPullRequest.number !== pullRequest.number || readyPullRequest.url !== pullRequest.url) {
-        return await this.halt(store, state, "mark-ready-identity-mismatch");
-      }
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "cleaning-up"
       });
     }
     if (state.phase !== "cleaning-up") {
@@ -49474,7 +49521,7 @@ var AutopilotController = class {
       branch,
       expectedHead2
     );
-    return { store, state, headCommitOid: expectedHead2, pullRequest, cleanup };
+    return { store, state, headCommitOid: expectedHead2, cleanup };
   }
   async cleanupBranch(store, state, branch, expectedHead2) {
     const key = cleanupIntentKey(expectedHead2);
@@ -49491,7 +49538,11 @@ var AutopilotController = class {
       });
     }
     this.dependencies.emit?.("cleanup");
-    const cleanup = await this.dependencies.branchManager.cleanup(branch, expectedHead2).catch(() => ({ ok: false, classification: "cleanup-failed" }));
+    const cleanup = await this.dependencies.branchManager.cleanup(
+      branch,
+      expectedHead2,
+      { retainBranch: true }
+    ).catch(() => ({ ok: false, classification: "cleanup-failed" }));
     if (cleanup.ok && cleanup.worktreeRemoved && cleanup.refsRemoved) {
       await store.completeIntent({
         expectedRevision: state.revision,
@@ -49537,30 +49588,30 @@ var AutopilotController = class {
   async finishCleanup(context, lockReleased, releaseError) {
     const worktreeRemoved = context.cleanup.ok && context.cleanup.worktreeRemoved;
     const refsRemoved = context.cleanup.ok && context.cleanup.refsRemoved;
-    const succeeded6 = worktreeRemoved && refsRemoved && lockReleased;
+    const succeeded = worktreeRemoved && refsRemoved && lockReleased;
     const classification = releaseError ?? "cleanup-failed";
     const completedAt = this.now();
     const next = await context.store.transition({
       expectedRevision: context.state.revision,
-      to: succeeded6 ? "ready-for-human-review" : "failed",
+      to: succeeded ? "ready-for-human-review" : "failed",
       update(draft) {
         draft.cleanup = {
-          status: succeeded6 ? "succeeded" : "failed",
+          status: succeeded ? "succeeded" : "failed",
           worktreeRemoved,
           lockReleased,
-          error: succeeded6 ? null : classification,
+          error: succeeded ? null : classification,
           completedAt
         };
         draft.terminal = {
-          classification: succeeded6 ? "ready-for-human-review" : "failed",
-          reason: succeeded6 ? null : classification,
+          classification: succeeded ? "ready-for-human-review" : "failed",
+          reason: succeeded ? null : classification,
           evidenceRefs: draft.finalGate === null ? [] : [draft.finalGate.reportRef],
           completedAt
         };
       }
     });
     await context.store.releaseLease();
-    if (!succeeded6) throw new AutopilotControllerError(classification);
+    if (!succeeded) throw new AutopilotControllerError(classification);
     return next;
   }
 };
@@ -49571,9 +49622,6 @@ import { createHash as createHash13 } from "node:crypto";
 // src/integrate/controlled-integrator.ts
 var CANDIDATE_REF = /^refs\/claude-architect\/candidates\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 var OBJECT_ID2 = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
-function succeeded4(result) {
-  return result.exitCode === 0;
-}
 function aborted2(detail) {
   return { integration: "aborted", detail };
 }
@@ -49619,7 +49667,7 @@ async function stageCandidateTreeWithLock(args, ownership) {
     "--quiet",
     `${args.artifact.anchorRef}^{commit}`
   ]);
-  if (!succeeded4(anchor) || anchor.stdout.trim() !== args.artifact.candidateCommitOid) {
+  if (!gitSucceeded(anchor) || anchor.stdout.trim() !== args.artifact.candidateCommitOid) {
     return complete(aborted2("candidate-anchor-mismatch"));
   }
   const candidateTree = await git(canonical, [
@@ -49627,7 +49675,7 @@ async function stageCandidateTreeWithLock(args, ownership) {
     "--verify",
     `${args.artifact.candidateCommitOid}^{tree}`
   ]);
-  if (!succeeded4(candidateTree) || candidateTree.stdout.trim() !== args.artifact.candidateTreeOid) {
+  if (!gitSucceeded(candidateTree) || candidateTree.stdout.trim() !== args.artifact.candidateTreeOid) {
     return complete(aborted2("candidate-tree-mismatch"));
   }
   const identity = await structuralVerify({
@@ -49642,7 +49690,7 @@ async function stageCandidateTreeWithLock(args, ownership) {
     return complete(aborted2("artifact-identity-mismatch"));
   }
   const refreshed = await git(canonical, ["update-index", "-q", "--refresh"]);
-  if (!succeeded4(refreshed)) {
+  if (!gitSucceeded(refreshed)) {
     return complete({ integration: "conflicted", detail: "index-refresh-failed" });
   }
   const applied = await git(canonical, [
@@ -49652,7 +49700,7 @@ async function stageCandidateTreeWithLock(args, ownership) {
     args.artifact.baseCommitOid,
     args.artifact.candidateTreeOid
   ]);
-  if (!succeeded4(applied)) {
+  if (!gitSucceeded(applied)) {
     return complete({ integration: "conflicted", detail: "candidate-apply-conflict" });
   }
   const stagedTree = await git(canonical, ["write-tree"]);
@@ -49666,7 +49714,7 @@ async function stageCandidateTreeWithLock(args, ownership) {
     "--ignore-submodules=none",
     "--no-renames"
   ]);
-  if (!succeeded4(stagedTree) || stagedTree.stdout.trim() !== args.artifact.candidateTreeOid || !succeeded4(worktreeDiff) || !succeeded4(head) || head.stdout.trim() !== args.artifact.baseCommitOid || !succeeded4(status) || !statusMatchesArtifact(status.stdout, args.artifact.changedPaths)) {
+  if (!gitSucceeded(stagedTree) || stagedTree.stdout.trim() !== args.artifact.candidateTreeOid || !gitSucceeded(worktreeDiff) || !gitSucceeded(head) || head.stdout.trim() !== args.artifact.baseCommitOid || !gitSucceeded(status) || !statusMatchesArtifact(status.stdout, args.artifact.changedPaths)) {
     return complete({ integration: "conflicted", detail: "post-apply-divergence" });
   }
   return complete({ integration: "applied", detail: "candidate tree applied" });
@@ -49692,7 +49740,7 @@ async function applyCandidateTree(args) {
       args.artifact.anchorRef,
       args.artifact.candidateCommitOid
     ]);
-    if (!succeeded4(deleted)) {
+    if (!gitSucceeded(deleted)) {
       return {
         integration: "applied",
         detail: "candidate tree applied; candidate anchor delete failed"
@@ -49703,29 +49751,25 @@ async function applyCandidateTree(args) {
   if (args.borrowedCheckoutLock !== void 0) {
     return await executeWithLock(args.borrowedCheckoutLock, "borrowed");
   }
-  let terminalResult = null;
-  try {
-    return await safety.withCheckoutLease(args.repoRoot, async (lock) => {
-      terminalResult = await executeWithLock(lock, "owned");
-      return terminalResult;
-    });
-  } catch (error51) {
-    if (terminalResult !== null) {
-      terminalResult.detail = `${terminalResult.detail}; checkout lock release failed`;
-      return terminalResult;
+  return await safety.withCheckoutLease(
+    args.repoRoot,
+    (lock) => executeWithLock(lock, "owned"),
+    {
+      // The terminal result already happened; a failed release must stay
+      // visible without erasing it.
+      onReleaseError: (_releaseError, result) => ({
+        ...result,
+        detail: `${result.detail}; checkout lock release failed`
+      })
     }
-    throw error51;
-  }
+  );
 }
 
 // src/autopilot/candidate-promoter.ts
 var OBJECT_ID3 = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
-var SHA2564 = /^[0-9a-f]{64}$/u;
+var SHA2563 = /^[0-9a-f]{64}$/u;
 function safeCommitMessage(message) {
   return message.trim().length > 0 && Buffer.byteLength(message, "utf8") <= 200 && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(message) && !/\bco-authored-by\s*:/iu.test(message) && !/\bgenerated(?:-|\s+)(?:by|with)\b/iu.test(message) && !/\b(?:ai|claude|codex|chatgpt|copilot|gemini|llm)[ -]generated\b/iu.test(message);
-}
-function succeeded5(result) {
-  return result.exitCode === 0 && result.truncated?.stdout !== true && result.truncated?.stderr !== true;
 }
 function rejected(classification) {
   return { status: "rejected", classification };
@@ -49771,6 +49815,7 @@ var PROMOTION_CLASSIFICATION_RECORD = {
   "journal-failed": true,
   "anchor-deletion-failed": true,
   "lock-release-failed": true,
+  "checkout-busy": true,
   "human-decision-required": true
 };
 var PROMOTION_CLASSIFICATIONS = new Set(
@@ -49790,6 +49835,7 @@ var CandidatePromoter = class {
   artifactStore;
   stageCandidate;
   now;
+  decisionAuthority;
   constructor(dependencies = {}) {
     this.runGit = dependencies.git ?? git;
     this.platformServices = dependencies.platformServices ?? getPlatformServices();
@@ -49798,6 +49844,7 @@ var CandidatePromoter = class {
     this.artifactStore = dependencies.artifactStore ?? ((runId) => new ArtifactStore(runId));
     this.stageCandidate = dependencies.stageCandidate ?? stageCandidateTreeUnderLock;
     this.now = dependencies.now ?? (() => (/* @__PURE__ */ new Date()).toISOString());
+    this.decisionAuthority = dependencies.decisionAuthority ?? (() => decisionAuthority());
   }
   async proveCommit(checkout, commitOid, treeOid, parentOid, message) {
     const [tree, parents, body] = await Promise.all([
@@ -49809,8 +49856,8 @@ var CandidatePromoter = class {
       this.runGit(checkout, ["rev-list", "--parents", "-n", "1", commitOid]),
       this.runGit(checkout, ["log", "-1", "--format=%B", commitOid])
     ]);
-    const lineage = succeeded5(parents) ? parents.stdout.trim().split(/\s+/u) : [];
-    return succeeded5(tree) && tree.stdout.trim() === treeOid && lineage.length === 2 && lineage[0] === commitOid && lineage[1] === parentOid && succeeded5(body) && body.stdout.trimEnd() === message;
+    const lineage = gitSucceeded(parents) ? parents.stdout.trim().split(/\s+/u) : [];
+    return gitSucceeded(tree) && tree.stdout.trim() === treeOid && lineage.length === 2 && lineage[0] === commitOid && lineage[1] === parentOid && gitSucceeded(body) && body.stdout.trimEnd() === message;
   }
   async deleteAnchor(checkout, artifact) {
     const current = await this.runGit(checkout, [
@@ -49820,10 +49867,10 @@ var CandidatePromoter = class {
       artifact.anchorRef
     ]);
     if (current.exitCode === 1 && current.stdout === "") return true;
-    if (!succeeded5(current) || current.stdout.trim().split(/\s/u)[0] !== artifact.candidateCommitOid) {
+    if (!gitSucceeded(current) || current.stdout.trim().split(/\s/u)[0] !== artifact.candidateCommitOid) {
       return false;
     }
-    return succeeded5(await this.runGit(checkout, [
+    return gitSucceeded(await this.runGit(checkout, [
       "update-ref",
       "--no-deref",
       "-d",
@@ -49848,7 +49895,7 @@ var CandidatePromoter = class {
         "--no-renames"
       ])
     ]);
-    return succeeded5(directRef) && directRef.stdout.trim().split(/\s/u)[0] === commitOid && succeeded5(head) && head.stdout.trim() === commitOid && succeeded5(index) && index.stdout.trim() === treeOid && succeeded5(diff) && succeeded5(status) && status.stdout === "";
+    return gitSucceeded(directRef) && directRef.stdout.trim().split(/\s/u)[0] === commitOid && gitSucceeded(head) && head.stdout.trim() === commitOid && gitSucceeded(index) && index.stdout.trim() === treeOid && gitSucceeded(diff) && gitSucceeded(status) && status.stdout === "";
   }
   async proveStagedCandidate(identity, artifact) {
     const [head, branch, index, diff, status] = await Promise.all([
@@ -49865,7 +49912,7 @@ var CandidatePromoter = class {
         "--no-renames"
       ])
     ]);
-    return succeeded5(head) && head.stdout.trim() === artifact.baseCommitOid && succeeded5(branch) && branch.stdout.trim() === identity.branchRef && succeeded5(index) && index.stdout.trim() === artifact.candidateTreeOid && succeeded5(diff) && succeeded5(status) && statusMatchesArtifact(status.stdout, artifact.changedPaths);
+    return gitSucceeded(head) && head.stdout.trim() === artifact.baseCommitOid && gitSucceeded(branch) && branch.stdout.trim() === identity.branchRef && gitSucceeded(index) && index.stdout.trim() === artifact.candidateTreeOid && gitSucceeded(diff) && gitSucceeded(status) && statusMatchesArtifact(status.stdout, artifact.changedPaths);
   }
   async ensureAcceptedDecision(artifactStore, runId, artifact, eligibility, eligibilityHash) {
     try {
@@ -49880,8 +49927,9 @@ var CandidatePromoter = class {
     }
   }
   async promote(request) {
-    if (!OBJECT_ID3.test(request.expectedHead) || !SHA2564.test(request.expectedArtifactHash) || request.workflowCheckoutPath.length === 0) return rejected("invalid-request");
+    if (!OBJECT_ID3.test(request.expectedHead) || !SHA2563.test(request.expectedArtifactHash) || request.workflowCheckoutPath.length === 0) return rejected("invalid-request");
     if (!safeCommitMessage(request.commitMessage)) return rejected("invalid-commit-message");
+    if (this.decisionAuthority() === "human") return rejected("human-decision-required");
     const workflowStore = this.workflowStore(request.workflowId);
     const artifactStore = this.artifactStore(request.runId);
     let workflow;
@@ -50027,7 +50075,7 @@ var CandidatePromoter = class {
               request.workflowCheckoutPath,
               ["rev-parse", "--verify", "HEAD"]
             );
-            if (!succeeded5(currentHead)) {
+            if (!gitSucceeded(currentHead)) {
               return {
                 kind: "rejected",
                 classification: "human-decision-required",
@@ -50093,19 +50141,6 @@ var CandidatePromoter = class {
                   journalFailure: false
                 };
               }
-              if (!await this.ensureAcceptedDecision(
-                artifactStore,
-                request.runId,
-                artifact,
-                eligibility,
-                eligibilityHash
-              )) {
-                return {
-                  kind: "rejected",
-                  classification: "decision-conflict",
-                  journalFailure: true
-                };
-              }
               const staged = await this.stageCandidate({
                 repoRoot: request.workflowCheckoutPath,
                 artifact,
@@ -50124,7 +50159,8 @@ var CandidatePromoter = class {
                   journalFailure: true
                 };
               }
-            } else if (!await this.ensureAcceptedDecision(
+            }
+            if (!await this.ensureAcceptedDecision(
               artifactStore,
               request.runId,
               artifact,
@@ -50144,11 +50180,11 @@ var CandidatePromoter = class {
                 journalFailure: false
               };
             }
-            const [author, committer] = await Promise.all([
-              this.runGit(request.workflowCheckoutPath, ["var", "GIT_AUTHOR_IDENT"]),
-              this.runGit(request.workflowCheckoutPath, ["var", "GIT_COMMITTER_IDENT"])
-            ]);
-            if (!succeeded5(author) || !succeeded5(committer)) {
+            const identityEnv = await userCommitEnvironment(
+              request.workflowCheckoutPath,
+              this.runGit
+            );
+            if (identityEnv === null) {
               return {
                 kind: "rejected",
                 classification: "git-identity-missing",
@@ -50162,9 +50198,9 @@ var CandidatePromoter = class {
               request.expectedHead,
               "-m",
               request.commitMessage
-            ]);
+            ], { env: identityEnv });
             const commitOid = created.stdout.trim();
-            if (!succeeded5(created) || !OBJECT_ID3.test(commitOid)) {
+            if (!gitSucceeded(created) || !OBJECT_ID3.test(commitOid)) {
               return {
                 kind: "rejected",
                 classification: "commit-creation-failed",
@@ -50191,7 +50227,7 @@ var CandidatePromoter = class {
               commitOid,
               request.expectedHead
             ]);
-            if (!succeeded5(updated)) {
+            if (!gitSucceeded(updated)) {
               return {
                 kind: "rejected",
                 classification: "human-decision-required",
@@ -50247,7 +50283,7 @@ var CandidatePromoter = class {
           reason: redact(String(error51))
         });
       } else if (!enteredLease) {
-        return finishFailure("branch-identity-changed");
+        return finishFailure(isLockContention(error51) ? "checkout-busy" : "branch-identity-changed");
       } else {
         throw error51;
       }
@@ -50271,214 +50307,14 @@ function specSha256(spec) {
 }
 
 // src/runtime/attempt-runtime.ts
-import { randomUUID as randomUUID12 } from "node:crypto";
+import { randomUUID as randomUUID11 } from "node:crypto";
 import { rm as rm12 } from "node:fs/promises";
 
-// src/git/candidate-tree.ts
-import { lstat as lstat17, mkdtemp as mkdtemp3, rm as rm11 } from "node:fs/promises";
-import { tmpdir as tmpdir6 } from "node:os";
-import path26 from "node:path";
-var MAX_DIAGNOSTIC_LENGTH5 = 2e3;
-var MAX_REJECT_PATHS = 25;
-var BINARY_PATCH_PAYLOAD_MARKER = "[[BINARY_PATCH_PAYLOAD_OMITTED]]";
-function gitFailure3(action, result) {
-  const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, MAX_DIAGNOSTIC_LENGTH5);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-async function checkedGit4(cwd, args, indexFile) {
-  const result = await git(cwd, args, indexFile);
-  if (result.truncated?.stdout === true || result.truncated?.stderr === true) {
-    throw new RuntimeError(`git ${args[0] ?? "command"} output exceeded the runtime bound`, {
-      command: args[0] ?? "command",
-      truncated: result.truncated
-    });
-  }
-  if (result.exitCode !== 0) throw gitFailure3(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
-function parsePorcelainPaths(output, kind) {
-  const fields = splitNul(output);
-  const paths = [];
-  for (let index = 0; index < fields.length; index += 1) {
-    const entry = fields[index];
-    const status = entry.slice(0, 2);
-    const entryPath = entry.slice(3);
-    if (kind === "ignored" !== (status === "!!")) {
-      if (status.includes("R")) index += 1;
-      continue;
-    }
-    paths.push(entryPath);
-    if (status.includes("R")) {
-      const sourcePath = fields[index + 1];
-      if (sourcePath !== void 0) paths.push(sourcePath);
-      index += 1;
-    }
-  }
-  return [...new Set(paths)];
-}
-async function inventoryWorktree(worktreePath) {
-  const changed = await checkedGit4(worktreePath, [
-    "status",
-    "--porcelain=v1",
-    "-z",
-    "--untracked-files=all"
-  ]);
-  const ignored = await checkedGit4(worktreePath, [
-    "status",
-    "--porcelain=v1",
-    "-z",
-    "--ignored",
-    "--untracked-files=all"
-  ]);
-  return {
-    changedPaths: parsePorcelainPaths(changed, "changed"),
-    ignoredPaths: parsePorcelainPaths(ignored, "ignored")
-  };
-}
-function isAllowed2(pathname, writeAllowlist, forbiddenScope, opaqueDirectory = false) {
-  const scopePaths = opaqueDirectory ? [pathname, `${pathname}/`] : [pathname];
-  return writeAllowlist.some((pattern) => scopePaths.some((candidate) => globMatches(pattern, candidate))) && !forbiddenScope.some((pattern) => scopePaths.some((candidate) => globMatches(pattern, candidate, true)));
-}
-async function advisoryLstatScan(worktreePath, changedPaths) {
-  const symlinkResults = await Promise.all(changedPaths.map(async (changedPath) => {
-    try {
-      return (await lstat17(path26.resolve(worktreePath, changedPath))).isSymbolicLink();
-    } catch (error51) {
-      if (error51.code === "ENOENT") return false;
-      throw error51;
-    }
-  }));
-  return symlinkResults.some(Boolean);
-}
-function sanitizeReviewPatch(patch) {
-  const sanitizedLines = [];
-  let omittingBinaryPayload = false;
-  for (const line of patch.split(/\r?\n/)) {
-    if (line === "GIT binary patch") {
-      sanitizedLines.push(line, BINARY_PATCH_PAYLOAD_MARKER);
-      omittingBinaryPayload = true;
-      continue;
-    }
-    if (omittingBinaryPayload) {
-      if (!line.startsWith("diff --git ")) continue;
-      omittingBinaryPayload = false;
-    }
-    sanitizedLines.push(line);
-  }
-  return redact(sanitizedLines.join("\n"));
-}
-async function freezeCandidate(args) {
-  const inventory = await inventoryWorktree(args.worktreePath);
-  const outOfScope = inventory.changedPaths.filter((changedPath) => !isAllowed2(changedPath, args.writeAllowlist, args.forbiddenScope));
-  if (outOfScope.length > 0) {
-    return { ok: false, reason: "out-of-scope-write", paths: outOfScope.slice(0, MAX_REJECT_PATHS) };
-  }
-  if (await advisoryLstatScan(args.worktreePath, inventory.changedPaths)) {
-    return { ok: false, reason: "modified-symlink" };
-  }
-  const indexDirectory = await mkdtemp3(path26.join(tmpdir6(), "claude-architect-index-"));
-  const indexFile = path26.join(indexDirectory, "index");
-  try {
-    await checkedGit4(args.worktreePath, ["read-tree", args.baseCommitOid], indexFile);
-    if (inventory.changedPaths.length > 0) {
-      const literalPathspecs = inventory.changedPaths.map((changedPath) => `:(literal)${changedPath}`);
-      await checkedGit4(args.worktreePath, ["add", "--all", "--", ...literalPathspecs], indexFile);
-    }
-    const candidateTreeOid = (await checkedGit4(args.worktreePath, ["write-tree"], indexFile)).trim();
-    const baseTreeOid = (await checkedGit4(
-      args.worktreePath,
-      ["rev-parse", `${args.baseCommitOid}^{tree}`]
-    )).trim();
-    if (candidateTreeOid === baseTreeOid) return { ok: false, reason: "empty-candidate" };
-    const rawDiff = parseRawDiff(await checkedGit4(args.worktreePath, [
-      "diff-tree",
-      "-r",
-      "--no-commit-id",
-      "--no-renames",
-      "--raw",
-      "-z",
-      args.baseCommitOid,
-      candidateTreeOid
-    ]));
-    const frozenOutOfScope = rawDiff.filter((entry) => !isAllowed2(
-      entry.path,
-      args.writeAllowlist,
-      args.forbiddenScope,
-      entry.oldMode === "160000" || entry.newMode === "160000"
-    )).map((entry) => entry.path);
-    if (frozenOutOfScope.length > 0) {
-      return {
-        ok: false,
-        reason: "out-of-scope-write",
-        paths: frozenOutOfScope.slice(0, MAX_REJECT_PATHS)
-      };
-    }
-    if (rawDiff.some((entry) => [entry.oldMode, entry.newMode].some((mode) => mode === "120000" || mode === "160000"))) {
-      return { ok: false, reason: "modified-symlink" };
-    }
-    const nameStatusOutput = await checkedGit4(args.repoRoot, [
-      "diff-tree",
-      "-r",
-      "--no-commit-id",
-      "--no-renames",
-      "--name-status",
-      "-z",
-      args.baseCommitOid,
-      candidateTreeOid
-    ]);
-    const treeOutput = await checkedGit4(
-      args.repoRoot,
-      ["ls-tree", "-r", "-z", candidateTreeOid]
-    );
-    const { changedPaths, manifestHash } = computeChangedPathManifest({
-      rawDiff,
-      nameStatusOutput,
-      treeOutput
-    });
-    const patch = sanitizeReviewPatch(await checkedGit4(args.repoRoot, [
-      "diff",
-      "--no-ext-diff",
-      "--no-textconv",
-      "--binary",
-      "--full-index",
-      args.baseCommitOid,
-      candidateTreeOid
-    ]));
-    const anchorRef = `refs/claude-architect/candidates/${args.runId}`;
-    const candidateCommitOid = (await checkedGit4(args.repoRoot, [
-      "commit-tree",
-      candidateTreeOid,
-      "-p",
-      args.baseCommitOid,
-      "-m",
-      `candidate ${args.runId}`
-    ])).trim();
-    await checkedGit4(args.repoRoot, ["update-ref", anchorRef, candidateCommitOid]);
-    return {
-      ok: true,
-      artifact: {
-        baseCommitOid: args.baseCommitOid,
-        candidateTreeOid,
-        candidateCommitOid,
-        anchorRef,
-        manifestHash,
-        changedPaths,
-        patch
-      },
-      evidence: {
-        ignoredPaths: inventory.ignoredPaths.map((ignoredPath) => redact(ignoredPath)).sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
-      }
-    };
-  } finally {
-    await rm11(indexDirectory, { recursive: true, force: true });
-  }
-}
-
 // src/verify/baseline-verifier.ts
-import { randomUUID as randomUUID11 } from "node:crypto";
-import { readFile as readFile7 } from "node:fs/promises";
+import { randomUUID as randomUUID10 } from "node:crypto";
+import { readFile as readFile6 } from "node:fs/promises";
 import { basename } from "node:path";
-import path27 from "node:path";
+import path29 from "node:path";
 function throwIfAborted(signal) {
   if (!signal?.aborted) return;
   throw new DOMException("Baseline verification was cancelled", "AbortError");
@@ -50561,7 +50397,7 @@ function shellCommandInvokesVitest(command, scripts, visitedScripts) {
 }
 async function packageScriptInvokesVitest(cwd, scriptName) {
   try {
-    const parsed = JSON.parse(await readFile7(path27.join(cwd, "package.json"), "utf8"));
+    const parsed = JSON.parse(await readFile6(path29.join(cwd, "package.json"), "utf8"));
     if (parsed === null || typeof parsed !== "object" || !("scripts" in parsed)) return false;
     const scripts = parsed.scripts;
     if (scripts === null || typeof scripts !== "object") return false;
@@ -50572,9 +50408,7 @@ async function packageScriptInvokesVitest(cwd, scriptName) {
       /* @__PURE__ */ new Set([scriptName])
     );
   } catch (error51) {
-    if (typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "ENOENT") {
-      return false;
-    }
+    if (isMissing(error51)) return false;
     throw error51;
   }
 }
@@ -50630,7 +50464,7 @@ async function verifyBaseline(args) {
     // A runId gives recovery a deterministic, reclaimable name; without one
     // (only unit callers), fall back to a unique id so repeated same-commit
     // fixtures cannot collide on a shared worktrees root.
-    `baseline-${args.runId ?? args.verificationId?.() ?? randomUUID11()}`,
+    `baseline-${args.runId ?? args.verificationId?.() ?? randomUUID10()}`,
     ps,
     args.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.borrowedCheckoutLease }
   );
@@ -50735,7 +50569,7 @@ async function verifyBaseline(args) {
 }
 
 // src/runtime/producer-preflight.ts
-import path28 from "node:path";
+import path30 from "node:path";
 var PREFLIGHT_PROBE_FILE = "claude-architect-preflight.txt";
 var PREFLIGHT_TIMEOUT_MS = 18e4;
 var PREFLIGHT_OUTPUT_LIMIT = 256 * 1024;
@@ -50843,7 +50677,7 @@ async function runProducerPreflight(args) {
     let contents;
     try {
       const probeBytes = await readStableRegularFile(
-        path28.join(worktree.path, PREFLIGHT_PROBE_FILE),
+        path30.join(worktree.path, PREFLIGHT_PROBE_FILE),
         BigInt(PROBE_FILE_LIMIT)
       );
       if (probeBytes === null) throw new RuntimeError("the Producer probe file is not stable");
@@ -50895,14 +50729,14 @@ async function runProducerPreflight(args) {
 }
 
 // src/runtime/reproducibility.ts
-import { readFile as readFile8 } from "node:fs/promises";
+import { readFile as readFile7 } from "node:fs/promises";
 var REPOSITORY_INSTRUCTION_PATHS = ["AGENTS.md", "CLAUDE.md"];
-function gitFailure4(action, result) {
+function gitFailure2(action, result) {
   const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, 2e3);
   return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
 }
 function assertCompleteGitOutput(action, result) {
-  if (result.exitCode !== 0) throw gitFailure4(action, result);
+  if (result.exitCode !== 0) throw gitFailure2(action, result);
   if (result.truncated?.stdout === true) {
     throw new RuntimeError(`${action} output exceeded the runtime limit`);
   }
@@ -50949,11 +50783,11 @@ function defaultVerifierModuleUrls() {
   ];
 }
 function isMissingModule(error51) {
-  const code = error51.code;
+  const code = errorCode(error51);
   return code === "ENOENT" || code === "ENOTDIR";
 }
 async function collectPackagedVerifier(dependencies) {
-  const readModule = dependencies.readModule ?? ((url2) => readFile8(url2));
+  const readModule = dependencies.readModule ?? ((url2) => readFile7(url2));
   const candidates = dependencies.verifierModuleUrls ?? defaultVerifierModuleUrls();
   let lastMissingError;
   for (const candidate of candidates) {
@@ -51136,7 +50970,9 @@ async function archiveTerminal(context) {
           configurationProfile: context.profile,
           temporaryHomeApplied: context.temporaryHomeApplied
         },
-        verificationPolicy: context.evidence.verificationPolicy ?? []
+        // Absent stays absent: "the verifier recorded nothing" must not read as
+        // "no command ran", which the decision policy treats as confined.
+        ...context.evidence.verificationPolicy === void 0 ? {} : { verificationPolicy: context.evidence.verificationPolicy }
       },
       repositoryInstructions: context.repositoryInstructions,
       prompt: context.invocation?.stdin ?? `${context.spec.objective}
@@ -51195,7 +51031,7 @@ async function runAttempt(checkoutPath, spec, deps) {
   const producerRegistry = deps.producerRegistry ?? registry2;
   const now = deps.now ?? Date.now;
   const startedAtMs = now();
-  const runId = (deps.runId ?? randomUUID12)();
+  const runId = (deps.runId ?? randomUUID11)();
   const store = new ArtifactStore(runId);
   const inferredSlices = Array.isArray(spec.slices) ? spec.slices.length : 0;
   const statusContext = deps.runStatus ?? {
@@ -51753,14 +51589,13 @@ function evaluateGates(input) {
   let requiresHumanDecision = false;
   const dispositionsById = new Map(input.dispositions.map((d) => [d.findingId, d]));
   for (const finding of input.findings) {
-    if (finding.severity === "nit") continue;
+    if (finding.severity === "nit" || finding.severity === "minor") continue;
     const disposition = dispositionsById.get(finding.id);
     if (!disposition) {
       reasons.push(`finding ${finding.id} (${finding.severity}) has no disposition`);
-      if (finding.severity === "blocker" || finding.severity === "major") requiresHumanDecision = true;
+      requiresHumanDecision = true;
       continue;
     }
-    if (finding.severity === "minor") continue;
     if (RESOLVING.has(disposition.disposition)) {
       if (disposition.disposition === "fixed" && !disposition.commit) {
         reasons.push(`finding ${finding.id} marked fixed without a commit`);
@@ -51875,9 +51710,9 @@ function routeSlice(input) {
 }
 
 // src/pipeline/slice-composer.ts
-import { mkdtemp as mkdtemp4, rm as rm13 } from "node:fs/promises";
-import { tmpdir as tmpdir7 } from "node:os";
-import path29 from "node:path";
+import { mkdtemp as mkdtemp5, rm as rm13 } from "node:fs/promises";
+import { tmpdir as tmpdir8 } from "node:os";
+import path31 from "node:path";
 var NULL_OID = "0000000000000000000000000000000000000000";
 function parseRawDiffEntries(raw) {
   const fields = raw.split("\0");
@@ -51931,8 +51766,8 @@ async function composeSliceOntoHead(args) {
       `slice ${args.sliceIndex} changed paths already written by its wave: ${collisions.join(", ")}`
     );
   }
-  const indexRoot = await mkdtemp4(path29.join(tmpdir7(), "ca-compose-"));
-  const indexFile = path29.join(indexRoot, "index");
+  const indexRoot = await mkdtemp5(path31.join(tmpdir8(), "ca-compose-"));
+  const indexFile = path31.join(indexRoot, "index");
   try {
     const options = { ...args.objectReadOptions, indexFile };
     await checked(args.checkoutPath, ["read-tree", args.head], options, runGit);
@@ -52099,50 +51934,46 @@ async function runFix(args) {
 }
 
 // src/pipeline/candidate-verifier.ts
-function gitFailure5(action, result) {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-async function checkedGit5(cwd, args, options) {
-  const result = await git(cwd, args, options);
-  if (result.exitCode !== 0) throw gitFailure5(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
+var SKIP_MARKERS = [
+  /\b(?:it|test|describe|context|suite)\.(?:skip|todo)\(/u,
+  /\bx(?:it|describe|test|context)\(/u,
+  /@(?:pytest\.mark\.(?:skip|skipif|xfail)|unittest\.(?:skip|skipIf|skipUnless|expectedFailure))\b/u,
+  /\b(?:pytest|self)\.skip(?:Test)?\(/u,
+  /\bt\.Skip(?:Now|f)?\(/u,
+  /#\[ignore\b/u,
+  /@(?:Disabled|Ignore)\b/u,
+  /\[Ignore\b|\bSkip\s*=\s*"/u,
+  /^\s*(?:skip|pending)(?:\s*\(|\s+["'])/u
+];
 function analyzeWeakenedTests(diff, allowedTestDeletions = [], deletedPaths) {
   let testsDeleted = 0;
   let testsSkipped = 0;
   const authorizedTestDeletions = [];
-  let currentFileIsTest = false;
-  let currentPath = null;
-  for (const line of diff.split("\n")) {
-    if (deletedPaths === void 0 && /^deleted file mode/.test(line)) {
-      if (currentFileIsTest && currentPath !== null) {
-        const deletedPath = currentPath;
-        if (allowedTestDeletions.some((pattern) => globMatches(pattern, deletedPath))) {
-          authorizedTestDeletions.push(deletedPath);
-        } else {
-          testsDeleted++;
-        }
-      }
-    }
-    const diffHeader = /^diff --git a\/(\S+) b\/\S+$/.exec(line);
-    if (diffHeader !== null) {
-      currentPath = diffHeader[1] ?? null;
-      currentFileIsTest = currentPath !== null && /(^|\/)tests?\/|\.test\.|\.spec\./.test(currentPath);
-    } else if (/^diff --git /.test(line)) {
-      currentPath = null;
-      currentFileIsTest = /(^|\/)tests?\/|\.test\.|\.spec\./.test(line);
-    }
-    if (currentFileIsTest && /^\+.*\b(it|test|describe)\.(skip|todo)\(/.test(line)) testsSkipped++;
-    if (currentFileIsTest && /^\+.*\bxit\(|^\+.*\bxdescribe\(/.test(line)) testsSkipped++;
-  }
-  for (const deletedPath of deletedPaths ?? []) {
-    if (!/(^|\/)tests?\/|\.test\.|\.spec\./.test(deletedPath)) continue;
+  const recordDeletion = (deletedPath) => {
     if (allowedTestDeletions.some((pattern) => globMatches(pattern, deletedPath))) {
       authorizedTestDeletions.push(deletedPath);
     } else {
       testsDeleted++;
     }
+  };
+  let currentFileIsTest = false;
+  let currentPath = null;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      currentPath = /^diff --git a\/(\S+) b\/\S+$/u.exec(line)?.[1] ?? null;
+      currentFileIsTest = currentPath !== null ? isTestPath(currentPath) : /test|spec/u.test(line);
+      continue;
+    }
+    if (!currentFileIsTest) continue;
+    if (deletedPaths === void 0 && line.startsWith("deleted file mode") && currentPath !== null) {
+      recordDeletion(currentPath);
+    } else if (line.startsWith("+") && !line.startsWith("+++")) {
+      const added = line.slice(1);
+      if (SKIP_MARKERS.some((marker) => marker.test(added))) testsSkipped++;
+    }
+  }
+  for (const deletedPath of deletedPaths ?? []) {
+    if (isTestPath(deletedPath)) recordDeletion(deletedPath);
   }
   return { testsDeleted, testsSkipped, authorizedTestDeletions };
 }
@@ -52167,7 +51998,7 @@ function parseDeletedPaths(nameStatus) {
 async function candidateArtifact(args) {
   const artifact = {
     baseCommitOid: args.baselineCommit,
-    candidateTreeOid: (await checkedGit5(
+    candidateTreeOid: (await gitChecked(
       args.worktreePath,
       ["rev-parse", `${args.candidateCommit}^{tree}`]
     )).trim(),
@@ -52175,7 +52006,11 @@ async function candidateArtifact(args) {
     anchorRef: args.anchorRef,
     manifestHash: "",
     changedPaths: [],
-    patch: args.diffText
+    patch: await candidateReviewPatch(
+      args.worktreePath,
+      args.baselineCommit,
+      args.candidateCommit
+    )
   };
   const canonical = await recomputeManifest({
     worktreePath: args.worktreePath,
@@ -52205,21 +52040,16 @@ async function verifyCandidate(args) {
     commit: args.candidateCommit,
     cleanupFailureMessage: "pipeline verification worktree could not be cleaned up",
     run: async (worktreePath) => {
-      const [diffText, , nameStatus, status, ancestry] = await Promise.all([
-        checkedGit5(worktreePath, ["diff", `${args.baselineCommit}..${args.candidateCommit}`]),
-        checkedGit5(worktreePath, [
-          "diff",
-          "--name-only",
-          `${args.baselineCommit}..${args.candidateCommit}`
-        ]),
-        checkedGit5(worktreePath, [
+      const [diffText, nameStatus, status, ancestry] = await Promise.all([
+        reviewDiff(worktreePath, args.baselineCommit, args.candidateCommit),
+        gitChecked(worktreePath, [
           "diff",
           "--name-status",
           "--no-renames",
           "-z",
           `${args.baselineCommit}..${args.candidateCommit}`
         ]),
-        checkedGit5(worktreePath, ["status", "--porcelain"]),
+        gitChecked(worktreePath, ["status", "--porcelain"]),
         git(worktreePath, [
           "merge-base",
           "--is-ancestor",
@@ -52231,8 +52061,7 @@ async function verifyCandidate(args) {
         worktreePath,
         baselineCommit: args.baselineCommit,
         candidateCommit: args.candidateCommit,
-        anchorRef: args.attempt.candidate?.anchorRef ?? "",
-        diffText
+        anchorRef: args.attempt.candidate?.anchorRef ?? ""
       });
       const verifier = new AcceptanceVerifier({ mode: "composed-slice" });
       const acceptance = await verifier.verify({
@@ -52247,7 +52076,7 @@ async function verifyCandidate(args) {
         verificationId: () => `${args.attempt.runId}-${namespace}pipeline`,
         logNamePrefix: `${namespace}pipeline-verification`
       });
-      const scopeViolations = artifact.changedPaths.filter((change) => !isAllowed(
+      const scopeViolations = artifact.changedPaths.filter((change) => !isAllowed2(
         change.path,
         args.spec.writeAllowlist,
         args.spec.forbiddenScope,
@@ -52294,16 +52123,7 @@ async function verifyCandidate(args) {
 }
 
 // src/pipeline/candidate-provenance.ts
-import path30 from "node:path";
-function gitFailure6(action, result) {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-async function checkedGit6(cwd, args, options) {
-  const result = await git(cwd, args, options);
-  if (result.exitCode !== 0) throw gitFailure6(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
+import path32 from "node:path";
 function privateObjectReadOptions(access6) {
   return {
     env: { GIT_ALTERNATE_OBJECT_DIRECTORIES: access6.privateObjectsDir }
@@ -52311,8 +52131,8 @@ function privateObjectReadOptions(access6) {
 }
 async function importPromotedObjects(args) {
   const privateObjects = privateObjectReadOptions(args.access);
-  const packPrefix = path30.join(args.access.sharedObjectsDir, "pack", "pack");
-  await checkedGit6(
+  const packPrefix = path32.join(args.access.sharedObjectsDir, "pack", "pack");
+  await gitChecked(
     args.checkoutPath,
     ["pack-objects", "--revs", packPrefix],
     {
@@ -52322,9 +52142,9 @@ async function importPromotedObjects(args) {
 `
     }
   );
-  await checkedGit6(args.checkoutPath, ["cat-file", "-e", `${args.promotedCommit}^{commit}`]);
-  await checkedGit6(args.checkoutPath, ["rev-parse", `${args.promotedCommit}^{tree}`]);
-  await checkedGit6(args.checkoutPath, [
+  await gitChecked(args.checkoutPath, ["cat-file", "-e", `${args.promotedCommit}^{commit}`]);
+  await gitChecked(args.checkoutPath, ["rev-parse", `${args.promotedCommit}^{tree}`]);
+  await gitChecked(args.checkoutPath, [
     "rev-list",
     "--objects",
     args.promotedCommit,
@@ -52461,15 +52281,6 @@ function scopeSpecToSlice(spec, slice) {
   delete scoped.slices;
   return scoped;
 }
-function gitFailure7(action, result) {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-async function checkedGit7(cwd, args, options) {
-  const result = await git(cwd, args, options);
-  if (result.exitCode !== 0) throw gitFailure7(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
 function temporarySliceRef(runId, index, attempt) {
   return `${SLICE_REF_PREFIX}${runId}/slice-${index}-attempt-${attempt}`;
 }
@@ -52481,7 +52292,7 @@ async function createTemporarySliceRef(checkoutPath, temporaryRef) {
     temporaryRef.oid,
     "0".repeat(temporaryRef.oid.length)
   ]);
-  if (result.exitCode !== 0) throw gitFailure7("create temporary slice ref", result);
+  if (result.exitCode !== 0) throw gitFailure("create temporary slice ref", result);
 }
 async function cleanupTemporarySliceRefs(checkoutPath, temporaryRefs) {
   const errors = [];
@@ -52495,7 +52306,7 @@ async function cleanupTemporarySliceRefs(checkoutPath, temporaryRefs) {
         temporaryRef.oid
       ]);
       if (result.exitCode !== 0) {
-        errors.push(gitFailure7("delete temporary slice ref", result));
+        errors.push(gitFailure("delete temporary slice ref", result));
       }
     } catch (error51) {
       errors.push(error51);
@@ -52555,10 +52366,7 @@ async function runSliceReview(args) {
     commit: args.candidateCommit,
     cleanupFailureMessage: "slice review failed and its worktree could not be cleaned up",
     run: async (worktreePath) => {
-      const diffText = await checkedGit7(worktreePath, [
-        "diff",
-        `${args.baselineCommit}..${args.candidateCommit}`
-      ]);
+      const diffText = await reviewDiff(worktreePath, args.baselineCommit, args.candidateCommit);
       const reviewRun = await runReviews({
         reviewers: args.reviewers,
         spec: args.spec,
@@ -53054,12 +52862,12 @@ async function runAdvisorStage(args) {
       }
     }
     const report = outcome.ok ? redactRecord(outcome.report) : failureReport(outcome.failure, outcome.failedRoleLogRef);
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: archivedPipelineResult,
       reviewSnapshot: archivedReviewSnapshot,
       advisor: report,
       evaluatedAt: args.evaluatedAt
-    }));
+    });
     await transitionRunStatusSafely(statusStore, args.runId, "gating", {
       role: "advisor"
     });
@@ -53095,17 +52903,7 @@ async function runAdvisorStage(args) {
 }
 
 // src/pipeline/pipeline-runtime.ts
-var schemas6 = loadSchemas();
 var CANDIDATE_REF_PREFIX2 = "refs/claude-architect/candidates/";
-function gitFailure8(action, result) {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-async function checkedGit8(cwd, args, options) {
-  const result = await git(cwd, args, options);
-  if (result.exitCode !== 0) throw gitFailure8(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
 function failedResult(attempt, rounds, finalCandidateCommit, reason, failure3 = "producer-failure", increments = [], slices = [], haltedSliceIndex = null) {
   return {
     runId: attempt.runId,
@@ -53186,7 +52984,7 @@ async function archiveSlicedFailure(args) {
         candidate.anchorRef,
         candidate.candidateCommitOid
       ]);
-      if (deleted.exitCode !== 0) throw gitFailure8("delete sliced candidate anchor", deleted);
+      if (deleted.exitCode !== 0) throw gitFailure("delete sliced candidate anchor", deleted);
     }
     const failedAttempt = {
       ...args.attempt,
@@ -53228,77 +53026,44 @@ async function archiveSliceExecutionError(args) {
     );
   }
 }
-async function candidateArtifact2(args) {
-  const artifact = {
-    baseCommitOid: args.baselineCommit,
-    candidateTreeOid: (await checkedGit8(
-      args.worktreePath,
-      ["rev-parse", `${args.candidateCommit}^{tree}`]
-    )).trim(),
-    candidateCommitOid: args.candidateCommit,
-    anchorRef: args.anchorRef,
-    manifestHash: "",
-    changedPaths: [],
-    patch: args.diffText
-  };
-  const canonical = await recomputeManifest({
-    worktreePath: args.worktreePath,
-    baseCommitOid: args.baselineCommit,
-    artifact
-  });
-  if (canonical.manifestHash === null) {
-    throw new RuntimeError("final candidate paths collide under case folding");
-  }
-  return {
-    ...artifact,
-    changedPaths: canonical.changedPaths,
-    manifestHash: canonical.manifestHash
-  };
-}
 async function promoteFinalCandidate(args) {
+  const treeLookup = await git(
+    args.checkoutPath,
+    ["rev-parse", "--verify", "--quiet", `${args.candidateCommit}^{tree}`]
+  );
+  if (!gitSucceeded(treeLookup)) {
+    const missing = treeLookup.exitCode === 1 && treeLookup.stdout.trim() === "";
+    return missing ? { ok: false, failure: "sandbox-violation", reason: "candidate commit is missing from the git object store" } : { ok: false, failure: "environment-defect", reason: "candidate tree could not be read from the git object store" };
+  }
+  const finalTree = treeLookup.stdout.trim();
   let canonicalCommit;
   try {
-    const objectReadOptions = args.privateObjectAccess === void 0 ? void 0 : privateObjectReadOptions(args.privateObjectAccess);
-    const finalTree = (await checkedGit8(
-      args.checkoutPath,
-      ["rev-parse", `${args.candidateCommit}^{tree}`],
-      objectReadOptions
-    )).trim();
-    canonicalCommit = (await checkedGit8(args.checkoutPath, [
+    canonicalCommit = (await gitChecked(args.checkoutPath, [
       "commit-tree",
       finalTree,
       "-p",
       args.baselineCommit,
       "-m",
       `candidate ${args.attempt.runId}`
-    ], objectReadOptions)).trim();
-    if (args.privateObjectAccess !== void 0) {
-      await importPromotedObjects({
-        checkoutPath: args.checkoutPath,
-        baselineCommit: args.baselineCommit,
-        promotedCommit: canonicalCommit,
-        access: args.privateObjectAccess
-      });
-    }
+    ])).trim();
   } catch {
-    return null;
+    return {
+      ok: false,
+      failure: "environment-defect",
+      reason: "candidate could not be rebuilt in the shared git object store"
+    };
   }
-  await checkedGit8(args.checkoutPath, [
+  await gitChecked(args.checkoutPath, [
     "update-ref",
     args.initialCandidate.anchorRef,
     canonicalCommit,
     args.initialCandidate.candidateCommitOid
   ]);
-  const diffText = await checkedGit8(
-    args.checkoutPath,
-    ["diff", `${args.baselineCommit}..${canonicalCommit}`]
-  );
-  const candidate = await candidateArtifact2({
+  const candidate = await candidateArtifact({
     worktreePath: args.checkoutPath,
     baselineCommit: args.baselineCommit,
     candidateCommit: canonicalCommit,
-    anchorRef: args.initialCandidate.anchorRef,
-    diffText
+    anchorRef: args.initialCandidate.anchorRef
   });
   const manifest = await args.store.readManifest();
   if (manifest === null) throw new RuntimeError("run manifest is missing during promotion");
@@ -53307,7 +53072,7 @@ async function promoteFinalCandidate(args) {
     result: finalAttempt,
     manifest: { ...manifest, candidateManifestHash: candidate.manifestHash }
   });
-  return { attempt: finalAttempt, candidateCommit: canonicalCommit };
+  return { ok: true, attempt: finalAttempt, candidateCommit: canonicalCommit };
 }
 async function runPipeline(checkoutPath, spec, deps) {
   const ps = deps.ps ?? getPlatformServices();
@@ -53395,10 +53160,9 @@ async function salvagePipelineFailure(context, deps, state, args) {
       initialCandidate: state.finalAttempt.candidate,
       baselineCommit: state.baselineCommit,
       candidateCommit: salvagedCommit,
-      store,
-      ...state.gitObjectAccess === null ? {} : { privateObjectAccess: state.gitObjectAccess }
+      store
     });
-    if (promoted === null) return await fallback();
+    if (!promoted.ok) return await fallback();
     salvagedAttempt = promoted.attempt;
     salvagedCommit = promoted.candidateCommit;
   }
@@ -53512,11 +53276,8 @@ async function resolveHaltedSlicePhase(context, deps, state, phase) {
     candidateCommit: state.currentCandidateCommit,
     store
   });
-  if (promoted === null) {
-    return await archiveHalt(
-      "partial halt candidate could not be promoted from the git object store",
-      "sandbox-violation"
-    );
+  if (!promoted.ok) {
+    return await archiveHalt(`partial halt ${promoted.reason}`, promoted.failure);
   }
   state.finalAttempt = promoted.attempt;
   state.currentCandidateCommit = promoted.candidateCommit;
@@ -53553,126 +53314,142 @@ async function resolveHaltedSlicePhase(context, deps, state, phase) {
   await store.writePipelineArtifact("pipeline-result", haltResult);
   return haltResult;
 }
-async function runIncrementPhase(context, deps, state, worktreePath, maxIncrements) {
-  const { checkoutPath, spec, store } = context;
+async function withRoleWorktree(context, commit, label, run) {
+  return await withManagedWorktree({
+    manager: new WorktreeManager(
+      context.checkoutPath,
+      `${context.runId}-${label}`,
+      context.ps,
+      context.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: context.borrowedCheckoutLease }
+    ),
+    commit,
+    cleanupFailureMessage: "pipeline role worktree could not be cleaned up",
+    run
+  });
+}
+async function adoptWriterCommit(args) {
+  const provenanceFailure = await args.validateProvenance();
+  if (provenanceFailure !== null) return provenanceFailure;
+  if (args.candidateCommit === args.previousCandidateCommit) return null;
   try {
-    state.gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
+    await importPromotedObjects({
+      checkoutPath: args.context.checkoutPath,
+      baselineCommit: args.previousCandidateCommit,
+      promotedCommit: args.candidateCommit,
+      access: args.gitObjectAccess
+    });
   } catch {
-    return terminal(failedAtCurrentCandidate(
-      state,
-      "increment git object isolation could not be established",
-      "sandbox-violation"
-    ));
+    return {
+      failure: "environment-defect",
+      reason: `${args.phaseLabel} objects could not be imported into the shared git object store`
+    };
   }
-  const gitObjectAccess = state.gitObjectAccess;
-  const privateObjects = privateObjectReadOptions(gitObjectAccess);
-  try {
-    for (let increment = 2; increment <= maxIncrements; increment += 1) {
-      if (deps.abortSignal?.aborted === true) {
-        return terminal(failedAtCurrentCandidate(
-          state,
-          `cancelled before increment ${increment}`,
-          "cancelled"
-        ));
-      }
-      await context.notePhase(`increment ${increment}/${maxIncrements}`);
-      const previousCandidateCommit = state.currentCandidateCommit;
-      const diffText = await checkedGit8(worktreePath, [
-        "diff",
-        `${state.baselineCommit}..${state.currentCandidateCommit}`
-      ], privateObjects);
-      const incrementRun = await runIncrement({
-        spec,
-        pkg: {
-          spec,
-          baselineCommit: state.baselineCommit,
-          candidateCommit: state.currentCandidateCommit,
-          candidateDiff: diffText,
-          testEvidence: state.frozenTestEvidence,
-          progress: composeProgressNotes(state.increments.at(-1)?.report ?? state.attempt)
-        },
-        worktreePath,
-        deps,
-        runId: state.attempt.runId,
-        increment,
-        store,
-        gitObjectAccess,
-        ...context.runStart === void 0 ? {} : { runStart: context.runStart }
-      });
-      if (!incrementRun.ok) {
-        return terminal(failedAtCurrentCandidate(
-          state,
-          `increment phase did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
-          incrementRun.failure
-        ));
-      }
-      const report = redactRecord(incrementRun.report);
-      await store.writePipelineArtifact(`increment-${increment}`, report);
-      const provenanceFailure = await validateCandidateProvenance({
-        worktreePath,
-        previousCandidateCommit,
-        candidateCommit: report.candidateCommit,
-        gitObjectAccess
-      });
-      if (provenanceFailure !== null) {
-        return terminal(failedAtCurrentCandidate(
-          state,
-          provenanceFailure.reason,
-          provenanceFailure.failure
-        ));
-      }
-      const [previousTree, candidateTree] = await Promise.all([
-        checkedGit8(worktreePath, ["rev-parse", `${previousCandidateCommit}^{tree}`], privateObjects),
-        checkedGit8(worktreePath, ["rev-parse", `${report.candidateCommit}^{tree}`], privateObjects)
-      ]);
-      const progressed = previousTree.trim() !== candidateTree.trim();
-      if (report.candidateCommit !== previousCandidateCommit) {
+  return null;
+}
+async function runIncrementPhase(context, deps, state, maxIncrements) {
+  const { checkoutPath, spec, store } = context;
+  for (let increment = 2; increment <= maxIncrements; increment += 1) {
+    if (deps.abortSignal?.aborted === true) {
+      return terminal(failedAtCurrentCandidate(
+        state,
+        `cancelled before increment ${increment}`,
+        "cancelled"
+      ));
+    }
+    await context.notePhase(`increment ${increment}/${maxIncrements}`);
+    const previousCandidateCommit = state.currentCandidateCommit;
+    const outcome = await withRoleWorktree(
+      context,
+      previousCandidateCommit,
+      `increment-${increment}`,
+      async (worktreePath) => {
+        let gitObjectAccess;
         try {
-          await importPromotedObjects({
-            checkoutPath,
-            baselineCommit: previousCandidateCommit,
-            promotedCommit: report.candidateCommit,
-            access: gitObjectAccess
+          gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
+        } catch {
+          return terminal(failedAtCurrentCandidate(
+            state,
+            "increment git object isolation could not be established",
+            "sandbox-violation"
+          ));
+        }
+        const diffText = await reviewDiff(checkoutPath, state.baselineCommit, previousCandidateCommit);
+        let incrementRun;
+        try {
+          incrementRun = await runIncrement({
+            spec,
+            pkg: {
+              spec,
+              baselineCommit: state.baselineCommit,
+              candidateCommit: previousCandidateCommit,
+              candidateDiff: diffText,
+              testEvidence: state.frozenTestEvidence,
+              progress: composeProgressNotes(state.increments.at(-1)?.report ?? state.attempt)
+            },
+            worktreePath,
+            deps,
+            runId: state.attempt.runId,
+            increment,
+            store,
+            gitObjectAccess,
+            ...context.runStart === void 0 ? {} : { runStart: context.runStart }
           });
         } catch {
           return terminal(failedAtCurrentCandidate(
             state,
-            "increment objects could not be imported into the shared git object store",
-            "sandbox-violation"
+            "increment phase failed unexpectedly",
+            "producer-failure"
           ));
         }
+        if (!incrementRun.ok) {
+          return terminal(failedAtCurrentCandidate(
+            state,
+            `increment phase did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
+            incrementRun.failure
+          ));
+        }
+        const report = redactRecord(incrementRun.report);
+        await store.writePipelineArtifact(`increment-${increment}`, report);
+        const adoptionFailure = await adoptWriterCommit({
+          context,
+          gitObjectAccess,
+          previousCandidateCommit,
+          candidateCommit: report.candidateCommit,
+          phaseLabel: "increment",
+          validateProvenance: () => validateCandidateProvenance({
+            worktreePath,
+            previousCandidateCommit,
+            candidateCommit: report.candidateCommit,
+            gitObjectAccess
+          })
+        });
+        if (adoptionFailure !== null) {
+          return terminal(failedAtCurrentCandidate(
+            state,
+            adoptionFailure.reason,
+            adoptionFailure.failure
+          ));
+        }
+        const [previousTree, candidateTree] = await Promise.all([
+          gitChecked(checkoutPath, ["rev-parse", `${previousCandidateCommit}^{tree}`]),
+          gitChecked(checkoutPath, ["rev-parse", `${report.candidateCommit}^{tree}`])
+        ]);
+        state.currentCandidateCommit = report.candidateCommit;
+        state.increments.push({ increment, report, roleLogRefs: incrementRun.roleLogRefs });
+        if (report.status === "complete") state.incrementOutcome = "complete";
+        else if (report.status === "blocked") state.incrementOutcome = "blocked";
+        else if (previousTree.trim() === candidateTree.trim()) state.incrementOutcome = "stalled";
+        return CONTINUE;
       }
-      state.currentCandidateCommit = report.candidateCommit;
-      state.increments.push({
-        increment,
-        report,
-        roleLogRefs: incrementRun.roleLogRefs
-      });
-      if (report.status === "complete") {
-        state.incrementOutcome = "complete";
-        break;
-      }
-      if (report.status === "blocked") {
-        state.incrementOutcome = "blocked";
-        break;
-      }
-      if (!progressed) {
-        state.incrementOutcome = "stalled";
-        break;
-      }
-    }
-    state.incrementOutcome ??= "budget-exhausted";
-  } catch {
-    return terminal(failedAtCurrentCandidate(
-      state,
-      "increment phase failed unexpectedly",
-      "producer-failure"
-    ));
+    );
+    if (outcome.state === "terminal") return outcome;
+    if (state.incrementOutcome !== void 0) break;
   }
+  state.incrementOutcome ??= "budget-exhausted";
   return CONTINUE;
 }
-async function runReviewRounds(context, deps, state, worktreePath, reviewers, maxRounds) {
-  const { spec, store } = context;
+async function runReviewRounds(context, deps, state, reviewers, maxRounds) {
+  const { checkoutPath, spec, store } = context;
   for (let round = 1; round <= maxRounds; round += 1) {
     if (deps.abortSignal?.aborted === true) {
       return terminal(failedAtCurrentCandidate(
@@ -53682,28 +53459,31 @@ async function runReviewRounds(context, deps, state, worktreePath, reviewers, ma
       ));
     }
     await context.notePhase(`review round ${round}/${maxRounds}`);
-    const diffText = await checkedGit8(worktreePath, [
-      "diff",
-      `${state.baselineCommit}..${state.currentCandidateCommit}`
-    ], state.gitObjectAccess === null ? void 0 : privateObjectReadOptions(state.gitObjectAccess));
+    const reviewedCommit = state.currentCandidateCommit;
+    const diffText = await reviewDiff(checkoutPath, state.baselineCommit, reviewedCommit);
     const pkg = {
       spec,
       baselineCommit: state.baselineCommit,
-      candidateCommit: state.currentCandidateCommit,
+      candidateCommit: reviewedCommit,
       candidateDiff: diffText,
       testEvidence: state.frozenTestEvidence
     };
-    const reviewRun = await runReviews({
-      reviewers,
-      spec,
-      pkg,
-      worktreePath,
-      deps,
-      runId: state.attempt.runId,
-      round,
-      store,
-      onReviewer: (role) => context.emitStatus("reviewing", { round, role })
-    });
+    const reviewRun = await withRoleWorktree(
+      context,
+      reviewedCommit,
+      `round-${round}-review`,
+      (worktreePath) => runReviews({
+        reviewers,
+        spec,
+        pkg,
+        worktreePath,
+        deps,
+        runId: state.attempt.runId,
+        round,
+        store,
+        onReviewer: (role) => context.emitStatus("reviewing", { round, role })
+      })
+    );
     if (!reviewRun.ok) {
       return terminal(await salvagePipelineFailure(context, deps, state, {
         reason: `review phase did not produce valid structured output (see ${reviewRun.failedRoleLogRef})`,
@@ -53733,75 +53513,84 @@ async function runReviewRounds(context, deps, state, worktreePath, reviewers, ma
     };
     state.rounds.push(roundRecord);
     if (!blocking && approved) break;
-    try {
-      state.gitObjectAccess ??= await resolveLinkedWorktreeWritableRoots(worktreePath);
-    } catch {
-      return terminal(await archivePipelineFailure(context, state, {
-        reason: "fixer git object isolation could not be established",
-        failure: "sandbox-violation"
-      }));
-    }
     await context.emitStatus("fixing", { round, role: "fixer" });
     await context.notePhase(`round ${round}: applying fixes`);
-    const fixRun = await runFix({
-      spec,
-      pkg: { ...pkg, findings: consolidated.findings },
-      worktreePath,
-      deps,
-      runId: state.attempt.runId,
-      round,
-      store,
-      gitObjectAccess: state.gitObjectAccess,
-      ...context.runStart === void 0 ? {} : { runStart: context.runStart }
-    });
-    if (!fixRun.ok) {
-      return terminal(await salvagePipelineFailure(context, deps, state, {
-        reason: `fix phase did not produce valid structured output (see ${fixRun.failedRoleLogRef})`,
-        failure: fixRun.failure
-      }));
-    }
-    const { fix } = fixRun;
-    await store.writePipelineArtifact(`round-${round}-fix`, fix);
-    const provenanceFailure = await validateFixProvenance({
-      worktreePath,
-      previousCandidateCommit: state.currentCandidateCommit,
-      fix,
-      gitObjectAccess: state.gitObjectAccess
-    });
-    if (provenanceFailure !== null) {
-      return terminal(await archivePipelineFailure(context, state, {
-        reason: provenanceFailure.reason,
-        failure: provenanceFailure.failure
-      }));
-    }
-    state.currentCandidateCommit = fix.candidateCommit;
-    roundRecord.fix = fix;
-    roundRecord.roleLogRefs = [...reviewRun.roleLogRefs, ...fixRun.roleLogRefs];
+    const fixOutcome = await withRoleWorktree(
+      context,
+      reviewedCommit,
+      `round-${round}-fix`,
+      async (worktreePath) => {
+        let gitObjectAccess;
+        try {
+          gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
+        } catch {
+          return terminal(await archivePipelineFailure(context, state, {
+            reason: "fixer git object isolation could not be established",
+            failure: "sandbox-violation"
+          }));
+        }
+        const fixRun = await runFix({
+          spec,
+          pkg: { ...pkg, findings: consolidated.findings },
+          worktreePath,
+          deps,
+          runId: state.attempt.runId,
+          round,
+          store,
+          gitObjectAccess,
+          ...context.runStart === void 0 ? {} : { runStart: context.runStart }
+        });
+        if (!fixRun.ok) {
+          return terminal(await salvagePipelineFailure(context, deps, state, {
+            reason: `fix phase did not produce valid structured output (see ${fixRun.failedRoleLogRef})`,
+            failure: fixRun.failure
+          }));
+        }
+        const { fix } = fixRun;
+        await store.writePipelineArtifact(`round-${round}-fix`, fix);
+        const adoptionFailure = await adoptWriterCommit({
+          context,
+          gitObjectAccess,
+          previousCandidateCommit: reviewedCommit,
+          candidateCommit: fix.candidateCommit,
+          phaseLabel: "fixer",
+          validateProvenance: () => validateFixProvenance({
+            worktreePath,
+            previousCandidateCommit: reviewedCommit,
+            fix,
+            gitObjectAccess
+          })
+        });
+        if (adoptionFailure !== null) {
+          return terminal(await archivePipelineFailure(context, state, {
+            reason: adoptionFailure.reason,
+            failure: adoptionFailure.failure
+          }));
+        }
+        state.currentCandidateCommit = fix.candidateCommit;
+        roundRecord.fix = fix;
+        roundRecord.roleLogRefs = [...reviewRun.roleLogRefs, ...fixRun.roleLogRefs];
+        return CONTINUE;
+      }
+    );
+    if (fixOutcome.state === "terminal") return fixOutcome;
   }
   return CONTINUE;
 }
 async function promoteReviewedCandidate(context, state) {
   if (state.currentCandidateCommit === state.initialCandidate.candidateCommitOid) return CONTINUE;
-  if (state.gitObjectAccess === null && !state.sliced) {
-    return terminal(failedAtCurrentCandidate(
-      state,
-      "fixer git object isolation state is missing during promotion",
-      "sandbox-violation"
-    ));
-  }
   const promoted = await promoteFinalCandidate({
     checkoutPath: context.checkoutPath,
     attempt: state.attempt,
     initialCandidate: state.initialCandidate,
     baselineCommit: state.baselineCommit,
     candidateCommit: state.currentCandidateCommit,
-    store: context.store,
-    ...state.gitObjectAccess === null ? {} : { privateObjectAccess: state.gitObjectAccess }
+    store: context.store
   });
-  if (promoted === null) {
+  if (!promoted.ok) {
     return terminal(await archivePipelineFailure(context, state, {
-      reason: state.sliced ? "sliced candidate could not be promoted from the shared git object store" : "fixer objects could not be imported into the shared git object store",
-      failure: "sandbox-violation"
+      reason: `${state.sliced ? "sliced" : "fixer"} ${promoted.reason}`,
+      failure: promoted.failure
     }));
   }
   state.finalAttempt = promoted.attempt;
@@ -54033,7 +53822,6 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
     currentCandidateCommit: attempt.candidate.candidateCommitOid,
     pipelineSlices: [],
     incrementOutcome: void 0,
-    gitObjectAccess: null,
     frozenTestEvidence: testEvidence(attempt),
     authoritySafeToRelease: !sliced
   };
@@ -54075,9 +53863,9 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
       let initialPerSliceReview = null;
       const initialRoleLogRefs = attemptLogRefs(attempt);
       if (reviewConfig.perSlice === true) {
-        let reviewed;
+        let reviewed2;
         try {
-          reviewed = await runSliceReview({
+          reviewed2 = await runSliceReview({
             checkoutPath,
             spec: initialSpec,
             deps,
@@ -54093,8 +53881,8 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
         } catch (error51) {
           return await failSliceExecution(error51, []);
         }
-        initialPerSliceReview = reviewed.review;
-        initialRoleLogRefs.push(...reviewed.roleLogRefs);
+        initialPerSliceReview = reviewed2.review;
+        initialRoleLogRefs.push(...reviewed2.roleLogRefs);
       }
       const completedSlices = [];
       let phase;
@@ -54139,29 +53927,14 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
       }
       state.frozenTestEvidence = sliceTestEvidence(phase.slices);
     }
-    const candidateWorktree = await new WorktreeManager(
-      checkoutPath,
-      sliced ? `${attempt.runId}-composed-review` : `${attempt.runId}-pipeline`,
-      ps,
-      deps.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: deps.borrowedCheckoutLease }
-    ).create(state.currentCandidateCommit);
-    try {
-      if (maxIncrements > 1) {
-        const outcome = await runIncrementPhase(context, deps, state, candidateWorktree.path, maxIncrements);
-        if (outcome.state === "terminal") return outcome.result;
-      }
-      const reviewed = await runReviewRounds(context, deps, state, candidateWorktree.path, reviewers, maxRounds);
-      if (reviewed.state === "terminal") return reviewed.result;
-      const promoted = await promoteReviewedCandidate(context, state);
-      if (promoted.state === "terminal") return promoted.result;
-    } finally {
-      const cleanupError = await cleanupWorktree(candidateWorktree);
-      if (cleanupError !== null) {
-        logger.warn("pipeline round worktree could not be cleaned up", {
-          error: redact(cleanupError instanceof Error ? cleanupError.message : String(cleanupError))
-        });
-      }
+    if (maxIncrements > 1) {
+      const outcome = await runIncrementPhase(context, deps, state, maxIncrements);
+      if (outcome.state === "terminal") return outcome.result;
     }
+    const reviewed = await runReviewRounds(context, deps, state, reviewers, maxRounds);
+    if (reviewed.state === "terminal") return reviewed.result;
+    const promoted = await promoteReviewedCandidate(context, state);
+    if (promoted.state === "terminal") return promoted.result;
     return await finalizePipelineGate(context, deps, state, maxRounds);
   } catch (error51) {
     let terminalError = error51;
@@ -54225,793 +53998,23 @@ var INTEGRABLE_DECISION_AUTHORITIES = [
   "autopilot-policy"
 ];
 
-// src/ship/github-cli-adapter.ts
-import { chmod as chmod2, rm as rm14 } from "node:fs/promises";
-import path31 from "node:path";
-var MINIMUM_GH_VERSION = [2, 96, 0];
-var OID2 = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
-var REPOSITORY_COMPONENT = /^[A-Za-z0-9_.-]+$/u;
-var MAX_OUTPUT_BYTES = 1e6;
-var COMMAND_TIMEOUT_MS = 6e4;
-var CREDENTIAL_HELPER_ARGS = [
-  "-c",
-  "credential.helper=",
-  "-c",
-  "credential.helper=!gh auth git-credential"
-];
-var HostingAdapterError = class extends Error {
-  constructor(classification, primaryClassification) {
-    super(classification);
-    this.classification = classification;
-    this.primaryClassification = primaryClassification;
-    this.name = "HostingAdapterError";
-  }
-  classification;
-  primaryClassification;
-};
-function fail3(classification) {
-  throw new HostingAdapterError(classification);
-}
-function failCommand(error51, classification) {
-  if (error51 instanceof HostingAdapterError && error51.classification === "cancelled") throw error51;
-  fail3(classification);
-}
-function cleanExit(result) {
-  return result.exitCode === 0 && result.timedOut !== true && result.cancelled !== true && result.spawnError === void 0 && result.truncated?.stdout !== true && result.truncated?.stderr !== true;
-}
-function assertNotCancelled(result) {
-  if (result.cancelled === true) fail3("cancelled");
-}
-function requireCleanExit(result, classification) {
-  assertNotCancelled(result);
-  if (!cleanExit(result)) fail3(classification);
-}
-function commandEnvironment2() {
-  const environment = {
-    PATH: process.env.PATH ?? "",
-    GH_PROMPT_DISABLED: "1",
-    GIT_TERMINAL_PROMPT: "0"
-  };
-  for (const name of [
-    "HOME",
-    "XDG_CONFIG_HOME",
-    "GH_CONFIG_DIR",
-    "GH_TOKEN",
-    "GITHUB_TOKEN"
-  ]) {
-    const value = process.env[name];
-    if (value !== void 0) environment[name] = value;
-  }
-  return environment;
-}
-function githubCredentialEnvironment() {
-  const environment = {};
-  for (const name of ["GH_TOKEN", "GITHUB_TOKEN"]) {
-    const value = process.env[name];
-    if (value !== void 0) environment[name] = value;
-  }
-  if (process.env.GH_CONFIG_DIR !== void 0) {
-    environment.GH_CONFIG_DIR = process.env.GH_CONFIG_DIR;
-  } else if (process.platform === "win32" && process.env.APPDATA !== void 0) {
-    environment.GH_CONFIG_DIR = path31.join(process.env.APPDATA, "GitHub CLI");
-  } else if (process.env.XDG_CONFIG_HOME !== void 0) {
-    environment.GH_CONFIG_DIR = path31.join(process.env.XDG_CONFIG_HOME, "gh");
-  } else if (process.env.HOME !== void 0) {
-    environment.GH_CONFIG_DIR = path31.join(process.env.HOME, ".config", "gh");
-  }
-  return environment;
-}
-function isolatedGitEnvironment(repository, withGithubCredentials = false) {
-  const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
-  return {
-    PATH: process.env.PATH ?? "",
-    GIT_CONFIG_GLOBAL: nullDevice,
-    GIT_CONFIG_SYSTEM: nullDevice,
-    GIT_CONFIG_NOSYSTEM: "1",
-    GIT_CONFIG_COUNT: "0",
-    GIT_CONFIG_PARAMETERS: "",
-    GIT_TERMINAL_PROMPT: "0",
-    HOME: repository,
-    XDG_CONFIG_HOME: repository,
-    ...withGithubCredentials ? githubCredentialEnvironment() : {}
-  };
-}
-function toCommandResult(exit) {
-  return {
-    exitCode: exit.exitCode,
-    stdout: exit.stdout,
-    stderr: exit.stderr,
-    timedOut: exit.timedOut,
-    cancelled: exit.cancelled,
-    truncated: { ...exit.truncated },
-    ...exit.spawnError === void 0 ? {} : { spawnError: exit.spawnError }
-  };
-}
-function createHostingCommandRunner(platformServices = getPlatformServices()) {
-  return async (request) => {
-    const executable = await platformServices.resolveExecutable({ name: request.executable });
-    const exit = await supervise(platformServices, {
-      executable,
-      args: request.args,
-      cwd: request.cwd,
-      env: request.env,
-      timeoutMs: request.timeoutMs,
-      maxOutputBytes: request.maxOutputBytes
-    }, {});
-    return toCommandResult(exit);
-  };
-}
-function parseVersion3(output) {
-  const firstLine = output.split(/\r?\n/u, 1)[0] ?? "";
-  const match = /^gh version (\d+)\.(\d+)\.(\d+)(?:\s|$)/u.exec(firstLine);
-  if (match === null) return null;
-  const parsed = match.slice(1).map((value) => Number.parseInt(value, 10));
-  if (parsed.some((value) => !Number.isSafeInteger(value))) return null;
-  return [parsed[0], parsed[1], parsed[2]];
-}
-function versionAtLeast(actual, minimum) {
-  for (let index = 0; index < minimum.length; index += 1) {
-    if (actual[index] > minimum[index]) return true;
-    if (actual[index] < minimum[index]) return false;
-  }
-  return true;
-}
-function canonicalRepository(value) {
-  if (/[%\0\r\n]/u.test(value)) return null;
-  const components = value.split("/");
-  if (components.length !== 2) return null;
-  if (components.some((component) => !REPOSITORY_COMPONENT.test(component) || component === "." || component === "..")) return null;
-  return `${components[0].toLowerCase()}/${components[1].toLowerCase()}`;
-}
-function canonicalGithubUrl2(raw) {
-  if (/[\0\r\n]/u.test(raw)) return null;
-  let parsed;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== "https:" || parsed.hostname.toLowerCase() !== "github.com" || parsed.port !== "" || parsed.username !== "" || parsed.password !== "" || parsed.search !== "" || parsed.hash !== "" || parsed.pathname.includes("%") || parsed.pathname.includes("//") || parsed.pathname.endsWith("/")) return null;
-  const pathname = parsed.pathname.slice(1);
-  const withoutSuffix = pathname.endsWith(".git") ? pathname.slice(0, -4) : pathname;
-  const repository = canonicalRepository(withoutSuffix);
-  if (repository === null) return null;
-  return { repository, url: `https://github.com/${repository}.git` };
-}
-function validBranch(branch) {
-  if (branch.length < 1 || branch.length > 240 || branch.startsWith("-") || branch.startsWith("/") || branch.endsWith("/") || branch.endsWith(".") || branch === "@" || branch.includes("..") || branch.includes("@{") || branch.includes("//")) return false;
-  return !/[\0-\x20\x7f~^:?*[\\]/u.test(branch) && branch.split("/").every((component) => component !== "" && !component.startsWith(".") && !component.endsWith(".lock"));
-}
-function validCheckoutPath(checkoutPath) {
-  return checkoutPath.length > 0 && !/[\0\r\n]/u.test(checkoutPath);
-}
-function validTarget(target) {
-  const repository = canonicalRepository(target.repository);
-  const url2 = canonicalGithubUrl2(target.canonicalHttpsUrl);
-  return target.provider === "github" && repository !== null && target.repository === repository && url2 !== null && url2.repository === repository && url2.url === target.canonicalHttpsUrl;
-}
-function parseRemoteHead(output, branchRef) {
-  if (output === "") return null;
-  const lines = output.split("\n").filter((line) => line !== "");
-  if (lines.length !== 1) return void 0;
-  const match = /^(\S+)\t(\S+)$/u.exec(lines[0]);
-  if (match === null || !OID2.test(match[1]) || match[2] !== branchRef) return void 0;
-  return match[1];
-}
-function parseBundledHead(output, branchRef) {
-  const lines = output.split(/\r?\n/u).filter((line) => line !== "");
-  if (lines.length !== 1) return void 0;
-  const match = /^(\S+) (\S+)$/u.exec(lines[0]);
-  if (match === null || !OID2.test(match[1]) || match[2] !== branchRef) return void 0;
-  return match[1];
-}
-var PR_JSON_FIELDS = "number,url,baseRefName,headRefName,headRefOid,headRepository,isDraft";
-var CHECK_JSON_FIELDS = "bucket,name,state,link";
-var MAX_TITLE_BYTES = 256;
-var MAX_BODY_BYTES = 65536;
-var MAX_CHECK_FIELD_BYTES = 4096;
-function boundedOutput(result) {
-  return result.timedOut !== true && result.cancelled !== true && result.spawnError === void 0 && result.truncated?.stdout !== true && result.truncated?.stderr !== true && Buffer.byteLength(result.stdout, "utf8") <= MAX_OUTPUT_BYTES && Buffer.byteLength(result.stderr, "utf8") <= MAX_OUTPUT_BYTES;
-}
-function validPullRequestText(title, body) {
-  if (typeof title !== "string" || typeof body !== "string") return false;
-  const titleBytes = Buffer.byteLength(title, "utf8");
-  const bodyBytes = Buffer.byteLength(body, "utf8");
-  return titleBytes > 0 && titleBytes <= MAX_TITLE_BYTES && bodyBytes <= MAX_BODY_BYTES && !/[\u0000-\u001f\u007f-\u009f]/u.test(title) && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(body);
-}
-function validPullRequestNumber(value) {
-  return Number.isSafeInteger(value) && value > 0;
-}
-function parseJson(output) {
-  if (Buffer.byteLength(output, "utf8") > MAX_OUTPUT_BYTES) return void 0;
-  try {
-    return JSON.parse(output);
-  } catch {
-    return void 0;
-  }
-}
-function pullRequestUrl(repository, number4) {
-  return `https://github.com/${repository}/pull/${number4}`;
-}
-function canonicalPullRequestUrl(raw, repository, number4) {
-  if (/[\0\r\n%]/u.test(raw)) return void 0;
-  let parsed;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return void 0;
-  }
-  const components = parsed.pathname.split("/");
-  const urlRepository = canonicalRepository(`${components[1] ?? ""}/${components[2] ?? ""}`);
-  if (parsed.protocol !== "https:" || parsed.hostname.toLowerCase() !== "github.com" || parsed.port !== "" || parsed.username !== "" || parsed.password !== "" || parsed.search !== "" || parsed.hash !== "" || components.length !== 5 || components[3] !== "pull" || components[4] !== String(number4) || urlRepository !== repository) return void 0;
-  return pullRequestUrl(repository, number4);
-}
-function parsePullRequestIdentity(value, target) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return void 0;
-  const record2 = value;
-  if (typeof record2.number !== "number" || !validPullRequestNumber(record2.number) || typeof record2.url !== "string" || typeof record2.baseRefName !== "string" || typeof record2.headRefName !== "string" || typeof record2.headRefOid !== "string" || typeof record2.isDraft !== "boolean" || typeof record2.headRepository !== "object" || record2.headRepository === null || Array.isArray(record2.headRepository)) return void 0;
-  const headRepository = record2.headRepository;
-  if (typeof headRepository.nameWithOwner !== "string") return void 0;
-  const repository = canonicalRepository(headRepository.nameWithOwner);
-  const url2 = canonicalPullRequestUrl(record2.url, target.repository, record2.number);
-  if (repository === null || repository !== target.repository || url2 === void 0 || !validBranch(record2.baseRefName) || !validBranch(record2.headRefName) || !OID2.test(record2.headRefOid)) return void 0;
-  return {
-    number: record2.number,
-    url: url2,
-    repository,
-    baseBranch: record2.baseRefName,
-    headBranch: record2.headRefName,
-    headCommitOid: record2.headRefOid,
-    draft: record2.isDraft
-  };
-}
-function samePullRequestIdentity(actual, expected) {
-  return actual.number === expected.number && actual.url === expected.url && actual.repository === expected.repository && actual.baseBranch === expected.baseBranch && actual.headBranch === expected.headBranch && actual.headCommitOid === expected.headCommitOid && actual.draft === expected.draft;
-}
-function pullRequestKey(repository, number4) {
-  return `${repository}#${number4}`;
-}
-function parseCreatedPullRequestNumber(output, repository) {
-  const trimmed = output.endsWith("\r\n") ? output.slice(0, -2) : output.endsWith("\n") ? output.slice(0, -1) : output;
-  const prefix = `https://github.com/${repository}/pull/`;
-  if (!trimmed.startsWith(prefix) || trimmed.includes("\n") || trimmed.includes("\r")) {
-    return void 0;
-  }
-  const numberText = trimmed.slice(prefix.length);
-  if (!/^[1-9]\d*$/u.test(numberText)) return void 0;
-  const number4 = Number(numberText);
-  return validPullRequestNumber(number4) ? number4 : void 0;
-}
-function validCheckField(value) {
-  return Buffer.byteLength(value, "utf8") <= MAX_CHECK_FIELD_BYTES && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
-}
-function parseRequiredChecks(output) {
-  const parsed = parseJson(output);
-  if (!Array.isArray(parsed)) return void 0;
-  const checks = [];
-  for (const value of parsed) {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) return void 0;
-    const record2 = value;
-    if (Object.keys(record2).some((key) => !["bucket", "name", "state", "link"].includes(key)) || typeof record2.bucket !== "string" || !["pass", "pending", "fail", "cancel", "skipping"].includes(record2.bucket) || typeof record2.name !== "string" || record2.name.length === 0 || !validCheckField(record2.name) || typeof record2.state !== "string" || record2.state.length === 0 || !validCheckField(record2.state) || !validCheckState(record2.bucket, record2.state) || record2.link !== null && typeof record2.link !== "string" || typeof record2.link === "string" && !validCheckField(record2.link)) return void 0;
-    checks.push({
-      bucket: record2.bucket,
-      name: record2.name,
-      state: record2.state,
-      link: record2.link
-    });
-  }
-  return checks;
-}
-function validCheckState(bucket, state) {
-  switch (bucket) {
-    case "pass":
-      return state === "SUCCESS";
-    case "pending":
-      return ["EXPECTED", "IN_PROGRESS", "PENDING", "QUEUED", "REQUESTED", "WAITING"].includes(state);
-    case "fail":
-      return [
-        "ACTION_REQUIRED",
-        "ERROR",
-        "FAILURE",
-        "STALE",
-        "STARTUP_FAILURE",
-        "TIMED_OUT"
-      ].includes(state);
-    case "cancel":
-      return state === "CANCELLED";
-    case "skipping":
-      return ["NEUTRAL", "SKIPPED"].includes(state);
-    default:
-      return false;
-  }
-}
-var GitHubCliAdapter = class {
-  runner;
-  platformServices;
-  pullRequests = /* @__PURE__ */ new Map();
-  constructor() {
-    this.platformServices = getPlatformServices();
-    this.runner = createHostingCommandRunner(this.platformServices);
-  }
-  run(executable, args, cwd, env, signal) {
-    if (signal?.aborted) fail3("cancelled");
-    return this.runner({
-      executable,
-      args,
-      cwd,
-      env,
-      timeoutMs: COMMAND_TIMEOUT_MS,
-      maxOutputBytes: MAX_OUTPUT_BYTES
-    });
-  }
-  async preflight(request) {
-    if (!validCheckoutPath(request.checkoutPath) || request.expectedRepository !== void 0 && canonicalRepository(request.expectedRepository) === null) {
-      fail3("preflight-repository-identity-mismatch");
-    }
-    if (request.signal?.aborted) fail3("cancelled");
-    let version2;
-    try {
-      version2 = await this.run(
-        "gh",
-        ["version"],
-        request.checkoutPath,
-        commandEnvironment2(),
-        request.signal
-      );
-    } catch (error51) {
-      failCommand(error51, "preflight-gh-unavailable");
-    }
-    requireCleanExit(version2, "preflight-gh-unavailable");
-    const parsedVersion = parseVersion3(version2.stdout);
-    if (parsedVersion === null) fail3("preflight-gh-version-invalid");
-    if (!versionAtLeast(parsedVersion, MINIMUM_GH_VERSION)) {
-      fail3("preflight-gh-version-unsupported");
-    }
-    let auth;
-    try {
-      auth = await this.run(
-        "gh",
-        ["auth", "status", "--hostname", "github.com"],
-        request.checkoutPath,
-        commandEnvironment2(),
-        request.signal
-      );
-    } catch (error51) {
-      failCommand(error51, "preflight-auth-failed");
-    }
-    requireCleanExit(auth, "preflight-auth-failed");
-    let repositoryView;
-    try {
-      repositoryView = await this.run(
-        "gh",
-        ["repo", "view", "--json", "nameWithOwner,url"],
-        request.checkoutPath,
-        commandEnvironment2(),
-        request.signal
-      );
-    } catch (error51) {
-      failCommand(error51, "preflight-repository-query-failed");
-    }
-    requireCleanExit(repositoryView, "preflight-repository-query-failed");
-    let parsed;
-    try {
-      parsed = JSON.parse(repositoryView.stdout);
-    } catch {
-      fail3("preflight-repository-response-invalid");
-    }
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      fail3("preflight-repository-response-invalid");
-    }
-    const record2 = parsed;
-    if (Object.keys(record2).some((key) => key !== "nameWithOwner" && key !== "url") || typeof record2.nameWithOwner !== "string" || typeof record2.url !== "string") {
-      fail3("preflight-repository-response-invalid");
-    }
-    const repository = canonicalRepository(record2.nameWithOwner);
-    if (repository === null) fail3("preflight-repository-response-invalid");
-    const canonicalUrl = canonicalGithubUrl2(record2.url);
-    if (canonicalUrl === null) fail3("preflight-repository-url-invalid");
-    if (canonicalUrl.repository !== repository) fail3("preflight-repository-identity-mismatch");
-    if (request.expectedRepository !== void 0) {
-      const expected = canonicalRepository(request.expectedRepository);
-      if (expected === null || expected !== repository) {
-        fail3("preflight-repository-identity-mismatch");
-      }
-    }
-    return {
-      provider: "github",
-      repository,
-      canonicalHttpsUrl: canonicalUrl.url
-    };
-  }
-  async pushBranch(request) {
-    if (!validCheckoutPath(request.checkoutPath) || !validTarget(request.target) || !validBranch(request.branch) || !OID2.test(request.headCommitOid)) fail3("push-request-invalid");
-    if (request.signal?.aborted) fail3("cancelled");
-    let quarantine;
-    try {
-      quarantine = await this.platformServices.createSecureTempDirectory();
-      await chmod2(quarantine, 448);
-    } catch {
-      if (quarantine !== void 0) {
-        try {
-          await rm14(quarantine, { recursive: true });
-        } catch {
-          throw new HostingAdapterError(
-            "push-quarantine-cleanup-failed",
-            "push-quarantine-create-failed"
-          );
-        }
-      }
-      fail3("push-quarantine-create-failed");
-    }
-    const environment = isolatedGitEnvironment(quarantine);
-    const remoteEnvironment = isolatedGitEnvironment(quarantine, true);
-    const branchRef = `refs/heads/${request.branch}`;
-    const bundlePath = path31.join(quarantine, "branch.bundle");
-    let outcome;
-    let failure3;
-    try {
-      let result = await this.run(
-        "git",
-        [
-          "init",
-          "--bare",
-          "--quiet",
-          ...request.headCommitOid.length === 64 ? ["--object-format=sha256"] : [],
-          "."
-        ],
-        quarantine,
-        environment,
-        request.signal
-      );
-      requireCleanExit(result, "push-quarantine-init-failed");
-      result = await this.run(
-        "git",
-        ["bundle", "create", bundlePath, branchRef],
-        request.checkoutPath,
-        environment,
-        request.signal
-      );
-      requireCleanExit(result, "push-bundle-create-failed");
-      result = await this.run(
-        "git",
-        ["bundle", "unbundle", bundlePath],
-        quarantine,
-        environment,
-        request.signal
-      );
-      requireCleanExit(result, "push-bundle-import-failed");
-      if (parseBundledHead(result.stdout, branchRef) !== request.headCommitOid) {
-        fail3("push-imported-oid-mismatch");
-      }
-      result = await this.run(
-        "git",
-        ["rev-parse", "--verify", `${request.headCommitOid}^{commit}`],
-        quarantine,
-        environment,
-        request.signal
-      );
-      assertNotCancelled(result);
-      if (!cleanExit(result) || result.stdout.trim() !== request.headCommitOid) {
-        fail3("push-imported-oid-mismatch");
-      }
-      result = await this.run(
-        "git",
-        ["update-ref", branchRef, request.headCommitOid, "0".repeat(request.headCommitOid.length)],
-        quarantine,
-        environment,
-        request.signal
-      );
-      requireCleanExit(result, "push-imported-oid-mismatch");
-      result = await this.run(
-        "git",
-        [...CREDENTIAL_HELPER_ARGS, "ls-remote", "--heads", request.target.canonicalHttpsUrl, branchRef],
-        quarantine,
-        remoteEnvironment,
-        request.signal
-      );
-      requireCleanExit(result, "push-remote-precheck-failed");
-      const remoteHead = parseRemoteHead(result.stdout, branchRef);
-      if (remoteHead === void 0) fail3("push-remote-response-invalid");
-      if (remoteHead !== null && remoteHead !== request.headCommitOid) {
-        fail3("push-remote-head-mismatch");
-      }
-      if (remoteHead === request.headCommitOid) {
-        outcome = { remoteHead };
-      } else {
-        result = await this.run(
-          "git",
-          [
-            ...CREDENTIAL_HELPER_ARGS,
-            "push",
-            request.target.canonicalHttpsUrl,
-            `${branchRef}:${branchRef}`
-          ],
-          quarantine,
-          remoteEnvironment,
-          request.signal
-        );
-        requireCleanExit(result, "push-command-failed");
-        outcome = { remoteHead: request.headCommitOid };
-      }
-    } catch (error51) {
-      failure3 = error51 instanceof HostingAdapterError ? error51 : new HostingAdapterError("push-command-failed");
-    }
-    try {
-      await rm14(quarantine, { recursive: true });
-    } catch {
-      throw new HostingAdapterError("push-quarantine-cleanup-failed", failure3?.classification);
-    }
-    if (failure3 !== void 0) throw failure3;
-    return outcome;
-  }
-  async ensureDraftPullRequest(request) {
-    if (!validCheckoutPath(request.checkoutPath) || !validTarget(request.target) || !validBranch(request.baseBranch) || !validBranch(request.headBranch) || !OID2.test(request.headCommitOid) || !validPullRequestText(request.title, request.body)) {
-      fail3("draft-pull-request-request-invalid");
-    }
-    if (request.signal?.aborted) fail3("cancelled");
-    let listed;
-    try {
-      listed = await this.run(
-        "gh",
-        [
-          "pr",
-          "list",
-          "--repo",
-          request.target.repository,
-          "--base",
-          request.baseBranch,
-          "--head",
-          request.headBranch,
-          "--state",
-          "open",
-          "--json",
-          PR_JSON_FIELDS
-        ],
-        request.checkoutPath,
-        commandEnvironment2(),
-        request.signal
-      );
-    } catch (error51) {
-      failCommand(error51, "draft-pull-request-list-failed");
-    }
-    assertNotCancelled(listed);
-    if (!cleanExit(listed) || !boundedOutput(listed)) {
-      fail3("draft-pull-request-list-failed");
-    }
-    const parsedList = parseJson(listed.stdout);
-    if (!Array.isArray(parsedList)) fail3("draft-pull-request-response-invalid");
-    const identities = parsedList.map((value) => parsePullRequestIdentity(value, request.target));
-    if (identities.some((identity2) => identity2 === void 0)) {
-      fail3("draft-pull-request-identity-mismatch");
-    }
-    if (identities.length > 1) fail3("draft-pull-request-ambiguous");
-    if (identities.length === 1) {
-      const identity2 = identities[0];
-      if (identity2.baseBranch !== request.baseBranch || identity2.headBranch !== request.headBranch) {
-        fail3("draft-pull-request-identity-mismatch");
-      }
-      if (identity2.headCommitOid !== request.headCommitOid) {
-        fail3("draft-pull-request-head-mismatch");
-      }
-      const key2 = pullRequestKey(identity2.repository, identity2.number);
-      this.pullRequests.set(key2, identity2);
-      return identity2;
-    }
-    let created;
-    try {
-      created = await this.run(
-        "gh",
-        [
-          "pr",
-          "create",
-          "--repo",
-          request.target.repository,
-          "--base",
-          request.baseBranch,
-          "--head",
-          request.headBranch,
-          "--draft",
-          "--title",
-          request.title,
-          "--body",
-          request.body
-        ],
-        request.checkoutPath,
-        commandEnvironment2(),
-        request.signal
-      );
-    } catch (error51) {
-      failCommand(error51, "draft-pull-request-create-failed");
-    }
-    assertNotCancelled(created);
-    if (!cleanExit(created) || !boundedOutput(created)) {
-      fail3("draft-pull-request-create-failed");
-    }
-    const createdNumber = parseCreatedPullRequestNumber(
-      created.stdout,
-      request.target.repository
-    );
-    if (createdNumber === void 0) fail3("draft-pull-request-response-invalid");
-    const identity = await this.viewPullRequest(
-      request.checkoutPath,
-      request.target,
-      createdNumber,
-      "draft-pull-request-create-failed",
-      "draft-pull-request-response-invalid",
-      request.signal
-    );
-    if (identity.baseBranch !== request.baseBranch || identity.headBranch !== request.headBranch || identity.headCommitOid !== request.headCommitOid || !identity.draft) fail3("draft-pull-request-identity-mismatch");
-    const key = pullRequestKey(identity.repository, identity.number);
-    this.pullRequests.set(key, identity);
-    return identity;
-  }
-  async requiredChecks(request) {
-    if (!validCheckoutPath(request.checkoutPath) || !validTarget(request.target) || !validPullRequestNumber(request.pullRequestNumber) || !OID2.test(request.headCommitOid)) {
-      fail3("required-checks-request-invalid");
-    }
-    if (request.signal?.aborted) fail3("cancelled");
-    const key = pullRequestKey(request.target.repository, request.pullRequestNumber);
-    const expected = this.pullRequests.get(key);
-    if (expected === void 0) fail3("required-checks-identity-not-established");
-    const before = await this.viewPullRequest(
-      request.checkoutPath,
-      request.target,
-      request.pullRequestNumber,
-      "required-checks-identity-query-failed",
-      "required-checks-identity-response-invalid",
-      request.signal
-    ).catch((error51) => {
-      throw error51;
-    });
-    if (!samePullRequestIdentity(before, expected)) {
-      fail3("required-checks-identity-mismatch");
-    }
-    if (before.headCommitOid !== request.headCommitOid) {
-      fail3("required-checks-head-mismatch");
-    }
-    let result;
-    try {
-      result = await this.run(
-        "gh",
-        [
-          "pr",
-          "checks",
-          String(request.pullRequestNumber),
-          "--repo",
-          request.target.repository,
-          "--required",
-          "--json",
-          CHECK_JSON_FIELDS
-        ],
-        request.checkoutPath,
-        commandEnvironment2(),
-        request.signal
-      );
-    } catch (error51) {
-      failCommand(error51, "required-checks-command-failed");
-    }
-    if (!boundedOutput(result) || ![0, 1, 8].includes(result.exitCode ?? -1)) {
-      fail3("required-checks-command-failed");
-    }
-    const after = await this.viewPullRequest(
-      request.checkoutPath,
-      request.target,
-      request.pullRequestNumber,
-      "required-checks-identity-query-failed",
-      "required-checks-identity-response-invalid",
-      request.signal
-    );
-    if (after.headCommitOid !== request.headCommitOid) {
-      fail3("required-checks-head-mismatch");
-    }
-    if (!samePullRequestIdentity(after, before)) {
-      fail3("required-checks-identity-mismatch");
-    }
-    const checks = parseRequiredChecks(result.stdout);
-    if (checks === void 0) fail3("required-checks-response-invalid");
-    const aggregate = checks.length === 0 ? "missing" : checks.some((check2) => ["fail", "cancel", "skipping"].includes(check2.bucket)) ? "failed" : checks.some((check2) => check2.bucket === "pending") ? "pending" : "passed";
-    const expectedExitCode = checks.length === 0 ? 1 : checks.some((check2) => check2.bucket === "fail" || check2.bucket === "cancel") ? 1 : checks.some((check2) => check2.bucket === "pending") ? 8 : 0;
-    if (result.exitCode !== expectedExitCode) fail3("required-checks-response-invalid");
-    return { result: aggregate, headCommitOid: request.headCommitOid, checks };
-  }
-  async markReady(request) {
-    if (!validCheckoutPath(request.checkoutPath) || !validTarget(request.target) || !validPullRequestNumber(request.pullRequestNumber) || !OID2.test(request.headCommitOid)) {
-      fail3("mark-ready-request-invalid");
-    }
-    if (request.signal?.aborted) fail3("cancelled");
-    const key = pullRequestKey(request.target.repository, request.pullRequestNumber);
-    const expected = this.pullRequests.get(key);
-    if (expected === void 0) fail3("mark-ready-identity-not-established");
-    const checks = await this.requiredChecks({
-      checkoutPath: request.checkoutPath,
-      target: request.target,
-      pullRequestNumber: request.pullRequestNumber,
-      headCommitOid: request.headCommitOid,
-      ...request.signal === void 0 ? {} : { signal: request.signal }
-    });
-    if (checks.result !== "passed" || checks.headCommitOid !== request.headCommitOid || checks.checks.length === 0 || checks.checks.some((check2) => check2.bucket !== "pass")) {
-      fail3("mark-ready-checks-not-passed");
-    }
-    let ready;
-    try {
-      ready = await this.run(
-        "gh",
-        [
-          "pr",
-          "ready",
-          String(request.pullRequestNumber),
-          "--repo",
-          request.target.repository
-        ],
-        request.checkoutPath,
-        commandEnvironment2(),
-        request.signal
-      );
-    } catch (error51) {
-      failCommand(error51, "mark-ready-command-failed");
-    }
-    if (!cleanExit(ready) || !boundedOutput(ready)) fail3("mark-ready-command-failed");
-    const updated = await this.viewPullRequest(
-      request.checkoutPath,
-      request.target,
-      request.pullRequestNumber,
-      "mark-ready-identity-query-failed",
-      "mark-ready-identity-response-invalid",
-      request.signal
-    );
-    const readyExpected = { ...expected, draft: false };
-    if (!samePullRequestIdentity(updated, readyExpected)) {
-      fail3("mark-ready-identity-mismatch");
-    }
-    this.pullRequests.delete(key);
-    return updated;
-  }
-  async viewPullRequest(checkoutPath, target, number4, queryFailure, responseFailure, signal) {
-    let viewed;
-    try {
-      viewed = await this.run(
-        "gh",
-        [
-          "pr",
-          "view",
-          String(number4),
-          "--repo",
-          target.repository,
-          "--json",
-          PR_JSON_FIELDS
-        ],
-        checkoutPath,
-        commandEnvironment2(),
-        signal
-      );
-    } catch (error51) {
-      failCommand(error51, queryFailure);
-    }
-    assertNotCancelled(viewed);
-    if (!cleanExit(viewed) || !boundedOutput(viewed)) fail3(queryFailure);
-    const identity = parsePullRequestIdentity(parseJson(viewed.stdout), target);
-    if (identity === void 0 || identity.number !== number4) fail3(responseFailure);
-    return identity;
-  }
-};
-
 // src/mcp/allowlist-sufficiency.ts
-import { readFile as readFile9 } from "node:fs/promises";
-import path32 from "node:path";
+import { readFile as readFile8 } from "node:fs/promises";
+import path33 from "node:path";
 var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 var MAX_GAPS = 25;
 var MAX_FILE_BYTES = 512 * 1024;
 var IMPORT_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["']([^"']+)["']/gu;
 function toPosix(candidate) {
-  return candidate.split(path32.sep).join("/");
+  return candidate.split(path33.sep).join("/");
 }
-function isTestPath(candidate) {
+function isTestPath2(candidate) {
   return /(?:^|\/)tests?\//u.test(candidate) || /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(candidate);
 }
 function resolveImport(fromPath, specifier, tracked) {
   if (!specifier.startsWith(".")) return null;
-  const base = toPosix(path32.posix.normalize(
-    path32.posix.join(path32.posix.dirname(toPosix(fromPath)), specifier)
+  const base = toPosix(path33.posix.normalize(
+    path33.posix.join(path33.posix.dirname(toPosix(fromPath)), specifier)
   ));
   if (base.startsWith("..")) return null;
   const rewrites = [
@@ -55030,21 +54033,21 @@ function resolveImport(fromPath, specifier, tracked) {
 }
 async function checkAllowlistSufficiency(repoRoot, spec, deps = {}) {
   const listed = await (deps.git ?? git)(repoRoot, ["ls-files", "-z"]);
-  if (listed.exitCode !== 0) return { allowlisted: 0, gaps: [], omitted: 0 };
+  if (!gitSucceeded(listed)) return { allowlisted: 0, gaps: [], omitted: 0 };
   const tracked = new Set(
     gitNulRecords(listed.stdout, "Git tracked-file list").filter((entry) => entry.length > 0)
   );
   const inScope = (candidate) => spec.writeAllowlist.some((pattern) => globMatches(pattern, candidate)) && !spec.forbiddenScope.some((pattern) => globMatches(pattern, candidate));
   const allowlisted = new Set([...tracked].filter(inScope));
   if (allowlisted.size === 0) return { allowlisted: 0, gaps: [], omitted: 0 };
-  const read = deps.readFile ?? (async (target) => readFile9(target, "utf8"));
+  const read = deps.readFile ?? (async (target) => readFile8(target, "utf8"));
   const gaps = [];
   for (const candidate of tracked) {
     if (allowlisted.has(candidate)) continue;
-    if (!SOURCE_EXTENSIONS.has(path32.posix.extname(candidate))) continue;
+    if (!SOURCE_EXTENSIONS.has(path33.posix.extname(candidate))) continue;
     let contents;
     try {
-      contents = (await read(path32.join(repoRoot, candidate))).slice(0, MAX_FILE_BYTES);
+      contents = (await read(path33.join(repoRoot, candidate))).slice(0, MAX_FILE_BYTES);
     } catch {
       continue;
     }
@@ -55056,7 +54059,7 @@ async function checkAllowlistSufficiency(repoRoot, spec, deps = {}) {
     if (imports.size > 0) gaps.push({ path: candidate, imports: [...imports].sort() });
   }
   gaps.sort((left, right) => {
-    const byKind = Number(isTestPath(right.path)) - Number(isTestPath(left.path));
+    const byKind = Number(isTestPath2(right.path)) - Number(isTestPath2(left.path));
     return byKind !== 0 ? byKind : left.path.localeCompare(right.path);
   });
   return {
@@ -55233,7 +54236,6 @@ function createAutopilotController(deps) {
       branchManager,
       workflowStore
     }),
-    hostingAdapter: new GitHubCliAdapter(),
     ...deps.abortSignal === void 0 ? {} : { abortSignal: deps.abortSignal },
     emit: (event) => deps.onProgress?.(event)
   });
@@ -55649,47 +54651,8 @@ async function handleReviewCandidate(checkoutPath, runId, deps = {}, expectedSpe
   }
 }
 function decisionAdvisoryForRun(run) {
-  const refused = run.result.evidence.pipelineGateRefused;
-  const incomplete = run.result.evidence.pipelineReviewIncomplete;
-  const rawCleared = run.result.evidence.pipelineGateCleared;
-  const warnings = [];
-  if (isRecord8(refused) && Array.isArray(refused.reasons)) {
-    warnings.push(
-      `the pipeline gate did NOT clear this candidate: ${refused.reasons.filter((r) => typeof r === "string").join("; ")}`
-    );
-  }
-  if (isRecord8(incomplete) && typeof incomplete.reason === "string") {
-    warnings.push(`the pipeline could not complete its own review: ${incomplete.reason}`);
-  }
-  const plainDelegate = run.result.evidence.plainDelegate === true && refused === void 0 && incomplete === void 0 && rawCleared === void 0;
-  let gateCleared = false;
-  if (plainDelegate) {
-    gateCleared = true;
-  } else if (rawCleared === void 0) {
-    if (warnings.length === 0) {
-      warnings.push("the pipeline gate clearance record is missing");
-    }
-  } else {
-    try {
-      const cleared = parsePipelineGateCleared(rawCleared);
-      if (cleared.requiresHumanDecision === true) {
-        warnings.push("the pipeline gate clearance record requires a human decision");
-      } else if (cleared.candidateCommitOid !== run.result.candidate?.candidateCommitOid) {
-        warnings.push(
-          "the pipeline gate clearance record does not match the archived candidate commit"
-        );
-      } else {
-        gateCleared = true;
-      }
-    } catch {
-      warnings.push("the pipeline gate clearance record is malformed");
-    }
-  }
-  return {
-    warnings,
-    verifiedClean: run.result.status === "verified-candidate" && run.result.failure === null && gateCleared,
-    unreadable: false
-  };
+  const verdict = runDecision.verdictFor(run.snapshot, "autonomous");
+  return verdict.state === "accepted" ? { warnings: [], verifiedClean: true, unreadable: false } : { warnings: verdict.reasons, verifiedClean: false, unreadable: false };
 }
 async function handleDecideCandidate(checkoutPath, runId, decision, expectedArtifactHash, deps = {}) {
   try {
@@ -55764,7 +54727,7 @@ async function handleIntegrateCandidate(checkoutPath, runId, expectedArtifactHas
       if (!INTEGRABLE_DECISION_AUTHORITIES.includes(decision.authority)) {
         return { integration: "aborted", detail: "accepted-decision-not-confirmed" };
       }
-      if (decision.candidateManifestHash != null && decision.candidateManifestHash !== expectedArtifactHash) {
+      if (decision.candidateManifestHash !== expectedArtifactHash) {
         return { integration: "aborted", detail: "decision-artifact-mismatch" };
       }
       return (deps.applyCandidateTree ?? applyCandidateTree)({
@@ -55783,47 +54746,96 @@ async function handleIntegrateCandidate(checkoutPath, runId, expectedArtifactHas
   }
 }
 
+// src/mcp/jev-screen.ts
+var JEV_ENV = "CLAUDE_ARCHITECT_JEV";
+var JEV_KEY_ENV = "TYPESAFE_API_KEY";
+var JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
+var JEV_TIMEOUT_MS = 15e3;
+var MAX_PATCH_CHARS = 5e4;
+var MAX_PATHS = 200;
+var CONCERN_THRESHOLD = 0.4;
+var QUESTIONS = {
+  weakens_verification: {
+    type: "noul",
+    instructions: "Does `patch` weaken, skip, or delete tests, assertions, lint rules, type checks, or CI checks, instead of changing the code under test?"
+  },
+  security_sensitive: {
+    type: "noul",
+    instructions: "Does `patch` add credential or secret access, outbound network calls, obfuscated or encoded code, shell command construction from input, or remove permission, authentication, or sandbox checks?"
+  }
+};
+var CONCERN_TEXT = {
+  weakens_verification: "an independent screen (Jev) flagged the candidate as weakening verification",
+  security_sensitive: "an independent screen (Jev) flagged security-sensitive changes in the candidate"
+};
+async function jevScreen(candidate, options = {}) {
+  const env = options.env ?? process.env;
+  if (env[JEV_ENV] !== "on") return { status: "disabled" };
+  const key = env[JEV_KEY_ENV];
+  if (key === void 0 || key === "") {
+    return { status: "unavailable", reason: `${JEV_KEY_ENV} is not set` };
+  }
+  const patch = redact(candidate.patch);
+  const state = {
+    changedPaths: candidate.changedPaths.slice(0, MAX_PATHS).map((change) => change.path),
+    patch: patch.slice(0, MAX_PATCH_CHARS),
+    patchTruncated: patch.length > MAX_PATCH_CHARS
+  };
+  let body;
+  try {
+    const response = await (options.fetch ?? globalThis.fetch)(JEV_ENDPOINT, {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: "jev-latest", state, questions: QUESTIONS }),
+      signal: AbortSignal.timeout(JEV_TIMEOUT_MS)
+    });
+    if (!response.ok) return { status: "unavailable", reason: `HTTP ${response.status}` };
+    body = await response.json();
+  } catch (error51) {
+    return { status: "unavailable", reason: error51 instanceof Error ? error51.name : "request failed" };
+  }
+  const answers = body?.answers;
+  const reasons = [];
+  for (const id of Object.keys(QUESTIONS)) {
+    const noul = answers?.[id]?.noul;
+    if (typeof noul !== "number" || !Number.isFinite(noul) || noul < 0 || noul > 1) {
+      return { status: "unavailable", reason: "malformed answer" };
+    }
+    if (noul >= CONCERN_THRESHOLD) reasons.push(`${CONCERN_TEXT[id]} (p=${noul.toFixed(2)})`);
+  }
+  return reasons.length === 0 ? { status: "clear" } : { status: "concern", reasons };
+}
+
 // src/runtime/recovery-manager.ts
-import { createHash as createHash16, randomUUID as randomUUID13 } from "node:crypto";
-import { constants as constants14 } from "node:fs";
-import {
-  lstat as lstat18,
-  link as link8,
-  mkdir as mkdir9,
-  open as open14,
-  readdir as readdir8,
-  realpath as realpath13,
-  rename as rename7
-} from "node:fs/promises";
-import path33 from "node:path";
+import { createHash as createHash18 } from "node:crypto";
+import { mkdir as mkdir10, readdir as readdir13, realpath as realpath20 } from "node:fs/promises";
+import path41 from "node:path";
+import nodeProcess8 from "node:process";
+
+// src/runtime/recovery-shared.ts
+import { createHash as createHash15 } from "node:crypto";
+import { constants as constants15 } from "node:fs";
+import { lstat as lstat18, realpath as realpath14 } from "node:fs/promises";
+import path34 from "node:path";
 import nodeProcess7 from "node:process";
-var NO_FOLLOW8 = constants14.O_NOFOLLOW ?? 0;
+var NO_FOLLOW8 = constants15.O_NOFOLLOW ?? 0;
 var MAX_STATE_FILE_BYTES2 = 8e6;
 var MAX_STATE_FILE_BYTES_BIGINT2 = BigInt(MAX_STATE_FILE_BYTES2);
 var SAFE_RUN_ID2 = /^[a-z0-9][a-z0-9._-]*$/;
 var WORKFLOW_WORKTREE_NAME = /^workflow-([0-9a-f]{32})(?:-final)?$/;
 var LEGACY_FINAL_WORKTREE_NAME = /^final-([0-9a-f]{24})$/;
 var WORKFLOW_OWNERSHIP_NAME = /^([0-9a-f]{64})\.json$/;
-var OID3 = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
+var OID2 = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 var CANDIDATE_REF_PREFIX3 = "refs/claude-architect/candidates/";
 var BACKUP_REF_PREFIX = "refs/claude-architect/prune-backups/";
 var MAX_QUARANTINE_REASON_BYTES = 2e3;
 var MAX_QUARANTINE_RECORD_BYTES = 4096;
 var MAX_WORKTREE_SWEEP_ISSUES = 100;
-function errorCode10(error51) {
-  return error51.code;
-}
-function isMissing4(error51) {
-  return errorCode10(error51) === "ENOENT";
-}
 function isPlainDirectory3(metadata) {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
 }
 function sameManagedIdentity(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
-}
-function sameIdentity5(metadata, expected) {
-  return metadata.dev === expected.dev && metadata.ino === expected.ino && metadata.birthtimeNs === expected.birthtimeNs;
 }
 function validateRunId(runId) {
   if (typeof runId !== "string" || !SAFE_RUN_ID2.test(runId)) {
@@ -55833,19 +54845,19 @@ function validateRunId(runId) {
 async function stateRoot() {
   const configured = nodeProcess7.env.CLAUDE_PLUGIN_DATA ?? (nodeProcess7.env.NODE_ENV === "test" ? nodeProcess7.env.CLAUDE_ARCHITECT_STATE_DIR : void 0);
   if (configured === void 0) return null;
-  const root = path33.resolve(resolveStateDir());
+  const root = path34.resolve(resolveStateDir());
   try {
     const metadata = await lstat18(root, { bigint: true });
     if (!isPlainDirectory3(metadata) || metadata.birthtimeNs <= 0n) {
       throw new RuntimeError("plugin data directory must be a stable plain directory during recovery");
     }
-    const canonicalRoot = await realpath13(root);
+    const canonicalRoot = await realpath14(root);
     const settled = await lstat18(canonicalRoot, { bigint: true });
     if (!isPlainDirectory3(settled) || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs) {
       throw new RuntimeError("plugin data directory identity changed during canonicalization");
     }
     const privateIdentity = await assertPrivateRecoveryDirectory(canonicalRoot);
-    if (!sameIdentity5(privateIdentity, {
+    if (!sameDirectoryIdentity(privateIdentity, {
       dev: metadata.dev,
       ino: metadata.ino,
       birthtimeNs: metadata.birthtimeNs
@@ -55854,7 +54866,7 @@ async function stateRoot() {
     }
     return canonicalRoot;
   } catch (error51) {
-    if (isMissing4(error51)) return null;
+    if (isMissing(error51)) return null;
     throw error51;
   }
 }
@@ -55866,30 +54878,174 @@ async function readBoundedRegularFile2(filename) {
     }
     return contents.toString("utf8");
   } catch (error51) {
-    if (isMissing4(error51)) return null;
+    if (isMissing(error51)) return null;
     throw error51;
   }
 }
+async function assertPrivateRecoveryDirectory(directory) {
+  return await ensurePrivateDirectory(directory, {
+    description: "recovery directory",
+    create: false,
+    migratePermissions: true
+  });
+}
+async function plainDirectoryIdentity2(directory) {
+  try {
+    const metadata = await lstat18(directory, { bigint: true });
+    if (!isPlainDirectory3(metadata)) {
+      throw new RuntimeError("recovery directory must not be a symbolic link");
+    }
+    return {
+      dev: metadata.dev,
+      ino: metadata.ino,
+      birthtimeNs: metadata.birthtimeNs
+    };
+  } catch (error51) {
+    if (isMissing(error51)) return null;
+    throw error51;
+  }
+}
+function parseRunStart(text, expectedRunId) {
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (cause) {
+    throw new RuntimeError("run-start recovery record is invalid JSON", { cause });
+  }
+  if (typeof value !== "object" || value === null) {
+    throw new RuntimeError("run-start recovery record must be an object");
+  }
+  const record2 = value;
+  validateRunId(record2.runId);
+  if (record2.runId !== expectedRunId || typeof record2.lockKey !== "string" || !/^[0-9a-f]{64}$/.test(record2.lockKey) || typeof record2.canonicalCommonDir !== "string" || !path34.isAbsolute(record2.canonicalCommonDir) || record2.pid !== null && (record2.pid === void 0 || !Number.isSafeInteger(record2.pid) || record2.pid <= 1) || record2.processToken !== void 0 && record2.processToken !== null && typeof record2.processToken !== "string" || typeof record2.startedAt !== "string" || !Number.isFinite(Date.parse(record2.startedAt))) {
+    throw new RuntimeError("run-start recovery record is malformed");
+  }
+  const expectedLockKey = createHash15("sha256").update(record2.canonicalCommonDir).digest("hex");
+  if (record2.lockKey !== expectedLockKey) {
+    throw new RuntimeError("run-start lock key does not match its canonical common directory");
+  }
+  return { ...record2, processToken: record2.processToken ?? null };
+}
+function validateTerminalResult(result, runId) {
+  if (typeof result !== "object" || result === null) {
+    throw new RuntimeError("terminal attempt result is malformed during recovery");
+  }
+  const value = result;
+  if (value.resultVersion !== "1" || value.runId !== runId || typeof value.status !== "string" || !["unavailable", "failed", "cancelled", "verified-candidate"].includes(value.status)) {
+    throw new RuntimeError("terminal attempt result is malformed during recovery");
+  }
+}
+function runGitError(action, result) {
+  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
+  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
+}
+async function validateGitCommonDir(commonDir) {
+  const canonical = await realpath14(commonDir);
+  if (canonical !== commonDir) {
+    throw new RuntimeError("recorded Git common directory is no longer canonical");
+  }
+  const result = await git(canonical, [
+    "rev-parse",
+    "--path-format=absolute",
+    "--git-common-dir"
+  ]);
+  if (result.exitCode !== 0) throw runGitError("validate Git common directory", result);
+  const reported = await realpath14(gitPathOutput(
+    result.stdout,
+    "Git common directory"
+  ));
+  if (reported !== canonical) {
+    throw new RuntimeError("recorded Git common directory no longer identifies the repository");
+  }
+  return canonical;
+}
+async function validateRepositoryRoot(repoRoot) {
+  if (!path34.isAbsolute(repoRoot)) {
+    throw new RuntimeError("cleanup journal repository root is not absolute");
+  }
+  const canonical = await realpath14(repoRoot);
+  if (canonical !== repoRoot) {
+    throw new RuntimeError("cleanup journal repository root is no longer canonical");
+  }
+  const result = await git(canonical, ["rev-parse", "--show-toplevel"]);
+  if (result.exitCode !== 0) throw runGitError("validate cleanup repository", result);
+  if (await realpath14(gitPathOutput(result.stdout, "Git repository root")) !== canonical) {
+    throw new RuntimeError("cleanup journal repository root is not the repository top level");
+  }
+  return canonical;
+}
+async function readDirectRef(repoRoot, ref, runGit = git) {
+  const symbolic = await runGit(repoRoot, ["symbolic-ref", "--quiet", ref]);
+  if (symbolic.exitCode === 0) {
+    throw new RuntimeError("recovery refuses to mutate a symbolic Git ref");
+  }
+  if (symbolic.exitCode !== 1) throw runGitError("inspect symbolic Git ref", symbolic);
+  const direct = await runGit(repoRoot, ["rev-parse", "--verify", "--quiet", ref]);
+  if (direct.exitCode === 1) return null;
+  if (direct.exitCode !== 0 || !OID2.test(direct.stdout.trim())) {
+    throw runGitError("inspect Git ref", direct);
+  }
+  return direct.stdout.trim();
+}
+async function deleteExactRef(repoRoot, ref, oid, runGit = git) {
+  const result = await runGit(repoRoot, ["update-ref", "--no-deref", "-d", ref, oid]);
+  if (result.exitCode !== 0) throw runGitError("delete recovery Git ref", result);
+}
+async function readHandleBytes3(handle, size) {
+  const contents = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < size) {
+    const { bytesRead } = await handle.read(
+      contents,
+      offset,
+      size - offset,
+      offset
+    );
+    if (bytesRead === 0) break;
+    offset += bytesRead;
+  }
+  return contents.subarray(0, offset);
+}
+function worktreeSweepIssue(worktreePath, error51, repositoryIdentity) {
+  return {
+    worktreePath,
+    reason: boundedRedactedDiagnostic(error51, MAX_QUARANTINE_REASON_BYTES),
+    ...repositoryIdentity === void 0 ? {} : { repositoryIdentity }
+  };
+}
+function boundedWorktreeSweepIssues(issues, worktreesRoot) {
+  if (issues.length <= MAX_WORKTREE_SWEEP_ISSUES) return issues;
+  const retained = issues.slice(0, MAX_WORKTREE_SWEEP_ISSUES - 1);
+  return [...retained, {
+    worktreePath: worktreesRoot,
+    reason: `${issues.length - retained.length} additional worktree sweep issues omitted`
+  }];
+}
+
+// src/runtime/recovery-prune-journal.ts
+import { constants as constants16 } from "node:fs";
+import { lstat as lstat19, open as open16, realpath as realpath15 } from "node:fs/promises";
+import path35 from "node:path";
 async function readCleanupJournal(filename) {
   let handle;
   try {
-    handle = await open14(filename, constants14.O_RDONLY | NO_FOLLOW8);
+    handle = await open16(filename, constants16.O_RDONLY | NO_FOLLOW8);
   } catch (error51) {
-    if (isMissing4(error51)) return { text: null, tornTail: false };
+    if (isMissing(error51)) return { text: null, tornTail: false };
     throw error51;
   }
   let result;
   let primaryError;
   try {
     const metadata = await handle.stat({ bigint: true });
-    const namedMetadata = await lstat18(filename, { bigint: true });
+    const namedMetadata = await lstat19(filename, { bigint: true });
     if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || namedMetadata.size !== metadata.size) {
       throw new RuntimeError("cleanup journal must be a bounded regular single-link file");
     }
     const bytes = await readHandleBytes3(handle, Number(metadata.size));
     const repeatedBytes = await readHandleBytes3(handle, Number(metadata.size));
     const settledMetadata = await handle.stat({ bigint: true });
-    const settledNamedMetadata = await lstat18(filename, { bigint: true });
+    const settledNamedMetadata = await lstat19(filename, { bigint: true });
     if (bytes.byteLength > MAX_STATE_FILE_BYTES2 || settledMetadata.size > MAX_STATE_FILE_BYTES_BIGINT2) {
       throw new RuntimeError("cleanup journal exceeds its size limit during read");
     }
@@ -55922,187 +55078,6 @@ async function readCleanupJournal(filename) {
   if (result === void 0) throw new RuntimeError("cleanup journal read produced no result");
   return result;
 }
-async function assertPrivateRecoveryDirectory(directory) {
-  return await ensurePrivateDirectory(directory, {
-    description: "recovery directory",
-    create: false,
-    migratePermissions: true
-  });
-}
-async function plainDirectoryIdentity2(directory) {
-  try {
-    const metadata = await lstat18(directory, { bigint: true });
-    if (!isPlainDirectory3(metadata)) {
-      throw new RuntimeError("recovery directory must not be a symbolic link");
-    }
-    return {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs
-    };
-  } catch (error51) {
-    if (isMissing4(error51)) return null;
-    throw error51;
-  }
-}
-function parseRunStart(text, expectedRunId) {
-  let value;
-  try {
-    value = JSON.parse(text);
-  } catch (cause) {
-    throw new RuntimeError("run-start recovery record is invalid JSON", { cause });
-  }
-  if (typeof value !== "object" || value === null) {
-    throw new RuntimeError("run-start recovery record must be an object");
-  }
-  const record2 = value;
-  validateRunId(record2.runId);
-  if (record2.runId !== expectedRunId || typeof record2.lockKey !== "string" || !/^[0-9a-f]{64}$/.test(record2.lockKey) || typeof record2.canonicalCommonDir !== "string" || !path33.isAbsolute(record2.canonicalCommonDir) || record2.pid !== null && (record2.pid === void 0 || !Number.isSafeInteger(record2.pid) || record2.pid <= 1) || record2.processToken !== void 0 && record2.processToken !== null && typeof record2.processToken !== "string" || typeof record2.startedAt !== "string" || !Number.isFinite(Date.parse(record2.startedAt))) {
-    throw new RuntimeError("run-start recovery record is malformed");
-  }
-  const expectedLockKey = createHash16("sha256").update(record2.canonicalCommonDir).digest("hex");
-  if (record2.lockKey !== expectedLockKey) {
-    throw new RuntimeError("run-start lock key does not match its canonical common directory");
-  }
-  return { ...record2, processToken: record2.processToken ?? null };
-}
-function validateTerminalResult(result, runId) {
-  if (typeof result !== "object" || result === null) {
-    throw new RuntimeError("terminal attempt result is malformed during recovery");
-  }
-  const value = result;
-  if (value.resultVersion !== "1" || value.runId !== runId || typeof value.status !== "string" || !["unavailable", "failed", "cancelled", "verified-candidate"].includes(value.status)) {
-    throw new RuntimeError("terminal attempt result is malformed during recovery");
-  }
-}
-function runGitError(action, result) {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2e3);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-async function validateGitCommonDir(commonDir) {
-  const canonical = await realpath13(commonDir);
-  if (canonical !== commonDir) {
-    throw new RuntimeError("recorded Git common directory is no longer canonical");
-  }
-  const result = await git(canonical, [
-    "rev-parse",
-    "--path-format=absolute",
-    "--git-common-dir"
-  ]);
-  if (result.exitCode !== 0) throw runGitError("validate Git common directory", result);
-  const reported = await realpath13(gitPathOutput(
-    result.stdout,
-    "Git common directory"
-  ));
-  if (reported !== canonical) {
-    throw new RuntimeError("recorded Git common directory no longer identifies the repository");
-  }
-  return canonical;
-}
-async function validateRepositoryRoot(repoRoot) {
-  if (!path33.isAbsolute(repoRoot)) {
-    throw new RuntimeError("cleanup journal repository root is not absolute");
-  }
-  const canonical = await realpath13(repoRoot);
-  if (canonical !== repoRoot) {
-    throw new RuntimeError("cleanup journal repository root is no longer canonical");
-  }
-  const result = await git(canonical, ["rev-parse", "--show-toplevel"]);
-  if (result.exitCode !== 0) throw runGitError("validate cleanup repository", result);
-  if (await realpath13(gitPathOutput(result.stdout, "Git repository root")) !== canonical) {
-    throw new RuntimeError("cleanup journal repository root is not the repository top level");
-  }
-  return canonical;
-}
-async function readDirectRef(repoRoot, ref, runGit = git) {
-  const symbolic = await runGit(repoRoot, ["symbolic-ref", "--quiet", ref]);
-  if (symbolic.exitCode === 0) {
-    throw new RuntimeError("recovery refuses to mutate a symbolic Git ref");
-  }
-  if (symbolic.exitCode !== 1) throw runGitError("inspect symbolic Git ref", symbolic);
-  const direct = await runGit(repoRoot, ["rev-parse", "--verify", "--quiet", ref]);
-  if (direct.exitCode === 1) return null;
-  if (direct.exitCode !== 0 || !OID3.test(direct.stdout.trim())) {
-    throw runGitError("inspect Git ref", direct);
-  }
-  return direct.stdout.trim();
-}
-async function deleteExactRef(repoRoot, ref, oid, runGit = git) {
-  const result = await runGit(repoRoot, ["update-ref", "--no-deref", "-d", ref, oid]);
-  if (result.exitCode !== 0) throw runGitError("delete recovery Git ref", result);
-}
-async function removeStaleCandidateAnchor(repoRoot, runId) {
-  const ref = `${CANDIDATE_REF_PREFIX3}${runId}`;
-  const oid = await readDirectRef(repoRoot, ref);
-  if (oid !== null) await deleteExactRef(repoRoot, ref, oid);
-}
-async function archiveInterruptedPipeline(store, result) {
-  if (result.status !== "verified-candidate") return;
-  const manifest = await store.readManifest();
-  if (manifest === null) {
-    throw new RuntimeError("run manifest is missing while recovering interrupted pipeline");
-  }
-  const failed = {
-    ...result,
-    status: "failed",
-    failure: "verification-failure",
-    summary: "Delegation pipeline was interrupted before trusted gates completed.",
-    unresolvedIssues: [
-      ...result.unresolvedIssues,
-      "pipeline-interrupted-before-terminal-cleanup"
-    ],
-    evidence: {
-      ...result.evidence,
-      pipelineRecovery: "interrupted-before-terminal-cleanup"
-    }
-  };
-  await store.promoteTerminalArtifacts({ result: failed, manifest });
-}
-function escapeRegex3(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-async function temporarySliceRefs(repoRoot, runId, runGit) {
-  const prefix = `${SLICE_REF_PREFIX}${runId}/`;
-  const listed = await runGit(repoRoot, [
-    "for-each-ref",
-    "--format=%(refname)%09%(objectname)",
-    prefix
-  ]);
-  if (listed.exitCode !== 0) throw runGitError("enumerate temporary slice refs", listed);
-  const expectedName = new RegExp(
-    `^${escapeRegex3(prefix)}slice-[1-9][0-9]*-attempt-(?:0|[1-9][0-9]*)$`
-  );
-  const refs = [];
-  for (const line of listed.stdout.split("\n").filter(Boolean)) {
-    const fields = line.split("	");
-    if (fields.length !== 2 || fields[0] === void 0 || !expectedName.test(fields[0])) {
-      throw new RuntimeError("temporary slice ref name is malformed during recovery");
-    }
-    if (fields[1] === void 0 || !OID3.test(fields[1])) {
-      throw new RuntimeError("temporary slice ref OID is malformed during recovery");
-    }
-    const object3 = await runGit(repoRoot, ["cat-file", "-t", fields[1]], {
-      env: { GIT_NO_REPLACE_OBJECTS: "1" }
-    });
-    if (object3.exitCode !== 0 || object3.stdout.trim() !== "commit") {
-      throw new RuntimeError("temporary slice ref does not identify a commit during recovery");
-    }
-    refs.push({ ref: fields[0], oid: fields[1] });
-  }
-  for (const temporaryRef of refs) {
-    const current = await readDirectRef(repoRoot, temporaryRef.ref, runGit);
-    if (current !== temporaryRef.oid) {
-      throw new RuntimeError("temporary slice ref moved during recovery");
-    }
-  }
-  return refs;
-}
-async function cleanupTemporarySliceRefs2(repoRoot, runId, runGit) {
-  const refs = await temporarySliceRefs(repoRoot, runId, runGit);
-  for (const temporaryRef of refs) {
-    await deleteExactRef(repoRoot, temporaryRef.ref, temporaryRef.oid, runGit);
-  }
-}
 function parseCleanupRecord(line) {
   let value;
   try {
@@ -56129,7 +55104,7 @@ function parseCleanupRecord(line) {
   const hasRepository = typeof record2.repoRoot === "string" && typeof record2.anchorRef === "string" && typeof record2.candidateCommitOid === "string";
   const repositoryOnly = typeof record2.repoRoot === "string" && record2.anchorRef === null && record2.backupRef === null && record2.candidateCommitOid === null;
   const noRepository = record2.repoRoot === null && record2.anchorRef === null && record2.backupRef === null && record2.candidateCommitOid === null;
-  if (!noRepository && !repositoryOnly && (!hasRepository || record2.anchorRef !== `${CANDIDATE_REF_PREFIX3}${record2.runId}` || !OID3.test(record2.candidateCommitOid) || record2.backupRef !== null && record2.backupRef !== `${BACKUP_REF_PREFIX}${record2.runId}`)) {
+  if (!noRepository && !repositoryOnly && (!hasRepository || record2.anchorRef !== `${CANDIDATE_REF_PREFIX3}${record2.runId}` || !OID2.test(record2.candidateCommitOid) || record2.backupRef !== null && record2.backupRef !== `${BACKUP_REF_PREFIX}${record2.runId}`)) {
     throw new RuntimeError("cleanup journal Git metadata is malformed");
   }
   return record2;
@@ -56138,6 +55113,242 @@ function cleanupOutcome(record2) {
   if (record2.repoRoot === null || record2.anchorRef === null) return "not-applicable";
   return record2.backupRef === null ? "already-absent" : "deleted";
 }
+async function removePlainDirectory(directory, expected, platformServices) {
+  const metadata = await lstat19(directory, { bigint: true });
+  if (!isPlainDirectory3(metadata) || !sameDirectoryIdentity(metadata, expected)) {
+    throw new RuntimeError("recovery directory identity changed before removal");
+  }
+  await emptyBoundDirectory(directory, expected, platformServices);
+  await removeBoundEmptyDirectory(directory, expected, platformServices);
+}
+async function createExactRef(repoRoot, ref, oid) {
+  const result = await git(repoRoot, [
+    "update-ref",
+    "--no-deref",
+    ref,
+    oid,
+    "0".repeat(oid.length)
+  ]);
+  if (result.exitCode !== 0) throw runGitError("create recovery Git ref", result);
+}
+async function appendCleanupRecord(runsRoot, record2) {
+  const journalLock = await getPlatformServices().acquireCleanupJournalLock();
+  try {
+    const identity = await plainDirectoryIdentity2(runsRoot);
+    if (identity === null) throw new RuntimeError("cleanup journal root disappeared");
+    const filename = path35.join(runsRoot, "cleanup.ndjson");
+    const handle = await open16(
+      filename,
+      constants16.O_WRONLY | constants16.O_CREAT | constants16.O_APPEND | NO_FOLLOW8,
+      384
+    );
+    try {
+      const metadata = await handle.stat();
+      const currentRoot2 = await lstat19(runsRoot, { bigint: true });
+      if (!metadata.isFile() || !isPlainDirectory3(currentRoot2) || !sameDirectoryIdentity(currentRoot2, identity)) {
+        throw new RuntimeError("cleanup journal identity changed during recovery");
+      }
+      await handle.writeFile(`${JSON.stringify(record2)}
+`, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    const currentRoot = await lstat19(runsRoot, { bigint: true });
+    if (!isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, identity)) {
+      throw new RuntimeError("cleanup journal root changed after recovery append");
+    }
+  } finally {
+    await journalLock.release();
+  }
+}
+async function reconcileCleanupRefs(record2, action) {
+  const outcome = cleanupOutcome(record2);
+  if (outcome === "not-applicable") return outcome;
+  const repoRoot = await validateRepositoryRoot(record2.repoRoot);
+  const anchorRef = record2.anchorRef;
+  const candidateOid = record2.candidateCommitOid;
+  let anchorOid = await readDirectRef(repoRoot, anchorRef);
+  if (anchorOid !== null && anchorOid !== candidateOid) {
+    throw new RuntimeError("candidate anchor moved during interrupted prune recovery");
+  }
+  if (outcome === "already-absent") {
+    if (anchorOid !== null) {
+      throw new RuntimeError("candidate anchor unexpectedly reappeared during prune recovery");
+    }
+    return outcome;
+  }
+  const backupRef = record2.backupRef;
+  let backupOid = await readDirectRef(repoRoot, backupRef);
+  if (backupOid !== null && backupOid !== candidateOid) {
+    throw new RuntimeError("candidate prune backup moved during recovery");
+  }
+  if (action === "finish") {
+    if (anchorOid !== null && backupOid === null) {
+      await createExactRef(repoRoot, backupRef, candidateOid);
+      backupOid = candidateOid;
+    }
+    if (anchorOid !== null) {
+      await deleteExactRef(repoRoot, anchorRef, candidateOid);
+      anchorOid = null;
+    }
+    return outcome;
+  }
+  if (anchorOid === null) {
+    if (backupOid === null) {
+      throw new RuntimeError("cannot restore candidate anchor without its prune backup");
+    }
+    await createExactRef(repoRoot, anchorRef, candidateOid);
+    anchorOid = candidateOid;
+  }
+  if (backupOid !== null) await deleteExactRef(repoRoot, backupRef, candidateOid);
+  return outcome;
+}
+async function commitCleanupRefs(record2) {
+  if (cleanupOutcome(record2) !== "deleted") return;
+  const repoRoot = await validateRepositoryRoot(record2.repoRoot);
+  const backupOid = await readDirectRef(repoRoot, record2.backupRef);
+  if (backupOid === null) return;
+  if (backupOid !== record2.candidateCommitOid) {
+    throw new RuntimeError("candidate prune backup moved before cleanup commit");
+  }
+  await deleteExactRef(repoRoot, record2.backupRef, backupOid);
+}
+async function readPendingCleanupRecords(runsRoot) {
+  const { text, tornTail } = await readCleanupJournal(path35.join(runsRoot, "cleanup.ndjson"));
+  const pending = /* @__PURE__ */ new Map();
+  if (text === null || text === "") return { pending, tornTail };
+  const completeText = text.endsWith("\n") ? text.slice(0, -1) : text;
+  for (const line of completeText.split("\n")) {
+    if (line.trim() === "") throw new RuntimeError("cleanup journal contains a blank record");
+    const record2 = parseCleanupRecord(line);
+    if (record2.event === "prune-cleanup-intent") pending.set(record2.runId, record2);
+    else pending.delete(record2.runId);
+  }
+  return { pending, tornTail };
+}
+async function truncateCleanupTornTail(filename) {
+  let handle;
+  try {
+    handle = await open16(filename, constants16.O_RDWR | NO_FOLLOW8);
+  } catch (error51) {
+    if (isMissing(error51)) return;
+    throw error51;
+  }
+  try {
+    const metadata = await handle.stat({ bigint: true });
+    const namedMetadata = await lstat19(filename, { bigint: true });
+    if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || namedMetadata.size !== metadata.size) {
+      throw new RuntimeError("cleanup journal must be a bounded regular single-link file");
+    }
+    const bytes = await readHandleBytes3(handle, Number(metadata.size));
+    const text = bytes.toString("utf8");
+    if (text === "" || text.endsWith("\n")) return;
+    const settled = await handle.stat({ bigint: true });
+    const settledNamed = await lstat19(filename, { bigint: true });
+    if (BigInt(bytes.byteLength) !== metadata.size || !settled.isFile() || settled.nlink !== 1n || settled.size !== metadata.size || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs || settled.mtimeNs !== metadata.mtimeNs || settled.ctimeNs !== metadata.ctimeNs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.nlink !== 1n || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino || settledNamed.birthtimeNs !== metadata.birthtimeNs || settledNamed.size !== metadata.size) {
+      throw new RuntimeError("cleanup journal changed during torn-tail repair");
+    }
+    const finalNewline = text.lastIndexOf("\n");
+    const completePrefix = finalNewline === -1 ? "" : text.slice(0, finalNewline + 1);
+    await handle.truncate(Buffer.byteLength(completePrefix, "utf8"));
+    await handle.sync();
+  } finally {
+    await handle?.close();
+  }
+}
+async function repositoryRootExists(repoRoot) {
+  if (!path35.isAbsolute(repoRoot)) return true;
+  try {
+    await realpath15(repoRoot);
+    return true;
+  } catch (error51) {
+    if (isMissing(error51)) return false;
+    throw error51;
+  }
+}
+async function reconcileRepoAbsentPrune(runsRoot, record2, platformServices) {
+  const runDirectory = path35.join(runsRoot, record2.runId);
+  const quarantinePath = path35.join(runsRoot, record2.quarantineName);
+  const runIdentity = await plainDirectoryIdentity2(runDirectory);
+  const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
+  if (runIdentity !== null && quarantineIdentity !== null) {
+    throw new RuntimeError("both retained and quarantined run archives exist during recovery");
+  }
+  const action = runIdentity !== null ? "rollback" : "finish";
+  if (action === "finish" && quarantineIdentity !== null) {
+    await removePlainDirectory(quarantinePath, quarantineIdentity, platformServices);
+  }
+  await appendCleanupRecord(runsRoot, {
+    ...record2,
+    event: action === "finish" ? "prune-cleanup-complete" : "prune-cleanup-rollback",
+    anchorCleanup: "already-absent",
+    recordedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+}
+async function replayInterruptedPrunes(runsRoot, ps) {
+  let pending;
+  const journalLock = await getPlatformServices().acquireCleanupJournalLock();
+  try {
+    const read = await readPendingCleanupRecords(runsRoot);
+    if (read.tornTail) await truncateCleanupTornTail(path35.join(runsRoot, "cleanup.ndjson"));
+    pending = read.pending;
+  } finally {
+    await journalLock.release();
+  }
+  for (const record2 of [...pending.values()].sort((left, right) => left.runId.localeCompare(right.runId))) {
+    if (record2.repoRoot === null) continue;
+    if (!await repositoryRootExists(record2.repoRoot)) {
+      await reconcileRepoAbsentPrune(runsRoot, record2, ps);
+      continue;
+    }
+    const repoRoot = await validateRepositoryRoot(record2.repoRoot);
+    const commonResult = await git(repoRoot, [
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-common-dir"
+    ]);
+    if (commonResult.exitCode !== 0) {
+      throw runGitError("resolve cleanup repository identity", commonResult);
+    }
+    const repositoryIdentity = await realpath15(gitPathOutput(
+      commonResult.stdout,
+      "cleanup repository identity"
+    ));
+    await platformSafety.withRecoveryLease(repoRoot, async (lease) => {
+      if (lease.repositoryIdentity !== repositoryIdentity) {
+        throw new RuntimeError("checkout lease repository identity changed during prune recovery");
+      }
+      const runDirectory = path35.join(runsRoot, record2.runId);
+      const quarantinePath = path35.join(runsRoot, record2.quarantineName);
+      const runIdentity = await plainDirectoryIdentity2(runDirectory);
+      const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
+      if (runIdentity !== null && quarantineIdentity !== null) {
+        throw new RuntimeError("both retained and quarantined run archives exist during recovery");
+      }
+      const action = runIdentity !== null ? "rollback" : "finish";
+      const outcome = await reconcileCleanupRefs(record2, action);
+      if (action === "finish") {
+        if (quarantineIdentity !== null) {
+          await removePlainDirectory(quarantinePath, quarantineIdentity, ps);
+        }
+        await commitCleanupRefs(record2);
+      }
+      await appendCleanupRecord(runsRoot, {
+        ...record2,
+        event: action === "finish" ? "prune-cleanup-complete" : "prune-cleanup-rollback",
+        anchorCleanup: outcome,
+        recordedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    });
+  }
+}
+
+// src/runtime/recovery-quarantine.ts
+import { randomUUID as randomUUID12 } from "node:crypto";
+import { constants as constants17 } from "node:fs";
+import { lstat as lstat20, link as link6, open as open17, rename as rename7 } from "node:fs/promises";
+import path36 from "node:path";
 function boundedQuarantineReason(error51) {
   return boundedRedactedDiagnostic(error51, MAX_QUARANTINE_REASON_BYTES);
 }
@@ -56184,14 +55395,14 @@ async function readRecoveryQuarantineJournal(runsRoot) {
   if (rootIdentity === null) {
     throw new RuntimeError("recovery quarantine journal root disappeared");
   }
-  const filename = path33.join(runsRoot, "recovery-quarantine.ndjson");
+  const filename = path36.join(runsRoot, "recovery-quarantine.ndjson");
   let expectedMetadata;
   try {
-    expectedMetadata = await lstat18(filename, { bigint: true });
+    expectedMetadata = await lstat20(filename, { bigint: true });
   } catch (error51) {
-    if (!isMissing4(error51)) throw error51;
-    const currentRoot = await lstat18(runsRoot, { bigint: true });
-    if (!isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, rootIdentity)) {
+    if (!isMissing(error51)) throw error51;
+    const currentRoot = await lstat20(runsRoot, { bigint: true });
+    if (!isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, rootIdentity)) {
       throw new RuntimeError("recovery quarantine journal root changed during missing read");
     }
     return {
@@ -56206,15 +55417,15 @@ async function readRecoveryQuarantineJournal(runsRoot) {
   }
   let handle;
   try {
-    handle = await open14(filename, constants14.O_RDONLY | NO_FOLLOW8);
+    handle = await open17(filename, constants17.O_RDONLY | NO_FOLLOW8);
   } catch (error51) {
-    if (!isMissing4(error51)) throw error51;
+    if (!isMissing(error51)) throw error51;
     try {
-      await lstat18(filename);
+      await lstat20(filename);
     } catch (namedError) {
-      if (isMissing4(namedError)) {
-        const currentRoot = await lstat18(runsRoot, { bigint: true });
-        if (isPlainDirectory3(currentRoot) && sameIdentity5(currentRoot, rootIdentity)) {
+      if (isMissing(namedError)) {
+        const currentRoot = await lstat20(runsRoot, { bigint: true });
+        if (isPlainDirectory3(currentRoot) && sameDirectoryIdentity(currentRoot, rootIdentity)) {
           return {
             bytes: Buffer.alloc(0),
             runIds: /* @__PURE__ */ new Set(),
@@ -56231,9 +55442,9 @@ async function readRecoveryQuarantineJournal(runsRoot) {
   let primaryError;
   try {
     const metadata = await handle.stat({ bigint: true });
-    const namedMetadata = await lstat18(filename, { bigint: true });
-    const currentRoot = await lstat18(runsRoot, { bigint: true });
-    if (!metadata.isFile() || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || metadata.size !== expectedMetadata.size || metadata.nlink !== 1n || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.size !== metadata.size || namedMetadata.dev !== expectedMetadata.dev || namedMetadata.ino !== expectedMetadata.ino || namedMetadata.birthtimeNs !== expectedMetadata.birthtimeNs || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || !isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, rootIdentity)) {
+    const namedMetadata = await lstat20(filename, { bigint: true });
+    const currentRoot = await lstat20(runsRoot, { bigint: true });
+    if (!metadata.isFile() || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || metadata.size !== expectedMetadata.size || metadata.nlink !== 1n || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.size !== metadata.size || namedMetadata.dev !== expectedMetadata.dev || namedMetadata.ino !== expectedMetadata.ino || namedMetadata.birthtimeNs !== expectedMetadata.birthtimeNs || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, rootIdentity)) {
       throw new RuntimeError("recovery quarantine journal changed during read");
     }
     journalIdentity = {
@@ -56243,9 +55454,9 @@ async function readRecoveryQuarantineJournal(runsRoot) {
     };
     bytes = await readHandleBytes3(handle, Number(metadata.size));
     const settledHandle = await handle.stat({ bigint: true });
-    const settledMetadata = await lstat18(filename, { bigint: true });
-    const settledRoot = await lstat18(runsRoot, { bigint: true });
-    if (!settledHandle.isFile() || settledHandle.nlink !== 1n || settledHandle.size !== metadata.size || settledHandle.dev !== metadata.dev || settledHandle.ino !== metadata.ino || settledHandle.birthtimeNs !== metadata.birthtimeNs || settledHandle.mtimeNs !== metadata.mtimeNs || settledHandle.ctimeNs !== metadata.ctimeNs || !settledMetadata.isFile() || settledMetadata.isSymbolicLink() || settledMetadata.nlink !== 1n || settledMetadata.size !== BigInt(bytes.byteLength) || settledMetadata.dev !== metadata.dev || settledMetadata.ino !== metadata.ino || settledMetadata.birthtimeNs !== metadata.birthtimeNs || settledMetadata.mtimeNs !== metadata.mtimeNs || settledMetadata.ctimeNs !== metadata.ctimeNs || !isPlainDirectory3(settledRoot) || !sameIdentity5(settledRoot, rootIdentity)) {
+    const settledMetadata = await lstat20(filename, { bigint: true });
+    const settledRoot = await lstat20(runsRoot, { bigint: true });
+    if (!settledHandle.isFile() || settledHandle.nlink !== 1n || settledHandle.size !== metadata.size || settledHandle.dev !== metadata.dev || settledHandle.ino !== metadata.ino || settledHandle.birthtimeNs !== metadata.birthtimeNs || settledHandle.mtimeNs !== metadata.mtimeNs || settledHandle.ctimeNs !== metadata.ctimeNs || !settledMetadata.isFile() || settledMetadata.isSymbolicLink() || settledMetadata.nlink !== 1n || settledMetadata.size !== BigInt(bytes.byteLength) || settledMetadata.dev !== metadata.dev || settledMetadata.ino !== metadata.ino || settledMetadata.birthtimeNs !== metadata.birthtimeNs || settledMetadata.mtimeNs !== metadata.mtimeNs || settledMetadata.ctimeNs !== metadata.ctimeNs || !isPlainDirectory3(settledRoot) || !sameDirectoryIdentity(settledRoot, rootIdentity)) {
       throw new RuntimeError("recovery quarantine journal changed after read");
     }
   } catch (error51) {
@@ -56277,9 +55488,9 @@ async function syncRecoveryDirectory(directory) {
   await syncDirectoryMetadata(directory);
 }
 async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, nextBytes) {
-  const temporaryPath = path33.join(
+  const temporaryPath = path36.join(
     runsRoot,
-    `.recovery-quarantine-journal-${randomUUID13()}.tmp`
+    `.recovery-quarantine-journal-${randomUUID12()}.tmp`
   );
   let handle;
   let temporaryCreated = false;
@@ -56288,9 +55499,9 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
   let temporaryIdentity;
   let primaryError;
   try {
-    handle = await open14(
+    handle = await open17(
       temporaryPath,
-      constants14.O_RDWR | constants14.O_CREAT | constants14.O_EXCL | NO_FOLLOW8,
+      constants17.O_RDWR | constants17.O_CREAT | constants17.O_EXCL | NO_FOLLOW8,
       384
     );
     temporaryCreated = true;
@@ -56300,9 +55511,9 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
       ino: metadata.ino,
       birthtimeNs: metadata.birthtimeNs
     };
-    const namedMetadata = await lstat18(temporaryPath, { bigint: true });
-    const currentRoot = await lstat18(runsRoot, { bigint: true });
-    if (!metadata.isFile() || metadata.nlink !== 1n || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || !isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, snapshot.rootIdentity)) {
+    const namedMetadata = await lstat20(temporaryPath, { bigint: true });
+    const currentRoot = await lstat20(runsRoot, { bigint: true });
+    if (!metadata.isFile() || metadata.nlink !== 1n || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, snapshot.rootIdentity)) {
       throw new RuntimeError("recovery quarantine journal temp changed during creation");
     }
     await handle.writeFile(nextBytes);
@@ -56351,7 +55562,7 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
         throw new RuntimeError("recovery quarantine journal changed before publication");
       }
       if (snapshot.journalIdentity === null) {
-        await link8(temporaryPath, filename);
+        await link6(temporaryPath, filename);
         linkedPublication = true;
         await validatePublishedLock(
           temporaryPath,
@@ -56422,7 +55633,7 @@ async function appendRecoveryQuarantineRecord(runsRoot, record2) {
   if (lineBytes > MAX_QUARANTINE_RECORD_BYTES) {
     throw new RuntimeError("recovery quarantine record exceeds its size limit");
   }
-  const filename = path33.join(runsRoot, "recovery-quarantine.ndjson");
+  const filename = path36.join(runsRoot, "recovery-quarantine.ndjson");
   const snapshot = await readRecoveryQuarantineJournal(runsRoot);
   if (snapshot.runIds.has(record2.runId)) {
     await syncRecoveryDirectory(runsRoot);
@@ -56439,8 +55650,8 @@ async function appendRecoveryQuarantineRecord(runsRoot, record2) {
   await publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, nextBytes);
 }
 async function quarantineRun(runsRoot, runId, error51) {
-  const runDirectory = path33.join(runsRoot, runId);
-  const quarantinePath = path33.join(runsRoot, `.poisoned-${runId}`);
+  const runDirectory = path36.join(runsRoot, runId);
+  const quarantinePath = path36.join(runsRoot, `.poisoned-${runId}`);
   const runsIdentity = await plainDirectoryIdentity2(runsRoot);
   if (runsIdentity === null) throw new RuntimeError("recovery runs root disappeared");
   let runIdentity = null;
@@ -56455,8 +55666,8 @@ async function quarantineRun(runsRoot, runId, error51) {
     await rename7(runDirectory, quarantinePath);
     renamed = true;
     const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
-    const currentRoot = await lstat18(runsRoot, { bigint: true });
-    if (quarantineIdentity === null || quarantineIdentity.dev !== runIdentity.dev || quarantineIdentity.ino !== runIdentity.ino || quarantineIdentity.birthtimeNs !== runIdentity.birthtimeNs || !isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, runsIdentity)) {
+    const currentRoot = await lstat20(runsRoot, { bigint: true });
+    if (quarantineIdentity === null || quarantineIdentity.dev !== runIdentity.dev || quarantineIdentity.ino !== runIdentity.ino || quarantineIdentity.birthtimeNs !== runIdentity.birthtimeNs || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
       throw new RuntimeError("poisoned recovery run identity changed during quarantine");
     }
     const record2 = {
@@ -56475,21 +55686,21 @@ async function quarantineRun(runsRoot, runId, error51) {
     const errors = [error51, quarantineError];
     if (renamed && !journaled && runIdentity !== null) {
       try {
-        const quarantineMetadata = await lstat18(quarantinePath, { bigint: true });
-        const currentRoot = await lstat18(runsRoot, { bigint: true });
-        if (!isPlainDirectory3(quarantineMetadata) || !sameIdentity5(quarantineMetadata, runIdentity) || await plainDirectoryIdentity2(runDirectory) !== null || !isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, runsIdentity)) {
+        const quarantineMetadata = await lstat20(quarantinePath, { bigint: true });
+        const currentRoot = await lstat20(runsRoot, { bigint: true });
+        if (!isPlainDirectory3(quarantineMetadata) || !sameDirectoryIdentity(quarantineMetadata, runIdentity) || await plainDirectoryIdentity2(runDirectory) !== null || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
           throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
         }
         await rename7(quarantinePath, runDirectory);
-        const restoredMetadata = await lstat18(runDirectory, { bigint: true });
-        const restoredRoot = await lstat18(runsRoot, { bigint: true });
-        if (!isPlainDirectory3(restoredMetadata) || !sameIdentity5(restoredMetadata, runIdentity) || !isPlainDirectory3(restoredRoot) || !sameIdentity5(restoredRoot, runsIdentity)) {
+        const restoredMetadata = await lstat20(runDirectory, { bigint: true });
+        const restoredRoot = await lstat20(runsRoot, { bigint: true });
+        if (!isPlainDirectory3(restoredMetadata) || !sameDirectoryIdentity(restoredMetadata, runIdentity) || !isPlainDirectory3(restoredRoot) || !sameDirectoryIdentity(restoredRoot, runsIdentity)) {
           throw new RuntimeError("poisoned recovery rollback identity changed");
         }
         await syncRecoveryDirectory(runsRoot);
-        const settledMetadata = await lstat18(runDirectory, { bigint: true });
-        const settledRoot = await lstat18(runsRoot, { bigint: true });
-        if (!isPlainDirectory3(settledMetadata) || !sameIdentity5(settledMetadata, runIdentity) || !isPlainDirectory3(settledRoot) || !sameIdentity5(settledRoot, runsIdentity)) {
+        const settledMetadata = await lstat20(runDirectory, { bigint: true });
+        const settledRoot = await lstat20(runsRoot, { bigint: true });
+        if (!isPlainDirectory3(settledMetadata) || !sameDirectoryIdentity(settledMetadata, runIdentity) || !isPlainDirectory3(settledRoot) || !sameDirectoryIdentity(settledRoot, runsIdentity)) {
           throw new RuntimeError("poisoned recovery rollback changed after directory sync");
         }
       } catch (rollbackError) {
@@ -56499,242 +55710,88 @@ async function quarantineRun(runsRoot, runId, error51) {
     throw new AggregateError(errors, "run recovery failed and quarantine did not complete");
   }
 }
-async function removePlainDirectory(directory, expected, platformServices) {
-  const metadata = await lstat18(directory, { bigint: true });
-  if (!isPlainDirectory3(metadata) || !sameIdentity5(metadata, expected)) {
-    throw new RuntimeError("recovery directory identity changed before removal");
-  }
-  await emptyBoundDirectory(directory, expected, platformServices);
-  await removeBoundEmptyDirectory(directory, expected, platformServices);
+
+// src/runtime/recovery-runs.ts
+import { lstat as lstat21, readdir as readdir9, realpath as realpath16 } from "node:fs/promises";
+import path37 from "node:path";
+async function removeStaleCandidateAnchor(repoRoot, runId) {
+  const ref = `${CANDIDATE_REF_PREFIX3}${runId}`;
+  const oid = await readDirectRef(repoRoot, ref);
+  if (oid !== null) await deleteExactRef(repoRoot, ref, oid);
 }
-async function createExactRef(repoRoot, ref, oid) {
-  const result = await git(repoRoot, [
-    "update-ref",
-    "--no-deref",
-    ref,
-    oid,
-    "0".repeat(oid.length)
+async function archiveInterruptedPipeline(store, result) {
+  if (result.status !== "verified-candidate") return;
+  const manifest = await store.readManifest();
+  if (manifest === null) {
+    throw new RuntimeError("run manifest is missing while recovering interrupted pipeline");
+  }
+  const failed = {
+    ...result,
+    status: "failed",
+    failure: "verification-failure",
+    summary: "Delegation pipeline was interrupted before trusted gates completed.",
+    unresolvedIssues: [
+      ...result.unresolvedIssues,
+      "pipeline-interrupted-before-terminal-cleanup"
+    ],
+    evidence: {
+      ...result.evidence,
+      pipelineRecovery: "interrupted-before-terminal-cleanup"
+    }
+  };
+  await store.promoteTerminalArtifacts({ result: failed, manifest });
+}
+function escapeRegex3(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+async function temporarySliceRefs(repoRoot, runId, runGit) {
+  const prefix = `${SLICE_REF_PREFIX}${runId}/`;
+  const listed = await runGit(repoRoot, [
+    "for-each-ref",
+    "--format=%(refname)%09%(objectname)",
+    prefix
   ]);
-  if (result.exitCode !== 0) throw runGitError("create recovery Git ref", result);
-}
-async function appendCleanupRecord(runsRoot, record2) {
-  const journalLock = await getPlatformServices().acquireCleanupJournalLock();
-  try {
-    const identity = await plainDirectoryIdentity2(runsRoot);
-    if (identity === null) throw new RuntimeError("cleanup journal root disappeared");
-    const filename = path33.join(runsRoot, "cleanup.ndjson");
-    const handle = await open14(
-      filename,
-      constants14.O_WRONLY | constants14.O_CREAT | constants14.O_APPEND | NO_FOLLOW8,
-      384
-    );
-    try {
-      const metadata = await handle.stat();
-      const currentRoot2 = await lstat18(runsRoot, { bigint: true });
-      if (!metadata.isFile() || !isPlainDirectory3(currentRoot2) || !sameIdentity5(currentRoot2, identity)) {
-        throw new RuntimeError("cleanup journal identity changed during recovery");
-      }
-      await handle.writeFile(`${JSON.stringify(record2)}
-`, "utf8");
-      await handle.sync();
-    } finally {
-      await handle.close();
+  if (listed.exitCode !== 0) throw runGitError("enumerate temporary slice refs", listed);
+  const expectedName = new RegExp(
+    `^${escapeRegex3(prefix)}slice-[1-9][0-9]*-attempt-(?:0|[1-9][0-9]*)$`
+  );
+  const refs = [];
+  for (const line of listed.stdout.split("\n").filter(Boolean)) {
+    const fields = line.split("	");
+    if (fields.length !== 2 || fields[0] === void 0 || !expectedName.test(fields[0])) {
+      throw new RuntimeError("temporary slice ref name is malformed during recovery");
     }
-    const currentRoot = await lstat18(runsRoot, { bigint: true });
-    if (!isPlainDirectory3(currentRoot) || !sameIdentity5(currentRoot, identity)) {
-      throw new RuntimeError("cleanup journal root changed after recovery append");
+    if (fields[1] === void 0 || !OID2.test(fields[1])) {
+      throw new RuntimeError("temporary slice ref OID is malformed during recovery");
     }
-  } finally {
-    await journalLock.release();
-  }
-}
-async function reconcileCleanupRefs(record2, action) {
-  const outcome = cleanupOutcome(record2);
-  if (outcome === "not-applicable") return outcome;
-  const repoRoot = await validateRepositoryRoot(record2.repoRoot);
-  const anchorRef = record2.anchorRef;
-  const candidateOid = record2.candidateCommitOid;
-  let anchorOid = await readDirectRef(repoRoot, anchorRef);
-  if (anchorOid !== null && anchorOid !== candidateOid) {
-    throw new RuntimeError("candidate anchor moved during interrupted prune recovery");
-  }
-  if (outcome === "already-absent") {
-    if (anchorOid !== null) {
-      throw new RuntimeError("candidate anchor unexpectedly reappeared during prune recovery");
-    }
-    return outcome;
-  }
-  const backupRef = record2.backupRef;
-  let backupOid = await readDirectRef(repoRoot, backupRef);
-  if (backupOid !== null && backupOid !== candidateOid) {
-    throw new RuntimeError("candidate prune backup moved during recovery");
-  }
-  if (action === "finish") {
-    if (anchorOid !== null && backupOid === null) {
-      await createExactRef(repoRoot, backupRef, candidateOid);
-      backupOid = candidateOid;
-    }
-    if (anchorOid !== null) {
-      await deleteExactRef(repoRoot, anchorRef, candidateOid);
-      anchorOid = null;
-    }
-    return outcome;
-  }
-  if (anchorOid === null) {
-    if (backupOid === null) {
-      throw new RuntimeError("cannot restore candidate anchor without its prune backup");
-    }
-    await createExactRef(repoRoot, anchorRef, candidateOid);
-    anchorOid = candidateOid;
-  }
-  if (backupOid !== null) await deleteExactRef(repoRoot, backupRef, candidateOid);
-  return outcome;
-}
-async function commitCleanupRefs(record2) {
-  if (cleanupOutcome(record2) !== "deleted") return;
-  const repoRoot = await validateRepositoryRoot(record2.repoRoot);
-  const backupOid = await readDirectRef(repoRoot, record2.backupRef);
-  if (backupOid === null) return;
-  if (backupOid !== record2.candidateCommitOid) {
-    throw new RuntimeError("candidate prune backup moved before cleanup commit");
-  }
-  await deleteExactRef(repoRoot, record2.backupRef, backupOid);
-}
-async function readPendingCleanupRecords(runsRoot) {
-  const { text, tornTail } = await readCleanupJournal(path33.join(runsRoot, "cleanup.ndjson"));
-  const pending = /* @__PURE__ */ new Map();
-  if (text === null || text === "") return { pending, tornTail };
-  const completeText = text.endsWith("\n") ? text.slice(0, -1) : text;
-  for (const line of completeText.split("\n")) {
-    if (line.trim() === "") throw new RuntimeError("cleanup journal contains a blank record");
-    const record2 = parseCleanupRecord(line);
-    if (record2.event === "prune-cleanup-intent") pending.set(record2.runId, record2);
-    else pending.delete(record2.runId);
-  }
-  return { pending, tornTail };
-}
-async function truncateCleanupTornTail(filename) {
-  let handle;
-  try {
-    handle = await open14(filename, constants14.O_RDWR | NO_FOLLOW8);
-  } catch (error51) {
-    if (isMissing4(error51)) return;
-    throw error51;
-  }
-  try {
-    const metadata = await handle.stat({ bigint: true });
-    const namedMetadata = await lstat18(filename, { bigint: true });
-    if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || namedMetadata.size !== metadata.size) {
-      throw new RuntimeError("cleanup journal must be a bounded regular single-link file");
-    }
-    const bytes = await readHandleBytes3(handle, Number(metadata.size));
-    const text = bytes.toString("utf8");
-    if (text === "" || text.endsWith("\n")) return;
-    const settled = await handle.stat({ bigint: true });
-    const settledNamed = await lstat18(filename, { bigint: true });
-    if (BigInt(bytes.byteLength) !== metadata.size || !settled.isFile() || settled.nlink !== 1n || settled.size !== metadata.size || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs || settled.mtimeNs !== metadata.mtimeNs || settled.ctimeNs !== metadata.ctimeNs || !settledNamed.isFile() || settledNamed.isSymbolicLink() || settledNamed.nlink !== 1n || settledNamed.dev !== metadata.dev || settledNamed.ino !== metadata.ino || settledNamed.birthtimeNs !== metadata.birthtimeNs || settledNamed.size !== metadata.size) {
-      throw new RuntimeError("cleanup journal changed during torn-tail repair");
-    }
-    const finalNewline = text.lastIndexOf("\n");
-    const completePrefix = finalNewline === -1 ? "" : text.slice(0, finalNewline + 1);
-    await handle.truncate(Buffer.byteLength(completePrefix, "utf8"));
-    await handle.sync();
-  } finally {
-    await handle?.close();
-  }
-}
-async function repositoryRootExists(repoRoot) {
-  if (!path33.isAbsolute(repoRoot)) return true;
-  try {
-    await realpath13(repoRoot);
-    return true;
-  } catch (error51) {
-    if (isMissing4(error51)) return false;
-    throw error51;
-  }
-}
-async function reconcileRepoAbsentPrune(runsRoot, record2, platformServices) {
-  const runDirectory = path33.join(runsRoot, record2.runId);
-  const quarantinePath = path33.join(runsRoot, record2.quarantineName);
-  const runIdentity = await plainDirectoryIdentity2(runDirectory);
-  const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
-  if (runIdentity !== null && quarantineIdentity !== null) {
-    throw new RuntimeError("both retained and quarantined run archives exist during recovery");
-  }
-  const action = runIdentity !== null ? "rollback" : "finish";
-  if (action === "finish" && quarantineIdentity !== null) {
-    await removePlainDirectory(quarantinePath, quarantineIdentity, platformServices);
-  }
-  await appendCleanupRecord(runsRoot, {
-    ...record2,
-    event: action === "finish" ? "prune-cleanup-complete" : "prune-cleanup-rollback",
-    anchorCleanup: "already-absent",
-    recordedAt: (/* @__PURE__ */ new Date()).toISOString()
-  });
-}
-async function replayInterruptedPrunes(runsRoot, ps) {
-  let pending;
-  const journalLock = await getPlatformServices().acquireCleanupJournalLock();
-  try {
-    const read = await readPendingCleanupRecords(runsRoot);
-    if (read.tornTail) await truncateCleanupTornTail(path33.join(runsRoot, "cleanup.ndjson"));
-    pending = read.pending;
-  } finally {
-    await journalLock.release();
-  }
-  for (const record2 of [...pending.values()].sort((left, right) => left.runId.localeCompare(right.runId))) {
-    if (record2.repoRoot === null) continue;
-    if (!await repositoryRootExists(record2.repoRoot)) {
-      await reconcileRepoAbsentPrune(runsRoot, record2, ps);
-      continue;
-    }
-    const repoRoot = await validateRepositoryRoot(record2.repoRoot);
-    const commonResult = await git(repoRoot, [
-      "rev-parse",
-      "--path-format=absolute",
-      "--git-common-dir"
-    ]);
-    if (commonResult.exitCode !== 0) {
-      throw runGitError("resolve cleanup repository identity", commonResult);
-    }
-    const repositoryIdentity = await realpath13(gitPathOutput(
-      commonResult.stdout,
-      "cleanup repository identity"
-    ));
-    await platformSafety.withRecoveryLease(repoRoot, async (lease) => {
-      if (lease.repositoryIdentity !== repositoryIdentity) {
-        throw new RuntimeError("checkout lease repository identity changed during prune recovery");
-      }
-      const runDirectory = path33.join(runsRoot, record2.runId);
-      const quarantinePath = path33.join(runsRoot, record2.quarantineName);
-      const runIdentity = await plainDirectoryIdentity2(runDirectory);
-      const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
-      if (runIdentity !== null && quarantineIdentity !== null) {
-        throw new RuntimeError("both retained and quarantined run archives exist during recovery");
-      }
-      const action = runIdentity !== null ? "rollback" : "finish";
-      const outcome = await reconcileCleanupRefs(record2, action);
-      if (action === "finish") {
-        if (quarantineIdentity !== null) {
-          await removePlainDirectory(quarantinePath, quarantineIdentity, ps);
-        }
-        await commitCleanupRefs(record2);
-      }
-      await appendCleanupRecord(runsRoot, {
-        ...record2,
-        event: action === "finish" ? "prune-cleanup-complete" : "prune-cleanup-rollback",
-        anchorCleanup: outcome,
-        recordedAt: (/* @__PURE__ */ new Date()).toISOString()
-      });
+    const object3 = await runGit(repoRoot, ["cat-file", "-t", fields[1]], {
+      env: { GIT_NO_REPLACE_OBJECTS: "1" }
     });
+    if (object3.exitCode !== 0 || object3.stdout.trim() !== "commit") {
+      throw new RuntimeError("temporary slice ref does not identify a commit during recovery");
+    }
+    refs.push({ ref: fields[0], oid: fields[1] });
+  }
+  for (const temporaryRef of refs) {
+    const current = await readDirectRef(repoRoot, temporaryRef.ref, runGit);
+    if (current !== temporaryRef.oid) {
+      throw new RuntimeError("temporary slice ref moved during recovery");
+    }
+  }
+  return refs;
+}
+async function cleanupTemporarySliceRefs2(repoRoot, runId, runGit) {
+  const refs = await temporarySliceRefs(repoRoot, runId, runGit);
+  for (const temporaryRef of refs) {
+    await deleteExactRef(repoRoot, temporaryRef.ref, temporaryRef.oid, runGit);
   }
 }
 async function managedWorktreeMarkerIsPresent(worktreePath) {
   let marker;
   try {
-    marker = await lstat18(path33.join(worktreePath, ".git"), { bigint: true });
+    marker = await lstat21(path37.join(worktreePath, ".git"), { bigint: true });
   } catch (error51) {
-    if (isMissing4(error51)) return false;
+    if (isMissing(error51)) return false;
     throw error51;
   }
   if (!marker.isFile() || marker.isSymbolicLink() || marker.nlink !== 1n) {
@@ -56764,7 +55821,7 @@ async function removeManagedWorktreeUnderLease(commonDir, worktreePath, expected
       resolved.stdout,
       "managed worktree common directory"
     );
-    if (!path33.isAbsolute(reportedCommonDir) || await realpath13(reportedCommonDir) !== commonDir) {
+    if (!path37.isAbsolute(reportedCommonDir) || await realpath16(reportedCommonDir) !== commonDir) {
       throw new RuntimeError("managed worktree belongs to a different repository");
     }
   }
@@ -56793,14 +55850,26 @@ function mostSpecificKnownRunClaim(knownRunIds, managedId) {
   }
   return owner;
 }
-async function cleanupRunWorktreesUnderLease(root, commonDir, runId, runGit, knownRunIds) {
-  const worktreesRoot = path33.join(root, "worktrees");
-  const worktreesIdentity = await plainDirectoryIdentity2(worktreesRoot);
-  if (worktreesIdentity !== null) {
-    const entries = await readdir8(worktreesRoot, { withFileTypes: true });
+async function canonicalManagedRoots() {
+  const { roots } = await managedWorktreeRoots();
+  const canonical = [];
+  for (const root of roots) {
+    try {
+      canonical.push(await canonicalizeWorktreePath(root, true));
+    } catch (error51) {
+      if (!isMissing(error51)) throw error51;
+    }
+  }
+  return canonical;
+}
+async function cleanupRunWorktreesUnderLease(commonDir, runId, runGit, knownRunIds) {
+  const managedRoots = await canonicalManagedRoots();
+  for (const worktreesRoot of managedRoots) {
+    if (await plainDirectoryIdentity2(worktreesRoot) === null) continue;
+    const entries = await readdir9(worktreesRoot, { withFileTypes: true });
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (!entry.isDirectory() || entry.isSymbolicLink() || !runClaimsWorktree(runId, entry.name) || mostSpecificKnownRunClaim(knownRunIds, entry.name) !== runId) continue;
-      const worktreePath = path33.join(worktreesRoot, entry.name);
+      const worktreePath = path37.join(worktreesRoot, entry.name);
       const identity = await managedWorktreeDirectoryIdentity(worktreePath);
       if (identity !== null) {
         await removeManagedWorktreeUnderLease(commonDir, worktreePath, identity, runGit);
@@ -56811,23 +55880,16 @@ async function cleanupRunWorktreesUnderLease(root, commonDir, runId, runGit, kno
   if (listed.exitCode !== 0 || listed.truncated?.stdout === true || listed.truncated?.stderr === true) {
     throw runGitError("enumerate missing run worktree registrations", listed);
   }
-  const canonicalWorktreesRoot = worktreesIdentity === null ? path33.join(await realpath13(root), "worktrees") : await realpath13(worktreesRoot);
   for (const field of gitNulRecords(listed.stdout, "missing-run Git worktree list")) {
     if (!field.startsWith("worktree ")) continue;
-    const reportedWorktreePath = path33.resolve(field.slice("worktree ".length));
-    let worktreePath;
-    try {
-      worktreePath = await canonicalizeWorktreePath(reportedWorktreePath, true);
-    } catch (error51) {
-      if (!isMissing4(error51) || worktreesIdentity !== null) throw error51;
-      const reportedRoot = path33.dirname(reportedWorktreePath);
-      worktreePath = path33.join(
-        await realpath13(path33.dirname(reportedRoot)),
-        path33.basename(reportedRoot),
-        path33.basename(reportedWorktreePath)
-      );
-    }
-    if (!platformPathsEqual(path33.dirname(worktreePath), canonicalWorktreesRoot) || !runClaimsWorktree(runId, path33.basename(worktreePath)) || mostSpecificKnownRunClaim(knownRunIds, path33.basename(worktreePath)) !== runId || await managedWorktreeDirectoryIdentity(worktreePath) !== null) continue;
+    const worktreePath = await canonicalizeWorktreePath(
+      path37.resolve(field.slice("worktree ".length)),
+      true
+    ).catch((error51) => {
+      if (isMissing(error51)) return null;
+      throw error51;
+    });
+    if (worktreePath === null || !managedRoots.some((root) => platformPathsEqual(path37.dirname(worktreePath), root)) || !runClaimsWorktree(runId, path37.basename(worktreePath)) || mostSpecificKnownRunClaim(knownRunIds, path37.basename(worktreePath)) !== runId || await managedWorktreeDirectoryIdentity(worktreePath) !== null) continue;
     await removeMissingRegisteredWorktree(commonDir, worktreePath, { git: runGit });
   }
 }
@@ -56854,7 +55916,7 @@ async function recoverRun(record2, root, ps, isProcessAlive2, runGit = git, work
     "recovery",
     "startup recovery reclaimed unfinished run\n"
   );
-  await cleanupRunWorktreesUnderLease(root, commonDir, record2.runId, runGit, knownRunIds);
+  await cleanupRunWorktreesUnderLease(commonDir, record2.runId, runGit, knownRunIds);
   await cleanupTemporarySliceRefs2(commonDir, record2.runId, runGit);
   await removeStaleCandidateAnchor(commonDir, record2.runId);
   await store.writeResult({
@@ -56881,23 +55943,15 @@ async function recoverRun(record2, root, ps, isProcessAlive2, runGit = git, work
   });
   return "recovered";
 }
-async function readHandleBytes3(handle, size) {
-  const contents = Buffer.alloc(size);
-  let offset = 0;
-  while (offset < size) {
-    const { bytesRead } = await handle.read(
-      contents,
-      offset,
-      size - offset,
-      offset
-    );
-    if (bytesRead === 0) break;
-    offset += bytesRead;
-  }
-  return contents.subarray(0, offset);
+function runClaimsWorktree(runId, managedId) {
+  return managedId === runId || managedId.startsWith(`${runId}-`) || managedId === `baseline-${runId}` || managedId.startsWith(`baseline-${runId}-`) || managedId === `verify-${runId}` || managedId.startsWith(`verify-${runId}-`);
 }
+
+// src/runtime/recovery-worktree-removals.ts
+import { lstat as lstat22, readdir as readdir10, realpath as realpath17, rename as rename8 } from "node:fs/promises";
+import path38 from "node:path";
 async function assertRegistrationBacklink(registrationPath, expectedPhysicalPath) {
-  const backlink = await readStableRegularFile(path33.join(registrationPath, "gitdir"), 32768n);
+  const backlink = await readStableRegularFile(path38.join(registrationPath, "gitdir"), 32768n);
   if (backlink === null) {
     throw new RuntimeError("worktree registration backlink is absent or unstable");
   }
@@ -56905,11 +55959,11 @@ async function assertRegistrationBacklink(registrationPath, expectedPhysicalPath
     backlink.toString("utf8"),
     "worktree registration backlink"
   );
-  if (!path33.isAbsolute(reportedDotGit) || path33.basename(reportedDotGit) !== ".git") {
+  if (!path38.isAbsolute(reportedDotGit) || path38.basename(reportedDotGit) !== ".git") {
     throw new RuntimeError("worktree registration backlink is malformed");
   }
   const [reportedPhysicalPath, canonicalExpectedPhysicalPath] = await Promise.all([
-    canonicalizeWorktreePath(path33.dirname(reportedDotGit), true),
+    canonicalizeWorktreePath(path38.dirname(reportedDotGit), true),
     canonicalizeWorktreePath(expectedPhysicalPath, true)
   ]);
   if (!platformPathsEqual(reportedPhysicalPath, canonicalExpectedPhysicalPath)) {
@@ -56918,11 +55972,11 @@ async function assertRegistrationBacklink(registrationPath, expectedPhysicalPath
 }
 async function findCreationRegistration(registrationRoot, physicalPath) {
   const matches = [];
-  for (const entry of await readdir8(registrationRoot, { withFileTypes: true })) {
+  for (const entry of await readdir10(registrationRoot, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const registrationPath = path33.join(registrationRoot, entry.name);
+    const registrationPath = path38.join(registrationRoot, entry.name);
     const contents = await readStableRegularFile(
-      path33.join(registrationPath, "gitdir"),
+      path38.join(registrationPath, "gitdir"),
       32768n
     );
     if (contents === null) continue;
@@ -56932,7 +55986,7 @@ async function findCreationRegistration(registrationRoot, physicalPath) {
     } catch {
       continue;
     }
-    if (path33.isAbsolute(backlink) && path33.basename(backlink) === ".git" && platformPathsEqual(path33.resolve(path33.dirname(backlink)), physicalPath)) {
+    if (path38.isAbsolute(backlink) && path38.basename(backlink) === ".git" && platformPathsEqual(path38.resolve(path38.dirname(backlink)), physicalPath)) {
       matches.push(registrationPath);
     }
   }
@@ -56941,13 +55995,18 @@ async function findCreationRegistration(registrationRoot, physicalPath) {
   }
   return matches[0] ?? null;
 }
-async function findCreationPhysicalRoot(stateDirectory, expected) {
+async function findCreationPhysicalRoot(expectedRoot, expected) {
+  const identity = await managedWorktreeDirectoryIdentity(expectedRoot);
+  if (identity !== null && sameManagedIdentity(identity, expected)) return expectedRoot;
+  const stateDirectory = path38.dirname(expectedRoot);
   const matches = [];
-  for (const entry of await readdir8(stateDirectory, { withFileTypes: true })) {
+  for (const entry of await readdir10(stateDirectory, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const candidate = path33.join(stateDirectory, entry.name);
-    const identity = await managedWorktreeDirectoryIdentity(candidate);
-    if (identity !== null && sameManagedIdentity(identity, expected)) matches.push(candidate);
+    const candidate = path38.join(stateDirectory, entry.name);
+    const candidateIdentity = await managedWorktreeDirectoryIdentity(candidate);
+    if (candidateIdentity !== null && sameManagedIdentity(candidateIdentity, expected)) {
+      matches.push(candidate);
+    }
   }
   if (matches.length > 1) {
     throw new RuntimeError("worktree creation root identity is ambiguous");
@@ -56956,9 +56015,9 @@ async function findCreationPhysicalRoot(stateDirectory, expected) {
 }
 async function findManagedChildByIdentity(root, expected) {
   const matches = [];
-  for (const entry of await readdir8(root, { withFileTypes: true })) {
+  for (const entry of await readdir10(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const candidate = path33.join(root, entry.name);
+    const candidate = path38.join(root, entry.name);
     const identity = await managedWorktreeDirectoryIdentity(candidate);
     if (identity !== null && sameManagedIdentity(identity, expected)) matches.push(candidate);
   }
@@ -56967,17 +56026,20 @@ async function findManagedChildByIdentity(root, expected) {
   }
   return matches[0] ?? null;
 }
-async function recoverWorktreeCreationIntent(manifestPath, manifest, platformServices, syncDirectory4, temporaryPath, temporaryKind) {
+async function recoverWorktreeCreationIntent(manifestPath, manifest, platformServices, syncDirectory, temporaryPath, temporaryKind) {
   const root = await stateRoot();
   if (root === null) throw new RuntimeError("runtime state root is unavailable");
-  const expectedPhysicalRootPath = path33.join(root, "worktrees");
-  if (!path33.isAbsolute(manifest.physicalPath) || path33.resolve(manifest.physicalPath) !== manifest.physicalPath || !platformPathsEqual(path33.dirname(manifest.physicalPath), expectedPhysicalRootPath) || path33.basename(manifest.physicalPath) === "" || !path33.isAbsolute(manifest.physicalQuarantinePath) || path33.resolve(manifest.physicalQuarantinePath) !== manifest.physicalQuarantinePath || !platformPathsEqual(
-    path33.dirname(manifest.physicalQuarantinePath),
+  const expectedPhysicalRootPath = path38.dirname(manifest.physicalPath);
+  if (!await isManagedWorktreeRoot(expectedPhysicalRootPath)) {
+    throw new RuntimeError("worktree creation intent names an unmanaged root");
+  }
+  if (!path38.isAbsolute(manifest.physicalPath) || path38.resolve(manifest.physicalPath) !== manifest.physicalPath || !platformPathsEqual(path38.dirname(manifest.physicalPath), expectedPhysicalRootPath) || path38.basename(manifest.physicalPath) === "" || !path38.isAbsolute(manifest.physicalQuarantinePath) || path38.resolve(manifest.physicalQuarantinePath) !== manifest.physicalQuarantinePath || !platformPathsEqual(
+    path38.dirname(manifest.physicalQuarantinePath),
     expectedPhysicalRootPath
-  ) || path33.basename(manifest.physicalQuarantinePath) !== `.create-${path33.basename(manifest.physicalPath)}-${manifest.transactionId}` || !path33.isAbsolute(manifest.commonDir) || !path33.isAbsolute(manifest.registrationRoot) || !path33.isAbsolute(manifest.quarantineRoot) || !path33.isAbsolute(manifest.quarantinePath) || !platformPathsEqual(
+  ) || path38.basename(manifest.physicalQuarantinePath) !== `.create-${path38.basename(manifest.physicalPath)}-${manifest.transactionId}` || !path38.isAbsolute(manifest.commonDir) || !path38.isAbsolute(manifest.registrationRoot) || !path38.isAbsolute(manifest.quarantineRoot) || !path38.isAbsolute(manifest.quarantinePath) || !platformPathsEqual(
     manifest.registrationRoot,
-    path33.join(manifest.commonDir, "worktrees")
-  ) || !platformPathsEqual(path33.dirname(manifest.quarantinePath), manifest.quarantineRoot) || path33.basename(manifest.quarantinePath) !== `.remove-registration-creation-${manifest.transactionId}`) {
+    path38.join(manifest.commonDir, "worktrees")
+  ) || !platformPathsEqual(path38.dirname(manifest.quarantinePath), manifest.quarantineRoot) || path38.basename(manifest.quarantinePath) !== `.remove-registration-creation-${manifest.transactionId}`) {
     throw new RuntimeError("worktree creation intent paths are inconsistent");
   }
   const expectedCommonDir = {
@@ -57000,9 +56062,9 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
     ino: BigInt(manifest.quarantineRootIno),
     birthtimeNs: BigInt(manifest.quarantineRootBirthtimeNs)
   };
-  const commonDir = await realpath13(manifest.commonDir);
-  const registrationRoot = await realpath13(manifest.registrationRoot);
-  const quarantineRoot = await realpath13(manifest.quarantineRoot);
+  const commonDir = await realpath17(manifest.commonDir);
+  const registrationRoot = await realpath17(manifest.registrationRoot);
+  const quarantineRoot = await realpath17(manifest.quarantineRoot);
   const [commonIdentity, registrationRootIdentity, quarantineRootIdentity] = await Promise.all([
     managedWorktreeDirectoryIdentity(commonDir),
     managedWorktreeDirectoryIdentity(registrationRoot),
@@ -57029,17 +56091,20 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
     if (lockedManifest === null || JSON.stringify(lockedManifest) !== JSON.stringify(manifest)) {
       throw new RuntimeError("worktree creation intent changed before recovery lease");
     }
-    const physicalRoot = await findCreationPhysicalRoot(root, expectedPhysicalRoot);
+    const physicalRoot = await findCreationPhysicalRoot(
+      expectedPhysicalRootPath,
+      expectedPhysicalRoot
+    );
     if (physicalRoot === null) {
-      throw new RuntimeError("worktree creation root moved outside the managed state directory");
+      throw new RuntimeError("worktree creation root moved outside its managed namespace");
     }
     const expectedPhysical = manifest.physicalPresent ? {
       dev: BigInt(manifest.physicalDev),
       ino: BigInt(manifest.physicalIno),
       birthtimeNs: BigInt(manifest.physicalBirthtimeNs)
     } : null;
-    const finalPhysicalPath = physicalRoot === null ? null : path33.join(physicalRoot, path33.basename(manifest.physicalPath));
-    const stagedPhysicalPath = physicalRoot === null ? null : path33.join(physicalRoot, path33.basename(manifest.physicalQuarantinePath));
+    const finalPhysicalPath = physicalRoot === null ? null : path38.join(physicalRoot, path38.basename(manifest.physicalPath));
+    const stagedPhysicalPath = physicalRoot === null ? null : path38.join(physicalRoot, path38.basename(manifest.physicalQuarantinePath));
     const [finalPhysicalIdentity, stagedPhysicalIdentity] = await Promise.all([
       finalPhysicalPath === null ? null : managedWorktreeDirectoryIdentity(finalPhysicalPath),
       stagedPhysicalPath === null ? null : managedWorktreeDirectoryIdentity(stagedPhysicalPath)
@@ -57073,8 +56138,8 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
         throw new RuntimeError("worktree creation registration disappeared");
       }
       await assertRegistrationBacklink(activeRegistration, manifest.physicalPath);
-      await rename7(activeRegistration, manifest.quarantinePath);
-      await Promise.all([syncDirectory4(registrationRoot), syncDirectory4(quarantineRoot)]);
+      await rename8(activeRegistration, manifest.quarantinePath);
+      await Promise.all([syncDirectory(registrationRoot), syncDirectory(quarantineRoot)]);
       if (await managedWorktreeDirectoryIdentity(activeRegistration) !== null) {
         throw new RuntimeError("worktree creation registration reappeared after staging");
       }
@@ -57092,7 +56157,7 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
         await emptyBoundDirectory(physicalPath, removalIdentity, platformServices);
       }
       await removeBoundEmptyDirectory(physicalPath, removalIdentity, platformServices);
-      await syncDirectory4(physicalRoot);
+      await syncDirectory(physicalRoot);
       const settledRoot = await managedWorktreeDirectoryIdentity(physicalRoot);
       if (settledRoot === null || !sameManagedIdentity(settledRoot, expectedPhysicalRoot)) {
         throw new RuntimeError("worktree creation root changed during recovery");
@@ -57106,39 +56171,42 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
         { processSupervisor: platformServices }
       );
     }
-    await Promise.all([syncDirectory4(registrationRoot), syncDirectory4(quarantineRoot)]);
+    await Promise.all([syncDirectory(registrationRoot), syncDirectory(quarantineRoot)]);
     await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
   });
 }
-async function recoverPendingWorktreeRemovals(platformServices = getPlatformServices(), syncDirectory4 = syncDirectoryMetadata) {
+async function recoverPendingWorktreeRemovals(platformServices = getPlatformServices(), syncDirectory = syncDirectoryMetadata) {
   const { pending, issues } = await readPendingWorktreeRemovalManifests();
   for (const { manifestPath, manifest, temporaryPath, temporaryKind } of pending) {
     let recoveryError;
     let repositoryIdentity;
     try {
       if (manifest.phase === "creation-intent") {
-        repositoryIdentity = await realpath13(manifest.commonDir);
+        repositoryIdentity = await realpath17(manifest.commonDir);
         await recoverWorktreeCreationIntent(
           manifestPath,
           manifest,
           platformServices,
-          syncDirectory4,
+          syncDirectory,
           temporaryPath,
           temporaryKind
         );
         continue;
       }
-      const commonDir = await realpath13(manifest.commonDir);
+      const commonDir = await realpath17(manifest.commonDir);
       repositoryIdentity = commonDir;
-      const expectedRegistrationRoot = path33.join(commonDir, "worktrees");
-      const registrationRoot = await realpath13(expectedRegistrationRoot);
-      const expectedQuarantineRoot = path33.join(
+      const expectedRegistrationRoot = path38.join(commonDir, "worktrees");
+      const registrationRoot = await realpath17(expectedRegistrationRoot);
+      const expectedQuarantineRoot = path38.join(
         commonDir,
         WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY
       );
-      const quarantineRoot = await realpath13(expectedQuarantineRoot);
-      const quarantineMetadata = await lstat18(quarantineRoot, { bigint: true });
-      const physicalRoot = await realpath13(path33.resolve(resolveStateDir(), "worktrees"));
+      const quarantineRoot = await realpath17(expectedQuarantineRoot);
+      const quarantineMetadata = await lstat22(quarantineRoot, { bigint: true });
+      const physicalRoot = await realpath17(path38.dirname(manifest.physicalPath));
+      if (!await isManagedWorktreeRoot(physicalRoot)) {
+        throw new RuntimeError("worktree removal manifest names an unmanaged root");
+      }
       const commonDirIdentity = await managedWorktreeDirectoryIdentity(commonDir);
       const registrationRootIdentity = await managedWorktreeDirectoryIdentity(registrationRoot);
       const quarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
@@ -57180,9 +56248,9 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
           )
         ]);
       }
-      const manifestPhysicalRoot = await realpath13(path33.dirname(manifest.physicalPath));
-      const manifestPhysicalQuarantineRoot = await realpath13(
-        path33.dirname(manifest.physicalQuarantinePath)
+      const manifestPhysicalRoot = await realpath17(path38.dirname(manifest.physicalPath));
+      const manifestPhysicalQuarantineRoot = await realpath17(
+        path38.dirname(manifest.physicalQuarantinePath)
       );
       const assertRemovalRootsUnchanged = async () => {
         const currentCommonDir = await managedWorktreeDirectoryIdentity(commonDir);
@@ -57195,7 +56263,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       };
       const syncRemovalRoots = async () => {
         for (const directory of [physicalRoot, registrationRoot, quarantineRoot]) {
-          await syncDirectory4(directory);
+          await syncDirectory(directory);
         }
         await assertRemovalRootsUnchanged();
       };
@@ -57313,13 +56381,13 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "registrationPath is not absolute",
-        path33.isAbsolute(manifest.registrationPath),
+        path38.isAbsolute(manifest.registrationPath),
         manifest.registrationPath
       );
       checkManifestConsistency(
         "registrationPath is not normalized",
-        path33.resolve(manifest.registrationPath) === manifest.registrationPath,
-        path33.resolve(manifest.registrationPath),
+        path38.resolve(manifest.registrationPath) === manifest.registrationPath,
+        path38.resolve(manifest.registrationPath),
         manifest.registrationPath
       );
       checkManifestConsistency(
@@ -57330,13 +56398,13 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "quarantinePath is not absolute",
-        path33.isAbsolute(manifest.quarantinePath),
+        path38.isAbsolute(manifest.quarantinePath),
         manifest.quarantinePath
       );
       checkManifestConsistency(
         "quarantinePath is not normalized",
-        path33.resolve(manifest.quarantinePath) === manifest.quarantinePath,
-        path33.resolve(manifest.quarantinePath),
+        path38.resolve(manifest.quarantinePath) === manifest.quarantinePath,
+        path38.resolve(manifest.quarantinePath),
         manifest.quarantinePath
       );
       checkManifestConsistency(
@@ -57347,13 +56415,13 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "physicalPath is not absolute",
-        path33.isAbsolute(manifest.physicalPath),
+        path38.isAbsolute(manifest.physicalPath),
         manifest.physicalPath
       );
       checkManifestConsistency(
         "physicalPath is not normalized",
-        path33.resolve(manifest.physicalPath) === manifest.physicalPath,
-        path33.resolve(manifest.physicalPath),
+        path38.resolve(manifest.physicalPath) === manifest.physicalPath,
+        path38.resolve(manifest.physicalPath),
         manifest.physicalPath
       );
       checkManifestConsistency(
@@ -57364,13 +56432,13 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "physicalQuarantinePath is not absolute",
-        path33.isAbsolute(manifest.physicalQuarantinePath),
+        path38.isAbsolute(manifest.physicalQuarantinePath),
         manifest.physicalQuarantinePath
       );
       checkManifestConsistency(
         "physicalQuarantinePath is not normalized",
-        path33.resolve(manifest.physicalQuarantinePath) === manifest.physicalQuarantinePath,
-        path33.resolve(manifest.physicalQuarantinePath),
+        path38.resolve(manifest.physicalQuarantinePath) === manifest.physicalQuarantinePath,
+        path38.resolve(manifest.physicalQuarantinePath),
         manifest.physicalQuarantinePath
       );
       checkManifestConsistency(
@@ -57381,21 +56449,21 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "registrationPath parent mismatch",
-        platformPathsEqual(path33.dirname(manifest.registrationPath), registrationRoot),
-        path33.dirname(manifest.registrationPath),
+        platformPathsEqual(path38.dirname(manifest.registrationPath), registrationRoot),
+        path38.dirname(manifest.registrationPath),
         registrationRoot
       );
       checkManifestConsistency(
         "quarantinePath parent mismatch",
-        platformPathsEqual(path33.dirname(manifest.quarantinePath), quarantineRoot),
-        path33.dirname(manifest.quarantinePath),
+        platformPathsEqual(path38.dirname(manifest.quarantinePath), quarantineRoot),
+        path38.dirname(manifest.quarantinePath),
         quarantineRoot
       );
       checkManifestConsistency(
         "quarantinePath name mismatch",
-        path33.basename(manifest.quarantinePath) === `.remove-registration-${path33.basename(manifest.registrationPath)}-${manifest.transactionId}`,
-        path33.basename(manifest.quarantinePath),
-        `.remove-registration-${path33.basename(manifest.registrationPath)}-${manifest.transactionId}`
+        path38.basename(manifest.quarantinePath) === `.remove-registration-${path38.basename(manifest.registrationPath)}-${manifest.transactionId}`,
+        path38.basename(manifest.quarantinePath),
+        `.remove-registration-${path38.basename(manifest.registrationPath)}-${manifest.transactionId}`
       );
       checkManifestConsistency(
         "physicalPath parent mismatch",
@@ -57411,9 +56479,9 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "physicalQuarantinePath name mismatch",
-        path33.basename(manifest.physicalQuarantinePath) === `.remove-${path33.basename(manifest.physicalPath)}-${manifest.transactionId}`,
-        path33.basename(manifest.physicalQuarantinePath),
-        `.remove-${path33.basename(manifest.physicalPath)}-${manifest.transactionId}`
+        path38.basename(manifest.physicalQuarantinePath) === `.remove-${path38.basename(manifest.physicalPath)}-${manifest.transactionId}`,
+        path38.basename(manifest.physicalQuarantinePath),
+        `.remove-${path38.basename(manifest.physicalPath)}-${manifest.transactionId}`
       );
       if (manifest.phase === "creation-root-changed") {
         throw new RuntimeError("worktree creation root changed and requires manual resolution");
@@ -57513,7 +56581,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
               throw new RuntimeError("physical worktree rollback state is inconsistent");
             }
             await assertRemovalRootsUnchanged();
-            await rename7(manifest.physicalQuarantinePath, manifest.physicalPath);
+            await rename8(manifest.physicalQuarantinePath, manifest.physicalPath);
             const restoredPhysical = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
             const settledPhysicalQuarantine = await managedWorktreeDirectoryIdentity(
               manifest.physicalQuarantinePath
@@ -57521,7 +56589,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
             if (restoredPhysical === null || !sameManagedIdentity(restoredPhysical, expectedPhysicalIdentity) || settledPhysicalQuarantine !== null) {
               throw new RuntimeError("physical worktree rollback identity changed");
             }
-            await syncDirectory4(physicalRoot);
+            await syncDirectory(physicalRoot);
             await assertRemovalRootsUnchanged();
           }
           if (quarantineIdentity !== null) {
@@ -57549,7 +56617,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
               throw new RuntimeError("started worktree removal state is inconsistent");
             }
             await assertRemovalRootsUnchanged();
-            await rename7(manifest.physicalPath, manifest.physicalQuarantinePath);
+            await rename8(manifest.physicalPath, manifest.physicalQuarantinePath);
             physicalIdentity = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
             physicalQuarantineIdentity = await managedWorktreeDirectoryIdentity(
               manifest.physicalQuarantinePath
@@ -57557,7 +56625,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
             if (physicalIdentity !== null || physicalQuarantineIdentity === null || !sameManagedIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity)) {
               throw new RuntimeError("started worktree removal quarantine identity changed");
             }
-            await syncDirectory4(physicalRoot);
+            await syncDirectory(physicalRoot);
             await assertRemovalRootsUnchanged();
           }
           if (physicalQuarantineIdentity !== null) {
@@ -57600,35 +56668,324 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
   }
   return issues;
 }
-function worktreeSweepIssue(worktreePath, error51, repositoryIdentity) {
+
+// src/runtime/recovery-worktree-sweep.ts
+import { createHash as createHash17 } from "node:crypto";
+import { readdir as readdir12, realpath as realpath19 } from "node:fs/promises";
+import path40 from "node:path";
+
+// src/runtime/recovery-autopilot.ts
+import { createHash as createHash16 } from "node:crypto";
+import { lstat as lstat23, readdir as readdir11, realpath as realpath18 } from "node:fs/promises";
+import path39 from "node:path";
+function exactObjectKeys(value, expected) {
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  return actual.length === sortedExpected.length && actual.every((key, index) => key === sortedExpected[index]);
+}
+function parseWorkflowLease(text, workflowId) {
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const record2 = value;
+  if (!exactObjectKeys(record2, ["workflowId", "pid", "processToken", "acquiredAt"]) || record2.workflowId !== workflowId || !Number.isSafeInteger(record2.pid) || record2.pid < 1 || record2.processToken !== null && (typeof record2.processToken !== "string" || record2.processToken.length < 1 || record2.processToken.length > 256) || typeof record2.acquiredAt !== "string" || Number.isNaN(Date.parse(record2.acquiredAt))) return null;
+  return record2;
+}
+async function observeWorkflowLease(store, isProcessAlive2, getProcessStartToken) {
+  const text = await readBoundedRegularFile2(store.ownerPath).catch(() => void 0);
+  if (text === void 0) return { presence: "present", status: "unverifiable" };
+  if (text === null) return { presence: "absent" };
+  const record2 = parseWorkflowLease(text, store.workflowId);
+  if (record2 === null) return { presence: "present", status: "unverifiable" };
   return {
-    worktreePath,
-    reason: boundedRedactedDiagnostic(error51, MAX_QUARANTINE_REASON_BYTES),
-    ...repositoryIdentity === void 0 ? {} : { repositoryIdentity }
+    presence: "present",
+    status: await lockOwnerStatus(record2, isProcessAlive2, getProcessStartToken).catch(() => "unverifiable")
   };
 }
-function boundedWorktreeSweepIssues(issues, worktreesRoot) {
-  if (issues.length <= MAX_WORKTREE_SWEEP_ISSUES) return issues;
-  const retained = issues.slice(0, MAX_WORKTREE_SWEEP_ISSUES - 1);
-  return [...retained, {
-    worktreePath: worktreesRoot,
-    reason: `${issues.length - retained.length} additional worktree sweep issues omitted`
-  }];
+function branchOwnershipPath(root, workflowId) {
+  const name = createHash16("sha256").update(workflowId).digest("hex");
+  return path39.join(root, "autopilot-branches", `${name}.json`);
 }
-function runClaimsWorktree(runId, managedId) {
-  return managedId === runId || managedId.startsWith(`${runId}-`) || managedId === `baseline-${runId}` || managedId.startsWith(`baseline-${runId}-`) || managedId === `verify-${runId}` || managedId.startsWith(`verify-${runId}-`);
+async function observeWorkflowBranch(root, workflowId, manager, isProcessAlive2, getProcessStartToken) {
+  const registration = await readBoundedRegularFile2(branchOwnershipPath(root, workflowId)).catch(() => void 0);
+  if (registration === void 0) {
+    return { presence: "ambiguous", identity: null, owner: null, ownerStatus: null };
+  }
+  if (registration === null) {
+    return { presence: "absent", identity: null, owner: null, ownerStatus: null };
+  }
+  const [identity, owner] = await Promise.all([
+    manager.load(workflowId),
+    manager.readBootstrapOwner(workflowId)
+  ]).catch(() => [null, null]);
+  if (identity === null || owner === null) {
+    return { presence: "ambiguous", identity: null, owner: null, ownerStatus: null };
+  }
+  return {
+    presence: "present",
+    identity,
+    owner,
+    ownerStatus: await lockOwnerStatus(owner, isProcessAlive2, getProcessStartToken).catch(() => "unverifiable")
+  };
 }
+function isWorkflowBranchIdentity(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const identity = value;
+  return identity.ownershipVersion === "1" && typeof identity.workflowId === "string" && SAFE_WORKFLOW_ID.test(identity.workflowId) && typeof identity.checkoutPath === "string" && typeof identity.gitCommonDir === "string" && typeof identity.repositoryIdentity === "string" && typeof identity.worktreePath === "string" && typeof identity.worktreeGitDir === "string" && typeof identity.branch === "string" && identity.branchRef === `refs/heads/${identity.branch}` && identity.baseRef === `refs/claude-architect/autopilot/${identity.workflowId}/base` && typeof identity.baseBranch === "string" && typeof identity.baseCommitOid === "string" && OID2.test(identity.baseCommitOid) && identity.remote === "origin" && typeof identity.remoteUrl === "string" && typeof identity.ownerRepo === "string";
+}
+function branchMatchesWorkflowState(branch, state) {
+  return branch.workflowId === state.workflowId && branch.repositoryIdentity === state.repositoryIdentity && branch.baseCommitOid === state.baseCommitOid && branch.branchRef === state.workflowRef && branch.worktreePath === state.worktreePath && branch.branch === state.branch;
+}
+function sameWorkflowBranch(left, right) {
+  return left.ownershipVersion === right.ownershipVersion && left.workflowId === right.workflowId && left.checkoutPath === right.checkoutPath && left.gitCommonDir === right.gitCommonDir && left.repositoryIdentity === right.repositoryIdentity && left.worktreePath === right.worktreePath && left.worktreeGitDir === right.worktreeGitDir && left.branch === right.branch && left.branchRef === right.branchRef && left.baseRef === right.baseRef && left.baseBranch === right.baseBranch && left.baseCommitOid === right.baseCommitOid && left.remote === right.remote && left.remoteUrl === right.remoteUrl && left.ownerRepo === right.ownerRepo;
+}
+function canonicalGithubRemote(raw) {
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname.toLowerCase() !== "github.com" || parsed.port !== "" || parsed.username !== "" || parsed.password !== "" || parsed.search !== "" || parsed.hash !== "" || parsed.pathname.includes("%") || parsed.pathname.endsWith("/") || parsed.pathname.includes("//")) return null;
+  const components = parsed.pathname.slice(1).split("/");
+  if (components.length !== 2) return null;
+  const owner = components[0];
+  const repository = components[1].endsWith(".git") ? components[1].slice(0, -4) : components[1];
+  const component = /^[A-Za-z0-9_.-]+$/u;
+  if (!component.test(owner) || !component.test(repository) || owner === "." || owner === ".." || repository === "." || repository === "..") return null;
+  return `https://github.com/${owner.toLowerCase()}/${repository.toLowerCase()}.git`;
+}
+function recordedBranch(journal, state) {
+  const recorded = journal.intents.find((status) => status.intent.operation === "record-workflow-spec" && status.intent.idempotencyKey === "workflow-spec");
+  const completion = recorded?.completion?.completion;
+  if (typeof completion !== "object" || completion === null || Array.isArray(completion)) {
+    return null;
+  }
+  const branch = completion.branch;
+  return isWorkflowBranchIdentity(branch) && branchMatchesWorkflowState(branch, state) ? branch : null;
+}
+function expectedWorkflowHead(state) {
+  const head = state.tasks.slice(0, state.currentTaskIndex + 1).reduce((current, task) => task.promotionCommitOid ?? current, state.baseCommitOid);
+  return OID2.test(head) ? head : null;
+}
+async function isAbsent(filename) {
+  try {
+    await lstat23(filename);
+    return false;
+  } catch (error51) {
+    return isMissing(error51) ? true : null;
+  }
+}
+async function activeBranchIsDirectlyObserved(branch, expectedHead2, runGit) {
+  let canonicalCheckout;
+  let canonicalWorktree;
+  let canonicalCommonDir;
+  try {
+    [canonicalCheckout, canonicalWorktree, canonicalCommonDir] = await Promise.all([
+      realpath18(branch.checkoutPath),
+      realpath18(branch.worktreePath),
+      realpath18(branch.gitCommonDir)
+    ]);
+  } catch {
+    return false;
+  }
+  if (canonicalCheckout !== branch.checkoutPath || canonicalWorktree !== branch.worktreePath || canonicalCommonDir !== branch.gitCommonDir) return false;
+  const [commonDir, worktrees, symbolic, head, base, status, remote] = await Promise.all([
+    runGit(branch.checkoutPath, ["rev-parse", "--path-format=absolute", "--git-common-dir"]),
+    runGit(branch.checkoutPath, ["worktree", "list", "--porcelain", "-z"]),
+    runGit(branch.worktreePath, ["symbolic-ref", "--quiet", "--short", "HEAD"]),
+    runGit(branch.worktreePath, ["rev-parse", "--verify", "HEAD"]),
+    runGit(branch.checkoutPath, ["rev-parse", "--verify", branch.baseRef]),
+    runGit(branch.worktreePath, [
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=all",
+      "--ignore-submodules=none"
+    ]),
+    runGit(branch.checkoutPath, ["config", "--get", "remote.origin.url"])
+  ]);
+  if ([commonDir, worktrees, symbolic, head, base, status, remote].some((result) => result.truncated?.stdout === true || result.truncated?.stderr === true) || commonDir.exitCode !== 0 || worktrees.exitCode !== 0 || symbolic.exitCode !== 0 || head.exitCode !== 0 || base.exitCode !== 0 || status.exitCode !== 0 || remote.exitCode !== 0) return false;
+  let observedCommonDir;
+  try {
+    observedCommonDir = await realpath18(gitPathOutput(
+      commonDir.stdout,
+      "active workflow common directory"
+    ));
+  } catch {
+    return false;
+  }
+  if (observedCommonDir !== branch.gitCommonDir || symbolic.stdout.trim() !== branch.branch || head.stdout.trim() !== expectedHead2 || base.stdout.trim() !== branch.baseCommitOid || status.stdout !== "" || canonicalGithubRemote(remote.stdout.trim()) !== branch.remoteUrl) return false;
+  const fields = gitNulRecords(worktrees.stdout, "active-branch Git worktree list");
+  const registrationIndex = await findWorktreeRegistration(fields, branch.worktreePath);
+  if (registrationIndex === -1) return false;
+  const nextRegistration = fields.findIndex((field, index) => index > registrationIndex && field.startsWith("worktree "));
+  const registration = fields.slice(
+    registrationIndex + 1,
+    nextRegistration === -1 ? void 0 : nextRegistration
+  );
+  return registration.includes(`HEAD ${expectedHead2}`) && registration.includes(`branch ${branch.branchRef}`);
+}
+async function workflowIds(root, issues) {
+  const ids = /* @__PURE__ */ new Set();
+  const workflowsRoot = path39.join(root, "workflows");
+  let workflowEntries = [];
+  try {
+    const workflowsIdentity = await plainDirectoryIdentity2(workflowsRoot);
+    workflowEntries = workflowsIdentity === null ? [] : await readdir11(workflowsRoot, { withFileTypes: true });
+  } catch (error51) {
+    issues.push(worktreeSweepIssue(workflowsRoot, error51));
+  }
+  for (const entry of workflowEntries) {
+    if (entry.isDirectory() && !entry.isSymbolicLink() && SAFE_WORKFLOW_ID.test(entry.name)) {
+      ids.add(entry.name);
+    }
+  }
+  const branchesRoot = path39.join(root, "autopilot-branches");
+  let branchEntries = [];
+  try {
+    const branchesIdentity = await plainDirectoryIdentity2(branchesRoot);
+    branchEntries = branchesIdentity === null ? [] : await readdir11(branchesRoot, { withFileTypes: true });
+  } catch (error51) {
+    issues.push(worktreeSweepIssue(branchesRoot, error51));
+  }
+  for (const entry of branchEntries) {
+    if (!entry.isFile() || entry.isSymbolicLink() || !/^[0-9a-f]{64}\.json$/u.test(entry.name)) {
+      continue;
+    }
+    const ownershipPath = path39.join(branchesRoot, entry.name);
+    let text;
+    let value;
+    try {
+      text = await readBoundedRegularFile2(ownershipPath);
+      if (text === null) {
+        throw new RuntimeError("workflow ownership record is absent or unstable");
+      }
+      value = JSON.parse(text);
+    } catch (error51) {
+      issues.push(worktreeSweepIssue(ownershipPath, error51));
+      continue;
+    }
+    if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
+    const workflowId = value.workflowId;
+    if (typeof workflowId === "string" && SAFE_WORKFLOW_ID.test(workflowId) && entry.name === path39.basename(branchOwnershipPath(root, workflowId))) {
+      ids.add(workflowId);
+    }
+  }
+  return [...ids].sort((left, right) => left.localeCompare(right));
+}
+async function recoverAutopilotWorkflows(root, dependencies, workflowIssues) {
+  const results = [];
+  const branchManager = new WorkflowBranchManager({ git: dependencies.runGit });
+  for (const workflowId of await workflowIds(root, workflowIssues)) {
+    try {
+      const store = new WorkflowStore(workflowId, {
+        stateDirectory: root,
+        isProcessAlive: dependencies.isProcessAlive,
+        getProcessStartToken: dependencies.getProcessStartToken
+      });
+      const [lease, branch] = await Promise.all([
+        observeWorkflowLease(
+          store,
+          dependencies.isProcessAlive,
+          dependencies.getProcessStartToken
+        ),
+        observeWorkflowBranch(
+          root,
+          workflowId,
+          branchManager,
+          dependencies.isProcessAlive,
+          dependencies.getProcessStartToken
+        )
+      ]);
+      if (lease.presence === "present" && lease.status === "live" || branch.ownerStatus === "live") {
+        results.push({ workflowId, disposition: "live-preserve" });
+        continue;
+      }
+      const stateAbsent = await isAbsent(store.statePath);
+      if (stateAbsent === true) {
+        if (branch.presence === "present" && branch.ownerStatus === "dead" && branch.identity !== null) {
+          const cleanup = await branchManager.cleanup(branch.identity, branch.identity.baseCommitOid);
+          results.push({
+            workflowId,
+            disposition: cleanup.ok && cleanup.worktreeRemoved && cleanup.refsRemoved ? "dispose" : "human-decision-required"
+          });
+        } else {
+          results.push({ workflowId, disposition: "human-decision-required" });
+        }
+        continue;
+      }
+      if (stateAbsent !== false) {
+        results.push({ workflowId, disposition: "human-decision-required" });
+        continue;
+      }
+      let state;
+      let journal;
+      try {
+        [state, journal] = await Promise.all([store.read(), store.readIntentJournal()]);
+      } catch {
+        results.push({ workflowId, disposition: "human-decision-required" });
+        continue;
+      }
+      if (TERMINAL_PHASES.has(state.phase)) {
+        if (lease.presence === "present" && lease.status === "unverifiable" || branch.ownerStatus === "unverifiable") {
+          results.push({ workflowId, disposition: "human-decision-required" });
+        }
+        continue;
+      }
+      if (lease.presence !== "present" || lease.status !== "dead" || branch.presence === "ambiguous" || branch.ownerStatus === "unverifiable") {
+        results.push({ workflowId, disposition: "human-decision-required" });
+        continue;
+      }
+      const recorded = recordedBranch(journal, state);
+      if (recorded === null) {
+        results.push({ workflowId, disposition: "human-decision-required" });
+        continue;
+      }
+      if (state.phase === "cleaning-up") {
+        const foreignBranch = branch.presence === "present" && (branch.identity === null || !sameWorkflowBranch(branch.identity, recorded));
+        results.push({
+          workflowId,
+          disposition: foreignBranch ? "human-decision-required" : "resume"
+        });
+        continue;
+      }
+      if (branch.presence !== "present" || branch.identity === null || branch.ownerStatus !== "dead" || !sameWorkflowBranch(branch.identity, recorded)) {
+        results.push({ workflowId, disposition: "human-decision-required" });
+        continue;
+      }
+      const expectedHead2 = expectedWorkflowHead(state);
+      if (expectedHead2 === null || !await activeBranchIsDirectlyObserved(
+        branch.identity,
+        expectedHead2,
+        dependencies.runGit
+      )) {
+        results.push({ workflowId, disposition: "human-decision-required" });
+        continue;
+      }
+      results.push({ workflowId, disposition: "resume" });
+    } catch {
+      results.push({ workflowId, disposition: "human-decision-required" });
+    }
+  }
+  return results;
+}
+
+// src/runtime/recovery-worktree-sweep.ts
 var MALFORMED_WORKFLOW_OWNERSHIP = "";
 async function workflowOwnershipRecords(root) {
-  const ownershipRoot = path33.join(root, "autopilot-branches");
+  const ownershipRoot = path40.join(root, "autopilot-branches");
   if (await plainDirectoryIdentity2(ownershipRoot) === null) return /* @__PURE__ */ new Map();
   const records = /* @__PURE__ */ new Map();
-  for (const entry of await readdir8(ownershipRoot, { withFileTypes: true })) {
+  for (const entry of await readdir12(ownershipRoot, { withFileTypes: true })) {
     const match = WORKFLOW_OWNERSHIP_NAME.exec(entry.name);
     if (match === null || !entry.isFile() || entry.isSymbolicLink()) {
       throw new RuntimeError("workflow ownership directory contains a malformed entry");
     }
-    const ownershipPath = path33.join(ownershipRoot, entry.name);
+    const ownershipPath = path40.join(ownershipRoot, entry.name);
     const filenamePrefix = match[1].slice(0, 32);
     records.set(filenamePrefix, [...records.get(filenamePrefix) ?? [], ownershipPath]);
     let workflowId;
@@ -57641,11 +56998,11 @@ async function workflowOwnershipRecords(root) {
       ]);
       continue;
     }
-    const expectedPrefix = createHash16("sha256").update(workflowId).digest("hex").slice(0, 32);
+    const expectedPrefix = createHash17("sha256").update(workflowId).digest("hex").slice(0, 32);
     if (expectedPrefix !== filenamePrefix) {
       records.set(expectedPrefix, [...records.get(expectedPrefix) ?? [], ownershipPath]);
     }
-    const legacyPrefix = createHash16("sha256").update(JSON.stringify(workflowId)).digest("hex").slice(0, 24);
+    const legacyPrefix = createHash17("sha256").update(JSON.stringify(workflowId)).digest("hex").slice(0, 24);
     records.set(`legacy:${legacyPrefix}`, [
       ...records.get(`legacy:${legacyPrefix}`) ?? [],
       ownershipPath
@@ -57695,23 +57052,41 @@ async function finalMaterializationMustBePreserved(root, claim, isProcessAlive2,
   }
 }
 async function sweepOrphanWorktrees(args) {
+  const { roots, malformed } = await managedWorktreeRoots();
+  const issues = malformed.map((record2) => worktreeSweepIssue(
+    record2,
+    new RuntimeError("managed worktree root record is malformed")
+  ));
+  const legacyRoot = path40.join(args.root, "worktrees");
+  for (const worktreesRoot of [legacyRoot, ...roots.filter(isManagedWorktreeNamespace)]) {
+    issues.push(...await sweepOrphanWorktreeRoot(args, worktreesRoot, worktreesRoot === legacyRoot));
+  }
+  return issues;
+}
+async function sweepRootParentIdentity(worktreesRoot, legacy) {
+  const parent = path40.dirname(worktreesRoot);
+  if (legacy) return await assertPrivateRecoveryDirectory(parent);
+  const identity = await plainDirectoryIdentity2(parent);
+  if (identity === null) throw new RuntimeError("checkout worktrees directory disappeared");
+  return identity;
+}
+async function sweepOrphanWorktreeRoot(args, worktreesRoot, legacy) {
   const issues = [];
-  const worktreesRoot = path33.join(args.root, "worktrees");
   let entries;
   let stateRootIdentity;
   let worktreesRootIdentity;
   try {
     if (await plainDirectoryIdentity2(worktreesRoot) === null) return issues;
     [stateRootIdentity, worktreesRootIdentity] = await Promise.all([
-      assertPrivateRecoveryDirectory(args.root),
+      sweepRootParentIdentity(worktreesRoot, legacy),
       assertPrivateRecoveryDirectory(worktreesRoot)
     ]);
-    entries = await readdir8(worktreesRoot, { withFileTypes: true });
+    entries = (await readdir12(worktreesRoot, { withFileTypes: true })).filter((entry) => legacy || !isNamespaceControlEntry(entry.name));
     const [settledStateRoot, settledWorktreesRoot] = await Promise.all([
-      plainDirectoryIdentity2(args.root),
+      plainDirectoryIdentity2(path40.dirname(worktreesRoot)),
       plainDirectoryIdentity2(worktreesRoot)
     ]);
-    if (settledStateRoot === null || settledWorktreesRoot === null || !sameIdentity5(settledStateRoot, stateRootIdentity) || !sameIdentity5(settledWorktreesRoot, worktreesRootIdentity)) {
+    if (settledStateRoot === null || settledWorktreesRoot === null || !sameDirectoryIdentity(settledStateRoot, stateRootIdentity) || !sameDirectoryIdentity(settledWorktreesRoot, worktreesRootIdentity)) {
       throw new RuntimeError("managed worktree namespace identity changed during sweep setup");
     }
   } catch (error51) {
@@ -57725,7 +57100,7 @@ async function sweepOrphanWorktrees(args) {
     ownershipLookupError = error51;
   }
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const worktreePath = path33.join(worktreesRoot, entry.name);
+    const worktreePath = path40.join(worktreesRoot, entry.name);
     if (!entry.isDirectory() || entry.isSymbolicLink()) {
       issues.push(worktreeSweepIssue(
         worktreePath,
@@ -57815,31 +57190,31 @@ async function sweepOrphanWorktrees(args) {
         resolved.stdout,
         "startup worktree common directory"
       );
-      if (!path33.isAbsolute(reportedCommonDir)) {
+      if (!path40.isAbsolute(reportedCommonDir)) {
         throw new RuntimeError("worktree repository lookup returned a non-absolute path");
       }
-      commonDir = await realpath13(reportedCommonDir);
+      commonDir = await realpath19(reportedCommonDir);
     } catch (error51) {
       issues.push(worktreeSweepIssue(worktreePath, error51));
       continue;
     }
-    const lockKey = createHash16("sha256").update(commonDir).digest("hex");
+    const lockKey = createHash17("sha256").update(commonDir).digest("hex");
     let lease = null;
     let contention;
     try {
       lease = await createOwnedLock(
-        path33.join(args.locksRoot, `${lockKey}.lock`),
+        path40.join(args.locksRoot, `${lockKey}.lock`),
         args.ownerContents
       );
       if (lease === null) {
         contention = await reclaimDeadLock(
-          path33.join(args.locksRoot, `${lockKey}.lock`),
+          path40.join(args.locksRoot, `${lockKey}.lock`),
           args.isProcessAlive,
           args.getProcessStartToken
         );
         if (contention === "reclaimed") {
           lease = await createOwnedLock(
-            path33.join(args.locksRoot, `${lockKey}.lock`),
+            path40.join(args.locksRoot, `${lockKey}.lock`),
             args.ownerContents
           );
         }
@@ -57898,10 +57273,10 @@ async function sweepOrphanWorktrees(args) {
         }
         if (!workflowClaimed) {
           const [currentStateRoot, currentWorktreesRoot] = await Promise.all([
-            assertPrivateRecoveryDirectory(args.root),
+            sweepRootParentIdentity(worktreesRoot, legacy),
             assertPrivateRecoveryDirectory(worktreesRoot)
           ]);
-          if (!sameIdentity5(currentStateRoot, stateRootIdentity) || !sameIdentity5(currentWorktreesRoot, worktreesRootIdentity)) {
+          if (!sameDirectoryIdentity(currentStateRoot, stateRootIdentity) || !sameDirectoryIdentity(currentWorktreesRoot, worktreesRootIdentity)) {
             throw new RuntimeError("managed worktree namespace changed before orphan removal");
           }
           await removeManagedWorktreeUnderLease(
@@ -57929,411 +57304,24 @@ async function sweepOrphanWorktrees(args) {
   }
   return issues;
 }
-function exactObjectKeys(value, expected) {
-  const actual = Object.keys(value).sort();
-  const sortedExpected = [...expected].sort();
-  return actual.length === sortedExpected.length && actual.every((key, index) => key === sortedExpected[index]);
-}
-function parseWorkflowLease(text, workflowId) {
-  let value;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  const record2 = value;
-  if (!exactObjectKeys(record2, ["workflowId", "pid", "processToken", "acquiredAt"]) || record2.workflowId !== workflowId || !Number.isSafeInteger(record2.pid) || record2.pid < 1 || record2.processToken !== null && (typeof record2.processToken !== "string" || record2.processToken.length < 1 || record2.processToken.length > 256) || typeof record2.acquiredAt !== "string" || Number.isNaN(Date.parse(record2.acquiredAt))) return null;
-  return record2;
-}
-async function observeWorkflowLease(store, isProcessAlive2, getProcessStartToken) {
-  const text = await readBoundedRegularFile2(store.ownerPath).catch(() => void 0);
-  if (text === void 0) return { presence: "present", status: "unverifiable" };
-  if (text === null) return { presence: "absent" };
-  const record2 = parseWorkflowLease(text, store.workflowId);
-  if (record2 === null) return { presence: "present", status: "unverifiable" };
-  return {
-    presence: "present",
-    status: await lockOwnerStatus(record2, isProcessAlive2, getProcessStartToken).catch(() => "unverifiable")
-  };
-}
-function branchOwnershipPath(root, workflowId) {
-  const name = createHash16("sha256").update(workflowId).digest("hex");
-  return path33.join(root, "autopilot-branches", `${name}.json`);
-}
-async function observeWorkflowBranch(root, workflowId, manager, isProcessAlive2, getProcessStartToken) {
-  const registration = await readBoundedRegularFile2(branchOwnershipPath(root, workflowId)).catch(() => void 0);
-  if (registration === void 0) {
-    return { presence: "ambiguous", identity: null, owner: null, ownerStatus: null };
-  }
-  if (registration === null) {
-    return { presence: "absent", identity: null, owner: null, ownerStatus: null };
-  }
-  const [identity, owner] = await Promise.all([
-    manager.load(workflowId),
-    manager.readBootstrapOwner(workflowId)
-  ]).catch(() => [null, null]);
-  if (identity === null || owner === null) {
-    return { presence: "ambiguous", identity: null, owner: null, ownerStatus: null };
-  }
-  return {
-    presence: "present",
-    identity,
-    owner,
-    ownerStatus: await lockOwnerStatus(owner, isProcessAlive2, getProcessStartToken).catch(() => "unverifiable")
-  };
-}
-function isWorkflowBranchIdentity(value) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const identity = value;
-  return identity.ownershipVersion === "1" && typeof identity.workflowId === "string" && SAFE_WORKFLOW_ID.test(identity.workflowId) && typeof identity.checkoutPath === "string" && typeof identity.gitCommonDir === "string" && typeof identity.repositoryIdentity === "string" && typeof identity.worktreePath === "string" && typeof identity.worktreeGitDir === "string" && typeof identity.branch === "string" && identity.branchRef === `refs/heads/${identity.branch}` && identity.baseRef === `refs/claude-architect/autopilot/${identity.workflowId}/base` && typeof identity.baseBranch === "string" && typeof identity.baseCommitOid === "string" && OID3.test(identity.baseCommitOid) && identity.remote === "origin" && typeof identity.remoteUrl === "string" && typeof identity.ownerRepo === "string";
-}
-function branchMatchesWorkflowState(branch, state) {
-  return branch.workflowId === state.workflowId && branch.repositoryIdentity === state.repositoryIdentity && branch.baseCommitOid === state.baseCommitOid && branch.branchRef === state.workflowRef && branch.worktreePath === state.worktreePath && branch.branch === state.shipping.branch;
-}
-function sameWorkflowBranch(left, right) {
-  return left.ownershipVersion === right.ownershipVersion && left.workflowId === right.workflowId && left.checkoutPath === right.checkoutPath && left.gitCommonDir === right.gitCommonDir && left.repositoryIdentity === right.repositoryIdentity && left.worktreePath === right.worktreePath && left.worktreeGitDir === right.worktreeGitDir && left.branch === right.branch && left.branchRef === right.branchRef && left.baseRef === right.baseRef && left.baseBranch === right.baseBranch && left.baseCommitOid === right.baseCommitOid && left.remote === right.remote && left.remoteUrl === right.remoteUrl && left.ownerRepo === right.ownerRepo;
-}
-function canonicalGithubRemote(raw) {
-  let parsed;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== "https:" || parsed.hostname.toLowerCase() !== "github.com" || parsed.port !== "" || parsed.username !== "" || parsed.password !== "" || parsed.search !== "" || parsed.hash !== "" || parsed.pathname.includes("%") || parsed.pathname.endsWith("/") || parsed.pathname.includes("//")) return null;
-  const components = parsed.pathname.slice(1).split("/");
-  if (components.length !== 2) return null;
-  const owner = components[0];
-  const repository = components[1].endsWith(".git") ? components[1].slice(0, -4) : components[1];
-  const component = /^[A-Za-z0-9_.-]+$/u;
-  if (!component.test(owner) || !component.test(repository) || owner === "." || owner === ".." || repository === "." || repository === "..") return null;
-  return `https://github.com/${owner.toLowerCase()}/${repository.toLowerCase()}.git`;
-}
-function recordedBranch(journal, state) {
-  const recorded = journal.intents.find((status) => status.intent.operation === "record-workflow-spec" && status.intent.idempotencyKey === "workflow-spec");
-  const completion = recorded?.completion?.completion;
-  if (typeof completion !== "object" || completion === null || Array.isArray(completion)) {
-    return null;
-  }
-  const branch = completion.branch;
-  return isWorkflowBranchIdentity(branch) && branchMatchesWorkflowState(branch, state) ? branch : null;
-}
-function expectedWorkflowHead(state) {
-  const head = state.tasks.slice(0, state.currentTaskIndex + 1).reduce((current, task) => task.promotionCommitOid ?? current, state.baseCommitOid);
-  return OID3.test(head) ? head : null;
-}
-function cleanupIntent(journal, expectedHead2) {
-  const key = `cleanup:${expectedHead2}`;
-  const intent = journal.intents.find((status) => status.intent.operation === "cleanup-workflow-branch" && status.intent.idempotencyKey === key);
-  if (intent === void 0 || intent.intent.expectedIdentities.headCommitOid !== expectedHead2 || intent.completion?.failure !== null && intent.completion !== null) return null;
-  if (intent.completion !== null) {
-    const completion = intent.completion.completion;
-    if (typeof completion !== "object" || completion === null || Array.isArray(completion) || completion.worktreeRemoved !== true || completion.refsRemoved !== true) return null;
-  }
-  return intent;
-}
-async function isAbsent(filename) {
-  try {
-    await lstat18(filename);
-    return false;
-  } catch (error51) {
-    return isMissing4(error51) ? true : null;
-  }
-}
-async function cleanupIsDirectlyObserved(branch, runGit) {
-  if (await isAbsent(branch.worktreePath) !== true) return false;
-  let canonicalCheckout;
-  let canonicalCommonDir;
-  try {
-    canonicalCheckout = await realpath13(branch.checkoutPath);
-    canonicalCommonDir = await realpath13(branch.gitCommonDir);
-  } catch {
-    return false;
-  }
-  if (canonicalCheckout !== branch.checkoutPath || canonicalCommonDir !== branch.gitCommonDir) {
-    return false;
-  }
-  const [commonDir, worktrees, branchRef, baseRef] = await Promise.all([
-    runGit(branch.checkoutPath, ["rev-parse", "--path-format=absolute", "--git-common-dir"]),
-    runGit(branch.checkoutPath, ["worktree", "list", "--porcelain", "-z"]),
-    runGit(branch.checkoutPath, ["show-ref", "--verify", "--quiet", branch.branchRef]),
-    runGit(branch.checkoutPath, ["show-ref", "--verify", "--quiet", branch.baseRef])
-  ]);
-  if ([commonDir, worktrees, branchRef, baseRef].some((result) => result.truncated?.stdout === true || result.truncated?.stderr === true) || commonDir.exitCode !== 0 || worktrees.exitCode !== 0 || branchRef.exitCode !== 1 || baseRef.exitCode !== 1) return false;
-  let observedCommonDir;
-  try {
-    observedCommonDir = await realpath13(gitPathOutput(
-      commonDir.stdout,
-      "disposed workflow common directory"
-    ));
-  } catch {
-    return false;
-  }
-  if (observedCommonDir !== branch.gitCommonDir) return false;
-  return await findWorktreeRegistration(
-    gitNulRecords(worktrees.stdout, "cleanup-observation Git worktree list"),
-    branch.worktreePath,
-    true
-  ) === -1;
-}
-async function activeBranchIsDirectlyObserved(branch, expectedHead2, runGit) {
-  let canonicalCheckout;
-  let canonicalWorktree;
-  let canonicalCommonDir;
-  try {
-    [canonicalCheckout, canonicalWorktree, canonicalCommonDir] = await Promise.all([
-      realpath13(branch.checkoutPath),
-      realpath13(branch.worktreePath),
-      realpath13(branch.gitCommonDir)
-    ]);
-  } catch {
-    return false;
-  }
-  if (canonicalCheckout !== branch.checkoutPath || canonicalWorktree !== branch.worktreePath || canonicalCommonDir !== branch.gitCommonDir) return false;
-  const [commonDir, worktrees, symbolic, head, base, status, remote] = await Promise.all([
-    runGit(branch.checkoutPath, ["rev-parse", "--path-format=absolute", "--git-common-dir"]),
-    runGit(branch.checkoutPath, ["worktree", "list", "--porcelain", "-z"]),
-    runGit(branch.worktreePath, ["symbolic-ref", "--quiet", "--short", "HEAD"]),
-    runGit(branch.worktreePath, ["rev-parse", "--verify", "HEAD"]),
-    runGit(branch.checkoutPath, ["rev-parse", "--verify", branch.baseRef]),
-    runGit(branch.worktreePath, [
-      "status",
-      "--porcelain=v1",
-      "--untracked-files=all",
-      "--ignore-submodules=none"
-    ]),
-    runGit(branch.checkoutPath, ["config", "--get", "remote.origin.url"])
-  ]);
-  if ([commonDir, worktrees, symbolic, head, base, status, remote].some((result) => result.truncated?.stdout === true || result.truncated?.stderr === true) || commonDir.exitCode !== 0 || worktrees.exitCode !== 0 || symbolic.exitCode !== 0 || head.exitCode !== 0 || base.exitCode !== 0 || status.exitCode !== 0 || remote.exitCode !== 0) return false;
-  let observedCommonDir;
-  try {
-    observedCommonDir = await realpath13(gitPathOutput(
-      commonDir.stdout,
-      "active workflow common directory"
-    ));
-  } catch {
-    return false;
-  }
-  if (observedCommonDir !== branch.gitCommonDir || symbolic.stdout.trim() !== branch.branch || head.stdout.trim() !== expectedHead2 || base.stdout.trim() !== branch.baseCommitOid || status.stdout !== "" || canonicalGithubRemote(remote.stdout.trim()) !== branch.remoteUrl) return false;
-  const fields = gitNulRecords(worktrees.stdout, "active-branch Git worktree list");
-  const registrationIndex = await findWorktreeRegistration(fields, branch.worktreePath);
-  if (registrationIndex === -1) return false;
-  const nextRegistration = fields.findIndex((field, index) => index > registrationIndex && field.startsWith("worktree "));
-  const registration = fields.slice(
-    registrationIndex + 1,
-    nextRegistration === -1 ? void 0 : nextRegistration
-  );
-  return registration.includes(`HEAD ${expectedHead2}`) && registration.includes(`branch ${branch.branchRef}`);
-}
-async function workflowIds(root, issues) {
-  const ids = /* @__PURE__ */ new Set();
-  const workflowsRoot = path33.join(root, "workflows");
-  let workflowEntries = [];
-  try {
-    const workflowsIdentity = await plainDirectoryIdentity2(workflowsRoot);
-    workflowEntries = workflowsIdentity === null ? [] : await readdir8(workflowsRoot, { withFileTypes: true });
-  } catch (error51) {
-    issues.push(worktreeSweepIssue(workflowsRoot, error51));
-  }
-  for (const entry of workflowEntries) {
-    if (entry.isDirectory() && !entry.isSymbolicLink() && SAFE_WORKFLOW_ID.test(entry.name)) {
-      ids.add(entry.name);
-    }
-  }
-  const branchesRoot = path33.join(root, "autopilot-branches");
-  let branchEntries = [];
-  try {
-    const branchesIdentity = await plainDirectoryIdentity2(branchesRoot);
-    branchEntries = branchesIdentity === null ? [] : await readdir8(branchesRoot, { withFileTypes: true });
-  } catch (error51) {
-    issues.push(worktreeSweepIssue(branchesRoot, error51));
-  }
-  for (const entry of branchEntries) {
-    if (!entry.isFile() || entry.isSymbolicLink() || !/^[0-9a-f]{64}\.json$/u.test(entry.name)) {
-      continue;
-    }
-    const ownershipPath = path33.join(branchesRoot, entry.name);
-    let text;
-    let value;
-    try {
-      text = await readBoundedRegularFile2(ownershipPath);
-      if (text === null) {
-        throw new RuntimeError("workflow ownership record is absent or unstable");
-      }
-      value = JSON.parse(text);
-    } catch (error51) {
-      issues.push(worktreeSweepIssue(ownershipPath, error51));
-      continue;
-    }
-    if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
-    const workflowId = value.workflowId;
-    if (typeof workflowId === "string" && SAFE_WORKFLOW_ID.test(workflowId) && entry.name === path33.basename(branchOwnershipPath(root, workflowId))) {
-      ids.add(workflowId);
-    }
-  }
-  return [...ids].sort((left, right) => left.localeCompare(right));
-}
-async function finalizeObservedWorkflow(store, state, expectedHead2) {
-  await store.adoptLease();
-  let primaryError;
-  try {
-    await store.completeIntent({
-      expectedRevision: state.revision,
-      idempotencyKey: `cleanup:${expectedHead2}`,
-      completion: { worktreeRemoved: true, refsRemoved: true }
-    });
-    const completedAt = (/* @__PURE__ */ new Date()).toISOString();
-    await store.transition({
-      expectedRevision: state.revision,
-      to: "ready-for-human-review",
-      update(draft) {
-        draft.cleanup = {
-          status: "succeeded",
-          worktreeRemoved: true,
-          lockReleased: true,
-          error: null,
-          completedAt
-        };
-        draft.terminal = {
-          classification: "ready-for-human-review",
-          reason: null,
-          evidenceRefs: draft.finalGate === null ? [] : [draft.finalGate.reportRef],
-          completedAt
-        };
-      }
-    });
-  } catch (error51) {
-    primaryError = error51;
-    throw error51;
-  } finally {
-    try {
-      await store.releaseLease();
-    } catch (releaseError) {
-      if (primaryError === void 0) throw releaseError;
-      throw new AggregateError(
-        [primaryError, releaseError],
-        "workflow finalization failed and its adopted lease could not be released"
-      );
-    }
-  }
-}
-async function recoverAutopilotWorkflows(root, dependencies, workflowIssues) {
-  const results = [];
-  const branchManager = new WorkflowBranchManager({ git: dependencies.runGit });
-  for (const workflowId of await workflowIds(root, workflowIssues)) {
-    try {
-      const store = new WorkflowStore(workflowId, {
-        stateDirectory: root,
-        isProcessAlive: dependencies.isProcessAlive,
-        getProcessStartToken: dependencies.getProcessStartToken
-      });
-      const [lease, branch] = await Promise.all([
-        observeWorkflowLease(
-          store,
-          dependencies.isProcessAlive,
-          dependencies.getProcessStartToken
-        ),
-        observeWorkflowBranch(
-          root,
-          workflowId,
-          branchManager,
-          dependencies.isProcessAlive,
-          dependencies.getProcessStartToken
-        )
-      ]);
-      if (lease.presence === "present" && lease.status === "live" || branch.ownerStatus === "live") {
-        results.push({ workflowId, disposition: "live-preserve" });
-        continue;
-      }
-      const stateAbsent = await isAbsent(store.statePath);
-      if (stateAbsent === true) {
-        if (branch.presence === "present" && branch.ownerStatus === "dead" && branch.identity !== null) {
-          const cleanup = await branchManager.cleanup(branch.identity, branch.identity.baseCommitOid);
-          results.push({
-            workflowId,
-            disposition: cleanup.ok && cleanup.worktreeRemoved && cleanup.refsRemoved ? "dispose" : "human-decision-required"
-          });
-        } else {
-          results.push({ workflowId, disposition: "human-decision-required" });
-        }
-        continue;
-      }
-      if (stateAbsent !== false) {
-        results.push({ workflowId, disposition: "human-decision-required" });
-        continue;
-      }
-      let state;
-      let journal;
-      try {
-        [state, journal] = await Promise.all([store.read(), store.readIntentJournal()]);
-      } catch {
-        results.push({ workflowId, disposition: "human-decision-required" });
-        continue;
-      }
-      if (TERMINAL_PHASES.has(state.phase)) {
-        if (lease.presence === "present" && lease.status === "unverifiable" || branch.ownerStatus === "unverifiable") {
-          results.push({ workflowId, disposition: "human-decision-required" });
-        }
-        continue;
-      }
-      if (lease.presence !== "present" || lease.status !== "dead" || branch.presence === "ambiguous" || branch.ownerStatus === "unverifiable") {
-        results.push({ workflowId, disposition: "human-decision-required" });
-        continue;
-      }
-      const recorded = recordedBranch(journal, state);
-      if (recorded === null) {
-        results.push({ workflowId, disposition: "human-decision-required" });
-        continue;
-      }
-      if (state.phase === "cleaning-up") {
-        const expectedHead3 = expectedWorkflowHead(state);
-        const intent = expectedHead3 === null ? null : cleanupIntent(journal, expectedHead3);
-        const directlyObserved = expectedHead3 !== null && state.finalGate?.headCommitOid === expectedHead3 && branch.presence === "absent" && await isAbsent(branchOwnershipPath(root, workflowId)) === true && await cleanupIsDirectlyObserved(recorded, dependencies.runGit);
-        if (expectedHead3 === null || intent === null || !directlyObserved) {
-          results.push({ workflowId, disposition: "human-decision-required" });
-          continue;
-        }
-        await finalizeObservedWorkflow(store, state, expectedHead3);
-        results.push({ workflowId, disposition: "finalize" });
-        continue;
-      }
-      if (branch.presence !== "present" || branch.identity === null || branch.ownerStatus !== "dead" || !sameWorkflowBranch(branch.identity, recorded)) {
-        results.push({ workflowId, disposition: "human-decision-required" });
-        continue;
-      }
-      const expectedHead2 = expectedWorkflowHead(state);
-      if (expectedHead2 === null || !await activeBranchIsDirectlyObserved(
-        branch.identity,
-        expectedHead2,
-        dependencies.runGit
-      )) {
-        results.push({ workflowId, disposition: "human-decision-required" });
-        continue;
-      }
-      results.push({ workflowId, disposition: "resume" });
-    } catch {
-      results.push({ workflowId, disposition: "human-decision-required" });
-    }
-  }
-  return results;
-}
+
+// src/runtime/recovery-manager.ts
 async function reclaimPendingRemovalLocks(locksRoot, isProcessAlive2, getProcessStartToken) {
   const { pending } = await readPendingWorktreeRemovalManifests();
   const seen = /* @__PURE__ */ new Set();
   for (const { manifest } of pending) {
     let commonDir;
     try {
-      commonDir = await realpath13(manifest.commonDir);
+      commonDir = await realpath20(manifest.commonDir);
     } catch {
       continue;
     }
     if (!platformPathsEqual(commonDir, manifest.commonDir)) continue;
-    const key = createHash16("sha256").update(commonDir).digest("hex");
+    const key = createHash18("sha256").update(commonDir).digest("hex");
     if (seen.has(key)) continue;
     seen.add(key);
     await reclaimDeadLock(
-      path33.join(locksRoot, `${key}.lock`),
+      path41.join(locksRoot, `${key}.lock`),
       isProcessAlive2,
       getProcessStartToken
     );
@@ -58345,16 +57333,16 @@ async function recoverStaleRuns(dependencies = {}) {
   const isProcessAlive2 = dependencies.isProcessAlive ?? defaultIsProcessAlive;
   const runGit = dependencies.git ?? git;
   if (root === null) return { recovered: [], quarantined: [] };
-  const locksRoot = path33.join(root, "locks");
-  await mkdir9(locksRoot, { recursive: true });
+  const locksRoot = path41.join(root, "locks");
+  await mkdir10(locksRoot, { recursive: true });
   if (await plainDirectoryIdentity2(locksRoot) === null) {
     throw new RuntimeError("recovery locks directory disappeared");
   }
   const ownerContents = Buffer.from(JSON.stringify({
-    pid: nodeProcess7.pid,
-    processToken: await ps.getProcessStartToken(nodeProcess7.pid)
+    pid: nodeProcess8.pid,
+    processToken: await ps.getProcessStartToken(nodeProcess8.pid)
   }));
-  const recoveryLockPath = path33.join(locksRoot, "recovery.lock");
+  const recoveryLockPath = path41.join(locksRoot, "recovery.lock");
   const recoveryLock = await acquireOwnedLock(
     recoveryLockPath,
     ownerContents,
@@ -58373,11 +57361,11 @@ async function recoverStaleRuns(dependencies = {}) {
   }
   let primaryError;
   try {
-    const runsRoot = path33.join(root, "runs");
+    const runsRoot = path41.join(root, "runs");
     const runsIdentity = await plainDirectoryIdentity2(runsRoot);
     if (runsIdentity !== null) {
       await reclaimDeadLock(
-        path33.join(locksRoot, `${CLEANUP_JOURNAL_LOCK_KEY}.lock`),
+        path41.join(locksRoot, `${CLEANUP_JOURNAL_LOCK_KEY}.lock`),
         isProcessAlive2,
         (pid) => ps.getProcessStartToken(pid)
       );
@@ -58398,7 +57386,7 @@ async function recoverStaleRuns(dependencies = {}) {
     const claimedRunIds = new Set(journaledQuarantines);
     const knownRunIds = new Set(journaledQuarantines);
     if (runsIdentity !== null) {
-      const runEntries = await readdir8(runsRoot, { withFileTypes: true });
+      const runEntries = await readdir13(runsRoot, { withFileTypes: true });
       for (const entry of runEntries) {
         if (entry.isDirectory() && !entry.isSymbolicLink() && SAFE_RUN_ID2.test(entry.name)) {
           knownRunIds.add(entry.name);
@@ -58417,8 +57405,8 @@ async function recoverStaleRuns(dependencies = {}) {
         }
         if (!entry.isDirectory() || entry.isSymbolicLink() || !SAFE_RUN_ID2.test(entry.name)) continue;
         try {
-          const runDirectory = path33.join(runsRoot, entry.name);
-          const runStartText = await readBoundedRegularFile2(path33.join(runDirectory, "run-start.json"));
+          const runDirectory = path41.join(runsRoot, entry.name);
+          const runStartText = await readBoundedRegularFile2(path41.join(runDirectory, "run-start.json"));
           if (runStartText === null) {
             claimedRunIds.add(entry.name);
             continue;
@@ -58445,7 +57433,7 @@ async function recoverStaleRuns(dependencies = {}) {
               continue;
             }
             const checkoutLock = await acquireOwnedLock(
-              path33.join(locksRoot, `${record2.lockKey}.lock`),
+              path41.join(locksRoot, `${record2.lockKey}.lock`),
               ownerContents,
               isProcessAlive2,
               (pid) => ps.getProcessStartToken(pid)
@@ -58459,7 +57447,7 @@ async function recoverStaleRuns(dependencies = {}) {
             let cleanupDeferred = false;
             try {
               const lockedRunStartText = await readBoundedRegularFile2(
-                path33.join(runDirectory, "run-start.json")
+                path41.join(runDirectory, "run-start.json")
               );
               if (lockedRunStartText === null) {
                 throw new RuntimeError("run-start recovery record disappeared during recovery");
@@ -58477,7 +57465,6 @@ async function recoverStaleRuns(dependencies = {}) {
               const commonDir = await validateGitCommonDir(lockedRecord.canonicalCommonDir);
               if (lockedMarker === null) {
                 await cleanupRunWorktreesUnderLease(
-                  root,
                   commonDir,
                   entry.name,
                   runGit,
@@ -58493,7 +57480,6 @@ async function recoverStaleRuns(dependencies = {}) {
                 if (lockedMarkerStatus === "dead") {
                   if (lockedMarker.sliced) await archiveInterruptedPipeline(store, lockedResult);
                   await cleanupRunWorktreesUnderLease(
-                    root,
                     commonDir,
                     entry.name,
                     runGit,
@@ -58566,7 +57552,7 @@ async function recoverStaleRuns(dependencies = {}) {
     }
     for (const { record: record2, runStartText } of stale) {
       const checkoutLock = await acquireOwnedLock(
-        path33.join(locksRoot, `${record2.lockKey}.lock`),
+        path41.join(locksRoot, `${record2.lockKey}.lock`),
         ownerContents,
         isProcessAlive2,
         (pid) => ps.getProcessStartToken(pid)
@@ -58581,7 +57567,7 @@ async function recoverStaleRuns(dependencies = {}) {
       let becameLive = false;
       try {
         const lockedRunStartText = await readBoundedRegularFile2(
-          path33.join(runsRoot, record2.runId, "run-start.json")
+          path41.join(runsRoot, record2.runId, "run-start.json")
         );
         if (lockedRunStartText === null) {
           throw new RuntimeError("run-start recovery record disappeared before stale recovery");
@@ -58633,7 +57619,7 @@ async function recoverStaleRuns(dependencies = {}) {
       }
       recovered.push(record2.runId);
     }
-    await reclaimLocks(
+    await reclaimDeadCheckoutLocks(
       locksRoot,
       isProcessAlive2,
       (pid) => ps.getProcessStartToken(pid)
@@ -58646,9 +57632,9 @@ async function recoverStaleRuns(dependencies = {}) {
     }, workflowRecoveryIssues);
     const claimedWorkflowPrefixes = /* @__PURE__ */ new Set();
     for (const { workflowId } of workflows) {
-      if (SAFE_WORKFLOW_ID.test(workflowId) && await plainDirectoryIdentity2(path33.join(root, "workflows", workflowId)) !== null) {
+      if (SAFE_WORKFLOW_ID.test(workflowId) && await plainDirectoryIdentity2(path41.join(root, "workflows", workflowId)) !== null) {
         claimedWorkflowPrefixes.add(
-          createHash16("sha256").update(workflowId).digest("hex").slice(0, 32)
+          createHash18("sha256").update(workflowId).digest("hex").slice(0, 32)
         );
       }
     }
@@ -58671,7 +57657,7 @@ async function recoverStaleRuns(dependencies = {}) {
       ...terminalCleanupIssues,
       ...workflowRecoveryIssues,
       ...orphanWorktreeIssues
-    ], path33.join(root, "worktrees"));
+    ], path41.join(root, "worktrees"));
     const result = workflows.length === 0 ? { recovered, quarantined } : { recovered, quarantined, workflows };
     return worktreeSweepIssues.length === 0 ? result : { ...result, worktreeSweepIssues };
   } catch (error51) {
@@ -59018,7 +58004,7 @@ async function createServer(dependencies = {}) {
       (issue2) => issue2.repositoryIdentity !== void 0
     );
     const unattributedWorktrees = unresolvedSweepIssues.filter(
-      (issue2) => issue2.repositoryIdentity === void 0 && path34.basename(path34.dirname(issue2.worktreePath)) === "worktrees"
+      (issue2) => issue2.repositoryIdentity === void 0 && (path42.basename(path42.dirname(issue2.worktreePath)) === "worktrees" || isManagedWorktreeNamespace(path42.dirname(issue2.worktreePath)))
     );
     if (attributed.length === 0 && unattributedWorktrees.length === 0) return;
     const canonical = await (dependencies.ps ?? getPlatformServices()).canonicalizePath(checkoutPath);
@@ -59141,11 +58127,11 @@ async function createServer(dependencies = {}) {
     "autopilotStart",
     {
       title: "Start an autopilot workflow",
-      description: "Validate an Autopilot Spec and run its verified workflow.",
+      description: "Validate an Autopilot Spec and run its verified workflow to a final-reviewed local branch. It never pushes or opens a pull request; hand the branch to the No Mistakes delivery gate.",
       inputSchema: autopilotStartInputSchema,
       outputSchema: autopilotOutput,
       // The most consequential tool on the surface: runs Producers, creates
-      // branches and worktrees, promotes commits, pushes, and opens a PR.
+      // branches and worktrees, and promotes commits onto the workflow branch.
       annotations: { destructiveHint: true, idempotentHint: false, readOnlyHint: false }
     },
     async ({ checkoutPath, spec, protocolVersion }, extra) => {
@@ -59186,7 +58172,7 @@ async function createServer(dependencies = {}) {
       description: "Resume a recoverable autopilot workflow from durable state.",
       inputSchema: autopilotWorkflowInputSchema,
       outputSchema: autopilotOutput,
-      // Continues the same shipping workflow from durable state.
+      // Continues the same workflow from durable state.
       annotations: { destructiveHint: true, idempotentHint: false, readOnlyHint: false }
     },
     async ({ checkoutPath, workflowId, protocolVersion }, extra) => {
@@ -59250,10 +58236,23 @@ async function createServer(dependencies = {}) {
               snapshot,
               (dependencies.decisionAuthority ?? decisionAuthority)()
             );
+            let reasons = verdict.state === "accepted" ? advisory.warnings : verdict.reasons;
             if (verdict.state === "accepted" && effectiveDecision === "accepted") {
-              return "policy-autonomous";
+              const candidate = snapshot.result?.candidate;
+              if (candidate == null) {
+                throw new RuntimeError("accepted verdict without a frozen candidate");
+              }
+              const screen = await (dependencies.jevScreen ?? jevScreen)(candidate);
+              if (screen.status === "unavailable") {
+                logger.warn("independent candidate screen unavailable; deterministic verdict stands", {
+                  event: "jev-screen-unavailable",
+                  runId: effectiveRunId,
+                  reason: screen.reason
+                });
+              }
+              if (screen.status !== "concern") return "policy-autonomous";
+              reasons = screen.reasons;
             }
-            const reasons = verdict.state === "accepted" ? advisory.warnings : verdict.reasons;
             const confirmed = await confirmWithHuman(
               server,
               effectiveRunId,

@@ -209,6 +209,10 @@ export function buildEnvironment(
     }
 
     for (const [name, value] of Object.entries(args.specAdditions ?? {})) {
+      // HOME, PATH, TMPDIR and the rest are the confinement's own inputs.
+      if (provenance.get(name) === "platform") {
+        throw new RuntimeError(`delegation environment may not override ${JSON.stringify(name)}`);
+      }
       setEnvironmentValue(env, provenance, name, value, "spec");
     }
 
@@ -220,6 +224,16 @@ export function buildEnvironment(
       "platform",
     );
     const environmentSecretRegistration = registerSensitiveEnvironment(env);
+    // Name patterns cannot recognize every vendor's credential variable, so any
+    // value an adapter or the spec chose to hand the Producer is redacted from
+    // runtime output. Absolute paths are locations, not secrets, and redacting
+    // them would destroy diagnostics.
+    const passedValueRegistration = combineSecretRegistrations(
+      [...provenance.entries()]
+        .filter(([name, source]) =>
+          (source === "adapter" || source === "spec") && !path.isAbsolute(env[name] ?? ""))
+        .map(([name]) => registerSecretValue(env[name] ?? "")),
+    );
 
     return {
       env,
@@ -229,6 +243,7 @@ export function buildEnvironment(
       secretRegistration: combineSecretRegistrations([
         hostSecretRegistration,
         environmentSecretRegistration,
+        passedValueRegistration,
       ]),
     };
   } catch (error) {

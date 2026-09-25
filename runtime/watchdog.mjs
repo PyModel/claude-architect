@@ -1,6 +1,11 @@
 // This dependency-free entrypoint must remain parseable by Node.js 20 so it can supervise producer
 // processes independently of the bundled runtime. It kills the producer process group when the MCP
 // server that launched it is no longer alive.
+//
+// POSIX contract: the runtime spawns this watchdog as the leader of a new process group, and the
+// producer stays in that same group. Every tree teardown — the supervisor's SIGKILL escalation and
+// startup recovery, which both signal the watchdog's group — therefore reaches the producer too. A
+// producer in a group of its own survived the uncatchable SIGKILL that removed its watchdog.
 import { spawn } from "node:child_process";
 
 const POLL_INTERVAL_MS = 5_000;
@@ -14,27 +19,36 @@ if (separator !== "--" || command === undefined) {
 }
 
 const supervisorPid = Number(supervisorArg);
-// POSIX: detach so the child leads its own process group and a negative-PID
-// signal reaches the whole tree. Windows has no POSIX process groups or
-// signals, so spawn attached and terminate the child directly (Windows
-// process-tree teardown is handled separately by the Job Object helper).
+// Windows has no POSIX process groups or signals; its process-tree teardown is
+// handled separately by the Job Object helper.
 const isWindows = process.platform === "win32";
-const child = spawn(command, args, { detached: !isWindows, stdio: "inherit" });
+const child = spawn(command, args, { stdio: "inherit" });
 let supervisorGone = false;
 let terminationTimer = null;
 
-function killChildGroup(signal) {
+function signalChild(signal) {
   try {
-    if (isWindows) process.kill(child.pid, signal);
-    else process.kill(-child.pid, signal);
+    process.kill(child.pid, signal);
   } catch {
-    // The child process group has already exited.
+    // The child has already exited.
   }
 }
 
+// The whole group: this watchdog, the producer, and everything it spawned.
+function killTree(signal) {
+  try {
+    if (isWindows) process.kill(child.pid, signal);
+    else process.kill(-process.pid, signal);
+  } catch {
+    // The group has already exited.
+  }
+}
+
+// A signal sent to the group already reached the producer; one sent to this
+// process alone is relayed so the producer can shut down cleanly.
 const signalHandlers = new Map(FORWARDED_SIGNALS.map(signal => [
   signal,
-  () => killChildGroup(signal),
+  () => signalChild(signal),
 ]));
 for (const [signal, handler] of signalHandlers) process.on(signal, handler);
 
@@ -44,10 +58,8 @@ const poll = setInterval(() => {
     process.kill(supervisorPid, 0);
   } catch {
     supervisorGone = true;
-    killChildGroup("SIGTERM");
-    terminationTimer = setTimeout(() => {
-      if (child.exitCode === null && child.signalCode === null) killChildGroup("SIGKILL");
-    }, TERMINATION_GRACE_MS);
+    killTree("SIGTERM");
+    terminationTimer = setTimeout(() => killTree("SIGKILL"), TERMINATION_GRACE_MS);
   }
 }, POLL_INTERVAL_MS);
 
@@ -64,6 +76,9 @@ child.once("error", () => {
 
 child.once("exit", (code, signal) => {
   cleanup();
+  // An orphaned tree is torn down completely: the producer's own children must
+  // not outlive it just because the producer exited within the grace period.
+  if (supervisorGone) killTree("SIGKILL");
   if (signal !== null) {
     process.kill(process.pid, signal);
     return;

@@ -42,6 +42,7 @@ function makeManifest(runId: string): RunManifest {
       model: "test-model",
     },
     effectiveConfig: {},
+    effectivePolicy: { verificationPolicy: [{ id: "unit", confinement: "macos-seatbelt", skipped: false }] },
     policy: {
       confinement: "none",
       writeScope: ["."],
@@ -199,6 +200,34 @@ describe("RunDecision", () => {
         autonomous: true,
         candidateCommit: CANDIDATE_COMMIT,
       });
+    });
+
+    it("1a. requires a person when the manifest has no verification record, or an unknown confinement", async () => {
+      const runId = "accepted-run";
+      const variants: Record<string, unknown>[] = [
+        {},
+        { verificationPolicy: [{ id: "unit", confinement: "[REDACTED]", skipped: false }] },
+        { verificationPolicy: [{ id: "unit", confinement: "none", skipped: false }] },
+      ];
+      for (const effectivePolicy of variants) {
+        const store = createMockStore(runId, {
+          readManifest: async () => ({ ...makeManifest(runId), effectivePolicy }),
+        });
+        await expect(runDecision.evaluate(runId, { store, authority: "autonomous" })).resolves.toEqual({
+          state: "human-required",
+          candidateCommit: CANDIDATE_COMMIT,
+          reasons: ["project verification ran without OS confinement on this platform"],
+        });
+      }
+    });
+
+    it("1c. accepts when the spec declared no verification command", async () => {
+      const runId = "accepted-run";
+      const store = createMockStore(runId, {
+        readManifest: async () => ({ ...makeManifest(runId), effectivePolicy: { verificationPolicy: [] } }),
+      });
+      await expect(runDecision.evaluate(runId, { store, authority: "autonomous" }))
+        .resolves.toMatchObject({ state: "accepted" });
     });
 
     it("1b. state: accepted on clean verified plain-delegate run without gate record", async () => {

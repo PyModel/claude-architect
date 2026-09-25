@@ -35,10 +35,10 @@ import { probeCowSupport } from "../verify/dependency-link.js";
 import { checkLiveBundle, type LiveBundleStatus } from "./live-bundle.js";
 
 import { CHECKOUT_LOCK_NAME_PATTERN } from "../platform/lock-ownership.js";
+import { errorCode } from "../util/errors.js";
 
 const POSIX_HOME_PATH = /\/(?:Users|home)\/[^/\\\s"']+(?:\/[^/\\\s"']+)*/g;
 const WINDOWS_HOME_PATH = /[A-Za-z]:\\Users\\[^/\\\s"']+(?:\\[^/\\\s"']+)*/gi;
-const CHECKOUT_LOCK_NAME = CHECKOUT_LOCK_NAME_PATTERN;
 const MAX_CHECKOUT_LOCK_BYTES = 4_096;
 const MAX_AUTOPILOT_OWNER_BYTES = 1_024;
 const MAX_AUTOPILOT_REGISTRATION_BYTES = 32_768;
@@ -53,8 +53,6 @@ const AUTOPILOT_ISSUE_ORDER = [
   "autopilot-worktree-orphaned",
   "autopilot-branch-mismatch",
   "autopilot-promotion-incomplete",
-  "autopilot-remote-recovery-required",
-  "autopilot-pr-recovery-required",
   "autopilot-state-malformed",
   "autopilot-scan-truncated",
 ] as const;
@@ -131,8 +129,14 @@ function gitVersion(stdout: string): string | null {
   return /^git version ([^\s]+)(?:\s|$)/u.exec(stdout.trim())?.[1] ?? null;
 }
 
-function errorCode(error: unknown): string | undefined {
-  return (error as NodeJS.ErrnoException).code;
+/**
+ * Review diffs read attributes from the trusted base with `--attr-source`,
+ * which Git added in 2.40. An older Git fails those diffs closed, so say why.
+ */
+function gitMeetsFloor(version: string): boolean {
+  const [major, minor] = version.split(".").map(part => Number.parseInt(part, 10));
+  if (!Number.isInteger(major) || !Number.isInteger(minor)) return false;
+  return major! > 2 || (major === 2 && minor! >= 40);
 }
 
 function defaultIsProcessAlive(pid: number): boolean {
@@ -198,7 +202,7 @@ async function checkoutLockIssues(
 
   const issues = new Set<string>();
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const match = CHECKOUT_LOCK_NAME.exec(entry.name);
+    const match = CHECKOUT_LOCK_NAME_PATTERN.exec(entry.name);
     if (match === null || match[1] === CLEANUP_JOURNAL_LOCK_KEY) continue;
     if (!entry.isFile() || entry.isSymbolicLink()) {
       issues.add("checkout-lock-malformed");
@@ -500,7 +504,7 @@ function branchMatchesState(
     && registration.baseCommitOid === state.baseCommitOid
     && registration.branchRef === state.workflowRef
     && registration.worktreePath === state.worktreePath
-    && registration.branch === state.shipping.branch;
+    && registration.branch === state.branch;
 }
 
 function expectedHead(state: AutopilotWorkflowState | null, registration: WorkflowBranchIdentity) {
@@ -637,13 +641,6 @@ async function autopilotIssues(
       );
       if (bootstrapStatus !== leaseStatus) issues.add("autopilot-state-malformed");
     }
-    if (leaseStatus === "dead" && state.phase === "pushing") {
-      issues.add("autopilot-remote-recovery-required");
-    }
-    if (leaseStatus === "dead"
-      && (state.phase === "creating-draft-pr" || state.phase === "marking-ready")) {
-      issues.add("autopilot-pr-recovery-required");
-    }
 
     let worktreeExists = false;
     try {
@@ -747,6 +744,7 @@ export async function doctor(deps: DoctorDependencies = {}): Promise<DoctorResul
     // The issue code below is the actionable diagnostic; external error text is not exposed.
   }
   if (!git.ok) issues.push("git-unavailable");
+  else if (!gitMeetsFloor(git.version!)) issues.push("git-too-old");
 
   let dependencyClone: DoctorResult["dependencyClone"];
   try {

@@ -8,6 +8,8 @@ export interface SeatbeltPolicy {
   tempHome: string | null;
   allowNetwork: boolean;
   extraWritableRoots?: string[];
+  /** false confines temporary files to `tempHome` instead of the shared tmp roots. */
+  sharedTemp?: boolean;
 }
 
 /**
@@ -148,12 +150,43 @@ function inheritedStateWritablePaths(
   return [...declared];
 }
 
+/**
+ * Credential stores an untrusted process never needs. Reads are otherwise
+ * allowed (toolchains, caches, the Producer's own login state), and network is
+ * allowed for model traffic, so these are the secrets that would be worth
+ * exfiltrating. A tool that needs one of them is not a delegated workload.
+ */
+const CREDENTIAL_PATHS = [
+  ".ssh",
+  ".aws",
+  ".azure",
+  ".gnupg",
+  ".kube",
+  ".docker",
+  ".netrc",
+  ".git-credentials",
+  ".config/gh",
+  ".config/gcloud",
+];
+
+function credentialReadDenials(): string[] {
+  const home = process.env.HOME ?? homedir();
+  if (!isAbsolute(home) || resolve(home) === "/") return [];
+  return [...new Set(CREDENTIAL_PATHS.flatMap(entry => {
+    const candidate = resolve(home, entry);
+    try {
+      return [candidate, realpathSync(candidate)];
+    } catch {
+      return [candidate];
+    }
+  }))];
+}
+
 function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): string {
   const writable = [...new Set([
     policy.worktreePath,
     policy.tempHome,
-    process.env.TMPDIR ?? "/private/tmp",
-    "/private/tmp",
+    ...(policy.sharedTemp === false ? [] : [process.env.TMPDIR ?? "/private/tmp", "/private/tmp"]),
     "/dev",
     ...(policy.extraWritableRoots ?? []),
     ...additionalWritable,
@@ -172,6 +205,7 @@ function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): str
     "(deny file-write*)",
     ...writable.map(path => `(allow file-write* (subpath ${sbPath(path)}))`),
     '(allow file-write* (literal "/dev/null") (literal "/dev/tty"))',
+    ...credentialReadDenials().map(path => `(deny file-read* (subpath ${sbPath(path)}))`),
   ];
   if (!policy.allowNetwork) lines.push("(deny network*)");
   return lines.join("\n");
@@ -201,4 +235,21 @@ export function wrapInvocationWithSeatbelt(
     },
     args: ["-p", profile, ...inner],
   };
+}
+
+/**
+ * Confine a trusted-runtime command (project verification) that executes
+ * Producer-authored code: writes only to its worktree and scratch directory.
+ */
+export function seatbeltArgv(
+  policy: { worktreePath: string; scratchDir: string },
+  argv: readonly string[],
+): { command: string; args: string[] } {
+  const profile = buildProfile({
+    worktreePath: policy.worktreePath,
+    tempHome: policy.scratchDir,
+    allowNetwork: true,
+    sharedTemp: false,
+  }, []);
+  return { command: "/usr/bin/sandbox-exec", args: ["-p", profile, ...argv] };
 }

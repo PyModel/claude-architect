@@ -1,16 +1,12 @@
 import { createHash } from "node:crypto";
 import { manifestHashOf } from "../git/changed-path-manifest.js";
-import type { AttemptResult } from "../protocol/attempt-result.js";
 import type { AutopilotDecisionEligibilityV1 } from "../protocol/candidate-decision.js";
-import type { PipelineResult, PipelineVerificationReport } from "../pipeline/pipeline-runtime.js";
-import type { AdvisorReport, Finding, ReviewReport } from "../pipeline/report-types.js";
-import type { GateResult } from "../pipeline/gates.js";
+import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
+import type { AdvisorReport } from "../pipeline/report-types.js";
 import {
   reviewSnapshotHash as hashReviewSnapshot,
   type ReviewSnapshot,
 } from "../runtime/review-snapshot.js";
-
-const SHA256 = /^[0-9a-f]{64}$/u;
 
 export interface AutopilotEligibilityRecord {
   recordVersion: "1";
@@ -28,37 +24,12 @@ export interface AutopilotEligibilityRecord {
   evaluatedAt: string;
 }
 
-export interface EligibilityReview {
-  reviewer: string;
-  report: ReviewReport;
-}
-
-/** A normalized, caller-independent description of the complete frozen evidence. */
-export interface AutopilotEligibilityInput {
-  runId: string;
-  status: PipelineResult["status"];
-  gate: GateResult;
-  attemptStatus: AttemptResult["status"];
-  verification: PipelineVerificationReport | null;
-  finalReviews: EligibilityReview[];
-  finalFindings: Finding[];
-  finalFixReReviewed: boolean;
-  advisor: AdvisorReport;
-  baseCommitOid: string;
-  candidateCommitOid: string;
-  candidateTreeOid: string;
-  candidateManifestHash: string;
-  reviewRunId: string;
-  reviewBaseCommitOid: string;
-  reviewCandidateCommitOid: string;
-  reviewCandidateTreeOid: string;
-  reviewManifestHash: string;
-  reviewSnapshotHash: string;
-  pipelineResultHash: string;
-  advisorReportHash: string;
-  evaluatedAt: string;
+/** The complete frozen evidence one eligibility record is derived from. */
+export interface AutopilotEligibilityEvidence {
   pipelineResult: PipelineResult;
   reviewSnapshot: ReviewSnapshot;
+  advisor: AdvisorReport;
+  evaluatedAt: string;
 }
 
 function canonicalJsonValue(value: unknown): string {
@@ -115,64 +86,31 @@ function addReason(reasons: string[], reason: string): void {
   if (!reasons.includes(reason)) reasons.push(reason);
 }
 
-function hashesAgree(actual: string, expected: string): boolean {
-  return SHA256.test(actual) && actual === expected;
-}
-
-export function eligibilityInputFromArtifacts(args: {
-  pipelineResult: PipelineResult;
-  reviewSnapshot: ReviewSnapshot;
-  advisor: AdvisorReport;
-  evaluatedAt: string;
-}): AutopilotEligibilityInput {
-  const { pipelineResult, reviewSnapshot, advisor } = args;
+/**
+ * Pure, deterministic derivation from the frozen evidence itself. Every field
+ * of the record is computed here, so no caller-supplied projection or hash can
+ * disagree with the artifacts it describes.
+ */
+export function evaluateAutopilotEligibility(
+  evidence: AutopilotEligibilityEvidence,
+): AutopilotEligibilityRecord {
+  const { pipelineResult, reviewSnapshot, advisor } = evidence;
+  const reasons: string[] = [];
   const candidate = pipelineResult.attempt.candidate;
   const lastRound = pipelineResult.rounds.at(-1);
-  return {
-    runId: pipelineResult.runId,
-    status: pipelineResult.status,
-    gate: structuredClone(pipelineResult.gate),
-    attemptStatus: pipelineResult.attempt.status,
-    verification: pipelineResult.verification === null
-      ? null
-      : structuredClone(pipelineResult.verification),
-    finalReviews: structuredClone(lastRound?.reviews ?? []),
-    finalFindings: structuredClone(lastRound?.consolidated.findings ?? []),
-    finalFixReReviewed: lastRound?.fix === null,
-    advisor: structuredClone(advisor),
-    baseCommitOid: candidate?.baseCommitOid ?? reviewSnapshot.baseCommitOid,
-    candidateCommitOid: candidate?.candidateCommitOid ?? reviewSnapshot.candidateCommitOid,
-    candidateTreeOid: candidate?.candidateTreeOid ?? reviewSnapshot.candidateTreeOid,
-    candidateManifestHash: candidate?.manifestHash ?? reviewSnapshot.manifestHash,
-    reviewRunId: reviewSnapshot.runId,
-    reviewBaseCommitOid: reviewSnapshot.baseCommitOid,
-    reviewCandidateCommitOid: reviewSnapshot.candidateCommitOid,
-    reviewCandidateTreeOid: reviewSnapshot.candidateTreeOid,
-    reviewManifestHash: reviewSnapshot.manifestHash,
-    reviewSnapshotHash: hashReviewSnapshot(reviewSnapshot),
-    pipelineResultHash: pipelineResultHash(pipelineResult),
-    advisorReportHash: advisorReportHash(advisor),
-    evaluatedAt: args.evaluatedAt,
-    pipelineResult: structuredClone(pipelineResult),
-    reviewSnapshot: structuredClone(reviewSnapshot),
-  };
-}
+  const gate = pipelineResult.gate;
 
-/** Pure, deterministic derivation. No caller-supplied eligibility is accepted. */
-export function evaluateAutopilotEligibility(
-  input: AutopilotEligibilityInput,
-): AutopilotEligibilityRecord {
-  const reasons: string[] = [];
-
-  if (input.status !== "decision-ready") addReason(reasons, "pipeline status is not decision-ready");
-  if (!input.gate.decisionReady) addReason(reasons, "pipeline gate is not decision-ready");
-  if (input.gate.requiresHumanDecision) addReason(reasons, "pipeline gate requires human decision");
-  for (const reason of input.gate.reasons) addReason(reasons, `pipeline gate: ${reason}`);
-  if (input.attemptStatus !== "verified-candidate") {
+  if (pipelineResult.status !== "decision-ready") {
+    addReason(reasons, "pipeline status is not decision-ready");
+  }
+  if (!gate.decisionReady) addReason(reasons, "pipeline gate is not decision-ready");
+  if (gate.requiresHumanDecision) addReason(reasons, "pipeline gate requires human decision");
+  for (const reason of gate.reasons) addReason(reasons, `pipeline gate: ${reason}`);
+  if (pipelineResult.attempt.status !== "verified-candidate") {
     addReason(reasons, "attempt is not a verified candidate");
   }
 
-  const verification = input.verification;
+  const verification = pipelineResult.verification;
   if (verification === null) {
     addReason(reasons, "trusted verification is missing");
   } else {
@@ -193,8 +131,9 @@ export function evaluateAutopilotEligibility(
     }
   }
 
+  const finalReviews = lastRound?.reviews ?? [];
   for (const reviewer of ["correctness", "systems"] as const) {
-    const report = input.finalReviews.find(review => review.reviewer === reviewer)?.report;
+    const report = finalReviews.find(review => review.reviewer === reviewer)?.report;
     if (report?.verdict !== "approve") {
       addReason(reasons, `final ${reviewer} review does not approve`);
     }
@@ -202,74 +141,41 @@ export function evaluateAutopilotEligibility(
       addReason(reasons, `final ${reviewer} review has coverage gaps`);
     }
   }
-  if (input.finalFindings.some(finding =>
+  if ((lastRound?.consolidated.findings ?? []).some(finding =>
     finding.severity === "blocker" || finding.severity === "major")) {
     addReason(reasons, "final review contains blocker or major findings");
   }
-  if (!input.finalFixReReviewed) addReason(reasons, "final fix was not independently re-reviewed");
+  if (lastRound?.fix !== null) addReason(reasons, "final fix was not independently re-reviewed");
 
-  if (input.advisor.verdict !== "approve") addReason(reasons, "advisor does not approve");
-  if (input.advisor.risks.some(risk => risk.severity === "blocker" || risk.severity === "major")) {
+  if (advisor.verdict !== "approve") addReason(reasons, "advisor does not approve");
+  if (advisor.risks.some(risk => risk.severity === "blocker" || risk.severity === "major")) {
     addReason(reasons, "advisor reported blocker or major risk");
   }
-  if (input.advisor.coverageGaps.length > 0) addReason(reasons, "advisor reported coverage gaps");
+  if (advisor.coverageGaps.length > 0) addReason(reasons, "advisor reported coverage gaps");
 
-  if (input.runId !== input.reviewRunId) addReason(reasons, "review snapshot run id mismatch");
-  if (input.baseCommitOid !== input.reviewBaseCommitOid) {
-    addReason(reasons, "review snapshot base commit mismatch");
-  }
-  if (input.candidateCommitOid !== input.reviewCandidateCommitOid) {
-    addReason(reasons, "review snapshot candidate commit mismatch");
-  }
-  if (input.candidateTreeOid !== input.reviewCandidateTreeOid) {
-    addReason(reasons, "review snapshot candidate tree mismatch");
-  }
-  if (input.candidateManifestHash !== input.reviewManifestHash) {
-    addReason(reasons, "review snapshot candidate manifest mismatch");
-  }
-
-  if (!SHA256.test(input.reviewSnapshotHash)) addReason(reasons, "review snapshot hash is invalid");
-  if (!SHA256.test(input.pipelineResultHash)) addReason(reasons, "pipeline result hash is invalid");
-  if (!SHA256.test(input.advisorReportHash)) addReason(reasons, "advisor report hash is invalid");
-  if (input.reviewSnapshot === undefined) {
-    addReason(reasons, "review snapshot source artifact is missing");
+  // The review snapshot is produced independently of the pipeline, so its
+  // binding to the pipeline's candidate is a real check, not a restatement.
+  if (candidate === null) {
+    addReason(reasons, "pipeline result has no candidate");
   } else {
-    try {
-      if (!hashesAgree(input.reviewSnapshotHash, hashReviewSnapshot(input.reviewSnapshot))) {
-        addReason(reasons, "review snapshot hash mismatch");
-      }
-    } catch {
-      addReason(reasons, "review snapshot is malformed");
+    if (pipelineResult.runId !== reviewSnapshot.runId) {
+      addReason(reasons, "review snapshot run id mismatch");
     }
-  }
-  if (input.pipelineResult === undefined) {
-    addReason(reasons, "pipeline result source artifact is missing");
-  } else {
+    if (candidate.baseCommitOid !== reviewSnapshot.baseCommitOid) {
+      addReason(reasons, "review snapshot base commit mismatch");
+    }
+    if (candidate.candidateCommitOid !== reviewSnapshot.candidateCommitOid) {
+      addReason(reasons, "review snapshot candidate commit mismatch");
+    }
+    if (candidate.candidateTreeOid !== reviewSnapshot.candidateTreeOid) {
+      addReason(reasons, "review snapshot candidate tree mismatch");
+    }
+    if (candidate.manifestHash !== reviewSnapshot.manifestHash) {
+      addReason(reasons, "review snapshot candidate manifest mismatch");
+    }
     try {
-      if (!hashesAgree(input.pipelineResultHash, pipelineResultHash(input.pipelineResult))) {
-        addReason(reasons, "pipeline result hash mismatch");
-      }
-      const sourceLastRound = input.pipelineResult.rounds.at(-1);
-      if (input.pipelineResult.status !== input.status
-        || input.pipelineResult.attempt.status !== input.attemptStatus
-        || canonicalArtifactHash(input.pipelineResult.gate) !== canonicalArtifactHash(input.gate)
-        || canonicalArtifactHash(input.pipelineResult.verification) !== canonicalArtifactHash(input.verification)
-        || canonicalArtifactHash(sourceLastRound?.reviews ?? [])
-          !== canonicalArtifactHash(input.finalReviews)
-        || canonicalArtifactHash(sourceLastRound?.consolidated.findings ?? [])
-          !== canonicalArtifactHash(input.finalFindings)
-        || (sourceLastRound?.fix === null) !== input.finalFixReReviewed) {
-        addReason(reasons, "pipeline result eligibility projection mismatch");
-      }
-      const candidate = input.pipelineResult.attempt.candidate;
-      if (input.pipelineResult.runId !== input.runId
-        || input.pipelineResult.attempt.runId !== input.runId
-        || input.pipelineResult.finalCandidateCommit !== input.candidateCommitOid
-        || candidate === null
-        || candidate.baseCommitOid !== input.baseCommitOid
-        || candidate.candidateCommitOid !== input.candidateCommitOid
-        || candidate.candidateTreeOid !== input.candidateTreeOid
-        || candidate.manifestHash !== input.candidateManifestHash
+      if (pipelineResult.attempt.runId !== pipelineResult.runId
+        || pipelineResult.finalCandidateCommit !== candidate.candidateCommitOid
         || manifestHashOf(candidate.changedPaths) !== candidate.manifestHash) {
         addReason(reasons, "pipeline result candidate binding mismatch");
       }
@@ -277,10 +183,22 @@ export function evaluateAutopilotEligibility(
       addReason(reasons, "pipeline result is malformed");
     }
   }
+
+  let reviewSnapshotHash = "";
+  let resultHash = "";
+  let advisorHash = "";
   try {
-    if (!hashesAgree(input.advisorReportHash, advisorReportHash(input.advisor))) {
-      addReason(reasons, "advisor report hash mismatch");
-    }
+    reviewSnapshotHash = hashReviewSnapshot(reviewSnapshot);
+  } catch {
+    addReason(reasons, "review snapshot is malformed");
+  }
+  try {
+    resultHash = pipelineResultHash(pipelineResult);
+  } catch {
+    addReason(reasons, "pipeline result is malformed");
+  }
+  try {
+    advisorHash = advisorReportHash(advisor);
   } catch {
     addReason(reasons, "advisor report is malformed");
   }
@@ -288,16 +206,16 @@ export function evaluateAutopilotEligibility(
   return {
     recordVersion: "1",
     policyVersion: "1",
-    runId: input.runId,
+    runId: pipelineResult.runId,
     eligible: reasons.length === 0,
     reasons,
-    baseCommitOid: input.baseCommitOid,
-    candidateCommitOid: input.candidateCommitOid,
-    candidateTreeOid: input.candidateTreeOid,
-    candidateManifestHash: input.candidateManifestHash,
-    reviewSnapshotHash: input.reviewSnapshotHash,
-    pipelineResultHash: input.pipelineResultHash,
-    advisorReportHash: input.advisorReportHash,
-    evaluatedAt: input.evaluatedAt,
+    baseCommitOid: candidate?.baseCommitOid ?? reviewSnapshot.baseCommitOid,
+    candidateCommitOid: candidate?.candidateCommitOid ?? reviewSnapshot.candidateCommitOid,
+    candidateTreeOid: candidate?.candidateTreeOid ?? reviewSnapshot.candidateTreeOid,
+    candidateManifestHash: candidate?.manifestHash ?? reviewSnapshot.manifestHash,
+    reviewSnapshotHash,
+    pipelineResultHash: resultHash,
+    advisorReportHash: advisorHash,
+    evaluatedAt: evidence.evaluatedAt,
   };
 }

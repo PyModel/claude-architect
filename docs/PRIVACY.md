@@ -7,7 +7,7 @@ Claude Architect is primarily a local orchestration and evidence system, but it 
 The plugin stores run state below the Claude Code-provided `$CLAUDE_PLUGIN_DATA` directory. `src/runtime/state-dir.ts` refuses to select an implicit production fallback. Typical contents include:
 
 - `runs/<run-id>/manifest.json`, `result.json`, an optional decision record, redacted bounded stdout/stderr logs, and pipeline review/fix/verification JSON;
-- `worktrees/<run-id>/` and short-lived verification worktrees;
+- records of each repository's managed worktree namespace; the worktrees themselves, including short-lived verification worktrees, live in that repository's main checkout under `.worktrees/claude-architect/`;
 - lock, recovery, cleanup-journal, and quarantine/pruning state;
 - Git objects and `refs/claude-architect/candidates/<run-id>` in the delegated repository, used to keep frozen candidate commits reachable.
 
@@ -22,6 +22,8 @@ The initial Producer receives the objective, relevant context, success criteria,
 Codex normally contacts the OpenAI service configured by the Codex CLI. OpenCode, Pi, Pythinker, and Antigravity CLI (`agy`) are model harnesses and may contact whichever cloud or local provider the user's configuration selects; headless Claude Code (`claude`) uses the default Anthropic endpoint (`api.anthropic.com`). A local provider may keep traffic on the machine, but that depends on its endpoint and configuration. Claude Architect does not inspect TLS, pin destinations, or override provider telemetry/retention.
 
 Verification commands run locally in a clean worktree. A command whose spec allows network may transmit repository or test data to destinations chosen by that command. Network-denied commands are only as private as the effective platform enforcement reported in verification evidence.
+
+The opt-in Jev screen is off by default. With `CLAUDE_ARCHITECT_JEV=on` and a `TYPESAFE_API_KEY`, each otherwise autonomous acceptance sends the redacted candidate patch (first 50,000 characters) and up to 200 changed paths to `api.typesafe.ai`; retention there is governed by TypeSafe. Leave it off for code that must not reach that service.
 
 ## Environment and credentials
 

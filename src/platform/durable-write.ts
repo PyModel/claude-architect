@@ -217,6 +217,13 @@ export async function writeAtomic(
       } catch (error) {
         if (!isAlreadyPresent(error)) throw error;
         await session.assertIdentity();
+        // Compare only against a regular file: a symlink planted at the name
+        // must not stand in for the committed record. The link count is not
+        // checked, since a crash between link and temp removal leaves two.
+        const present = await lstat(destination, { bigint: true });
+        if (!present.isFile() || present.isSymbolicLink()) {
+          throw new RuntimeError(`archive entry is not a plain file: ${name}`);
+        }
         const existing = await readFile(destination);
         const expected = typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes;
         if (!existing.equals(expected)) {

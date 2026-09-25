@@ -1,6 +1,6 @@
-import path from "node:path";
-import { git, type GitExecOptions, type GitResult } from "../git/git-exec.js";
-import { WorktreeManager, cleanupWorktree } from "../runtime/worktree-manager.js";
+import { gitChecked as checkedGit, gitFailure, gitSucceeded, reviewDiff } from "../git/checked-git.js";
+import { git } from "../git/git-exec.js";
+import { WorktreeManager, withManagedWorktree } from "../runtime/worktree-manager.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
 import type { ProducerRuntime } from "../producers/producer-runtime.js";
 import type { RunDecision } from "../runtime/run-decision.js";
@@ -22,7 +22,6 @@ import {
   type ReviewerKind,
 } from "../protocol/delegation-spec.js";
 import { specSha256 } from "../protocol/spec-hash.js";
-import { loadSchemas } from "../protocol/schema-loader.js";
 import type { ProducerRegistry } from "../producers/producer-registry.js";
 import {
   runAttempt as defaultRunAttempt,
@@ -33,16 +32,12 @@ import {
   type PipelineActiveMarker,
 } from "../runtime/artifact-store.js";
 import { redact, redactRecord } from "../runtime/redaction.js";
-import { logger } from "../util/logger.js";
 import type { RunStartContext } from "../runtime/run-start.js";
 import {
   transitionRunStatusSafely,
   writeRunStatusSafely,
 } from "../runtime/run-status.js";
 import { RuntimeError } from "../util/errors.js";
-import {
-  recomputeManifest,
-} from "../verify/structural-verifier.js";
 import { consolidate, detectNonConvergence, type ConsolidationResult } from "./consolidator.js";
 import { evaluateGates, type GateResult, type IncrementOutcome } from "./gates.js";
 import type {
@@ -68,6 +63,7 @@ import {
   type ReviewConfig,
 } from "./slice-runner.js";
 import {
+  candidateArtifact,
   verifyCandidate,
   detectWeakenedTests,
 } from "./candidate-verifier.js";
@@ -75,7 +71,7 @@ import {
   importPromotedObjects,
   validateCandidateProvenance,
   validateFixProvenance,
-  privateObjectReadOptions,
+  type CandidateProvenanceFailure,
 } from "./candidate-provenance.js";
 import {
   runIncrement,
@@ -159,25 +155,11 @@ export interface PipelineDependencies extends AttemptRuntimeDependencies {
   ) => Promise<AttemptResult>;
 }
 
-const schemas = loadSchemas();
 const CANDIDATE_REF_PREFIX = "refs/claude-architect/candidates/";
 
 
 
-function gitFailure(action: string, result: GitResult): RuntimeError {
-  const diagnostic = (result.stderr || result.stdout).trim().slice(0, 2_000);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
 
-async function checkedGit(
-  cwd: string,
-  args: string[],
-  options?: GitExecOptions,
-): Promise<string> {
-  const result = await git(cwd, args, options);
-  if (result.exitCode !== 0) throw gitFailure(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
 
 
 
@@ -334,40 +316,6 @@ async function archiveSliceExecutionError(args: {
   }
 }
 
-async function candidateArtifact(args: {
-  worktreePath: string;
-  baselineCommit: string;
-  candidateCommit: string;
-  anchorRef: string;
-  diffText: string;
-}): Promise<CandidateArtifact> {
-  const artifact: CandidateArtifact = {
-    baseCommitOid: args.baselineCommit,
-    candidateTreeOid: (await checkedGit(
-      args.worktreePath,
-      ["rev-parse", `${args.candidateCommit}^{tree}`],
-    )).trim(),
-    candidateCommitOid: args.candidateCommit,
-    anchorRef: args.anchorRef,
-    manifestHash: "",
-    changedPaths: [],
-    patch: args.diffText,
-  };
-  const canonical = await recomputeManifest({
-    worktreePath: args.worktreePath,
-    baseCommitOid: args.baselineCommit,
-    artifact,
-  });
-  if (canonical.manifestHash === null) {
-    throw new RuntimeError("final candidate paths collide under case folding");
-  }
-  return {
-    ...artifact,
-    changedPaths: canonical.changedPaths,
-    manifestHash: canonical.manifestHash,
-  };
-}
-
 async function promoteFinalCandidate(args: {
   checkoutPath: string;
   attempt: AttemptResult;
@@ -375,18 +323,27 @@ async function promoteFinalCandidate(args: {
   baselineCommit: string;
   candidateCommit: string;
   store: ArtifactStore;
-  privateObjectAccess?: LinkedWorktreeGitAccess;
-}): Promise<{ attempt: AttemptResult; candidateCommit: string } | null> {
+}): Promise<
+  | { ok: true; attempt: AttemptResult; candidateCommit: string }
+  | { ok: false; failure: FailureClassification; reason: string }
+> {
+  // Every writer's objects were imported into the shared store before its
+  // worktree was removed, so promotion reads the shared store only.
+  const treeLookup = await git(
+    args.checkoutPath,
+    ["rev-parse", "--verify", "--quiet", `${args.candidateCommit}^{tree}`],
+  );
+  if (!gitSucceeded(treeLookup)) {
+    // `--quiet` makes a missing object a bare exit 1: the Producer reported a
+    // commit its isolated store never held. Anything else is the host failing.
+    const missing = treeLookup.exitCode === 1 && treeLookup.stdout.trim() === "";
+    return missing
+      ? { ok: false, failure: "sandbox-violation", reason: "candidate commit is missing from the git object store" }
+      : { ok: false, failure: "environment-defect", reason: "candidate tree could not be read from the git object store" };
+  }
+  const finalTree = treeLookup.stdout.trim();
   let canonicalCommit: string;
   try {
-    const objectReadOptions = args.privateObjectAccess === undefined
-      ? undefined
-      : privateObjectReadOptions(args.privateObjectAccess);
-    const finalTree = (await checkedGit(
-      args.checkoutPath,
-      ["rev-parse", `${args.candidateCommit}^{tree}`],
-      objectReadOptions,
-    )).trim();
     canonicalCommit = (await checkedGit(args.checkoutPath, [
       "commit-tree",
       finalTree,
@@ -394,17 +351,14 @@ async function promoteFinalCandidate(args: {
       args.baselineCommit,
       "-m",
       `candidate ${args.attempt.runId}`,
-    ], objectReadOptions)).trim();
-    if (args.privateObjectAccess !== undefined) {
-      await importPromotedObjects({
-        checkoutPath: args.checkoutPath,
-        baselineCommit: args.baselineCommit,
-        promotedCommit: canonicalCommit,
-        access: args.privateObjectAccess,
-      });
-    }
+    ])).trim();
   } catch {
-    return null;
+    // The candidate exists; the host could not rebuild it.
+    return {
+      ok: false,
+      failure: "environment-defect",
+      reason: "candidate could not be rebuilt in the shared git object store",
+    };
   }
   await checkedGit(args.checkoutPath, [
     "update-ref",
@@ -412,16 +366,11 @@ async function promoteFinalCandidate(args: {
     canonicalCommit,
     args.initialCandidate.candidateCommitOid,
   ]);
-  const diffText = await checkedGit(
-    args.checkoutPath,
-    ["diff", `${args.baselineCommit}..${canonicalCommit}`],
-  );
   const candidate = await candidateArtifact({
     worktreePath: args.checkoutPath,
     baselineCommit: args.baselineCommit,
     candidateCommit: canonicalCommit,
     anchorRef: args.initialCandidate.anchorRef,
-    diffText,
   });
   const manifest = await args.store.readManifest();
   if (manifest === null) throw new RuntimeError("run manifest is missing during promotion");
@@ -430,7 +379,7 @@ async function promoteFinalCandidate(args: {
     result: finalAttempt,
     manifest: { ...manifest, candidateManifestHash: candidate.manifestHash },
   });
-  return { attempt: finalAttempt, candidateCommit: canonicalCommit };
+  return { ok: true, attempt: finalAttempt, candidateCommit: canonicalCommit };
 }
 
 
@@ -498,7 +447,6 @@ interface PipelineRunState {
   currentCandidateCommit: string;
   pipelineSlices: PipelineSlice[];
   incrementOutcome: IncrementOutcome | undefined;
-  gitObjectAccess: LinkedWorktreeGitAccess | null;
   frozenTestEvidence: string;
   authoritySafeToRelease: boolean;
 }
@@ -591,11 +539,8 @@ async function salvagePipelineFailure(
       baselineCommit: state.baselineCommit,
       candidateCommit: salvagedCommit,
       store,
-      ...(state.gitObjectAccess === null
-        ? {}
-        : { privateObjectAccess: state.gitObjectAccess }),
     });
-    if (promoted === null) return await fallback();
+    if (!promoted.ok) return await fallback();
     salvagedAttempt = promoted.attempt;
     salvagedCommit = promoted.candidateCommit;
   }
@@ -736,11 +681,8 @@ async function resolveHaltedSlicePhase(
     candidateCommit: state.currentCandidateCommit,
     store,
   });
-  if (promoted === null) {
-    return await archiveHalt(
-      "partial halt candidate could not be promoted from the git object store",
-      "sandbox-violation",
-    );
+  if (!promoted.ok) {
+    return await archiveHalt(`partial halt ${promoted.reason}`, promoted.failure);
   }
   state.finalAttempt = promoted.attempt;
   state.currentCandidateCommit = promoted.candidateCommit;
@@ -778,136 +720,175 @@ async function resolveHaltedSlicePhase(
   return haltResult;
 }
 
+/**
+ * Run one role in its own fresh worktree at `commit`. Every writer — each
+ * increment and each fix — starts clean (AGENTS.md: fresh context in a fresh
+ * isolated worktree), so nothing one Producer left behind, tracked or not, can
+ * reach the next.
+ */
+async function withRoleWorktree<T>(
+  context: RunContext,
+  commit: string,
+  label: string,
+  run: (worktreePath: string) => Promise<T>,
+): Promise<T> {
+  return await withManagedWorktree({
+    manager: new WorktreeManager(
+      context.checkoutPath,
+      `${context.runId}-${label}`,
+      context.ps,
+      context.borrowedCheckoutLease === undefined
+        ? {}
+        : { borrowedCheckoutLease: context.borrowedCheckoutLease },
+    ),
+    commit,
+    cleanupFailureMessage: "pipeline role worktree could not be cleaned up",
+    run,
+  });
+}
+
+/**
+ * A writer's commits live in its worktree's private object store, which goes
+ * away with the worktree. Validate them, then import them into the shared
+ * store while the worktree still exists.
+ */
+async function adoptWriterCommit(args: {
+  context: RunContext;
+  gitObjectAccess: LinkedWorktreeGitAccess;
+  previousCandidateCommit: string;
+  candidateCommit: string;
+  phaseLabel: string;
+  validateProvenance: () => Promise<CandidateProvenanceFailure | null>;
+}): Promise<CandidateProvenanceFailure | null> {
+  const provenanceFailure = await args.validateProvenance();
+  if (provenanceFailure !== null) return provenanceFailure;
+  if (args.candidateCommit === args.previousCandidateCommit) return null;
+  try {
+    await importPromotedObjects({
+      checkoutPath: args.context.checkoutPath,
+      baselineCommit: args.previousCandidateCommit,
+      promotedCommit: args.candidateCommit,
+      access: args.gitObjectAccess,
+    });
+  } catch {
+    return {
+      failure: "environment-defect",
+      reason: `${args.phaseLabel} objects could not be imported into the shared git object store`,
+    };
+  }
+  return null;
+}
+
 /** Increments two through `maxIncrements`, each continuing the previous candidate. */
 async function runIncrementPhase(
   context: RunContext,
   deps: PipelineDependencies,
   state: PipelineRunState,
-  worktreePath: string,
   maxIncrements: number,
 ): Promise<PhaseOutcome> {
   const { checkoutPath, spec, store } = context;
-  try {
-    state.gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
-  } catch {
-    return terminal(failedAtCurrentCandidate(
-      state,
-      "increment git object isolation could not be established",
-      "sandbox-violation",
-    ));
-  }
-  const gitObjectAccess = state.gitObjectAccess;
-  const privateObjects = privateObjectReadOptions(gitObjectAccess);
-
-  try {
-    for (let increment = 2; increment <= maxIncrements; increment += 1) {
-      // A cancellation that lands between Producer runs must stop the
-      // pipeline here. Otherwise the loop keeps launching Producers even
-      // though the caller has already given up on the run.
-      if (deps.abortSignal?.aborted === true) {
-        return terminal(failedAtCurrentCandidate(
-          state,
-          `cancelled before increment ${increment}`,
-          "cancelled",
-        ));
-      }
-      await context.notePhase(`increment ${increment}/${maxIncrements}`);
-      const previousCandidateCommit = state.currentCandidateCommit;
-      const diffText = await checkedGit(worktreePath, [
-        "diff",
-        `${state.baselineCommit}..${state.currentCandidateCommit}`,
-      ], privateObjects);
-      const incrementRun = await runIncrement({
-        spec,
-        pkg: {
-          spec,
-          baselineCommit: state.baselineCommit,
-          candidateCommit: state.currentCandidateCommit,
-          candidateDiff: diffText,
-          testEvidence: state.frozenTestEvidence,
-          progress: composeProgressNotes(state.increments.at(-1)?.report ?? state.attempt),
-        },
-        worktreePath,
-        deps,
-        runId: state.attempt.runId,
-        increment,
-        store,
-        gitObjectAccess,
-        ...(context.runStart === undefined ? {} : { runStart: context.runStart }),
-      });
-      if (!incrementRun.ok) {
-        return terminal(failedAtCurrentCandidate(
-          state,
-          `increment phase did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
-          incrementRun.failure,
-        ));
-      }
-
-      const report = redactRecord(incrementRun.report);
-      await store.writePipelineArtifact(`increment-${increment}`, report);
-      const provenanceFailure = await validateCandidateProvenance({
-        worktreePath,
-        previousCandidateCommit,
-        candidateCommit: report.candidateCommit,
-        gitObjectAccess,
-      });
-      if (provenanceFailure !== null) {
-        return terminal(failedAtCurrentCandidate(
-          state,
-          provenanceFailure.reason,
-          provenanceFailure.failure,
-        ));
-      }
-
-      const [previousTree, candidateTree] = await Promise.all([
-        checkedGit(worktreePath, ["rev-parse", `${previousCandidateCommit}^{tree}`], privateObjects),
-        checkedGit(worktreePath, ["rev-parse", `${report.candidateCommit}^{tree}`], privateObjects),
-      ]);
-      const progressed = previousTree.trim() !== candidateTree.trim();
-      if (report.candidateCommit !== previousCandidateCommit) {
+  for (let increment = 2; increment <= maxIncrements; increment += 1) {
+    // A cancellation that lands between Producer runs must stop the pipeline
+    // here. Otherwise the loop keeps launching Producers even though the
+    // caller has already given up on the run.
+    if (deps.abortSignal?.aborted === true) {
+      return terminal(failedAtCurrentCandidate(
+        state,
+        `cancelled before increment ${increment}`,
+        "cancelled",
+      ));
+    }
+    await context.notePhase(`increment ${increment}/${maxIncrements}`);
+    const previousCandidateCommit = state.currentCandidateCommit;
+    const outcome = await withRoleWorktree(
+      context,
+      previousCandidateCommit,
+      `increment-${increment}`,
+      async (worktreePath): Promise<PhaseOutcome> => {
+        let gitObjectAccess: LinkedWorktreeGitAccess;
         try {
-          await importPromotedObjects({
-            checkoutPath,
-            baselineCommit: previousCandidateCommit,
-            promotedCommit: report.candidateCommit,
-            access: gitObjectAccess,
+          gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
+        } catch {
+          return terminal(failedAtCurrentCandidate(
+            state,
+            "increment git object isolation could not be established",
+            "sandbox-violation",
+          ));
+        }
+        const diffText = await reviewDiff(checkoutPath, state.baselineCommit, previousCandidateCommit);
+        let incrementRun;
+        try {
+          incrementRun = await runIncrement({
+            spec,
+            pkg: {
+              spec,
+              baselineCommit: state.baselineCommit,
+              candidateCommit: previousCandidateCommit,
+              candidateDiff: diffText,
+              testEvidence: state.frozenTestEvidence,
+              progress: composeProgressNotes(state.increments.at(-1)?.report ?? state.attempt),
+            },
+            worktreePath,
+            deps,
+            runId: state.attempt.runId,
+            increment,
+            store,
+            gitObjectAccess,
+            ...(context.runStart === undefined ? {} : { runStart: context.runStart }),
           });
         } catch {
           return terminal(failedAtCurrentCandidate(
             state,
-            "increment objects could not be imported into the shared git object store",
-            "sandbox-violation",
+            "increment phase failed unexpectedly",
+            "producer-failure",
           ));
         }
-      }
-      state.currentCandidateCommit = report.candidateCommit;
-      state.increments.push({
-        increment,
-        report,
-        roleLogRefs: incrementRun.roleLogRefs,
-      });
+        if (!incrementRun.ok) {
+          return terminal(failedAtCurrentCandidate(
+            state,
+            `increment phase did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
+            incrementRun.failure,
+          ));
+        }
 
-      if (report.status === "complete") {
-        state.incrementOutcome = "complete";
-        break;
-      }
-      if (report.status === "blocked") {
-        state.incrementOutcome = "blocked";
-        break;
-      }
-      if (!progressed) {
-        state.incrementOutcome = "stalled";
-        break;
-      }
-    }
-    state.incrementOutcome ??= "budget-exhausted";
-  } catch {
-    return terminal(failedAtCurrentCandidate(
-      state,
-      "increment phase failed unexpectedly",
-      "producer-failure",
-    ));
+        const report = redactRecord(incrementRun.report);
+        await store.writePipelineArtifact(`increment-${increment}`, report);
+        const adoptionFailure = await adoptWriterCommit({
+          context,
+          gitObjectAccess,
+          previousCandidateCommit,
+          candidateCommit: report.candidateCommit,
+          phaseLabel: "increment",
+          validateProvenance: () => validateCandidateProvenance({
+            worktreePath,
+            previousCandidateCommit,
+            candidateCommit: report.candidateCommit,
+            gitObjectAccess,
+          }),
+        });
+        if (adoptionFailure !== null) {
+          return terminal(failedAtCurrentCandidate(
+            state,
+            adoptionFailure.reason,
+            adoptionFailure.failure,
+          ));
+        }
+        const [previousTree, candidateTree] = await Promise.all([
+          checkedGit(checkoutPath, ["rev-parse", `${previousCandidateCommit}^{tree}`]),
+          checkedGit(checkoutPath, ["rev-parse", `${report.candidateCommit}^{tree}`]),
+        ]);
+        state.currentCandidateCommit = report.candidateCommit;
+        state.increments.push({ increment, report, roleLogRefs: incrementRun.roleLogRefs });
+        if (report.status === "complete") state.incrementOutcome = "complete";
+        else if (report.status === "blocked") state.incrementOutcome = "blocked";
+        else if (previousTree.trim() === candidateTree.trim()) state.incrementOutcome = "stalled";
+        return CONTINUE;
+      },
+    );
+    if (outcome.state === "terminal") return outcome;
+    if (state.incrementOutcome !== undefined) break;
   }
+  state.incrementOutcome ??= "budget-exhausted";
   return CONTINUE;
 }
 
@@ -916,11 +897,10 @@ async function runReviewRounds(
   context: RunContext,
   deps: PipelineDependencies,
   state: PipelineRunState,
-  worktreePath: string,
   reviewers: ReviewerKind[],
   maxRounds: number,
 ): Promise<PhaseOutcome> {
-  const { spec, store } = context;
+  const { checkoutPath, spec, store } = context;
   for (let round = 1; round <= maxRounds; round += 1) {
     if (deps.abortSignal?.aborted === true) {
       return terminal(failedAtCurrentCandidate(
@@ -930,28 +910,31 @@ async function runReviewRounds(
       ));
     }
     await context.notePhase(`review round ${round}/${maxRounds}`);
-    const diffText = await checkedGit(worktreePath, [
-      "diff",
-      `${state.baselineCommit}..${state.currentCandidateCommit}`,
-    ], state.gitObjectAccess === null ? undefined : privateObjectReadOptions(state.gitObjectAccess));
+    const reviewedCommit = state.currentCandidateCommit;
+    const diffText = await reviewDiff(checkoutPath, state.baselineCommit, reviewedCommit);
     const pkg: RolePackage = {
       spec,
       baselineCommit: state.baselineCommit,
-      candidateCommit: state.currentCandidateCommit,
+      candidateCommit: reviewedCommit,
       candidateDiff: diffText,
       testEvidence: state.frozenTestEvidence,
     };
-    const reviewRun = await runReviews({
-      reviewers,
-      spec,
-      pkg,
-      worktreePath,
-      deps,
-      runId: state.attempt.runId,
-      round,
-      store,
-      onReviewer: role => context.emitStatus("reviewing", { round, role }),
-    });
+    const reviewRun = await withRoleWorktree(
+      context,
+      reviewedCommit,
+      `round-${round}-review`,
+      worktreePath => runReviews({
+        reviewers,
+        spec,
+        pkg,
+        worktreePath,
+        deps,
+        runId: state.attempt.runId,
+        round,
+        store,
+        onReviewer: role => context.emitStatus("reviewing", { round, role }),
+      }),
+    );
     if (!reviewRun.ok) {
       return terminal(await salvagePipelineFailure(context, deps, state, {
         reason: `review phase did not produce valid structured output (see ${reviewRun.failedRoleLogRef})`,
@@ -987,53 +970,69 @@ async function runReviewRounds(
     state.rounds.push(roundRecord);
     if (!blocking && approved) break;
 
-    try {
-      state.gitObjectAccess ??= await resolveLinkedWorktreeWritableRoots(worktreePath);
-    } catch {
-      return terminal(await archivePipelineFailure(context, state, {
-        reason: "fixer git object isolation could not be established",
-        failure: "sandbox-violation",
-      }));
-    }
-
     await context.emitStatus("fixing", { round, role: "fixer" });
     await context.notePhase(`round ${round}: applying fixes`);
-    const fixRun = await runFix({
-      spec,
-      pkg: { ...pkg, findings: consolidated.findings },
-      worktreePath,
-      deps,
-      runId: state.attempt.runId,
-      round,
-      store,
-      gitObjectAccess: state.gitObjectAccess,
-      ...(context.runStart === undefined ? {} : { runStart: context.runStart }),
-    });
-    if (!fixRun.ok) {
-      // The fix never landed, so the bytes here are the last reviewed
-      // candidate — salvage them rather than losing the whole round.
-      return terminal(await salvagePipelineFailure(context, deps, state, {
-        reason: `fix phase did not produce valid structured output (see ${fixRun.failedRoleLogRef})`,
-        failure: fixRun.failure,
-      }));
-    }
-    const { fix } = fixRun;
-    await store.writePipelineArtifact(`round-${round}-fix`, fix);
-    const provenanceFailure = await validateFixProvenance({
-      worktreePath,
-      previousCandidateCommit: state.currentCandidateCommit,
-      fix,
-      gitObjectAccess: state.gitObjectAccess,
-    });
-    if (provenanceFailure !== null) {
-      return terminal(await archivePipelineFailure(context, state, {
-        reason: provenanceFailure.reason,
-        failure: provenanceFailure.failure,
-      }));
-    }
-    state.currentCandidateCommit = fix.candidateCommit;
-    roundRecord.fix = fix;
-    roundRecord.roleLogRefs = [...reviewRun.roleLogRefs, ...fixRun.roleLogRefs];
+    const fixOutcome = await withRoleWorktree(
+      context,
+      reviewedCommit,
+      `round-${round}-fix`,
+      async (worktreePath): Promise<PhaseOutcome> => {
+        let gitObjectAccess: LinkedWorktreeGitAccess;
+        try {
+          gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
+        } catch {
+          return terminal(await archivePipelineFailure(context, state, {
+            reason: "fixer git object isolation could not be established",
+            failure: "sandbox-violation",
+          }));
+        }
+        const fixRun = await runFix({
+          spec,
+          pkg: { ...pkg, findings: consolidated.findings },
+          worktreePath,
+          deps,
+          runId: state.attempt.runId,
+          round,
+          store,
+          gitObjectAccess,
+          ...(context.runStart === undefined ? {} : { runStart: context.runStart }),
+        });
+        if (!fixRun.ok) {
+          // The fix never landed, so the reviewed bytes are the last
+          // candidate — salvage them rather than losing the whole round.
+          return terminal(await salvagePipelineFailure(context, deps, state, {
+            reason: `fix phase did not produce valid structured output (see ${fixRun.failedRoleLogRef})`,
+            failure: fixRun.failure,
+          }));
+        }
+        const { fix } = fixRun;
+        await store.writePipelineArtifact(`round-${round}-fix`, fix);
+        const adoptionFailure = await adoptWriterCommit({
+          context,
+          gitObjectAccess,
+          previousCandidateCommit: reviewedCommit,
+          candidateCommit: fix.candidateCommit,
+          phaseLabel: "fixer",
+          validateProvenance: () => validateFixProvenance({
+            worktreePath,
+            previousCandidateCommit: reviewedCommit,
+            fix,
+            gitObjectAccess,
+          }),
+        });
+        if (adoptionFailure !== null) {
+          return terminal(await archivePipelineFailure(context, state, {
+            reason: adoptionFailure.reason,
+            failure: adoptionFailure.failure,
+          }));
+        }
+        state.currentCandidateCommit = fix.candidateCommit;
+        roundRecord.fix = fix;
+        roundRecord.roleLogRefs = [...reviewRun.roleLogRefs, ...fixRun.roleLogRefs];
+        return CONTINUE;
+      },
+    );
+    if (fixOutcome.state === "terminal") return fixOutcome;
   }
   return CONTINUE;
 }
@@ -1044,13 +1043,6 @@ async function promoteReviewedCandidate(
   state: PipelineRunState,
 ): Promise<PhaseOutcome> {
   if (state.currentCandidateCommit === state.initialCandidate.candidateCommitOid) return CONTINUE;
-  if (state.gitObjectAccess === null && !state.sliced) {
-    return terminal(failedAtCurrentCandidate(
-      state,
-      "fixer git object isolation state is missing during promotion",
-      "sandbox-violation",
-    ));
-  }
   const promoted = await promoteFinalCandidate({
     checkoutPath: context.checkoutPath,
     attempt: state.attempt,
@@ -1058,14 +1050,11 @@ async function promoteReviewedCandidate(
     baselineCommit: state.baselineCommit,
     candidateCommit: state.currentCandidateCommit,
     store: context.store,
-    ...(state.gitObjectAccess === null ? {} : { privateObjectAccess: state.gitObjectAccess }),
   });
-  if (promoted === null) {
+  if (!promoted.ok) {
     return terminal(await archivePipelineFailure(context, state, {
-      reason: state.sliced
-        ? "sliced candidate could not be promoted from the shared git object store"
-        : "fixer objects could not be imported into the shared git object store",
-      failure: "sandbox-violation",
+      reason: `${state.sliced ? "sliced" : "fixer"} ${promoted.reason}`,
+      failure: promoted.failure,
     }));
   }
   state.finalAttempt = promoted.attempt;
@@ -1335,7 +1324,6 @@ async function runPipelineWithLease(
     currentCandidateCommit: attempt.candidate.candidateCommitOid,
     pipelineSlices: [],
     incrementOutcome: undefined,
-    gitObjectAccess: null,
     frozenTestEvidence: testEvidence(attempt),
     authoritySafeToRelease: !sliced,
   };
@@ -1450,31 +1438,14 @@ async function runPipelineWithLease(
       state.frozenTestEvidence = sliceTestEvidence(phase.slices);
     }
 
-    const candidateWorktree = await new WorktreeManager(
-      checkoutPath,
-      sliced ? `${attempt.runId}-composed-review` : `${attempt.runId}-pipeline`,
-      ps,
-      deps.borrowedCheckoutLease === undefined
-        ? {}
-        : { borrowedCheckoutLease: deps.borrowedCheckoutLease },
-    ).create(state.currentCandidateCommit);
-    try {
-      if (maxIncrements > 1) {
-        const outcome = await runIncrementPhase(context, deps, state, candidateWorktree.path, maxIncrements);
-        if (outcome.state === "terminal") return outcome.result;
-      }
-      const reviewed = await runReviewRounds(context, deps, state, candidateWorktree.path, reviewers, maxRounds);
-      if (reviewed.state === "terminal") return reviewed.result;
-      const promoted = await promoteReviewedCandidate(context, state);
-      if (promoted.state === "terminal") return promoted.result;
-    } finally {
-      const cleanupError = await cleanupWorktree(candidateWorktree);
-      if (cleanupError !== null) {
-        logger.warn("pipeline round worktree could not be cleaned up", {
-          error: redact(cleanupError instanceof Error ? cleanupError.message : String(cleanupError)),
-        });
-      }
+    if (maxIncrements > 1) {
+      const outcome = await runIncrementPhase(context, deps, state, maxIncrements);
+      if (outcome.state === "terminal") return outcome.result;
     }
+    const reviewed = await runReviewRounds(context, deps, state, reviewers, maxRounds);
+    if (reviewed.state === "terminal") return reviewed.result;
+    const promoted = await promoteReviewedCandidate(context, state);
+    if (promoted.state === "terminal") return promoted.result;
 
     return await finalizePipelineGate(context, deps, state, maxRounds);
   } catch (error) {

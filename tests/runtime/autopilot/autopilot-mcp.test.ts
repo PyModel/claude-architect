@@ -31,7 +31,7 @@ function verification() {
 
 function validSpec(): AutopilotSpec {
   return {
-    specVersion: "1",
+    specVersion: "2",
     topic: "autopilot-mcp",
     base: { remote: "origin", branch: "main" },
     tasks: [{
@@ -53,20 +53,12 @@ function validSpec(): AutopilotSpec {
     }],
     finalSuccessCriteria: ["The MCP surface passes its protocol tests."],
     finalVerification: verification(),
-    shipping: {
-      provider: "github",
-      draft: true,
-      markReadyWhenRequiredChecksPass: true,
-      requiredChecksTimeoutMs: 1_800_000,
-      pullRequestTitle: "Expose autopilot MCP tools",
-      pullRequestBody: "Adds the reviewed workflow surface.",
-    },
   };
 }
 
 function workflowState(): AutopilotWorkflowState {
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId: WORKFLOW_ID,
     repositoryIdentity: `${CHECKOUT}/.git`,
     baseCommitOid: OID,
@@ -86,13 +78,7 @@ function workflowState(): AutopilotWorkflowState {
     }],
     intentJournal: { ref: "journal.ndjson", entryCount: 2, lastEntryHash: HASH },
     finalGate: null,
-    shipping: {
-      branch: "feat/autopilot-mcp-workflow",
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: "2026-07-21T12:30:00.000Z",
-    },
-    ciObservations: [],
+    branch: "feat/autopilot-mcp-workflow",
     cleanup: null,
     terminal: null,
     createdAt: NOW,
@@ -104,12 +90,6 @@ function workflowState(): AutopilotWorkflowState {
 function redactedProjectionOf(state: AutopilotWorkflowState): AutopilotWorkflowState {
   state.repositoryIdentity = "[redacted]";
   state.worktreePath = "[redacted]";
-  if (state.shipping.prUrl !== null) state.shipping.prUrl = "[redacted]";
-  for (const observation of state.ciObservations) {
-    for (const check of observation.checks) {
-      if (check.link !== null) check.link = "[redacted]";
-    }
-  }
   return state;
 }
 
@@ -252,18 +232,6 @@ describe("autopilot MCP surface", () => {
   // projection through to the client without widening it.
   it("passes the controller status projection through start and resume unchanged", async () => {
     const sensitive = workflowState();
-    sensitive.shipping.prUrl = "https://github.com/example/repository/pull/42";
-    sensitive.ciObservations.push({
-      observedAt: NOW,
-      result: "passed",
-      headCommitOid: OID,
-      checks: [{
-        bucket: "pass",
-        name: "build",
-        state: "SUCCESS",
-        link: "https://github.com/example/repository/actions/runs/99",
-      }],
-    });
     const projected = redactedProjectionOf(sensitive);
     status.mockResolvedValueOnce(projected);
     status.mockResolvedValueOnce(projected);
@@ -327,7 +295,7 @@ describe("autopilot MCP surface", () => {
       arguments: { checkoutPath: CHECKOUT, workflowId: WORKFLOW_ID, protocolVersion: "1.3.0" },
     });
     expect(toolErrorText(result))
-      .toMatch(/protocol version mismatch.*received 1\.3\.0.*expected 2\.0\.0/isu);
+      .toMatch(/protocol version mismatch.*received 1\.3\.0.*expected 3\.0\.0/isu);
     expect(status).not.toHaveBeenCalled();
   });
 

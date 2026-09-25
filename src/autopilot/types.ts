@@ -3,10 +3,6 @@ export type AutopilotPhase =
   | "running-task"
   | "promoting-task"
   | "final-review"
-  | "pushing"
-  | "creating-draft-pr"
-  | "waiting-required-checks"
-  | "marking-ready"
   | "cleaning-up"
   | "ready-for-human-review"
   | "human-decision-required"
@@ -23,7 +19,7 @@ export interface AutopilotTaskState {
 }
 
 export interface AutopilotWorkflowState {
-  stateVersion: "1";
+  stateVersion: "2";
   workflowId: string;
   repositoryIdentity: string;
   baseCommitOid: string;
@@ -45,23 +41,8 @@ export interface AutopilotWorkflowState {
     headCommitOid: string;
     eligibilityHash: string;
   } | null;
-  shipping: {
-    branch: string;
-    prNumber: number | null;
-    prUrl: string | null;
-    ciDeadlineAt: string;
-  };
-  ciObservations: Array<{
-    observedAt: string;
-    result: "missing" | "pending" | "failed" | "passed";
-    headCommitOid: string;
-    checks: Array<{
-      bucket: "pass" | "pending" | "fail" | "cancel" | "skipping";
-      name: string;
-      state: string;
-      link: string | null;
-    }>;
-  }>;
+  /** The local workflow branch handed to the delivery gate once final-reviewed. */
+  branch: string;
   cleanup: {
     status: "succeeded" | "failed";
     worktreeRemoved: boolean;

@@ -37,7 +37,7 @@ All agent output is an untrusted candidate. A candidate that fails independent v
 
 ## Installation
 
-Claude Code requires Node.js 22 or newer.
+Claude Code requires Node.js 22 or newer. The runtime needs Git 2.40 or newer: review diffs read attributes from the trusted base with `--attr-source`, and `doctor` reports `git-too-old` below that.
 
 ```bash
 claude plugin marketplace add PyModel/claude-architect
@@ -87,7 +87,7 @@ Dispatch a delegation through the `delegation-lane` agent to watch it as a nativ
 
 ## Decision authority
 
-By default, `decideCandidate` records `accepted` without prompting for an independently verified candidate that produces no advisory warnings from a readable archive: either a `delegatePipeline` candidate carrying a durable `pipelineGateCleared` record that names the archived candidate commit and does not require a human, or a plain `delegate` result judged on its independent verification alone. Gate-refused, review-incomplete, malformed, commit-mismatched, human-required, unverified, or unreadable cases still require a human, as does every non-accept verdict. Set `CLAUDE_ARCHITECT_DECISION_AUTHORITY=human` to require confirmation for every decision; an unrecognized value fails closed to `human` with a warning.
+By default, `decideCandidate` records `accepted` without prompting for an independently verified candidate that produces no advisory warnings from a readable archive: either a `delegatePipeline` candidate carrying a durable `pipelineGateCleared` record that names the archived candidate commit and does not require a human, or a plain `delegate` result judged on its independent verification alone. Autonomy also requires that project verification ran under an OS confinement backend, so off macOS every decision needs a human, and a plain `delegate` candidate that edits its own verification inputs (tests, test or build configuration, dependency manifests) needs one too. Setting `CLAUDE_ARCHITECT_JEV=on` with a `TYPESAFE_API_KEY` adds an opt-in Jev screen of the patch that can route an otherwise autonomous acceptance to a human, never the reverse. Gate-refused, review-incomplete, malformed, commit-mismatched, human-required, unverified, or unreadable cases still require a human, as does every non-accept verdict. Set `CLAUDE_ARCHITECT_DECISION_AUTHORITY=human` to require confirmation for every decision; an unrecognized value fails closed to `human` with a warning.
 
 This never relaxes the gates themselves: independent verification decides what may be accepted at all, integration refuses any acceptance whose provenance is unknown, and it aborts on a moved `HEAD`, a dirty tree, or a hash that does not match the reviewed artifact. Every decision records its provenance.
 
@@ -136,6 +136,7 @@ Logs and MCP evidence are bounded and redacted; prompt and argument values are n
 - An unavailable requested Producer is reported and fails closed; the runtime never substitutes another Producer or bypasses a denied edit lane.
 - Verification commands are evidence, not automatically sandboxed build infrastructure.
 - Integration stages an accepted candidate but never commits, pushes, opens a pull request, or deploys it.
+- Autopilot ends at a final-reviewed local branch committed under your Git identity. It never pushes or opens a pull request; deliver that branch through your normal gate (No Mistakes in this repository).
 
 ## Development
 

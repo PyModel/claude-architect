@@ -4,17 +4,17 @@ import { link, lstat, open, readdir, readFile, rm, type FileHandle } from "node:
 import path from "node:path";
 import nodeProcess from "node:process";
 import { resolveStateDir } from "../runtime/state-dir.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import type { DirectoryIdentity } from "./durable-directory.js";
 import type { CheckoutLock, LockOwnerAnnotation } from "./platform-services.js";
+import { sameDirectoryIdentity } from "./durable-directory.js";
 
 const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const MAX_STATE_FILE_BYTES = 1_000_000;
 const MAX_STATE_FILE_BYTES_BIGINT = BigInt(MAX_STATE_FILE_BYTES);
 
 export const CHECKOUT_LOCK_NAME_PATTERN = /^([0-9a-f]{64})\.lock$/;
-export const LOCK_NAME = CHECKOUT_LOCK_NAME_PATTERN;
 
 const LOCK_RETRY_MS = 30;
 const LOCK_TIMEOUT_MS = nodeProcess.platform === "win32" ? 15_000 : 2500;
@@ -43,16 +43,6 @@ export type LockOwnerStatus = "dead" | "live" | "unverifiable";
 export type DeadLockReclaimResult = "reclaimed" | "live" | "unverifiable" | "malformed" | "contended";
 export type ExpectedLockRemoval = "removed" | "absent" | "changed";
 
-function isMissing(error: unknown): boolean {
-  return errorCode(error) === "ENOENT";
-}
-
-
-function errorCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String((error as { code?: unknown }).code)
-    : undefined;
-}
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -67,13 +57,6 @@ function isPlainDirectory(metadata: {
   isSymbolicLink(): boolean;
 }): boolean {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
-}
-
-function sameIdentity(
-  left: { dev: bigint; ino: bigint; birthtimeNs: bigint },
-  right: { dev: bigint; ino: bigint; birthtimeNs: bigint },
-): boolean {
-  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
 }
 
 export async function plainDirectoryIdentity(directoryPath: string): Promise<DirectoryIdentity | null> {
@@ -172,7 +155,7 @@ export async function removeLockIfUnchanged(
   const beforeMetadata = await handle.stat({ bigint: true });
   if (!beforeMetadata.isFile()
     || beforeMetadata.isSymbolicLink()
-    || !sameIdentity(beforeMetadata, expectedIdentity)
+    || !sameDirectoryIdentity(beforeMetadata, expectedIdentity)
     || beforeMetadata.nlink !== BigInt(expectedLinks)
     || beforeMetadata.size !== BigInt(expectedContents.byteLength)) {
     return false;
@@ -261,8 +244,6 @@ export async function reclaimDeadCheckoutLocks(
   }
 }
 
-
-export const reclaimLocks = reclaimDeadCheckoutLocks;
 
 
 export async function lockIsOwnedByLiveProcess(
@@ -363,6 +344,13 @@ export async function describeLockContention(
   return `it is held by live pid ${owner.pid}${self}${extras}`;
 }
 
+/** The classification every lock-acquisition timeout carries. */
+export const LOCK_CONTENDED = "lock-contended";
+
+export function isLockContention(error: unknown): boolean {
+  return error instanceof RuntimeError && error.detail?.classification === LOCK_CONTENDED;
+}
+
 export async function withLockContentionDetail(
   error: unknown,
   key: string,
@@ -425,7 +413,10 @@ export async function acquireWxFileLock(
     } catch (error) {
       if (errorCode(error) !== "EEXIST") throw error;
       if (Date.now() >= deadline) {
-        throw new RuntimeError(timeoutMessage ?? `lock is held: ${key}`, { key });
+        throw new RuntimeError(timeoutMessage ?? `lock is held: ${key}`, {
+          key,
+          classification: LOCK_CONTENDED,
+        });
       }
       await delay(LOCK_RETRY_MS);
     }
@@ -437,7 +428,7 @@ export async function validateLockParentIdentity(
   expectedIdentity: DirectoryIdentity,
 ): Promise<void> {
   const metadata = await lstat(parentPath, { bigint: true });
-  if (!isPlainDirectory(metadata) || !sameIdentity(metadata, expectedIdentity)) {
+  if (!isPlainDirectory(metadata) || !sameDirectoryIdentity(metadata, expectedIdentity)) {
     throw new RuntimeError("recovery lock parent identity changed");
   }
 }
@@ -459,7 +450,7 @@ function isExpectedLockMetadata(
   return metadata.isFile()
     && !metadata.isSymbolicLink()
     && metadata.nlink === BigInt(expectedLinks)
-    && sameIdentity(metadata, expectedIdentity)
+    && sameDirectoryIdentity(metadata, expectedIdentity)
     && metadata.size === BigInt(expectedSize)
     && metadata.size <= MAX_STATE_FILE_BYTES_BIGINT;
 }
@@ -549,7 +540,7 @@ export async function pathNamesLockIdentity(
     const metadata = await lstat(filename, { bigint: true });
     return metadata.isFile()
       && !metadata.isSymbolicLink()
-      && sameIdentity(metadata, expectedIdentity);
+      && sameDirectoryIdentity(metadata, expectedIdentity);
   } catch (error) {
     if (isMissing(error)) return false;
     throw error;

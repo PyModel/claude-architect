@@ -17,14 +17,16 @@ vi.mock("../../src/git/git-exec.js", async importOriginal => {
   return {
     ...actual,
     git: async (...args: Parameters<typeof actual.git>) => {
-      if (args[1][0] === gitHooks.failCommand) {
+      // The subcommand, past leading options such as --attr-source.
+      const command = args[1].find(arg => !arg.startsWith("-"));
+      if (command === gitHooks.failCommand) {
         return { stdout: "", stderr: `forced ${gitHooks.failCommand} failure`, exitCode: 1 };
       }
       const result = await actual.git(...args);
-      if (args[1][0] === gitHooks.truncateCommand) {
+      if (command === gitHooks.truncateCommand) {
         return { ...result, truncated: { stdout: true, stderr: false } };
       }
-      if (args[1][0] === "read-tree" && gitHooks.afterReadTree !== undefined) {
+      if (command === "read-tree" && gitHooks.afterReadTree !== undefined) {
         const hook = gitHooks.afterReadTree;
         gitHooks.afterReadTree = undefined;
         await hook();

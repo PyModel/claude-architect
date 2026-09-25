@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,6 +40,23 @@ describe("PlatformSafety durable-write", () => {
       await session.close();
     }
   });
+
+  it.skipIf(process.platform === "win32")(
+    "refuses a symlink planted where an immutable record belongs",
+    async () => {
+      const outside = path.join(testDir, "outside.json");
+      await writeFile(outside, '{"data":1}');
+      await symlink(outside, path.join(testDir, "artifact.json"));
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        // Identical bytes behind the link must not count as the record.
+        await expect(writeAtomic(session, "artifact.json", '{"data":1}', "immutable"))
+          .rejects.toThrow("archive entry is not a plain file");
+      } finally {
+        await session.close();
+      }
+    },
+  );
 
   it("writes atomically in replace mode", async () => {
     const session = await openDurableDirectorySession(testDir);
