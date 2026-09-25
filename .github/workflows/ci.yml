@@ -10,15 +10,15 @@ jobs:
         os: [macos-15, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22 }
       - run: node scripts/verify-native-helpers.mjs
       - if: runner.os == 'Windows'
-        uses: mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with: { version: 0.15.2 }
       - if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
       # Build the Job Object helper so the win32-gated suites exercise the
       # real fail-closed spawn path; the committed binary ships separately.
       - if: runner.os == 'Windows'
@@ -36,11 +36,11 @@ jobs:
       # validate-release runs `claude plugin validate`; the CLI is not on
       # hosted runners, so install it for the POSIX legs.
       - if: runner.os != 'Windows'
-        run: npm install -g @anthropic-ai/claude-code
+        run: npm install -g @anthropic-ai/claude-code@2.1.282
       - if: runner.os != 'Windows'
         run: bash scripts/validate-release.sh
       - if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: win32-job-kill-x64
           path: native/bin/win32-job-kill-x64.exe
@@ -49,11 +49,11 @@ jobs:
   windows-arm64-filesystem:
     runs-on: windows-11-arm
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22 }
       - run: node scripts/verify-native-helpers.mjs
-      - uses: mlugg/setup-zig@v2
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with: { version: 0.15.2 }
       - shell: cmd
         run: |

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { userCommitEnvironment } from "../git/git-exec.js";
+import { decisionAuthority, type DecisionAuthority } from "../mcp/decision-authority.js";
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { AutopilotSpec, AutopilotTaskSpec } from "../protocol/autopilot-spec.js";
 import {
@@ -6,12 +8,6 @@ import {
   type ValidateAutopilotResult,
 } from "../protocol/spec-validator.js";
 import type { ReviewSnapshot } from "../runtime/review-snapshot.js";
-import type {
-  HostingAdapter,
-  HostingTarget,
-  PullRequestIdentity,
-  RequiredChecksResult,
-} from "../ship/hosting-adapter.js";
 import { RuntimeError } from "../util/errors.js";
 import {
   autopilotEligibilityRecordHash,
@@ -44,10 +40,6 @@ export type AutopilotControllerEvent =
   | `task:${string}`
   | `promote:${string}`
   | "final-review"
-  | "push"
-  | "draft-pr"
-  | `checks:${string}`
-  | "mark-ready"
   | "cleanup"
   | "ready";
 
@@ -129,17 +121,20 @@ export interface AutopilotControllerDependencies {
   eligibilityEvaluator: EligibilityEvaluator;
   promoter: Pick<CandidatePromoter, "promote">;
   finalBranchReviewer: Pick<FinalBranchReviewer, "review">;
-  hostingAdapter: HostingAdapter;
-  requiredChecksPollIntervalMs?: number;
-  sleep?: (milliseconds: number) => Promise<void>;
   abortSignal?: AbortSignal;
   emit?: (event: AutopilotControllerEvent) => void;
+  decisionAuthority?: () => DecisionAuthority;
+  /** Whether promotions in this checkout can carry the user's Git identity. */
+  commitIdentityAvailable?: (checkoutPath: string) => Promise<boolean>;
 }
 
+/**
+ * Autopilot ends at a final-reviewed local branch. Pushing it and opening a
+ * pull request belong to the No Mistakes delivery gate, not to this runtime.
+ */
 export type AutopilotStartResult = AutopilotWorkflowState & {
   status: "ready-for-human-review";
   headCommitOid: string;
-  pullRequest: PullRequestIdentity;
 };
 
 export type AutopilotStatusResult = AutopilotWorkflowState;
@@ -148,7 +143,6 @@ interface CleanupContext {
   store: WorkflowStorePort;
   state: AutopilotWorkflowState;
   headCommitOid: string;
-  pullRequest: PullRequestIdentity;
   cleanup: BranchCleanupResult;
 }
 
@@ -157,9 +151,6 @@ interface RecordedWorkflow {
   branch: WorkflowBranchIdentity | null;
 }
 
-const DEFAULT_REQUIRED_CHECKS_POLL_INTERVAL_MS = 10_000;
-const MIN_REQUIRED_CHECKS_POLL_INTERVAL_MS = 100;
-const MAX_REQUIRED_CHECKS_POLL_INTERVAL_MS = 60_000;
 const REQUIRED_TASK_EVIDENCE_REFS = [
   "decision.json",
   "manifest.json",
@@ -252,19 +243,13 @@ function branchMatchesState(
     && branch.baseCommitOid === state.baseCommitOid
     && branch.branchRef === state.workflowRef
     && branch.worktreePath === state.worktreePath
-    && branch.branch === state.shipping.branch;
+    && branch.branch === state.branch;
 }
 
 function redactedState(state: AutopilotWorkflowState): AutopilotStatusResult {
   const redacted = structuredClone(state);
   redacted.repositoryIdentity = "[redacted]";
   redacted.worktreePath = "[redacted]";
-  if (redacted.shipping.prUrl !== null) redacted.shipping.prUrl = "[redacted]";
-  for (const observation of redacted.ciObservations) {
-    for (const check of observation.checks) {
-      if (check.link !== null) check.link = "[redacted]";
-    }
-  }
   return redacted;
 }
 
@@ -294,10 +279,9 @@ function initialWorkflowState(args: {
   spec: AutopilotSpec;
   branch: WorkflowBranchIdentity;
   startedAt: string;
-  ciDeadlineAt: string;
 }): AutopilotWorkflowState {
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId: args.workflowId,
     repositoryIdentity: args.branch.repositoryIdentity,
     baseCommitOid: args.branch.baseCommitOid,
@@ -321,13 +305,7 @@ function initialWorkflowState(args: {
       lastEntryHash: null,
     },
     finalGate: null,
-    shipping: {
-      branch: args.branch.branch,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: args.ciDeadlineAt,
-    },
-    ciObservations: [],
+    branch: args.branch.branch,
     cleanup: null,
     terminal: null,
     createdAt: args.startedAt,
@@ -343,50 +321,6 @@ function finalGateFor(report: FinalBranchReport) {
     headCommitOid: report.headCommitOid,
     eligibilityHash: reportHash,
   };
-}
-
-function pullRequestIdentityMatches(
-  pullRequest: PullRequestIdentity,
-  target: HostingTarget,
-  branch: WorkflowBranchIdentity,
-  expectedHead: string,
-): boolean {
-  return Number.isSafeInteger(pullRequest.number)
-    && pullRequest.number > 0
-    && pullRequest.url.length > 0
-    && pullRequest.repository === target.repository
-    && pullRequest.baseBranch === branch.baseBranch
-    && pullRequest.headBranch === branch.branch
-    && pullRequest.headCommitOid === expectedHead;
-}
-
-function pullRequestMatches(
-  pullRequest: PullRequestIdentity,
-  target: HostingTarget,
-  branch: WorkflowBranchIdentity,
-  expectedHead: string,
-  expectedDraft: boolean,
-): boolean {
-  return pullRequestIdentityMatches(pullRequest, target, branch, expectedHead)
-    && pullRequest.draft === expectedDraft;
-}
-
-function checksAreNonEmptyAndPassing(
-  checks: RequiredChecksResult,
-  expectedHead: string,
-): boolean {
-  return checks.result === "passed"
-    && checks.headCommitOid === expectedHead
-    && checks.checks.length > 0
-    && checks.checks.every(check => check.bucket === "pass");
-}
-
-function stateHasPassingChecks(state: AutopilotWorkflowState): boolean {
-  const observation = state.ciObservations.at(-1);
-  const expectedHead = state.finalGate?.headCommitOid;
-  return observation !== undefined
-    && expectedHead !== undefined
-    && checksAreNonEmptyAndPassing(observation, expectedHead);
 }
 
 const CLEANUP_INTENT_OPERATION = "cleanup-workflow-branch";
@@ -413,24 +347,29 @@ export class AutopilotController {
   private readonly validator: (value: unknown) => ValidateAutopilotResult;
   private readonly createWorkflowId: () => string;
   private readonly now: () => string;
-  private readonly pollIntervalMs: number;
-  private readonly sleep: (milliseconds: number) => Promise<void>;
+  private readonly decisionAuthority: () => DecisionAuthority;
 
   constructor(private readonly dependencies: AutopilotControllerDependencies) {
     this.validator = dependencies.validator ?? validateAutopilotSpec;
     this.createWorkflowId = dependencies.workflowId ?? randomUUID;
     this.now = dependencies.now ?? (() => new Date().toISOString());
-    const configuredInterval = dependencies.requiredChecksPollIntervalMs
-      ?? DEFAULT_REQUIRED_CHECKS_POLL_INTERVAL_MS;
-    this.pollIntervalMs = Number.isFinite(configuredInterval)
-      ? Math.min(
-          MAX_REQUIRED_CHECKS_POLL_INTERVAL_MS,
-          Math.max(MIN_REQUIRED_CHECKS_POLL_INTERVAL_MS, Math.trunc(configuredInterval)),
-        )
-      : DEFAULT_REQUIRED_CHECKS_POLL_INTERVAL_MS;
-    this.sleep = dependencies.sleep ?? (async milliseconds => {
-      await new Promise<void>(resolve => setTimeout(resolve, milliseconds));
-    });
+    this.decisionAuthority = dependencies.decisionAuthority ?? (() => decisionAuthority());
+  }
+
+  /**
+   * Autopilot accepts each task under `autopilot-policy`; it has no person to
+   * ask. Under the `human` authority it therefore refuses to promote rather
+   * than spend Producer work that could only halt at the first promotion. The
+   * promoter enforces the same rule; this only fails fast.
+   */
+  private assertPolicyAuthority(): void {
+    if (this.decisionAuthority() === "human") {
+      throw new AutopilotControllerError(
+        "decision-authority-human",
+        "CLAUDE_ARCHITECT_DECISION_AUTHORITY=human requires a person for every acceptance; "
+          + "Autopilot records policy decisions and cannot run under it",
+      );
+    }
   }
 
   async start(checkoutPath: string, value: unknown): Promise<AutopilotStartResult> {
@@ -444,16 +383,20 @@ export class AutopilotController {
       );
     }
 
+    this.assertPolicyAuthority();
+    const identityAvailable = this.dependencies.commitIdentityAvailable
+      ?? (async (path: string) => await userCommitEnvironment(path) !== null);
+    if (!await identityAvailable(checkoutPath)) {
+      throw new AutopilotControllerError(
+        "git-identity-missing",
+        "promotions are committed under your Git identity; configure user.name and user.email",
+      );
+    }
     const spec = validated.spec;
     const startedAt = this.now();
-    const startedAtMs = Date.parse(startedAt);
-    if (!Number.isFinite(startedAtMs)) {
+    if (!Number.isFinite(Date.parse(startedAt))) {
       throw new AutopilotControllerError("clock-invalid", "autopilot clock is invalid");
     }
-    const ciDeadlineAt = new Date(
-      startedAtMs + spec.shipping.requiredChecksTimeoutMs,
-    ).toISOString();
-    const ciDeadlineMs = Date.parse(ciDeadlineAt);
     const workflowId = this.createWorkflowId();
     // Widened deliberately, like the bootstrap locals above: this is assigned
     // inside the locked closure, which control-flow analysis cannot see, so a
@@ -473,22 +416,7 @@ export class AutopilotController {
       completedCleanup = await this.dependencies.workflowLock.runExclusive(
         workflowId,
         async (): Promise<CleanupContext> => {
-      let target: HostingTarget;
       this.dependencies.emit?.("preflight");
-      try {
-        target = await this.dependencies.hostingAdapter.preflight({
-          checkoutPath,
-          ...(this.dependencies.abortSignal === undefined
-            ? {}
-            : { signal: this.dependencies.abortSignal }),
-        });
-      } catch (error) {
-        throw new AutopilotControllerError(
-          classificationOf(error, "preflight-failed"),
-          "shipping preflight failed",
-        );
-      }
-
       let branch: WorkflowBranchIdentity;
       try {
         branch = await this.dependencies.branchManager.create({
@@ -505,21 +433,12 @@ export class AutopilotController {
           "workflow branch creation failed",
         );
       }
-      if (branch.ownerRepo !== target.repository
-        || branch.remoteUrl !== target.canonicalHttpsUrl) {
-        throw new AutopilotControllerError(
-          "repository-identity-mismatch",
-          "shipping and workflow repository identities differ",
-        );
-      }
-
       const store = this.dependencies.workflowStore(workflowId);
-      let state = await store.create(initialWorkflowState({
+      const state = await store.create(initialWorkflowState({
         workflowId,
         spec,
         branch,
         startedAt,
-        ciDeadlineAt,
       }));
       bootstrapStore = store;
       bootstrapState = state;
@@ -539,300 +458,15 @@ export class AutopilotController {
         } as unknown as WorkflowJournalJson,
       });
       bootstrapCompleted = true;
-      let expectedHead = branch.baseCommitOid;
       await this.haltIfAborted(store, state);
-
-      for (const [index, task] of spec.tasks.entries()) {
-        if (state.phase === "preflighting") {
-          state = await store.transition({
-            expectedRevision: state.revision,
-            to: "running-task",
-            update(draft) {
-              draft.currentTaskIndex = index;
-              draft.tasks[index]!.status = "running";
-            },
-          });
-        }
-
-        await this.haltIfAborted(store, state);
-        this.dependencies.emit?.(`task:${task.id}`);
-        const pipelineResult = await this.dependencies.pipelineRunner.run(
-          branch.worktreePath,
-          task.delegation,
-        ).catch(async error =>
-          await this.halt(store, state, classificationOf(error, "pipeline-failed")));
-        if (pipelineResult.status === "failed") {
-          return await this.halt(store, state,
-            pipelineResult.failure === "cancelled" ? "cancelled" : "pipeline-failed");
-        }
-        if (pipelineResult.status === "human-decision-required"
-          || pipelineResult.gate.requiresHumanDecision) {
-          return await this.halt(store, state, "human-decision-required");
-        }
-
-        await this.haltIfAborted(store, state);
-        const snapshot = await this.dependencies.reviewSnapshotter.create({
-          workflow: state,
-          branch,
-          task,
-          pipelineResult,
-        }).catch(async error =>
-          await this.halt(
-            store,
-            state,
-            classificationOf(error, "candidate-evidence-mismatch"),
-          ));
-        if (!snapshotMatchesCandidate(expectedHead, pipelineResult, snapshot)) {
-          return await this.halt(store, state, "candidate-evidence-mismatch");
-        }
-        await this.haltIfAborted(store, state);
-        const eligibility = await this.dependencies.eligibilityEvaluator.evaluate({
-          workflow: state,
-          branch,
-          task,
-          pipelineResult,
-          reviewSnapshot: snapshot,
-        }).catch(async error =>
-          await this.halt(store, state, classificationOf(error, "eligibility-red")));
-        if (!eligibilityMatchesSnapshot(pipelineResult, snapshot, eligibility)) {
-          return await this.halt(store, state, "candidate-evidence-mismatch");
-        }
-        if (!eligibility.eligible || eligibility.reasons.length !== 0) {
-          return await this.halt(store, state, "eligibility-red");
-        }
-
-        const candidate = candidateFrom(pipelineResult)!;
-        const eligibilityHash = autopilotEligibilityRecordHash(eligibility);
-        state = await store.transition({
-          expectedRevision: state.revision,
-          to: "promoting-task",
-          update(draft) {
-            const current = draft.tasks[index]!;
-            current.runId = pipelineResult.runId;
-            current.candidateManifestHash = candidate.manifestHash;
-            current.eligibilityHash = eligibilityHash;
-          },
-        });
-
-        await this.haltIfAborted(store, state);
-        this.dependencies.emit?.(`promote:${task.id}`);
-        const promotion = await this.dependencies.promoter.promote({
-          workflowId,
-          runId: pipelineResult.runId,
-          workflowCheckoutPath: branch.worktreePath,
-          expectedHead,
-          expectedArtifactHash: candidate.manifestHash,
-          commitMessage: task.commitMessage,
-        }).catch(async error =>
-          await this.halt(
-            store,
-            state,
-            classificationOf(error, "promotion-failed"),
-          ));
-        if (promotion.status === "rejected") {
-          return await this.halt(store, state, promotion.classification);
-        }
-
-        expectedHead = promotion.commitOid;
-        const nextPhase = index === spec.tasks.length - 1 ? "final-review" : "running-task";
-        state = await store.transition({
-          expectedRevision: state.revision,
-          to: nextPhase,
-          update(draft) {
-            const current = draft.tasks[index]!;
-            current.status = "promoted";
-            current.promotionCommitOid = promotion.commitOid;
-            draft.currentTaskIndex = index + 1;
-            if (nextPhase === "running-task") {
-              draft.tasks[index + 1]!.status = "running";
-            }
-          },
-        });
-        await this.haltIfAborted(store, state);
-      }
-
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("final-review");
-      const report = await this.dependencies.finalBranchReviewer.review({
-        workflowId,
-        expectedRevision: state.revision,
-        taskEvidence: state.tasks.map(task => ({
-          taskId: task.id,
-          runId: task.runId!,
-          candidateManifestHash: task.candidateManifestHash!,
-          promotionCommitOid: task.promotionCommitOid!,
-          evidenceRefs: [...REQUIRED_TASK_EVIDENCE_REFS],
-        })),
-        autopilotSpec: spec,
-        checkoutPath: branch.worktreePath,
-      }).catch(async error =>
-        await this.halt(
-          store,
-          state,
-          classificationOf(error, "final-review-failed"),
-        ));
-      if (report.workflowId !== workflowId
-        || report.baseCommitOid !== branch.baseCommitOid
-        || report.headCommitOid !== expectedHead) {
-        return await this.halt(store, state, "stale-final-review");
-      }
-      if (!report.eligible
-        || report.status !== "ready-to-ship"
-        || report.reasons.length !== 0) {
-        return await this.halt(
-          store,
-          state,
-          "human-decision-required",
-          draft => { draft.finalGate = finalGateFor(report); },
-        );
-      }
-
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "pushing",
-        update(draft) { draft.finalGate = finalGateFor(report); },
-      });
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("push");
-      const pushed = await this.dependencies.hostingAdapter.pushBranch({
-        checkoutPath: branch.worktreePath,
-        target,
-        branch: branch.branch,
-        headCommitOid: expectedHead,
-        ...(this.dependencies.abortSignal === undefined
-          ? {}
-          : { signal: this.dependencies.abortSignal }),
-      }).catch(async error =>
-        await this.halt(store, state, classificationOf(error, "push-failed")));
-      if (pushed.remoteHead !== expectedHead) {
-        return await this.halt(store, state, "push-head-mismatch");
-      }
-
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "creating-draft-pr",
-      });
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("draft-pr");
-      const pullRequest = await this.dependencies.hostingAdapter.ensureDraftPullRequest({
-        checkoutPath: branch.worktreePath,
-        target,
-        baseBranch: branch.baseBranch,
-        headBranch: branch.branch,
-        headCommitOid: expectedHead,
-        title: spec.shipping.pullRequestTitle,
-        body: spec.shipping.pullRequestBody,
-        ...(this.dependencies.abortSignal === undefined
-          ? {}
-          : { signal: this.dependencies.abortSignal }),
-      }).catch(async error =>
-        await this.halt(
-          store,
-          state,
-          classificationOf(error, "draft-pull-request-failed"),
-        ));
-      if (!pullRequestMatches(pullRequest, target, branch, expectedHead, true)) {
-        return await this.halt(store, state, "draft-pull-request-identity-mismatch");
-      }
-
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "waiting-required-checks",
-        update(draft) {
-          draft.shipping.prNumber = pullRequest.number;
-          draft.shipping.prUrl = pullRequest.url;
-        },
-      });
-
-      while (true) {
-        await this.haltIfAborted(store, state);
-        const beforePoll = Date.parse(this.now());
-        if (!Number.isFinite(beforePoll) || beforePoll >= ciDeadlineMs) {
-          return await this.halt(store, state, "required-checks-timeout");
-        }
-        const observation = await this.dependencies.hostingAdapter.requiredChecks({
-          checkoutPath: branch.worktreePath,
-          target,
-          pullRequestNumber: pullRequest.number,
-          headCommitOid: expectedHead,
-          ...(this.dependencies.abortSignal === undefined
-            ? {}
-            : { signal: this.dependencies.abortSignal }),
-        }).catch(async error =>
-          await this.halt(
-            store,
-            state,
-            classificationOf(error, "required-checks-failed"),
-          ));
-        this.dependencies.emit?.(`checks:${observation.result === "passed"
-          ? "pass"
-          : observation.result === "failed" ? "red" : observation.result}`);
-        const observedAt = this.now();
-        const observedAtMs = Date.parse(observedAt);
-        state = await store.update({
-          expectedRevision: state.revision,
-          update(draft) {
-            draft.ciObservations.push({
-              observedAt,
-              result: observation.result,
-              headCommitOid: observation.headCommitOid,
-              checks: structuredClone(observation.checks),
-            });
-          },
-        });
-        await this.haltIfAborted(store, state);
-        if (!Number.isFinite(observedAtMs) || observedAtMs >= ciDeadlineMs) {
-          return await this.halt(store, state, "required-checks-timeout");
-        }
-        if (checksAreNonEmptyAndPassing(observation, expectedHead)) break;
-        if (observation.result === "missing" || observation.checks.length === 0) {
-          return await this.halt(store, state, "required-checks-missing");
-        }
-        if (observation.result === "failed"
-          || observation.checks.some(check =>
-            check.bucket !== "pass" && check.bucket !== "pending")) {
-          return await this.halt(store, state, "required-checks-red");
-        }
-        const remainingMs = ciDeadlineMs - observedAtMs;
-        await this.sleep(Math.min(this.pollIntervalMs, remainingMs)).catch(async error =>
-          await this.halt(store, state, classificationOf(error, "checks-wait-failed")));
-      }
-
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "marking-ready",
-      });
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("mark-ready");
-      const readyPullRequest = await this.dependencies.hostingAdapter.markReady({
-        checkoutPath: branch.worktreePath,
-        target,
-        pullRequestNumber: pullRequest.number,
-        headCommitOid: expectedHead,
-        ...(this.dependencies.abortSignal === undefined
-          ? {}
-          : { signal: this.dependencies.abortSignal }),
-      }).catch(async error =>
-        await this.halt(store, state, classificationOf(error, "mark-ready-failed")));
-      if (!pullRequestMatches(readyPullRequest, target, branch, expectedHead, false)
-        || readyPullRequest.number !== pullRequest.number
-        || readyPullRequest.url !== pullRequest.url) {
-        return await this.halt(store, state, "mark-ready-identity-mismatch");
-      }
-
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "cleaning-up",
-      });
-      await this.haltIfAborted(store, state);
-      const cleanup = await this.cleanupBranch(store, state, branch, expectedHead);
-      pendingCleanup = {
+      // From here a fresh start and a resume are the same state machine.
+      pendingCleanup = await this.resumeActiveWorkflow({
         store,
         state,
-        headCommitOid: expectedHead,
-        pullRequest: readyPullRequest,
-        cleanup,
-      };
+        spec,
+        branch,
+        expectedHead: branch.baseCommitOid,
+      });
       return pendingCleanup;
     });
     } catch (error) {
@@ -895,7 +529,6 @@ export class AutopilotController {
       ...result,
       status: "ready-for-human-review",
       headCommitOid: completedCleanup.headCommitOid,
-      pullRequest: structuredClone(completedCleanup.pullRequest),
     };
   }
 
@@ -938,6 +571,12 @@ export class AutopilotController {
         let state = await store.read();
         await this.assertRepositoryIdentity(checkoutPath, workflowId, state);
         if (isTerminal(state)) return state;
+        // Only phases that still promote record an acceptance. A workflow in
+        // final review or cleanup has accepted everything already; refusing it
+        // would strand a promoted branch.
+        if (state.phase === "preflighting"
+          || state.phase === "running-task"
+          || state.phase === "promoting-task") this.assertPolicyAuthority();
         await store.adoptLease();
         await this.haltIfAborted(store, state);
 
@@ -975,34 +614,11 @@ export class AutopilotController {
           }
         }
 
-        let target: HostingTarget;
-        try {
-          target = await this.dependencies.hostingAdapter.preflight({
-            checkoutPath,
-            ...(this.dependencies.abortSignal === undefined
-              ? {}
-              : { signal: this.dependencies.abortSignal }),
-          });
-        } catch (error) {
-          throw new AutopilotControllerError(
-            classificationOf(error, "preflight-failed"),
-            "shipping preflight failed",
-          );
-        }
-        if (branch.ownerRepo !== target.repository
-          || branch.remoteUrl !== target.canonicalHttpsUrl) {
-          throw new AutopilotControllerError(
-            "repository-identity-mismatch",
-            "shipping and workflow repository identities differ",
-          );
-        }
-
         const resumed = await this.resumeActiveWorkflow({
           store,
           state,
           spec: validated.spec,
           branch,
-          target,
           expectedHead,
         });
         pendingCleanup = resumed;
@@ -1052,10 +668,9 @@ export class AutopilotController {
     state: AutopilotWorkflowState;
     spec: AutopilotSpec;
     branch: WorkflowBranchIdentity;
-    target: HostingTarget;
     expectedHead: string;
   }): Promise<CleanupContext> {
-    const { store, spec, branch, target } = args;
+    const { store, spec, branch } = args;
     let state = args.state;
     let expectedHead = args.expectedHead;
 
@@ -1199,7 +814,7 @@ export class AutopilotController {
         || report.headCommitOid !== expectedHead) {
         return await this.halt(store, state, "stale-final-review");
       }
-      if (!report.eligible || report.status !== "ready-to-ship" || report.reasons.length !== 0) {
+      if (!report.eligible || report.status !== "ready-for-human-review" || report.reasons.length !== 0) {
         return await this.halt(
           store,
           state,
@@ -1209,207 +824,8 @@ export class AutopilotController {
       }
       state = await store.transition({
         expectedRevision: state.revision,
-        to: "pushing",
-        update(draft) { draft.finalGate = finalGateFor(report); },
-      });
-    }
-
-    if (state.phase === "pushing") {
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("push");
-      const pushed = await this.dependencies.hostingAdapter.pushBranch({
-        checkoutPath: branch.worktreePath,
-        target,
-        branch: branch.branch,
-        headCommitOid: expectedHead,
-        ...(this.dependencies.abortSignal === undefined
-          ? {}
-          : { signal: this.dependencies.abortSignal }),
-      }).catch(async error =>
-        await this.halt(store, state, classificationOf(error, "push-failed")));
-      if (pushed.remoteHead !== expectedHead) {
-        return await this.halt(store, state, "push-head-mismatch");
-      }
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "creating-draft-pr",
-      });
-    }
-
-    let pullRequest: PullRequestIdentity;
-    if (state.phase === "creating-draft-pr") {
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("draft-pr");
-      pullRequest = await this.dependencies.hostingAdapter.ensureDraftPullRequest({
-        checkoutPath: branch.worktreePath,
-        target,
-        baseBranch: branch.baseBranch,
-        headBranch: branch.branch,
-        headCommitOid: expectedHead,
-        title: spec.shipping.pullRequestTitle,
-        body: spec.shipping.pullRequestBody,
-        ...(this.dependencies.abortSignal === undefined
-          ? {}
-          : { signal: this.dependencies.abortSignal }),
-      }).catch(async error =>
-        await this.halt(
-          store,
-          state,
-          classificationOf(error, "draft-pull-request-failed"),
-        ));
-      if (!pullRequestMatches(pullRequest, target, branch, expectedHead, true)) {
-        return await this.halt(store, state, "draft-pull-request-identity-mismatch");
-      }
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "waiting-required-checks",
-        update(draft) {
-          draft.shipping.prNumber = pullRequest.number;
-          draft.shipping.prUrl = pullRequest.url;
-        },
-      });
-    } else {
-      if (state.shipping.prNumber === null || state.shipping.prUrl === null) {
-        throw new AutopilotControllerError(
-          "workflow-state-mismatch",
-          "shipping identity is incomplete",
-        );
-      }
-      pullRequest = {
-        number: state.shipping.prNumber,
-        url: state.shipping.prUrl,
-        repository: target.repository,
-        baseBranch: branch.baseBranch,
-        headBranch: branch.branch,
-        headCommitOid: expectedHead,
-        draft: state.phase !== "cleaning-up",
-      };
-      if (state.phase === "marking-ready" && !stateHasPassingChecks(state)) {
-        return await this.halt(store, state, "required-checks-proof-missing");
-      }
-      if (state.phase === "waiting-required-checks" || state.phase === "marking-ready") {
-        const establishedPullRequest = await this.dependencies.hostingAdapter
-          .ensureDraftPullRequest({
-            checkoutPath: branch.worktreePath,
-            target,
-            baseBranch: branch.baseBranch,
-            headBranch: branch.branch,
-            headCommitOid: expectedHead,
-            title: spec.shipping.pullRequestTitle,
-            body: spec.shipping.pullRequestBody,
-            ...(this.dependencies.abortSignal === undefined
-              ? {}
-              : { signal: this.dependencies.abortSignal }),
-          })
-          .catch(async error =>
-            await this.halt(
-              store,
-              state,
-              classificationOf(error, "draft-pull-request-failed"),
-            ));
-        if (!pullRequestIdentityMatches(
-          establishedPullRequest,
-          target,
-          branch,
-          expectedHead,
-        ) || establishedPullRequest.number !== pullRequest.number
-          || establishedPullRequest.url !== pullRequest.url) {
-          return await this.halt(store, state, "draft-pull-request-identity-mismatch");
-        }
-        pullRequest = establishedPullRequest;
-        if (!pullRequest.draft) {
-          if (!stateHasPassingChecks(state)) {
-            return await this.halt(store, state, "required-checks-proof-missing");
-          }
-          state = await store.transition({
-            expectedRevision: state.revision,
-            to: "cleaning-up",
-          });
-        }
-      }
-    }
-
-    if (state.phase === "waiting-required-checks") {
-      const deadlineMs = Date.parse(state.shipping.ciDeadlineAt);
-      if (!Number.isFinite(deadlineMs)) {
-        return await this.halt(store, state, "required-checks-timeout");
-      }
-      while (true) {
-        await this.haltIfAborted(store, state);
-        const beforePoll = Date.parse(this.now());
-        if (!Number.isFinite(beforePoll) || beforePoll >= deadlineMs) {
-          return await this.halt(store, state, "required-checks-timeout");
-        }
-        const observation = await this.dependencies.hostingAdapter.requiredChecks({
-          checkoutPath: branch.worktreePath,
-          target,
-          pullRequestNumber: pullRequest.number,
-          headCommitOid: expectedHead,
-          ...(this.dependencies.abortSignal === undefined
-            ? {}
-            : { signal: this.dependencies.abortSignal }),
-        }).catch(async error =>
-          await this.halt(store, state, classificationOf(error, "required-checks-failed")));
-        this.dependencies.emit?.(`checks:${observation.result === "passed"
-          ? "pass"
-          : observation.result === "failed" ? "red" : observation.result}`);
-        const observedAt = this.now();
-        const observedAtMs = Date.parse(observedAt);
-        state = await store.update({
-          expectedRevision: state.revision,
-          update(draft) {
-            draft.ciObservations.push({
-              observedAt,
-              result: observation.result,
-              headCommitOid: observation.headCommitOid,
-              checks: structuredClone(observation.checks),
-            });
-          },
-        });
-        await this.haltIfAborted(store, state);
-        if (!Number.isFinite(observedAtMs) || observedAtMs >= deadlineMs) {
-          return await this.halt(store, state, "required-checks-timeout");
-        }
-        if (checksAreNonEmptyAndPassing(observation, expectedHead)) break;
-        if (observation.result === "missing" || observation.checks.length === 0) {
-          return await this.halt(store, state, "required-checks-missing");
-        }
-        if (observation.result === "failed"
-          || observation.checks.some(check =>
-            check.bucket !== "pass" && check.bucket !== "pending")) {
-          return await this.halt(store, state, "required-checks-red");
-        }
-        const remainingMs = deadlineMs - observedAtMs;
-        await this.sleep(Math.min(this.pollIntervalMs, remainingMs)).catch(async error =>
-          await this.halt(store, state, classificationOf(error, "checks-wait-failed")));
-      }
-      state = await store.transition({
-        expectedRevision: state.revision,
-        to: "marking-ready",
-      });
-    }
-
-    if (state.phase === "marking-ready") {
-      await this.haltIfAborted(store, state);
-      this.dependencies.emit?.("mark-ready");
-      const readyPullRequest = await this.dependencies.hostingAdapter.markReady({
-        checkoutPath: branch.worktreePath,
-        target,
-        pullRequestNumber: pullRequest.number,
-        headCommitOid: expectedHead,
-        ...(this.dependencies.abortSignal === undefined
-          ? {}
-          : { signal: this.dependencies.abortSignal }),
-      }).catch(async error =>
-        await this.halt(store, state, classificationOf(error, "mark-ready-failed")));
-      if (!pullRequestMatches(readyPullRequest, target, branch, expectedHead, false)
-        || readyPullRequest.number !== pullRequest.number
-        || readyPullRequest.url !== pullRequest.url) {
-        return await this.halt(store, state, "mark-ready-identity-mismatch");
-      }
-      state = await store.transition({
-        expectedRevision: state.revision,
         to: "cleaning-up",
+        update(draft) { draft.finalGate = finalGateFor(report); },
       });
     }
 
@@ -1426,7 +842,7 @@ export class AutopilotController {
       branch,
       expectedHead,
     );
-    return { store, state, headCommitOid: expectedHead, pullRequest, cleanup };
+    return { store, state, headCommitOid: expectedHead, cleanup };
   }
 
   private async cleanupBranch(
@@ -1453,8 +869,13 @@ export class AutopilotController {
     }
 
     this.dependencies.emit?.("cleanup");
-    const cleanup = await this.dependencies.branchManager.cleanup(branch, expectedHead)
-      .catch((): BranchCleanupResult => ({ ok: false, classification: "cleanup-failed" }));
+    // The final-reviewed branch is the hand-off; only the worktree and the
+    // workflow's private base ref are removed.
+    const cleanup = await this.dependencies.branchManager.cleanup(
+      branch,
+      expectedHead,
+      { retainBranch: true },
+    ).catch((): BranchCleanupResult => ({ ok: false, classification: "cleanup-failed" }));
     if (cleanup.ok && cleanup.worktreeRemoved && cleanup.refsRemoved) {
       await store.completeIntent({
         expectedRevision: state.revision,

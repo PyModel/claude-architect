@@ -79,19 +79,68 @@ const sameIdentity = (left, right) => left.dev === right.dev
   && left.birthtimeNs === right.birthtimeNs
   && left.isDirectory() === right.isDirectory()
   && left.isSymbolicLink() === right.isSymbolicLink();
-const darwinHandlePath = fd => {
+// One lsof spawn resolves a whole batch of handles; per-directory spawns made
+// large trees (node_modules) blow the cleanup budget.
+const darwinHandlePaths = fds => {
   const output = execFileSync("/usr/sbin/lsof", [
-    "-a", "-p", String(process.pid), "-d", String(fd), "-F0pn",
-  ], { encoding: "utf8", env: {}, maxBuffer: 16_384, timeout: 5_000 });
-  const match = /(?:^|[\n\u0000])n([^\u0000]*)\u0000/u.exec(output);
-  if (match === null) process.exit(50);
-  return match[1];
+    "-a", "-p", String(process.pid), "-d", fds.join(","), "-F0pn",
+  ], { encoding: "utf8", env: {}, maxBuffer: 1_048_576, timeout: 5_000 });
+  const paths = new Map();
+  for (const match of output.matchAll(/(?:^|[\n\u0000])f(\d+)\u0000n([^\u0000]*)\u0000/gu)) {
+    if (paths.has(match[1])) process.exit(50);
+    paths.set(match[1], match[2]);
+  }
+  if (fds.some(fd => !paths.has(String(fd)))) process.exit(50);
+  return paths;
 };
+const identityKey = stats => stats.dev + ":" + stats.ino + ":" + stats.birthtimeNs;
+const DIRECTORY_BATCH = 64;
+const removeDarwinBoundDirectories = async directories => {
+  for (let start = 0; start < directories.length; start += DIRECTORY_BATCH) {
+    const batch = directories.slice(start, start + DIRECTORY_BATCH);
+    const handles = [];
+    try {
+      for (const [entry, expected] of batch) {
+        const handle = await open(entry, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+        handles.push(handle);
+        if (!sameIdentity(await handle.stat({ bigint: true }), expected)) process.exit(51);
+      }
+      const fds = handles.map(handle => handle.fd);
+      const originalPaths = darwinHandlePaths(fds);
+      for (const [index, [entry, expected]] of batch.entries()) {
+        if (!sameIdentity(await lstat(entry, { bigint: true }), expected)) process.exit(61);
+        await rmdir(entry);
+        if (!sameIdentity(await handles[index].stat({ bigint: true }), expected)) process.exit(53);
+      }
+      const removedPaths = darwinHandlePaths(fds);
+      for (const fd of fds) {
+        if (removedPaths.get(String(fd)) !== originalPaths.get(String(fd))) process.exit(55);
+      }
+    } finally {
+      for (const handle of handles) await handle.close();
+    }
+    const removed = new Set(batch.map(([, expected]) => identityKey(expected)));
+    for (const sibling of await readdir(".")) {
+      if (removed.has(identityKey(await lstat(sibling, { bigint: true })))) process.exit(46);
+    }
+  }
+};
+const removeBoundDirectories = async directories => {
+  if (process.platform === "darwin") {
+    await removeDarwinBoundDirectories(directories);
+    return;
+  }
+  for (const [entry, expected] of directories) {
+    await removeBoundEntry(entry, expected, true);
+    for (const sibling of await readdir(".")) {
+      if (sameIdentity(await lstat(sibling, { bigint: true }), expected)) process.exit(46);
+    }
+  }
+};
+// darwin resolves directory handles in batches (removeDarwinBoundDirectories).
 const boundHandlePath = async fd => process.platform === "linux"
   ? await readlink("/proc/self/fd/" + fd)
-  : process.platform === "darwin"
-    ? darwinHandlePath(fd)
-    : null;
+  : null;
 const removeBoundUnopenedEntry = async (entry, expected) => {
   const tombstone = ".remove-symlink-" + randomUUID();
   await rename(entry, tombstone);
@@ -192,6 +241,7 @@ const removeBoundEntry = async (entry, expected, directory) => {
 };
 const emptyBoundDirectory = async expected => {
   if (!sameIdentity(await lstat(".", { bigint: true }), expected)) process.exit(41);
+  const emptiedDirectories = [];
   for (const entry of await readdir(".")) {
     const child = await lstat(entry, { bigint: true });
     if (child.birthtimeNs <= 0n) process.exit(42);
@@ -209,10 +259,7 @@ const emptyBoundDirectory = async expected => {
       process.chdir("..");
       if (!sameIdentity(await lstat(".", { bigint: true }), parent)) process.exit(44);
       if (!sameIdentity(await lstat(entry, { bigint: true }), child)) process.exit(45);
-      await removeBoundEntry(entry, child, true);
-      for (const sibling of await readdir(".")) {
-        if (sameIdentity(await lstat(sibling, { bigint: true }), child)) process.exit(46);
-      }
+      emptiedDirectories.push([entry, child]);
     } else {
       if (!sameIdentity(await lstat(entry, { bigint: true }), child)) process.exit(47);
       if (!child.isFile() || child.isSymbolicLink()) {
@@ -222,6 +269,7 @@ const emptyBoundDirectory = async expected => {
       }
     }
   }
+  await removeBoundDirectories(emptiedDirectories);
   if (!sameIdentity(await lstat(".", { bigint: true }), expected)) process.exit(48);
 };
 (async () => {

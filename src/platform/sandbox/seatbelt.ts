@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path/posix";
+import { isAbsolute, normalize, parse, relative, resolve } from "node:path";
 import type { ProducerInvocation } from "../../producers/producer-adapter.js";
 
 export interface SeatbeltPolicy {
@@ -8,6 +8,8 @@ export interface SeatbeltPolicy {
   tempHome: string | null;
   allowNetwork: boolean;
   extraWritableRoots?: string[];
+  /** false confines temporary files to `tempHome` instead of the shared tmp roots. */
+  sharedTemp?: boolean;
 }
 
 /**
@@ -51,80 +53,140 @@ function sbPath(path: string): string {
   return `"${path.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
 }
 
-function openCodeWritablePaths(
+function isDeclaredStateRoot(
+  normalized: string,
+  invocation: ProducerInvocation,
+  policy: SeatbeltPolicy,
+): boolean {
+  const roots: string[] = [];
+
+  const homeCandidates = [
+    invocation.env?.HOME,
+    invocation.env?.USERPROFILE,
+    process.env.HOME,
+    process.env.USERPROFILE,
+  ];
+  try {
+    homeCandidates.push(homedir());
+  } catch {}
+
+  for (const candidate of homeCandidates) {
+    if (typeof candidate === "string" && candidate.length > 0 && candidate !== "/") {
+      roots.push(resolve(candidate));
+    }
+  }
+
+  const stateEnvs = [
+    "CLAUDE_CONFIG_DIR",
+    "OPENCODE_CONFIG_DIR",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
+    "XDG_CONFIG_HOME",
+    "PI_CONFIG_DIR",
+    "PYTHINKER_SHARE_DIR",
+    "GEMINI_CLI_HOME",
+  ];
+  for (const envKey of stateEnvs) {
+    const val = invocation.env?.[envKey] ?? process.env[envKey];
+    if (typeof val === "string" && val.length > 0 && val !== "/") {
+      roots.push(resolve(val));
+    }
+  }
+
+  if (policy.extraWritableRoots) {
+    for (const root of policy.extraWritableRoots) {
+      if (typeof root === "string" && root.length > 0 && root !== "/") {
+        roots.push(resolve(root));
+      }
+    }
+  }
+
+  for (const root of roots) {
+    if (normalized === root) return true;
+    const rel = relative(root, normalized);
+    if (!rel.startsWith("..") && !isAbsolute(rel)) return true;
+  }
+
+  const userHomePattern = /^(\/Users\/[^/]+|\/home\/[^/]+|\/root)(?:\/.*)?$/u;
+  const winUserHomePattern = /^[a-zA-Z]:\\Users\\[^\\]+(?:\\.*)?$/u;
+  return userHomePattern.test(normalized) || winUserHomePattern.test(normalized);
+}
+
+function isValidInheritedStatePath(
+  path: string,
+  invocation: ProducerInvocation,
+  policy: SeatbeltPolicy,
+): boolean {
+  if (typeof path !== "string" || path.trim().length === 0) return false;
+  if (!isAbsolute(path)) return false;
+  const parsed = parse(path);
+  if (path === "/" || path === parsed.root) return false;
+  const normalized = normalize(path);
+  if (normalized === "/" || normalized === parsed.root) return false;
+  if (resolve(path) === "/" || resolve(path) === parsed.root) return false;
+  return isDeclaredStateRoot(normalized, invocation, policy);
+}
+
+/**
+ * State the Producer declared it must write while running with the real HOME.
+ * A temporary home replaces that state wholesale, so the declaration is moot.
+ * Every entry must be absolute, under home or a declared state root, and never root (`/`).
+ * Any invalid entry fails closed: no grants are emitted.
+ */
+function inheritedStateWritablePaths(
   invocation: ProducerInvocation,
   policy: SeatbeltPolicy,
 ): string[] {
-  if (
-    policy.tempHome !== null
-    || !invocation.requiredEnv.includes("OPENCODE_CONFIG_DIR")
-  ) return [];
+  if (policy.tempHome !== null) return [];
+  const declared = invocation.inheritedStateWritablePaths;
+  if (!declared || declared.length === 0) return [];
 
-  const home = homedir();
-  const dataHome = invocation.env?.XDG_DATA_HOME
-    ?? process.env.XDG_DATA_HOME
-    ?? join(home, ".local", "share");
-  const stateHome = invocation.env?.XDG_STATE_HOME
-    ?? process.env.XDG_STATE_HOME
-    ?? join(home, ".local", "state");
-  return [join(dataHome, "opencode"), join(stateHome, "opencode")];
+  for (const entry of declared) {
+    if (!isValidInheritedStatePath(entry, invocation, policy)) {
+      return [];
+    }
+  }
+
+  return [...declared];
 }
 
-function piWritablePaths(
-  invocation: ProducerInvocation,
-  policy: SeatbeltPolicy,
-): string[] {
-  if (
-    policy.tempHome !== null
-    || !invocation.requiredEnv.includes("PI_API_KEY")
-  ) return [];
+/**
+ * Credential stores an untrusted process never needs. Reads are otherwise
+ * allowed (toolchains, caches, the Producer's own login state), and network is
+ * allowed for model traffic, so these are the secrets that would be worth
+ * exfiltrating. A tool that needs one of them is not a delegated workload.
+ */
+const CREDENTIAL_PATHS = [
+  ".ssh",
+  ".aws",
+  ".azure",
+  ".gnupg",
+  ".kube",
+  ".docker",
+  ".netrc",
+  ".git-credentials",
+  ".config/gh",
+  ".config/gcloud",
+];
 
-  const home = invocation.env?.HOME ?? process.env.HOME ?? homedir();
-  return [join(home, ".pi", "agent")];
-}
-
-function isPythinkerInvocation(invocation: ProducerInvocation): boolean {
-  return [invocation.executable.command, ...invocation.executable.prefixArgs]
-    .some(part => basename(part) === "pythinker");
-}
-
-function isAgyInvocation(invocation: ProducerInvocation): boolean {
-  return [invocation.executable.command, ...invocation.executable.prefixArgs]
-    .some(part => basename(part) === "agy");
-}
-
-function agyWritablePaths(
-  invocation: ProducerInvocation,
-  policy: SeatbeltPolicy,
-): string[] {
-  if (policy.tempHome !== null || !isAgyInvocation(invocation)) return [];
-
-  const home = invocation.env?.HOME ?? process.env.HOME ?? homedir();
-  return [join(home, ".gemini", "antigravity-cli")];
-}
-
-function pythinkerWritablePaths(
-  invocation: ProducerInvocation,
-  policy: SeatbeltPolicy,
-): string[] {
-  if (policy.tempHome !== null || !isPythinkerInvocation(invocation)) return [];
-
-  // Pythinker's real default data directory is `~/.pythinker`, overridable with
-  // `PYTHINKER_SHARE_DIR` — see the matching rationale in pythinker-adapter.ts.
-  const configuredHome = invocation.env?.PYTHINKER_SHARE_DIR
-    ?? process.env.PYTHINKER_SHARE_DIR;
-  if (configuredHome !== undefined && configuredHome.length > 0) return [configuredHome];
-
-  const home = invocation.env?.HOME ?? process.env.HOME ?? homedir();
-  return [join(home, ".pythinker")];
+function credentialReadDenials(): string[] {
+  const home = process.env.HOME ?? homedir();
+  if (!isAbsolute(home) || resolve(home) === "/") return [];
+  return [...new Set(CREDENTIAL_PATHS.flatMap(entry => {
+    const candidate = resolve(home, entry);
+    try {
+      return [candidate, realpathSync(candidate)];
+    } catch {
+      return [candidate];
+    }
+  }))];
 }
 
 function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): string {
   const writable = [...new Set([
     policy.worktreePath,
     policy.tempHome,
-    process.env.TMPDIR ?? "/private/tmp",
-    "/private/tmp",
+    ...(policy.sharedTemp === false ? [] : [process.env.TMPDIR ?? "/private/tmp", "/private/tmp"]),
     "/dev",
     ...(policy.extraWritableRoots ?? []),
     ...additionalWritable,
@@ -143,6 +205,7 @@ function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): str
     "(deny file-write*)",
     ...writable.map(path => `(allow file-write* (subpath ${sbPath(path)}))`),
     '(allow file-write* (literal "/dev/null") (literal "/dev/tty"))',
+    ...credentialReadDenials().map(path => `(deny file-read* (subpath ${sbPath(path)}))`),
   ];
   if (!policy.allowNetwork) lines.push("(deny network*)");
   return lines.join("\n");
@@ -156,12 +219,7 @@ export function wrapInvocationWithSeatbelt(
   invocation: ProducerInvocation,
   policy: SeatbeltPolicy,
 ): ProducerInvocation {
-  const profile = buildProfile(policy, [
-    ...openCodeWritablePaths(invocation, policy),
-    ...piWritablePaths(invocation, policy),
-    ...pythinkerWritablePaths(invocation, policy),
-    ...agyWritablePaths(invocation, policy),
-  ]);
+  const profile = buildProfile(policy, inheritedStateWritablePaths(invocation, policy));
   const inner = [
     invocation.executable.command,
     ...invocation.executable.prefixArgs,
@@ -177,4 +235,21 @@ export function wrapInvocationWithSeatbelt(
     },
     args: ["-p", profile, ...inner],
   };
+}
+
+/**
+ * Confine a trusted-runtime command (project verification) that executes
+ * Producer-authored code: writes only to its worktree and scratch directory.
+ */
+export function seatbeltArgv(
+  policy: { worktreePath: string; scratchDir: string },
+  argv: readonly string[],
+): { command: string; args: string[] } {
+  const profile = buildProfile({
+    worktreePath: policy.worktreePath,
+    tempHome: policy.scratchDir,
+    allowNetwork: true,
+    sharedTemp: false,
+  }, []);
+  return { command: "/usr/bin/sandbox-exec", args: ["-p", profile, ...argv] };
 }

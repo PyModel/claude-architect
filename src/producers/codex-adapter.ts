@@ -1,12 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { open } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { supervise } from "../platform/process-supervisor.js";
-import type { ResolvedExecutable } from "../platform/platform-services.js";
-import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
+import { probeOsConfinedCli } from "./cli-probe.js";
 import type {
   AdapterEvent,
   CapabilityReport,
@@ -14,9 +11,20 @@ import type {
   ProbeContext,
   ProducerAdapter,
   ProducerConfigurationProfile,
+  ProducerDescriptor,
   ProducerInvocation,
 } from "./producer-adapter.js";
-import { renderSkillBootstrap } from "./skill-bootstrap.js";
+import {
+  isProducerAuthenticated,
+  isRecord,
+  resolveDefaultEnv,
+  stringProperty,
+  type HostStoreContext,
+} from "./host-store.js";
+import {
+  EDIT_ACTION_PREAMBLE,
+  renderProducerPrompt,
+} from "./prompt-renderer.js";
 
 export const CODEX_REQUIRED_ENV = [
   "CODEX_HOME",
@@ -50,7 +58,7 @@ function resolveDarwinUserTempDirectory(): string | null {
   try {
     const raw = execFileSync("/usr/bin/getconf", ["DARWIN_USER_TEMP_DIR"], {
       encoding: "utf8",
-      timeout: VERSION_TIMEOUT_MS,
+      timeout: 10_000,
     }).trim();
     darwinUserTempDirectory = raw.length === 0 ? realpathSync(tmpdir()) : realpathSync(raw);
   } catch {
@@ -90,219 +98,60 @@ export function sandboxSupportWritableRoots(platform: NodeJS.Platform): string[]
   const temporaryDirectory = resolveDarwinUserTempDirectory();
   return temporaryDirectory === null ? [] : [temporaryDirectory];
 }
-const VERSION_TIMEOUT_MS = 10_000;
-const VERSION_OUTPUT_LIMIT = 64 * 1024;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringProperty(value: unknown, name: string): string | undefined {
-  if (!isRecord(value)) return undefined;
-  const property = value[name];
-  return typeof property === "string" ? property : undefined;
-}
-
-function unavailableReport(
-  ctx: ProbeContext,
-  reason: string,
-  resolvedExecutable: ResolvedExecutable | null = null,
-): CapabilityReport {
-  return {
-    producerId: "codex",
-    available: false,
-    reason,
-    os: ctx.os,
-    arch: ctx.arch,
-    environmentType: ctx.environmentType,
-    resolvedExecutable,
-    version: null,
-    authState: "unknown",
-    executionModes: ["edit"],
-    structuredOutput: true,
-    writeConfinementBackend: null,
-    laneEligibility: { edit: false },
-  };
-}
-
 function parseVersion(stdout: string): string | null {
   const match = /(?:^|\s)(\d+\.\d+\.\d+(?:[-+][^\s]+)?)(?:\s|$)/u.exec(stdout.trim());
   return match?.[1] ?? null;
-}
-
-function selectCodexWriteConfinementBackend(ctx: ProbeContext): string | null {
-  const backend = SANDBOX_BACKENDS.find(candidate =>
-    candidate.id === "codex-native-sandbox"
-    && candidate.platforms.some(platform =>
-      platform.os === ctx.os
-      && platform.environmentType === ctx.environmentType
-      && (platform.arch === undefined || platform.arch === ctx.arch)
-      && (platform.state === "certified" || platform.state === "tested")));
-  return backend?.id ?? null;
-}
-
-async function normalizeCodexExecutable(
-  executable: ResolvedExecutable,
-): Promise<ResolvedExecutable> {
-  if (executable.kind !== "native") return executable;
-  let handle;
-  try {
-    handle = await open(executable.command, "r");
-    const buffer = Buffer.alloc(256);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    const firstLine = buffer.subarray(0, bytesRead).toString("utf8").split(/\r?\n/u, 1)[0] ?? "";
-    if (!/^#![^\r\n]*\bnode(?:\s|$)/u.test(firstLine)) return executable;
-    return {
-      kind: "node-entrypoint",
-      command: process.execPath,
-      prefixArgs: [executable.command, ...executable.prefixArgs],
-      resolvedFrom: `${executable.resolvedFrom};node:${process.execPath}`,
-    };
-  } catch {
-    return executable;
-  } finally {
-    await handle?.close();
-  }
 }
 
 function quoteTomlString(value: string): string {
   return JSON.stringify(value);
 }
 
-function renderList(values: string[]): string {
-  return values.length === 0 ? "- (none)" : values.map(value => `- ${value}`).join("\n");
-}
+export const CODEX_EDIT_ACTION_PREAMBLE = EDIT_ACTION_PREAMBLE;
 
-export const CODEX_EDIT_ACTION_PREAMBLE = [
-  "This is an action-first edit run.",
-  "Constraints are fully pre-digested in this spec.",
-  "Do not read repository AGENTS.md, CLAUDE.md, SKILL.md, lessons files, or any repository agent-rule/skill documents; the delegated skill files named below are permitted.",
-  "Begin by opening the implementation files authorized in the spec.",
-  "A plan-only final message with zero edits is a failed run.",
-].join("\n");
+export const codexDescriptor: ProducerDescriptor = {
+  id: "codex",
+  executable: { name: "codex" },
+  isolation: "controlled-config-with-copied-credentials",
+  hostState: {
+    resolveStore: deps => deps.env.CODEX_HOME ?? join(deps.homeDirectory, ".codex"),
+    authMarker: "auth.json",
+    defaultEnv: (store, deps) => {
+      if (deps.env.CODEX_HOME !== undefined) return {};
+      const hasAuth = (deps.hasAuthStore ?? (dir => existsSync(join(dir, "auth.json"))))(store);
+      return hasAuth ? { CODEX_HOME: store } : {};
+    },
+  },
+  prompt: {
+    actionPreamble: true,
+    bootstrapPlacement: "before",
+  },
+  structuredOutput: true,
+  executionModes: ["edit"],
+};
 
-function renderPrompt(spec: DelegationSpec, readOnly: boolean): string {
-  const prompt = [
-    "You are an untrusted implementation Producer operating inside an isolated worktree.",
-    "Do not delegate to other agents or expand the authorized scope.",
-    "",
-    "Objective:",
-    spec.objective,
-    "",
-    "Context:",
-    spec.context,
-    "",
-    "Authorized write allowlist:",
-    renderList(spec.writeAllowlist),
-    "",
-    "Forbidden scope:",
-    renderList(spec.forbiddenScope),
-    "",
-    "Success criteria:",
-    renderList(spec.successCriteria),
-    "",
-    "If you run linting, formatting, or type checking, complete all linting and formatting first, then run a final type-check covering every typed file you changed, including new or modified tests.",
-    "",
-    "Make only the requested edits. Return a concise final summary of the work performed.",
-  ].join("\n");
-  return readOnly
-    ? prompt
-    : `${CODEX_EDIT_ACTION_PREAMBLE}\n\n${renderSkillBootstrap()}\n\n${prompt}`;
-}
-
-export interface DefaultCodexEnvDeps {
-  env: Record<string, string | undefined>;
-  homeDirectory: string;
-  hasAuthStore: (directory: string) => boolean;
-}
-
-export interface CodexAdapterDeps {
-  env: Record<string, string | undefined>;
-  homeDirectory: string;
-  hasAuthStore?: (directory: string) => boolean;
-}
-
-function resolveCodexStore(
-  deps: Pick<DefaultCodexEnvDeps, "env" | "homeDirectory">,
-): string {
-  return deps.env.CODEX_HOME ?? join(deps.homeDirectory, ".codex");
-}
-
-/**
- * The isolated per-attempt HOME hides the host `~/.codex` auth store. When the
- * Host has not set CODEX_HOME explicitly, default it to the real auth store so
- * Codex authentication survives HOME isolation.
- */
-export function defaultCodexEnv(deps: DefaultCodexEnvDeps): Record<string, string> {
-  if (deps.env.CODEX_HOME !== undefined) return {};
-  const store = resolveCodexStore(deps);
-  return deps.hasAuthStore(store) ? { CODEX_HOME: store } : {};
-}
+export interface CodexAdapterDeps extends HostStoreContext {}
 
 export class CodexAdapter implements ProducerAdapter {
-  readonly producerId = "codex";
+  readonly producerId = codexDescriptor.id;
+  readonly structuredOutput = codexDescriptor.structuredOutput!;
+  readonly executionModes = codexDescriptor.executionModes!;
+  readonly descriptor = codexDescriptor;
 
   constructor(private readonly deps: CodexAdapterDeps = {
     env: process.env,
     homeDirectory: homedir(),
   }) {}
 
-  private hasAuthStore(directory: string): boolean {
-    return (this.deps.hasAuthStore ?? (store => existsSync(join(store, "auth.json"))))(directory);
-  }
-
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
-    if (ctx.os === "win32") return unavailableReport(ctx, "unsupported-platform");
-
-    let executable: ResolvedExecutable;
-    try {
-      executable = await normalizeCodexExecutable(
-        await ctx.ps.resolveExecutable({ name: "codex" }),
-      );
-    } catch {
-      return unavailableReport(ctx, "missing-executable");
-    }
-
-    try {
-      const result = await supervise(ctx.ps, {
-        executable,
-        args: ["--version"],
-        cwd: process.cwd(),
-        env: {},
-        timeoutMs: VERSION_TIMEOUT_MS,
-        maxOutputBytes: VERSION_OUTPUT_LIMIT,
-      }, {});
-      const version = result.spawnError === undefined
-        && result.exitCode === 0
-        && result.signal === null
-        && result.timedOut === false
-        && result.cancelled === false
-        ? parseVersion(result.stdout)
-        : null;
-      if (version === null) return unavailableReport(ctx, "probe-failed", executable);
-
-      const writeConfinementBackend = selectCodexWriteConfinementBackend(ctx);
-      const authState = this.hasAuthStore(resolveCodexStore(this.deps))
-        ? "authenticated"
-        : "unauthenticated";
-      return {
-        producerId: this.producerId,
-        available: true,
-        reason: null,
-        os: ctx.os,
-        arch: ctx.arch,
-        environmentType: ctx.environmentType,
-        resolvedExecutable: executable,
-        version,
-        authState,
-        executionModes: ["edit"],
-        structuredOutput: true,
-        writeConfinementBackend,
-        laneEligibility: { edit: writeConfinementBackend !== null },
-      };
-    } catch {
-      return unavailableReport(ctx, "probe-failed", executable);
-    }
+    return probeOsConfinedCli(ctx, {
+      producerId: this.producerId,
+      executableName: "codex",
+      structuredOutput: this.structuredOutput,
+      writeConfinementBackend: "codex-native-sandbox",
+      parseVersion,
+      isAuthenticated: () => isProducerAuthenticated(codexDescriptor, this.deps),
+    });
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
@@ -402,16 +251,14 @@ export class CodexAdapter implements ProducerAdapter {
       );
     }
     args.push("-");
-
-    const defaultEnv = defaultCodexEnv({
-      env: this.deps.env,
-      homeDirectory: this.deps.homeDirectory,
-      hasAuthStore: directory => this.hasAuthStore(directory),
-    });
+    const defaultEnv = resolveDefaultEnv(codexDescriptor, this.deps);
     return {
       executable: ctx.executable,
       args,
-      stdin: renderPrompt(spec, ctx.readOnly === true),
+      stdin: renderProducerPrompt(spec, {
+        readOnly: ctx.readOnly === true,
+        ...codexDescriptor.prompt,
+      }),
       requiredEnv: [...CODEX_REQUIRED_ENV],
       env: {
         ...defaultEnv,

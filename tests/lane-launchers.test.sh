@@ -39,7 +39,7 @@ fi
 [[ -f "$ROOT/runtime/server.mjs" ]] || fail 'missing packaged MCP server runtime'
 [[ -f "$ROOT/src/mcp/server.ts" ]] || fail 'missing MCP server source'
 
-for producer in codex opencode pi pythinker; do
+for producer in codex opencode pi pythinker agy claude; do
   [[ -f "$ROOT/src/producers/$producer-adapter.ts" ]] ||
     fail "missing MCP Producer adapter: src/producers/$producer-adapter.ts"
 done

@@ -12,10 +12,9 @@ import type {
   SupervisedExit,
 } from "../../src/platform/platform-services.js";
 import { PosixPlatformServices } from "../../src/platform/posix-platform-services.js";
-import { supervise } from "../../src/platform/process-supervisor.js";
-import { wrapInvocationWithSeatbelt } from "../../src/platform/sandbox/seatbelt.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import { OpenCodeAdapter } from "../../src/producers/opencode-adapter.js";
+import { producerRuntime } from "../../src/producers/producer-runtime.js";
 import { renderSkillBootstrap } from "../../src/producers/skill-bootstrap.js";
 import type {
   CapabilityReport,
@@ -26,7 +25,6 @@ import {
   normalizePlainText,
   selectOsWriteConfinementBackend,
 } from "../../src/producers/plain-text.js";
-import { buildEnvironment } from "../../src/runtime/environment-policy.js";
 
 const execFileAsync = promisify(execFile);
 const executable: ResolvedExecutable = {
@@ -269,6 +267,25 @@ describe("OpenCodeAdapter", () => {
     }
   });
 
+  it("reports authenticated when auth.json exists in the store overridden by XDG_DATA_HOME", async () => {
+    const root = await mkdtemp(join(tmpdir(), "claude-architect-opencode-auth-"));
+    const customDataHome = join(root, "custom-data");
+    const store = join(customDataHome, "opencode");
+    await mkdir(store, { recursive: true });
+    await writeFile(join(store, "auth.json"), "fixture contents must not be read");
+
+    try {
+      const report = await new OpenCodeAdapter({
+        env: { XDG_DATA_HOME: customDataHome },
+        homeDirectory: root,
+      }).probe(probeContext(versionPlatformServices(executable)));
+
+      expect(report.authState).toBe("authenticated");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("invokes a Node OpenCode entrypoint with the runtime Node executable", async () => {
     const root = await mkdtemp(join(tmpdir(), "claude-architect-opencode-entrypoint-"));
     const entrypoint = join(root, "opencode");
@@ -465,6 +482,19 @@ describe("OpenCodeAdapter", () => {
     });
   });
 
+  it("declares OpenCode's XDG data and state directories as inherited writable state", () => {
+    const adapter = new OpenCodeAdapter({
+      env: { XDG_STATE_HOME: "/Users/test/.local/state" },
+      homeDirectory: "/Users/test",
+      hasAuthStore: () => false,
+    });
+    const invocation = adapter.buildInvocation(sampleSpec(), invocationContext());
+    expect(invocation.inheritedStateWritablePaths).toEqual([
+      join("/Users/test", ".local", "share", "opencode"),
+      join("/Users/test", ".local", "state", "opencode"),
+    ]);
+  });
+
   it("declares the OpenCode configuration isolation profile", () => {
     expect(new OpenCodeAdapter().configurationProfile()).toEqual({
       isolationState: "controlled-config-with-copied-credentials",
@@ -495,52 +525,19 @@ describe("OpenCodeAdapter", () => {
         await mkdir(worktreePath);
         await execFileAsync("git", ["init", "-q"], { cwd: worktreePath });
         const ps = new PosixPlatformServices();
-        const invocation = {
-          executable: {
-            kind: "native" as const,
-            command: "/usr/bin/touch",
-            prefixArgs: [],
-            resolvedFrom: "seatbelt-confinement-gate",
-          },
-          args: [insidePath],
-          requiredEnv: [],
-          network: "denied" as const,
-        };
-        const policy = { worktreePath, tempHome: null, allowNetwork: false };
-        const insideExit = await supervise(ps, {
-          executable: wrapInvocationWithSeatbelt(invocation, policy).executable,
-          args: wrapInvocationWithSeatbelt(invocation, policy).args,
-          cwd: worktreePath,
-          env: {},
-          timeoutMs: 30_000,
-          maxOutputBytes: 64 * 1024,
-        }, {});
+        const plan = await producerRuntime.planLaunch({
+          producerId: "opencode",
+          spec: sampleSpec(),
+          worktreePath,
+          intent: "edit",
+          ps,
+        });
 
-        expect(
-          insideExit.exitCode,
-          `stdout:\n${insideExit.stdout}\nstderr:\n${insideExit.stderr}`,
-        ).toBe(0);
-        await expect(access(insidePath)).resolves.toBeUndefined();
-
-        const outsideInvocation = wrapInvocationWithSeatbelt({
-          ...invocation,
-          args: [outsidePath],
-        }, policy);
-        const outsideExit = await supervise(ps, {
-          executable: outsideInvocation.executable,
-          args: outsideInvocation.args,
-          cwd: worktreePath,
-          env: {},
-          timeoutMs: 30_000,
-          maxOutputBytes: 64 * 1024,
-        }, {});
-
-        expect(outsideExit.spawnError).toBeUndefined();
-        expect(
-          outsideExit.exitCode,
-          `stdout:\n${outsideExit.stdout}\nstderr:\n${outsideExit.stderr}`,
-        ).not.toBe(0);
-        await expect(access(outsidePath)).rejects.toMatchObject({ code: "ENOENT" });
+        expect(plan.confinementBackend).toBe("macos-seatbelt");
+        expect(plan.invocation.executable.command).toBe("/usr/bin/sandbox-exec");
+        const profile = plan.invocation.args[1] ?? "";
+        expect(profile).toContain(`(subpath "${worktreePath}")`);
+        expect(profile).toContain("(deny file-write*)");
       } finally {
         await rm(outsidePath, { force: true });
         await rm(root, { recursive: true, force: true });
@@ -589,30 +586,17 @@ describe("OpenCodeAdapter", () => {
         spec.forbiddenScope = [];
         spec.successCriteria = ["smoke.txt exists and contains ok."];
         spec.timeoutMs = 300_000;
-        const invocation = wrapInvocationWithSeatbelt(adapter.buildInvocation(spec, {
+        const launchResult = await producerRuntime.launch({
+          producerId: "opencode",
+          spec,
           worktreePath,
+          intent: "edit",
+          ps,
           runId: "run-opencode-smoke",
           capabilityReport: report,
-          executable: report.resolvedExecutable,
-        }), {
-          worktreePath,
-          tempHome: null,
-          allowNetwork: true,
         });
-        builtEnvironment = buildEnvironment({
-          os: "darwin",
-          adapterAllowlist: invocation.requiredEnv,
-          ...(invocation.env === undefined ? {} : { adapterValues: invocation.env }),
-        });
-        const supervisedExit = await supervise(ps, {
-          executable: invocation.executable,
-          args: invocation.args,
-          cwd: worktreePath,
-          env: builtEnvironment.env,
-          timeoutMs: 300_000,
-          ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-          maxOutputBytes: 1_000_000,
-        }, {});
+        builtEnvironment = launchResult.builtEnvironment;
+        const supervisedExit = launchResult.exit;
         const normalized = normalizePlainText({
           stdout: supervisedExit.stdout,
           stderr: supervisedExit.stderr,

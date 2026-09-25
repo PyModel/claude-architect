@@ -22,6 +22,7 @@ import { WorkflowStore } from "../../src/autopilot/workflow-store.js";
 import { WorktreeManager } from "../../src/runtime/worktree-manager.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
+import { platformServicesDouble } from "../helpers/platform-services-double.js";
 import {
   recoverStaleRuns,
   type RecoveryDependencies,
@@ -145,7 +146,7 @@ async function createNonterminalWorkflowState(
     now: () => timestamp,
   });
   await store.create({
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId,
     repositoryIdentity: repo.commonDir,
     baseCommitOid: repo.head,
@@ -165,13 +166,7 @@ async function createNonterminalWorkflowState(
     }],
     intentJournal: { ref: "journal.ndjson", entryCount: 0, lastEntryHash: null },
     finalGate: null,
-    shipping: {
-      branch: `feat/${workflowId}`,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: timestamp,
-    },
-    ciObservations: [],
+    branch: `feat/${workflowId}`,
     cleanup: null,
     terminal: null,
     createdAt: timestamp,
@@ -194,7 +189,7 @@ async function createTerminalWorkflowWithUnverifiableOwner(
   };
   const store = new WorkflowStore(workflowId, options);
   await store.create({
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId,
     repositoryIdentity: repo.commonDir,
     baseCommitOid: repo.head,
@@ -214,13 +209,7 @@ async function createTerminalWorkflowWithUnverifiableOwner(
     }],
     intentJournal: { ref: "journal.ndjson", entryCount: 0, lastEntryHash: null },
     finalGate: null,
-    shipping: {
-      branch: `feat/${workflowId}`,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: timestamp,
-    },
-    ciObservations: [],
+    branch: `feat/${workflowId}`,
     cleanup: null,
     terminal: null,
     createdAt: timestamp,
@@ -538,13 +527,13 @@ describe("startup worktree sweep", () => {
     }));
     try {
       await expect(recoverStaleRuns({
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: getPlatformServices().os,
           async getProcessStartToken(pid) {
             return pid === process.pid ? "live-checkout-owner" : null;
           },
           async terminateProcessTreeByPid() {},
-        },
+        }),
         isProcessAlive: pid => pid === process.pid,
       })).resolves.toEqual({ recovered: [], quarantined: [] });
       await expect(access(worktree.path)).resolves.toBeUndefined();
@@ -611,7 +600,9 @@ describe("startup worktree sweep", () => {
     await expect(access(valid.path)).resolves.toBeUndefined();
     await expect(access(invalid.path)).resolves.toBeUndefined();
     await expect(access(missing.path)).resolves.toBeUndefined();
-    await Promise.all([valid.cleanup(), invalid.cleanup(), missing.cleanup()]);
+    // One checkout lease serializes these; concurrent cleanups can exceed its
+    // acquisition timeout on a loaded host.
+    for (const worktree of [valid, invalid, missing]) await worktree.cleanup();
   });
 
   it("sweeps stale modern and legacy final-review materializations", async () => {
@@ -653,7 +644,7 @@ describe("startup worktree sweep", () => {
       now: () => timestamp,
     });
     await store.create({
-      stateVersion: "1",
+      stateVersion: "2",
       workflowId,
       repositoryIdentity: repo.commonDir,
       baseCommitOid: repo.head,
@@ -677,13 +668,7 @@ describe("startup worktree sweep", () => {
         lastEntryHash: null,
       },
       finalGate: null,
-      shipping: {
-        branch: `feat/${workflowId}`,
-        prNumber: null,
-        prUrl: null,
-        ciDeadlineAt: timestamp,
-      },
-      ciObservations: [],
+      branch: `feat/${workflowId}`,
       cleanup: null,
       terminal: null,
       createdAt: timestamp,
@@ -724,11 +709,11 @@ describe("startup worktree sweep", () => {
     try {
       await expect(recoverStaleRuns({
         isProcessAlive: pid => pid === process.pid,
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: process.platform,
           getProcessStartToken: async () => null,
           async terminateProcessTreeByPid() {},
-        },
+        }),
       })).resolves.toEqual({
         recovered: [],
         quarantined: [],
@@ -905,6 +890,27 @@ describe("startup worktree sweep", () => {
     expect(listed.stdout).not.toContain(worktree.path);
   });
 
+  it("sweeps an orphan in a checkout namespace and leaves user worktrees beside it", async () => {
+    const repo = await initRepo();
+    const userWorktree = path.join(repo.directory, ".worktrees", "user-feature");
+    await runGit(repo.directory, ["worktree", "add", "-q", "--detach", userWorktree, repo.head]);
+    const orphan = await new WorktreeManager(repo.directory, "namespace-orphan").create(repo.head);
+
+    await expect(recoverStaleRuns({ isProcessAlive: () => false })).resolves.toEqual({
+      recovered: [],
+      quarantined: [],
+    });
+
+    await expectMissing(orphan.path);
+    const listed = await git(repo.directory, ["worktree", "list", "--porcelain", "-z"]);
+    expect(listed.stdout).not.toContain(orphan.path);
+    expect(listed.stdout).toContain(await realpath(userWorktree));
+    await expect(readFile(
+      path.join(repo.directory, ".worktrees", "claude-architect", ".gitignore"),
+      "utf8",
+    )).resolves.toBe("*\n");
+  });
+
   it("removes stale registrations when the entire managed worktree root vanished", async () => {
     const repo = await initRepo();
     const runId = "sweep-missing-worktree-root";
@@ -962,7 +968,7 @@ describe("startup worktree sweep", () => {
         }],
       });
       await expect(access(worktree.path)).resolves.toBeUndefined();
-      await expect(store.readResult(runId)).resolves.toBeNull();
+      await expect(store.readResult()).resolves.toBeNull();
     } finally {
       await rm(manifestPath, { force: true });
       try { await recoverStaleRuns({ isProcessAlive: () => false }); } catch { /* fixture cleanup */ }
@@ -993,7 +999,7 @@ describe("startup worktree sweep", () => {
       await writeCheckoutOwner(repo, JSON.stringify(owner));
       let published = false;
       dependencies = {
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: "darwin",
           async getProcessStartToken(pid) {
             if (pid === owner.pid) {
@@ -1006,7 +1012,7 @@ describe("startup worktree sweep", () => {
             return "darwin:self";
           },
           async terminateProcessTreeByPid() {},
-        },
+        }),
         isProcessAlive: pid => pid === owner.pid,
       };
     } else if (state === "terminal-cleanup-deferred-by-empty-owner") {
@@ -1029,7 +1035,7 @@ describe("startup worktree sweep", () => {
       const liveOwner = { pid: 9402, processToken: "darwin:live-pipeline" };
       await writeCheckoutOwner(repo, JSON.stringify(checkoutOwner));
       dependencies = {
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: "darwin",
           async getProcessStartToken(pid) {
             if (pid === checkoutOwner.pid) {
@@ -1043,7 +1049,7 @@ describe("startup worktree sweep", () => {
             return pid === liveOwner.pid ? liveOwner.processToken : "darwin:self";
           },
           async terminateProcessTreeByPid() {},
-        },
+        }),
         isProcessAlive: pid => pid === checkoutOwner.pid || pid === liveOwner.pid,
       };
     } else if (state === "terminal-live-owner") {
@@ -1054,11 +1060,11 @@ describe("startup worktree sweep", () => {
         sliced: false,
       });
       dependencies = {
-        platformServices: {
+        platformServices: platformServicesDouble({
           os: "darwin",
           async getProcessStartToken() { return null; },
           async terminateProcessTreeByPid() {},
-        },
+        }),
         isProcessAlive: pid => pid === 4243,
       };
     } else {
@@ -1093,13 +1099,13 @@ describe("startup worktree sweep", () => {
     let terminated = false;
 
     await expect(recoverStaleRuns({
-      platformServices: {
+      platformServices: platformServicesDouble({
         os: "darwin",
         async getProcessStartToken(observedPid) {
           return observedPid === pid ? processToken : "darwin:recovery-token";
         },
         async terminateProcessTreeByPid() { terminated = true; },
-      },
+      }),
       isProcessAlive: observedPid => observedPid === pid,
     })).resolves.toEqual({ recovered: [], quarantined: [] });
 
@@ -1127,17 +1133,17 @@ describe("startup worktree sweep", () => {
     ).create(repo.head);
 
     await expect(recoverStaleRuns({
-      platformServices: {
+      platformServices: platformServicesDouble({
         os: "darwin",
         async getProcessStartToken() { return null; },
         async terminateProcessTreeByPid() {},
-      },
+      }),
       isProcessAlive: pid => pid === 4243,
     })).resolves.toEqual({ recovered: ["run"], quarantined: [] });
 
     await expect(access(protectedWorktree.path)).resolves.toBeUndefined();
     await expect(access(staleWorktree.path)).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(protectedStore.readPipelineActiveMarker("run-repair")).resolves.not.toBeNull();
+    await expect(protectedStore.readPipelineActiveMarker()).resolves.not.toBeNull();
   });
 
   it("claims a run missing its start record and preserves its worktree", async () => {
@@ -1196,6 +1202,17 @@ describe("worktree lease coverage", () => {
       const source = await readFile(filename, "utf8");
       if (!source.includes("worktree-manager.js")) continue;
       for (const line of source.split("\n")) {
+        // `withManagedWorktree` creates a worktree on its caller's behalf, so a
+        // call to it is a creation site too. Without this the helper would hide
+        // creations from the very inventory that exists to name them.
+        const borrows = /\bwithManagedWorktree\s*\(/u.test(line)
+          && !/\bfunction\s+withManagedWorktree/u.test(line);
+        if (borrows) {
+          calls.push(
+            `${path.relative(repositoryRoot, filename).replaceAll(path.sep, "/")}#withManagedWorktree`,
+          );
+          continue;
+        }
         if (!/\.create(?:Attached)?\s*\(/u.test(line) || line.includes("Object.create(")) continue;
         const method = line.match(/\.create(Attached)?\s*\(/u)?.[1] === "Attached"
           ? "createAttached"
@@ -1211,13 +1228,14 @@ describe("worktree lease coverage", () => {
     // leases in branch-manager tests.
     const instructions = "A new WorktreeManager create call needs a behavioral lease-lifetime "
       + "test for its ownership model, then must be added to this audited inventory.";
-    expect(calls, instructions).toHaveLength(9);
+    expect(calls, instructions).toHaveLength(10);
     expect(calls, instructions).toEqual([
       "src/autopilot/branch-manager.ts#createAttached",
       "src/autopilot/final-branch-reviewer.ts#create",
-      "src/pipeline/pipeline-runtime.ts#create",
-      "src/pipeline/pipeline-runtime.ts#create",
-      "src/pipeline/pipeline-runtime.ts#create",
+      "src/pipeline/candidate-verifier.ts#withManagedWorktree",
+      "src/pipeline/pipeline-runtime.ts#withManagedWorktree",
+      "src/pipeline/slice-runner.ts#withManagedWorktree",
+      "src/pipeline/slice-runner.ts#withManagedWorktree",
       "src/runtime/attempt-runtime.ts#create",
       "src/runtime/producer-preflight.ts#create",
       "src/verify/baseline-verifier.ts#create",

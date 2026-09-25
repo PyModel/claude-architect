@@ -33,7 +33,6 @@ import {
 } from "../../src/runtime/redaction.js";
 import { scrubbedGitEnv } from "./helpers/git-fixture-env.js";
 import {
-  eligibilityInputFromArtifacts,
   evaluateAutopilotEligibility,
 } from "../../src/autopilot/autopilot-eligibility.js";
 import {
@@ -256,12 +255,12 @@ describe("ArtifactStore", () => {
     await store.writeReviewSnapshot(snapshot);
     const pipelinePath = join(store.runDirectory, "pipeline", "pipeline-result.json");
     const pipelineBefore = await readFile(pipelinePath, "utf8");
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-20T12:00:00.000Z",
-    }));
+    });
 
     const hashes = await store.writePostPipelineAutopilotArtifacts({
       pipelineResult: pipeline,
@@ -272,8 +271,8 @@ describe("ArtifactStore", () => {
 
     expect(hashes.advisorReportHash).toBe(eligibility.advisorReportHash);
     expect(hashes.eligibilityRecordHash).toMatch(/^[0-9a-f]{64}$/u);
-    await expect(store.readAdvisorReport(runId)).resolves.toEqual(advisorReport);
-    await expect(store.readAutopilotEligibility(runId)).resolves.toEqual(eligibility);
+    await expect(store.readAdvisorReport()).resolves.toEqual(advisorReport);
+    await expect(store.readAutopilotEligibility()).resolves.toEqual(eligibility);
     expect(await readFile(pipelinePath, "utf8")).toBe(pipelineBefore);
 
     const candidate = pipeline.attempt.candidate!;
@@ -282,15 +281,15 @@ describe("ArtifactStore", () => {
       eligibility,
       "2026-07-20T12:01:00.000Z",
     );
-    await expect(store.readCandidateDecision(runId)).resolves.toMatchObject({
+    await expect(store.readCandidateDecision()).resolves.toMatchObject({
       authority: "autopilot-policy",
       candidateManifestHash: candidate.manifestHash,
       evidenceHash: hashes.eligibilityRecordHash,
     });
 
     await rm(join(store.runDirectory, "pipeline", "post-pipeline-autopilot.json"));
-    await expect(store.readAdvisorReport(runId)).resolves.toBeNull();
-    await expect(store.readAutopilotEligibility(runId)).resolves.toBeNull();
+    await expect(store.readAdvisorReport()).resolves.toBeNull();
+    await expect(store.readAutopilotEligibility()).resolves.toBeNull();
   });
 
   it("publishes neither post-pipeline record when the single atomic publication fails", async () => {
@@ -302,12 +301,12 @@ describe("ArtifactStore", () => {
     await store.writeReviewSnapshot(snapshot);
     const pipelinePath = join(store.runDirectory, "pipeline", "pipeline-result.json");
     const pipelineBefore = await readFile(pipelinePath, "utf8");
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-20T12:00:00.000Z",
-    }));
+    });
     filesystemHooks.beforeLink = async (_source, destination) => {
       if (!destination.endsWith("post-pipeline-autopilot.json")) return;
       const error = new Error("injected atomic publication failure") as NodeJS.ErrnoException;
@@ -323,8 +322,8 @@ describe("ArtifactStore", () => {
     })).rejects.toThrow(/injected atomic publication failure/u);
     filesystemHooks.beforeLink = undefined;
 
-    await expect(store.readAdvisorReport(runId)).resolves.toBeNull();
-    await expect(store.readAutopilotEligibility(runId)).resolves.toBeNull();
+    await expect(store.readAdvisorReport()).resolves.toBeNull();
+    await expect(store.readAutopilotEligibility()).resolves.toBeNull();
     expect(await readFile(pipelinePath, "utf8")).toBe(pipelineBefore);
   });
 
@@ -337,8 +336,8 @@ describe("ArtifactStore", () => {
       advisorReportHash: "f".repeat(64),
     });
 
-    await expect(store.readAdvisorReport(runId)).rejects.toThrow(/artifacts are invalid/u);
-    await expect(store.readAutopilotEligibility(runId)).rejects.toThrow(/artifacts are invalid/u);
+    await expect(store.readAdvisorReport()).rejects.toThrow(/artifacts are invalid/u);
+    await expect(store.readAutopilotEligibility()).rejects.toThrow(/artifacts are invalid/u);
   });
 
   it("rejects caller-forged or non-strict post-pipeline eligibility", async () => {
@@ -348,12 +347,12 @@ describe("ArtifactStore", () => {
     const snapshot = reviewSnapshot(runId);
     await store.writePipelineArtifact("pipeline-result", pipeline);
     await store.writeReviewSnapshot(snapshot);
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-20T12:00:00.000Z",
-    }));
+    });
 
     await expect(store.writePostPipelineAutopilotArtifacts({
       pipelineResult: pipeline,
@@ -391,7 +390,7 @@ describe("ArtifactStore", () => {
     ), "utf8");
     expect(persisted).not.toContain(secret);
     expect(persisted).not.toContain("bearer-secret-value");
-    await expect(store.readPipelineArtifact(runId, "round-1-review")).resolves.toEqual({
+    await expect(store.readPipelineArtifact("round-1-review")).resolves.toEqual({
       nested: { rawOutput: "Bearer [b] and [k]" },
       summary: "provider returned [k]",
     });
@@ -409,8 +408,8 @@ describe("ArtifactStore", () => {
 
     await store.promoteTerminalArtifacts({ result: promoted, manifest: promotedManifest });
 
-    await expect(store.readResult(runId)).resolves.toEqual(promoted);
-    await expect(store.readManifest(runId)).resolves.toEqual(sanitizeRunManifest(promotedManifest));
+    await expect(store.readResult()).resolves.toEqual(promoted);
+    await expect(store.readManifest()).resolves.toEqual(sanitizeRunManifest(promotedManifest));
   });
 
   it("rejects terminal promotion across run ids or after a decision", async () => {
@@ -475,7 +474,7 @@ describe("ArtifactStore", () => {
 
     await store.writeResult(result);
 
-    const archived = await store.readResult("run-allowed-mutations");
+    const archived = await store.readResult();
     expect(archived?.requestedVerification[0]?.allowedMutations).toBe("ignored-paths");
     expect(archived?.requestedVerification[0]?.expectBaselineFailure).toBe(true);
   });
@@ -486,7 +485,7 @@ describe("ArtifactStore", () => {
 
     await store.writeResult(result);
 
-    await expect(store.readResult("run-round-trip")).resolves.toEqual(result);
+    await expect(store.readResult()).resolves.toEqual(result);
     await expect(store.list()).resolves.toContain("run-round-trip");
     await expect(access(join(
       process.env.CLAUDE_PLUGIN_DATA!,
@@ -504,7 +503,7 @@ describe("ArtifactStore", () => {
     const malformedStore = new ArtifactStore(malformedRunId);
     await malformedStore.writeLog("producer", "create run directory\n");
     await writeFile(join(malformedStore.runDirectory, "result.json"), "{}\n");
-    await expect(malformedStore.readResult(malformedRunId)).rejects.toThrow(
+    await expect(malformedStore.readResult()).rejects.toThrow(
       /attempt result.*invalid|run id/i,
     );
 
@@ -515,7 +514,7 @@ describe("ArtifactStore", () => {
       join(crossStore.runDirectory, "result.json"),
       `${JSON.stringify(sampleResult("different-run"))}\n`,
     );
-    await expect(crossStore.readResult(crossRunId)).rejects.toThrow(/attempt result.*run id/i);
+    await expect(crossStore.readResult()).rejects.toThrow(/attempt result.*run id/i);
   });
 
   it("rejects case-colliding changed paths consumed from archived pipeline bytes", async () => {
@@ -536,12 +535,12 @@ describe("ArtifactStore", () => {
     expect(archivedBytes).not.toBeNull();
     const archivedPipeline = JSON.parse(archivedBytes!);
 
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: archivedPipeline,
       reviewSnapshot: reviewSnapshot(runId),
       advisor: advisorReport,
       evaluatedAt: "2026-07-20T12:00:00.000Z",
-    }));
+    });
     expect(eligibility).toMatchObject({
       eligible: false,
       reasons: expect.arrayContaining(["pipeline result is malformed"]),
@@ -561,10 +560,24 @@ describe("ArtifactStore", () => {
     await expect(store.writeResult(invalid)).rejects.toThrow(/attempt result.*invalid/i);
   });
 
-  it("validates run ids before reading manifests", async () => {
-    const store = new ArtifactStore("run-manifest-id-check");
+  it("validates the run id once, at construction, before any read", () => {
+    expect(() => new ArtifactStore("../run-manifest-id-check")).toThrow(/invalid run id/i);
+  });
 
-    await expect(store.readManifest("../outside")).rejects.toThrow(/invalid run id/i);
+  it("binds every read façade to the run it was constructed for", async () => {
+    const bound = new ArtifactStore("run-bound-a");
+    const other = new ArtifactStore("run-bound-b");
+    await bound.writeResult(sampleResult("run-bound-a"));
+
+    await expect(bound.readResult()).resolves.toMatchObject({ runId: "run-bound-a" });
+    await expect(other.readResult()).resolves.toBeNull();
+    for (const facade of [
+      "readResult", "readManifest", "readRunStatus", "readReviewSnapshot", "readCandidateDecision",
+      "readDecision", "readPipelineGateCleared", "readPipelineActiveMarker", "readAdvisorReport",
+      "readAutopilotEligibility", "readRunStartSpecSha256",
+    ] as const) {
+      expect(ArtifactStore.prototype[facade].length, facade).toBe(0);
+    }
   });
 
   it("treats an archived runtime version as provenance", async () => {
@@ -577,7 +590,7 @@ describe("ArtifactStore", () => {
 
     await store.writeManifest(manifest);
 
-    await expect(store.readManifest(runId)).resolves.toMatchObject({
+    await expect(store.readManifest()).resolves.toMatchObject({
       runId,
       runtimeVersion: "0.16.0",
     });
@@ -617,7 +630,7 @@ describe("ArtifactStore", () => {
     await store.writeResult(sampleResult(runId));
     await truncate(join(store.runDirectory, "result.json"), 8_000_001);
 
-    await expect(store.readResult(runId)).rejects.toThrow(/archive entry.*large|byte limit/i);
+    await expect(store.readResult()).rejects.toThrow(/archive entry.*large|byte limit/i);
   });
 
   it("rejects a hardlinked archive entry", async () => {
@@ -633,7 +646,7 @@ describe("ArtifactStore", () => {
     await rm(destination);
     await link(external, destination);
 
-    await expect(store.readResult(runId)).rejects.toThrow(/hardlink|link count/i);
+    await expect(store.readResult()).rejects.toThrow(/hardlink|link count/i);
   });
 
   it("fails size accounting when a run directory is swapped for a symlink", async () => {
@@ -742,7 +755,7 @@ describe("ArtifactStore", () => {
       detail: { toolError: "decision-conflict" },
     });
 
-    await expect(store.readCandidateDecision(runId)).resolves.toEqual({
+    await expect(store.readCandidateDecision()).resolves.toEqual({
       ...first,
       decisionVersion: "2",
       authority: "human",
@@ -770,7 +783,7 @@ describe("ArtifactStore", () => {
     // "unknown", not "human": the record predates provenance, so it says a
     // decision happened and nothing about who made it. Reporting a person would
     // invent evidence and hand it the one authority integration accepts.
-    await expect(store.readCandidateDecision(runId)).resolves.toEqual({
+    await expect(store.readCandidateDecision()).resolves.toEqual({
       decisionVersion: "1",
       decision: "accepted",
       authority: "unknown",
@@ -819,7 +832,7 @@ describe("ArtifactStore", () => {
       decisionVersion: "2",
       authority: "human",
     };
-    await expect(store.readCandidateDecision(runId)).resolves.toEqual(expected);
+    await expect(store.readCandidateDecision()).resolves.toEqual(expected);
     expect(JSON.parse(await readFile(join(store.runDirectory, "decision.json"), "utf8")))
       .toEqual(expected);
   });
@@ -833,12 +846,12 @@ describe("ArtifactStore", () => {
     await store.writeResult(sampleResult(runId));
     await store.writePipelineArtifact("pipeline-result", pipeline);
     await store.writeReviewSnapshot(snapshot);
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-14T12:00:00.000Z",
-    }));
+    });
     const hashes = await store.writePostPipelineAutopilotArtifacts({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
@@ -861,7 +874,7 @@ describe("ArtifactStore", () => {
       "2026-07-14T12:01:00.000Z",
     );
 
-    await expect(store.readCandidateDecision(runId)).resolves.toEqual(persisted);
+    await expect(store.readCandidateDecision()).resolves.toEqual(persisted);
     expect(JSON.parse(await readFile(join(store.runDirectory, "decision.json"), "utf8")))
       .toEqual(persisted);
 
@@ -891,12 +904,12 @@ describe("ArtifactStore", () => {
     const candidate = pipeline.attempt.candidate!;
     await store.writePipelineArtifact("pipeline-result", pipeline);
     await store.writeReviewSnapshot(snapshot);
-    const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const eligibility = evaluateAutopilotEligibility({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
       advisor: advisorReport,
       evaluatedAt: "2026-07-14T12:00:00.000Z",
-    }));
+    });
     await store.writePostPipelineAutopilotArtifacts({
       pipelineResult: pipeline,
       reviewSnapshot: snapshot,
@@ -924,7 +937,7 @@ describe("ArtifactStore", () => {
       eligible: false,
     }, "2026-07-14T12:00:00.000Z"))
       .rejects.toThrow(/eligibility is invalid/u);
-    await expect(store.readCandidateDecision(runId)).resolves.toBeNull();
+    await expect(store.readCandidateDecision()).resolves.toBeNull();
   });
 
   it("requires idempotent decision retries to match authority and candidate binding", async () => {
@@ -956,7 +969,7 @@ describe("ArtifactStore", () => {
         detail: { toolError: "decision-conflict" },
       });
     }
-    await expect(store.readCandidateDecision(runId)).resolves.toEqual(original);
+    await expect(store.readCandidateDecision()).resolves.toEqual(original);
   });
 
   it("atomically preserves one decision when conflicting writers race", async () => {
@@ -1003,7 +1016,7 @@ describe("ArtifactStore", () => {
     expect(rejected).toMatchObject({
       reason: { detail: { toolError: "decision-conflict" } },
     });
-    await expect(firstStore.readCandidateDecision(runId)).resolves.toEqual({
+    await expect(firstStore.readCandidateDecision()).resolves.toEqual({
       decisionVersion: "2",
       ...records[winnerIndex],
       authority: "human",
@@ -1023,7 +1036,7 @@ describe("ArtifactStore", () => {
 
     await store.writePipelineActiveMarker(marker);
 
-    await expect(store.readPipelineActiveMarker(runId)).resolves.toEqual(marker);
+    await expect(store.readPipelineActiveMarker()).resolves.toEqual(marker);
   });
 
   it("rejects a legacy pipeline marker without sliced", async () => {
@@ -1036,7 +1049,7 @@ describe("ArtifactStore", () => {
       startedAt: "2026-07-19T12:00:00.000Z",
     })}\n`);
 
-    await expect(store.readPipelineActiveMarker(runId)).rejects.toThrow(
+    await expect(store.readPipelineActiveMarker()).rejects.toThrow(
       /pipeline-active marker is malformed/i,
     );
   });
@@ -1054,7 +1067,7 @@ describe("ArtifactStore", () => {
         sliced,
       })}\n`);
 
-      await expect(store.readPipelineActiveMarker(runId)).rejects.toThrow(
+      await expect(store.readPipelineActiveMarker()).rejects.toThrow(
         /pipeline-active marker is malformed/i,
       );
     },
@@ -1089,7 +1102,7 @@ describe("ArtifactStore", () => {
       })}\n`);
     };
 
-    const result = await store.readResult(runId).catch(() => null);
+    const result = await store.readResult().catch(() => null);
 
     expect(swapped).toBe(true);
     expect(result?.summary).not.toBe("forged result");
@@ -1105,7 +1118,7 @@ describe("ArtifactStore", () => {
     const stored = await readFile(join(store.runDirectory, "result.json"), "utf8");
     expect(() => JSON.parse(stored)).not.toThrow();
     expect(stored).not.toContain('"runId"');
-    await expect(store.readResult("run-json-syntax")).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       runId: "run-json-syntax",
     });
     registration.dispose();
@@ -1119,7 +1132,7 @@ describe("ArtifactStore", () => {
 
     const stored = await readFile(join(store.runDirectory, "result.json"), "utf8");
     expect(stored).not.toContain("ummary");
-    await expect(store.readResult("run-required-key")).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       summary: "producer exited non-zero",
     });
     registration.dispose();
@@ -1294,7 +1307,7 @@ describe("ArtifactStore", () => {
       ...original,
       summary: "conflicting terminal result",
     })).rejects.toThrow(/already exists with different content/);
-    await expect(store.readResult("run-create-once")).resolves.toEqual(original);
+    await expect(store.readResult()).resolves.toEqual(original);
   });
 
   it("allows only one conflicting concurrent terminal write", async () => {
@@ -1308,7 +1321,7 @@ describe("ArtifactStore", () => {
     ]);
 
     expect(outcomes.filter(outcome => outcome.status === "fulfilled")).toHaveLength(1);
-    const stored = await store.readResult("run-concurrent");
+    const stored = await store.readResult();
     expect([first.summary, second.summary]).toContain(stored?.summary);
   });
 
@@ -1468,7 +1481,7 @@ describe("ArtifactStore", () => {
 
     expect(result.removed).not.toContain(runId);
     expect(result.retained.some(entry => entry.reason.includes("authority changed"))).toBe(true);
-    await expect(store.readResult(runId)).resolves.toEqual(replacement);
+    await expect(store.readResult()).resolves.toEqual(replacement);
   });
 
   it("records repository identity for candidate-null cleanup intents", async () => {

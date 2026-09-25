@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  autonomousEligibility,
   DECISION_AUTHORITY_ENV,
   decisionAuthority,
 } from "../../src/mcp/decision-authority.js";
@@ -17,6 +16,7 @@ import type { AttemptResult, CandidateArtifact } from "../../src/protocol/attemp
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
 import type { CandidateDecisionV2 } from "../../src/protocol/candidate-decision.js";
 import type { RunManifest } from "../../src/runtime/run-manifest.js";
+import { manifestHashOf } from "../../src/git/changed-path-manifest.js";
 import type { ReviewSnapshot } from "../../src/runtime/review-snapshot.js";
 
 describe("decisionAuthority", () => {
@@ -39,49 +39,6 @@ describe("decisionAuthority", () => {
       message => warnings.push(message),
     )).toBe("human");
     expect(warnings).toEqual([expect.stringContaining("not a recognized decision authority")]);
-  });
-});
-
-describe("autonomousEligibility", () => {
-  const gateCleared = { warnings: [], verifiedClean: true, unreadable: false };
-
-  it("accepts only an evidence-bound, gate-cleared, unwarned, readable candidate", () => {
-    expect(autonomousEligibility("autonomous", gateCleared))
-      .toEqual({ eligible: true, reasons: [] });
-  });
-
-  it("refuses when the authority is human", () => {
-    expect(autonomousEligibility("human", gateCleared).eligible).toBe(false);
-  });
-
-  it("refuses an unreadable archive rather than falling through to a prompt", () => {
-    // Under autonomous policy a client may not advertise elicitation at all, so
-    // downgrading here would dead-end the run with no path forward.
-    const verdict = autonomousEligibility(
-      "autonomous",
-      { warnings: ["unreadable"], verifiedClean: false, unreadable: true },
-    );
-    expect(verdict.eligible).toBe(false);
-    expect(verdict.reasons).toEqual(["the candidate archive could not be read"]);
-  });
-
-  it("refuses a run that is not an independently verified candidate", () => {
-    // The decisive case: zero warnings but unverified (e.g. a failed or
-    // still-open run). Keying autonomy off warnings alone, instead of the
-    // archived status, would auto-accept whatever such a run produced.
-    const verdict = autonomousEligibility(
-      "autonomous",
-      { warnings: [], verifiedClean: false, unreadable: false },
-    );
-    expect(verdict.eligible).toBe(false);
-    expect(verdict.reasons).toEqual(["the candidate is not an independently verified result"]);
-  });
-
-  it("refuses a verified candidate carrying advisory warnings", () => {
-    expect(autonomousEligibility(
-      "autonomous",
-      { warnings: ["the pipeline gate did NOT clear this candidate"], verifiedClean: true, unreadable: false },
-    ).eligible).toBe(false);
   });
 });
 
@@ -142,7 +99,7 @@ describe("policy-autonomous decisions survive the archive", () => {
       recordedAt: new Date().toISOString(),
     };
     await store.writeCandidateDecisionRecord(record);
-    await expect(store.readCandidateDecision("decision-authority-roundtrip"))
+    await expect(store.readCandidateDecision())
       .resolves.toMatchObject({ authority: "policy-autonomous" });
   });
 });
@@ -157,6 +114,10 @@ const candidate: CandidateArtifact = {
   manifestHash: createHash("sha256").update(JSON.stringify([])).digest("hex"),
   changedPaths: [],
 };
+
+let confinedVerification: unknown[] = [
+  { id: "unit", confinement: "macos-seatbelt", networkPolicy: "unenforced", skipped: false },
+];
 
 const verifiedResult = {
   runId: "decide-authority",
@@ -208,6 +169,7 @@ async function advisoryFor(result: AttemptResult) {
         repoRoot: "/canonical/repo",
         baseCommitOid: candidate.baseCommitOid,
         candidateManifestHash: candidate.manifestHash,
+        effectivePolicy: { verificationPolicy: confinedVerification },
       } as unknown as RunManifest),
     }) as never,
   });
@@ -246,6 +208,7 @@ async function decideVia(
           repoRoot: "/canonical/repo",
           baseCommitOid: candidate.baseCommitOid,
           candidateManifestHash: candidate.manifestHash,
+          effectivePolicy: { verificationPolicy: confinedVerification },
         } as unknown as RunManifest),
         writeCandidateDecisionRecord: async (record: CandidateDecisionV2) => {
           recorded = record;
@@ -302,11 +265,70 @@ describe("decideCandidate honors the configured authority", () => {
     const advisory = await advisoryFor(plainDelegateResult);
 
     expect(advisory).toEqual({ warnings: [], verifiedClean: true, unreadable: false });
-    expect(autonomousEligibility("autonomous", advisory).eligible).toBe(true);
 
     const { decision, output } = await decideVia("autonomous", plainDelegateResult);
     expect(decision, JSON.stringify(output)).not.toBeNull();
     expect(decision?.authority).toBe("policy-autonomous");
+  });
+
+  it("requires a person when verification ran without OS confinement", async () => {
+    // Unconfined verification ran Producer code with the user's authority and
+    // could have rewritten the archive itself, so it cannot ground autonomy.
+    const plainDelegateResult = {
+      ...verifiedResult,
+      evidence: { plainDelegate: true },
+    } as AttemptResult;
+    const previous = confinedVerification;
+    confinedVerification = [{ id: "unit", confinement: "none", skipped: false }];
+    try {
+      expect(await advisoryFor(plainDelegateResult)).toEqual({
+        warnings: ["project verification ran without OS confinement on this platform"],
+        verifiedClean: false,
+        unreadable: false,
+      });
+      const { decision } = await decideVia("autonomous", plainDelegateResult);
+      expect(decision).toBeNull();
+    } finally {
+      confinedVerification = previous;
+    }
+  });
+
+  it("requires a person when a plain delegate rewrote its own verification inputs", async () => {
+    const changedPaths = [{
+      path: "tests/unit.test.ts",
+      changeType: "modified",
+      mode: "100644",
+      contentHash: "a".repeat(40),
+    }];
+    const touched = {
+      ...verifiedResult,
+      candidate: {
+        ...candidate,
+        changedPaths,
+        manifestHash: manifestHashOf(changedPaths as never),
+      },
+      evidence: { plainDelegate: true },
+    } as AttemptResult;
+
+    const advisory = await readDecisionAdvisory("decide-authority", {
+      ps: fakePlatform(),
+      storeFactory: () => ({
+        readResult: async () => touched,
+        readManifest: async () => ({
+          runId: "decide-authority",
+          repoRoot: "/canonical/repo",
+          baseCommitOid: candidate.baseCommitOid,
+          candidateManifestHash: touched.candidate!.manifestHash,
+          effectivePolicy: { verificationPolicy: confinedVerification },
+        } as unknown as RunManifest),
+      }) as never,
+    });
+
+    expect(advisory).toEqual({
+      warnings: ["the candidate changes verification inputs: tests/unit.test.ts"],
+      verifiedClean: false,
+      unreadable: false,
+    });
   });
 
   it("fails closed on an archive with neither provenance marker nor gate evidence", async () => {
@@ -320,7 +342,6 @@ describe("decideCandidate honors the configured authority", () => {
       verifiedClean: false,
       unreadable: false,
     });
-    expect(autonomousEligibility("autonomous", advisory).eligible).toBe(false);
   });
 
   it("does not double-report a missing clearance record when the gate refused", async () => {
@@ -332,9 +353,7 @@ describe("decideCandidate honors the configured authority", () => {
     });
 
     expect(advisory).toEqual({
-      warnings: [
-        "the pipeline gate did NOT clear this candidate: unresolved blocker F-001: blocked",
-      ],
+      warnings: ["unresolved blocker F-001: blocked"],
       verifiedClean: false,
       unreadable: false,
     });
@@ -371,7 +390,6 @@ describe("decideCandidate honors the configured authority", () => {
         verifiedClean: false,
         unreadable: false,
       });
-      expect(autonomousEligibility("autonomous", advisory).eligible).toBe(false);
     },
   );
 

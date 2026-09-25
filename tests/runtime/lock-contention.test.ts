@@ -6,6 +6,7 @@ import path from "node:path";
 import nodeProcess from "node:process";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { isLockContention } from "../../src/platform/lock-ownership.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 
 const execFileAsync = promisify(execFile);
@@ -102,6 +103,14 @@ describe("repository lock contention diagnostics", () => {
     await expect(ps.acquireCheckoutLock(checkout)).rejects.toThrow(
       new RegExp(`checkout is locked.*held by live pid ${nodeProcess.pid}`, "u"),
     );
+  });
+
+  it("classifies a timed-out acquisition as contention for callers to branch on", async () => {
+    const ps = getPlatformServices();
+    const token = await ps.getProcessStartToken(nodeProcess.pid);
+    await writeLockRecord({ pid: nodeProcess.pid, processToken: token });
+    const error = await ps.acquireCheckoutLock(checkout).then(() => null, (caught: unknown) => caught);
+    expect(isLockContention(error)).toBe(true);
   });
 
   it("never discloses the owner's process token", async () => {

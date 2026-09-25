@@ -11,18 +11,16 @@ import type {
   SupervisedExit,
 } from "../../src/platform/platform-services.js";
 import { PosixPlatformServices } from "../../src/platform/posix-platform-services.js";
-import { supervise } from "../../src/platform/process-supervisor.js";
-import { wrapInvocationWithSeatbelt } from "../../src/platform/sandbox/seatbelt.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import { PiAdapter } from "../../src/producers/pi-adapter.js";
 import { normalizePlainText } from "../../src/producers/plain-text.js";
+import { producerRuntime } from "../../src/producers/producer-runtime.js";
 import { renderSkillBootstrap } from "../../src/producers/skill-bootstrap.js";
 import type {
   CapabilityReport,
   InvocationContext,
   ProbeContext,
 } from "../../src/producers/producer-adapter.js";
-import { buildEnvironment } from "../../src/runtime/environment-policy.js";
 
 const execFileAsync = promisify(execFile);
 const executable: ResolvedExecutable = {
@@ -320,24 +318,31 @@ describe("PiAdapter", () => {
     expect(invocation.network).toBe("allowed");
   });
 
-  it("wraps a Pi edit invocation with provider network and write confinement", () => {
+  it("wraps a Pi edit invocation with provider network and write confinement", async () => {
     const context = invocationContext();
     const spec = sampleSpec();
-    const invocation = new PiAdapter({
+    const adapter = new PiAdapter({
       env: {},
       homeDirectory: "/hosthome",
       hasAuthStore: () => false,
-    }).buildInvocation(spec, context);
-    const wrapped = wrapInvocationWithSeatbelt(invocation, {
-      worktreePath: context.worktreePath,
-      tempHome: context.tempHome ?? null,
-      allowNetwork: invocation.network === "allowed",
     });
-    const profile = wrapped.args[1] ?? "";
+    const plan = await producerRuntime.planLaunch({
+      adapter,
+      producerId: "pi",
+      spec,
+      worktreePath: context.worktreePath,
+      intent: "edit",
+      ps: new PosixPlatformServices(),
+      capabilityReport: {
+        ...context.capabilityReport,
+        writeConfinementBackend: "macos-seatbelt",
+      },
+    });
+    const profile = plan.invocation.args[1] ?? "";
 
     expect(spec.executionMode).toBe("edit");
-    expect(invocation.network).toBe("allowed");
-    expect(wrapped.executable.command).toBe("/usr/bin/sandbox-exec");
+    expect(plan.confinementBackend).toBe("macos-seatbelt");
+    expect(plan.invocation.executable.command).toBe("/usr/bin/sandbox-exec");
     expect(profile).not.toContain("(deny network*)");
     expect(profile).toContain("(deny file-write*)");
   });
@@ -442,6 +447,12 @@ describe("PiAdapter", () => {
     }
   });
 
+  it("declares only ~/.pi/agent as inherited writable state, following HOME", () => {
+    const adapter = new PiAdapter({ env: { HOME: "/Users/test" }, homeDirectory: "/Users/other" });
+    const invocation = adapter.buildInvocation(sampleSpec(), invocationContext());
+    expect(invocation.inheritedStateWritablePaths).toEqual([join("/Users/test", ".pi", "agent")]);
+  });
+
   it("declares the Pi configuration isolation profile", () => {
     expect(new PiAdapter().configurationProfile()).toEqual({
       isolationState: "inherited-config-only",
@@ -508,30 +519,18 @@ describe("PiAdapter", () => {
         spec.producerOverrides = {
           reasoningEffort: "low",
         };
-        const invocation = wrapInvocationWithSeatbelt(adapter.buildInvocation(spec, {
+        const launchResult = await producerRuntime.launch({
+          adapter,
+          producerId: "pi",
+          spec,
           worktreePath,
+          intent: "edit",
+          ps,
           runId: "run-pi-smoke",
           capabilityReport: report,
-          executable: report.resolvedExecutable,
-        }), {
-          worktreePath,
-          tempHome: null,
-          allowNetwork: true,
         });
-        builtEnvironment = buildEnvironment({
-          os: "darwin",
-          adapterAllowlist: invocation.requiredEnv,
-          ...(invocation.env === undefined ? {} : { adapterValues: invocation.env }),
-        });
-        const supervisedExit = await supervise(ps, {
-          executable: invocation.executable,
-          args: invocation.args,
-          cwd: worktreePath,
-          env: builtEnvironment.env,
-          timeoutMs: 300_000,
-          ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-          maxOutputBytes: 1_000_000,
-        }, {});
+        builtEnvironment = launchResult.builtEnvironment;
+        const supervisedExit = launchResult.exit;
         const normalized = normalizePlainText({
           stdout: supervisedExit.stdout,
           stderr: supervisedExit.stderr,

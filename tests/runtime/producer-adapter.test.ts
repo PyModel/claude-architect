@@ -3,13 +3,24 @@ import type { PlatformServices, ResolvedExecutable } from "../../src/platform/pl
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import {
   detectEnvironmentType,
+  DescriptorAdapter,
   type CapabilityReport,
   type InvocationContext,
   type ProbeContext,
   type ProducerAdapter,
   type ProducerConfigurationProfile,
+  type ProducerDescriptor,
   type ProducerInvocation,
 } from "../../src/producers/producer-adapter.js";
+import {
+  isProducerAuthenticated,
+  resolveDefaultEnv,
+  resolveInheritedWritablePaths,
+} from "../../src/producers/host-store.js";
+import {
+  EDIT_ACTION_PREAMBLE,
+  LINT_BEFORE_TYPECHECK_INSTRUCTION,
+} from "../../src/producers/prompt-renderer.js";
 
 const executable: ResolvedExecutable = {
   kind: "native",
@@ -107,5 +118,96 @@ describe("ProducerAdapter", () => {
     });
 
     expect(report.laneEligibility.edit).toBe(true);
+  });
+
+  it("treats a seventh-lane fixture as a pure data record descriptor", async () => {
+    const seventhLaneDescriptor: ProducerDescriptor = {
+      id: "seventh-lane",
+      executable: { name: "seventh-cli" },
+      isolation: "inherited-config-only",
+      hostState: {
+        resolveStore: ctx => `${ctx.homeDirectory}/.seventh`,
+        authMarker: "token.json",
+        inheritedWritablePaths: store => [store],
+        defaultEnv: (store, ctx) => (ctx.env.SEVENTH_HOME ? {} : { SEVENTH_HOME: store }),
+      },
+      prompt: {
+        actionPreamble: true,
+        bootstrapPlacement: "before",
+      },
+      structuredOutput: true,
+      executionModes: ["edit"],
+    };
+
+    // 1. Host-store functions operate on the pure data record
+    const authed = isProducerAuthenticated(seventhLaneDescriptor, {
+      env: {},
+      homeDirectory: "/test/home",
+      hasAuthStore: dir => dir === "/test/home/.seventh",
+    });
+    expect(authed).toBe(true);
+
+    const unauthed = isProducerAuthenticated(seventhLaneDescriptor, {
+      env: {},
+      homeDirectory: "/test/home",
+      hasAuthStore: () => false,
+    });
+    expect(unauthed).toBe(false);
+
+    const writable = resolveInheritedWritablePaths(seventhLaneDescriptor, {
+      env: {},
+      homeDirectory: "/test/home",
+    });
+    expect(writable).toEqual(["/test/home/.seventh"]);
+
+    const env = resolveDefaultEnv(seventhLaneDescriptor, {
+      env: {},
+      homeDirectory: "/test/home",
+    });
+    expect(env).toEqual({ SEVENTH_HOME: "/test/home/.seventh" });
+
+    // 2. DescriptorAdapter wraps the data record directly without bespoke class boilerplate
+    const adapter = new DescriptorAdapter(seventhLaneDescriptor, {
+      env: {},
+      homeDirectory: "/test/home",
+      hasAuthStore: () => true,
+    });
+
+    expect(adapter.producerId).toBe("seventh-lane");
+    expect(adapter.structuredOutput).toBe(true);
+    expect(adapter.executionModes).toEqual(["edit"]);
+    expect(adapter.configurationProfile().isolationState).toBe("inherited-config-only");
+
+    const probeReport = await adapter.probe({
+      ps: {
+        resolveExecutable: async () => executable,
+      } as unknown as PlatformServices,
+      os: "darwin",
+      arch: "arm64",
+      environmentType: "native",
+    });
+    expect(probeReport.available).toBe(true);
+    expect(probeReport.authState).toBe("authenticated");
+    expect(probeReport.laneEligibility.edit).toBe(true);
+
+    const invocation = adapter.buildInvocation(
+      {
+        id: "spec-seventh",
+        objective: "Build seventh lane",
+        context: "test",
+        writeAllowlist: ["a.ts"],
+        forbiddenScope: [],
+        successCriteria: ["works"],
+        executionMode: "edit",
+        timeoutMs: 10_000,
+      },
+      {
+        executable,
+        worktreePath: "/tmp/worktree",
+        tempHome: "/tmp/home",
+      },
+    );
+    expect(invocation.stdin).toContain(EDIT_ACTION_PREAMBLE);
+    expect(invocation.stdin).toContain(LINT_BEFORE_TYPECHECK_INSTRUCTION);
   });
 });

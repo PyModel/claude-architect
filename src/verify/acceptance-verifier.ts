@@ -13,9 +13,11 @@ import {
   structuralVerify,
   type StructuralVerifyArgs,
   type StructuralVerifyResult,
+  type VerificationMode,
 } from "./structural-verifier.js";
 
 export interface AcceptanceVerifyArgs {
+  mode?: VerificationMode;
   repoRoot: string;
   worktreePath: string;
   baseCommitOid: string;
@@ -36,7 +38,8 @@ export interface AcceptanceVerifyResult {
 }
 
 export interface AcceptanceVerifierDependencies {
-  structural?: (args: StructuralVerifyArgs) => Promise<StructuralVerifyResult>;
+  mode?: VerificationMode;
+  structural?: (args: StructuralVerifyArgs, mode?: VerificationMode) => Promise<StructuralVerifyResult>;
   project?: (args: ProjectVerifyArgs) => Promise<ProjectVerifyResult>;
 }
 
@@ -123,23 +126,29 @@ function outcomesMatchHostCommands(
 }
 
 export class AcceptanceVerifier {
-  private readonly structural: (args: StructuralVerifyArgs) => Promise<StructuralVerifyResult>;
+  private readonly mode: VerificationMode;
+  private readonly structural: ((args: StructuralVerifyArgs, mode?: VerificationMode) => Promise<StructuralVerifyResult>) | undefined;
   private readonly project: (args: ProjectVerifyArgs) => Promise<ProjectVerifyResult>;
 
   constructor(dependencies: AcceptanceVerifierDependencies = {}) {
-    this.structural = dependencies.structural ?? structuralVerify;
+    this.mode = dependencies.mode ?? "candidate";
+    this.structural = dependencies.structural;
     this.project = dependencies.project ?? projectVerify;
   }
 
   async verify(args: AcceptanceVerifyArgs): Promise<AcceptanceVerifyResult> {
-    const structural = await this.structural({
+    const effectiveMode = args.mode ?? this.mode;
+    const structuralArgs: StructuralVerifyArgs = {
       repoRoot: args.repoRoot,
       worktreePath: args.worktreePath,
       baseCommitOid: args.baseCommitOid,
       artifact: args.artifact,
       writeAllowlist: args.spec.writeAllowlist,
       forbiddenScope: args.spec.forbiddenScope,
-    });
+    };
+    const structural = this.structural !== undefined
+      ? await this.structural(structuralArgs, effectiveMode)
+      : await structuralVerify(structuralArgs, effectiveMode);
     const structuralEvidence = {
       manifestHash: structural.manifestHash,
       failures: [...structural.failures],

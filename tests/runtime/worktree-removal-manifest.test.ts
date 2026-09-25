@@ -2,11 +2,9 @@ import { access, link, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  recoverPendingWorktreeRemovals,
-  recoverStaleRuns,
-} from "../../src/runtime/recovery-manager.js";
-import { guardWorktreeMutations } from "../../src/runtime/worktree-mutation-gate.js";
+import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
+import { recoverPendingWorktreeRemovals } from "../../src/runtime/recovery-worktree-removals.js";
+import { PlatformSafety } from "../../src/platform/platform-safety.js";
 import {
   assertNoPendingWorktreeRemovalForRepository,
   persistWorktreeRemovalManifest,
@@ -90,20 +88,25 @@ describe("worktree removal manifest recovery", () => {
     );
     const repositoryIdentity = await realpath(commonDir);
     const release = vi.fn(async () => {});
-    const services = guardWorktreeMutations({
+    const safety = new PlatformSafety({
       acquireCheckoutLock: vi.fn(async () => ({
         key: "test-lock",
         repositoryIdentity,
         release,
       })),
+      canonicalizePath: vi.fn(async (p: string) => ({
+        canonical: p,
+        gitCommonDir: commonDir,
+      })),
     });
 
-    await expect(services.acquireCheckoutLock(commonDir)).rejects.toMatchObject({
+    await expect(safety.withCheckoutLease(commonDir, async () => {})).rejects.toMatchObject({
       message: "worktree mutation is unavailable while removal recovery remains ambiguous",
       detail: expect.objectContaining({ classification: "recovery-ambiguous" }),
     });
     expect(release).toHaveBeenCalledOnce();
   });
+
 
   it("rechecks pending removal state after acquiring the repository lease", async () => {
     const root = path.join(stateRoot, "worktree-removals");

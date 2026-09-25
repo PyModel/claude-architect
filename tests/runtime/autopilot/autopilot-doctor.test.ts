@@ -95,7 +95,7 @@ function autopilotSpec(): AutopilotSpec {
     expectedExitCodes: [0],
   }];
   return {
-    specVersion: "1",
+    specVersion: "2",
     topic: "autopilot-doctor",
     base: { remote: "origin", branch: "main" },
     tasks: [{
@@ -117,20 +117,12 @@ function autopilotSpec(): AutopilotSpec {
     }],
     finalSuccessCriteria: ["Diagnostics remain read-only."],
     finalVerification: verification,
-    shipping: {
-      provider: "github",
-      draft: true,
-      markReadyWhenRequiredChecksPass: true,
-      requiredChecksTimeoutMs: 1_800_000,
-      pullRequestTitle: "Exercise autopilot doctor",
-      pullRequestBody: "Autopilot doctor fixture.",
-    },
   };
 }
 
 function initialState(branch: WorkflowBranchIdentity): AutopilotWorkflowState {
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId: branch.workflowId,
     repositoryIdentity: branch.repositoryIdentity,
     baseCommitOid: branch.baseCommitOid,
@@ -150,13 +142,7 @@ function initialState(branch: WorkflowBranchIdentity): AutopilotWorkflowState {
     }],
     intentJournal: { ref: "journal.ndjson", entryCount: 0, lastEntryHash: null },
     finalGate: null,
-    shipping: {
-      branch: branch.branch,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: "2026-07-21T18:30:00.000Z",
-    },
-    ciObservations: [],
+    branch: branch.branch,
     cleanup: null,
     terminal: null,
     createdAt: "2026-07-21T18:00:00.000Z",
@@ -288,26 +274,6 @@ async function runDoctor() {
   });
 }
 
-async function transitionTo(
-  store: WorkflowStore,
-  target: "pushing" | "creating-draft-pr" | "marking-ready",
-): Promise<void> {
-  const phases = [
-    "running-task",
-    "promoting-task",
-    "final-review",
-    "pushing",
-    "creating-draft-pr",
-    "waiting-required-checks",
-    "marking-ready",
-  ] as const;
-  let state = await store.read();
-  for (const phase of phases) {
-    state = await store.transition({ expectedRevision: state.revision, to: phase });
-    if (phase === target) return;
-  }
-}
-
 async function snapshot(directory: string): Promise<ByteSnapshot> {
   const output: ByteSnapshot = [];
   async function visit(current: string, prefix: string): Promise<void> {
@@ -396,25 +362,6 @@ describe("autopilot doctor diagnostics", () => {
 
     expect((await runDoctor()).issues).toContain("autopilot-promotion-incomplete");
   });
-
-  it("reports autopilot-remote-recovery-required for interrupted pushing", async () => {
-    const fixture = await createFixture();
-    await transitionTo(fixture.store, "pushing");
-    await makeOwnersDead(fixture);
-
-    expect((await runDoctor()).issues).toContain("autopilot-remote-recovery-required");
-  });
-
-  it.each(["creating-draft-pr", "marking-ready"] as const)(
-    "reports autopilot-pr-recovery-required for interrupted %s",
-    async phase => {
-      const fixture = await createFixture();
-      await transitionTo(fixture.store, phase);
-      await makeOwnersDead(fixture);
-
-      expect((await runDoctor()).issues).toContain("autopilot-pr-recovery-required");
-    },
-  );
 
   it("reports bounded malformed state, journal, owner, and registration without disclosure", async () => {
     const stateFixture = await createFixture();

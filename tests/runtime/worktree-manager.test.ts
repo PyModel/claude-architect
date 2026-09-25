@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -28,10 +29,8 @@ import { syncDirectoryMetadata } from "../../src/platform/durable-directory.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 import { windowsEssentialEnvironment } from "../../src/platform/windows-env.js";
 import { platformPathsEqual } from "../../src/util/platform-path.js";
-import {
-  recoverPendingWorktreeRemovals,
-  recoverStaleRuns,
-} from "../../src/runtime/recovery-manager.js";
+import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
+import { recoverPendingWorktreeRemovals } from "../../src/runtime/recovery-worktree-removals.js";
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
 import {
   managedWorktreeDirectoryIdentity,
@@ -102,6 +101,10 @@ async function canonicalPathsEqual(left: string, right: string): Promise<boolean
   }
 }
 
+function managedRootOf(repo: string): string {
+  return join(realpathSync(repo), ".worktrees", "claude-architect");
+}
+
 async function runGit(cwd: string, args: string[]): Promise<string> {
   const result = await git(cwd, args);
   expect(result.exitCode, result.stderr).toBe(0);
@@ -168,7 +171,7 @@ describe("WorktreeManager", () => {
     const attempt = await manager.create(base);
 
     expect(attempt.path).toBe(await realpath(
-      join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees", "run-123"),
+      join(managedRootOf(directory), "run-123"),
     ));
     await expect(stat(attempt.path)).resolves.toBeDefined();
     expect(await runGit(attempt.path, ["rev-parse", "HEAD"])).toBe(base);
@@ -191,11 +194,42 @@ describe("WorktreeManager", () => {
     expect(await registeredWorktrees(directory)).not.toContain(resolve(attempt.path));
   });
 
+  it("pins Git to the managed registration so a rewritten .git pointer cannot run commands", async () => {
+    const { directory, base } = await initRepo();
+    const manager = new WorktreeManager(directory, "run-pinned");
+    const attempt = await manager.create(base);
+    const hostile = await temporaryDirectory("ca-hostile-gitdir-");
+    const marker = join(hostile, "textconv-ran");
+    await runGit(hostile, ["init", "-q"]);
+    await writeFile(
+      join(hostile, ".git", "config"),
+      `[diff "x"]\n\ttextconv = "${process.execPath}" -e "require('fs').writeFileSync('${marker.replaceAll("\\", "/")}','')"\n`,
+      { flag: "a" },
+    );
+    await writeFile(join(attempt.path, ".git"), `gitdir: ${join(hostile, ".git")}\n`);
+    await writeFile(join(attempt.path, ".gitattributes"), "a.txt diff=x\n");
+    await writeFile(join(attempt.path, "a.txt"), "changed\n");
+
+    const diff = await git(attempt.path, ["diff", "--stat"]);
+    const head = await git(attempt.path, ["rev-parse", "HEAD"]);
+
+    expect(diff.exitCode, diff.stderr).toBe(0);
+    expect(diff.stdout).toContain("a.txt");
+    expect(head.stdout.trim()).toBe(base);
+    await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
+
+    await attempt.cleanup();
+
+    await expect(stat(attempt.path)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await registeredWorktrees(directory)).not.toContain(resolve(attempt.path));
+  });
+
   it("retries a locked Windows quarantine rename until it succeeds", async () => {
     const { directory, base } = await initRepo();
     const delays: number[] = [];
     let physicalMoves = 0;
-    const physicalPath = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees", "run-retry");
+    const physicalPath = join(managedRootOf(directory), "run-retry");
     const manager = new WorktreeManager(directory, "run-retry", { os: "win32" }, {
       async rename(source, destination) {
         if (await canonicalPathsEqual(source, physicalPath)) {
@@ -222,7 +256,7 @@ describe("WorktreeManager", () => {
     const { directory, base } = await initRepo();
     const delays: number[] = [];
     let moves = 0;
-    const physicalPath = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees", "run-exhausted");
+    const physicalPath = join(managedRootOf(directory), "run-exhausted");
     const manager = new WorktreeManager(directory, "run-exhausted", { os: "win32" }, {
       async rename(source, destination) {
         if (!await canonicalPathsEqual(source, physicalPath)) {
@@ -491,9 +525,7 @@ describe("WorktreeManager", () => {
       quarantineRoot,
       `.remove-registration-${basename(registrationPath)}-${transactionId}`,
     );
-    const physicalQuarantinePath = join(
-      process.env.CLAUDE_PLUGIN_DATA!,
-      "worktrees",
+    const physicalQuarantinePath = join(managedRootOf(directory),
       `.remove-run-precommit-recovery-${transactionId}`,
     );
     const physicalIdentity = await managedWorktreeDirectoryIdentity(attempt.path);
@@ -511,7 +543,7 @@ describe("WorktreeManager", () => {
       commonDir,
       ...await removalRootIdentities(
         commonDir,
-        join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees"),
+        managedRootOf(directory),
         registrationRoot,
         quarantineRoot,
       ),
@@ -618,7 +650,9 @@ describe("WorktreeManager", () => {
     } finally {
       await rm(manifestPath, { force: true });
       await rename(quarantinePath, registrationPath);
-      await Promise.all([attemptA.cleanup(), attemptB.cleanup()]);
+      // Both cleanups take the same checkout lease; run them in turn.
+      await attemptA.cleanup();
+      await attemptB.cleanup();
     }
   });
 
@@ -640,7 +674,7 @@ describe("WorktreeManager", () => {
       quarantineRoot,
       `.remove-registration-${basename(registrationPath)}-${transactionId}`,
     );
-    const physicalRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const physicalRoot = managedRootOf(directory);
     const physicalIdentity = await managedWorktreeDirectoryIdentity(attempt.path);
     const registrationIdentity = await managedWorktreeDirectoryIdentity(registrationPath);
     const manifestRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktree-removals");
@@ -712,7 +746,7 @@ describe("WorktreeManager", () => {
         stderr: Readable.from([]),
       };
     };
-    const physicalRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const physicalRoot = managedRootOf(directory);
     const manager = new WorktreeManager(directory, "run-emptying-failure", undefined, {
       processSupervisor,
     });
@@ -836,7 +870,7 @@ describe("WorktreeManager", () => {
 
   it("persists the physical-removal commit marker before quarantine sync", async () => {
     const { directory, base } = await initRepo();
-    const physicalRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const physicalRoot = managedRootOf(directory);
     let failPhysicalSync = false;
     const manager = new WorktreeManager(directory, "run-intent-sync-failure", undefined, {
       syncDirectory: async directoryPath => {
@@ -956,7 +990,7 @@ describe("WorktreeManager", () => {
     "retains staged registration when final physical rmdir fails",
     async () => {
     const { directory, base } = await initRepo();
-    const physicalRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const physicalRoot = managedRootOf(directory);
     const manager = new WorktreeManager(directory, "run-rmdir-failure", undefined, {
       async rmdir(directoryPath) {
         if (await canonicalPathsEqual(dirname(directoryPath), physicalRoot)) {
@@ -996,7 +1030,7 @@ describe("WorktreeManager", () => {
     "preserves a removal whose quarantined inode moved to an unrecorded sibling",
     async () => {
       const { directory, base } = await initRepo();
-      const physicalRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+      const physicalRoot = managedRootOf(directory);
       const manager = new WorktreeManager(directory, "run-moved-quarantine", undefined, {
         async rmdir(directoryPath) {
           if (await canonicalPathsEqual(dirname(directoryPath), physicalRoot)) {
@@ -1036,7 +1070,7 @@ describe("WorktreeManager", () => {
     "preserves a pending removal when its registration root changed before startup",
     async () => {
     const { directory, base } = await initRepo();
-    const physicalRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const physicalRoot = managedRootOf(directory);
     const manager = new WorktreeManager(directory, "run-root-substitution", undefined, {
       async rmdir(directoryPath) {
         if (await canonicalPathsEqual(dirname(directoryPath), physicalRoot)) {
@@ -1082,7 +1116,7 @@ describe("WorktreeManager", () => {
     "preserves worktrees when a durable removal manifest is malformed",
     async () => {
     const { directory, base } = await initRepo();
-    const physicalRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const physicalRoot = managedRootOf(directory);
     const manager = new WorktreeManager(directory, "run-malformed-manifest", undefined, {
       async rmdir(directoryPath) {
         if (await canonicalPathsEqual(dirname(directoryPath), physicalRoot)) {
@@ -1119,7 +1153,7 @@ describe("WorktreeManager", () => {
 
   it("rejects a managed root substituted during removal-storage preflight", async () => {
     const { directory, base } = await initRepo();
-    const worktreesRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const worktreesRoot = managedRootOf(directory);
     const displacedRoot = `${worktreesRoot}-preflight-displaced`;
     let gitCalls = 0;
     const manager = new WorktreeManager(directory, "run-preflight-root-race", undefined, {
@@ -1187,7 +1221,7 @@ describe("WorktreeManager", () => {
 
   it("durably records a worktree root substituted before git chooses its destination", async () => {
     const { directory, base } = await initRepo();
-    const worktreesRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const worktreesRoot = managedRootOf(directory);
     const displacedRoot = `${worktreesRoot}-pre-add-displaced`;
     const worktreePath = join(worktreesRoot, "run-create-pre-add-race");
     let substituted = false;
@@ -1226,7 +1260,7 @@ describe("WorktreeManager", () => {
 
   it("recovers a placeholder created before its identity publication completes", async () => {
     const { directory, base } = await initRepo();
-    const worktreesRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const worktreesRoot = managedRootOf(directory);
     const manifestRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktree-removals");
     let interrupted = false;
     const manager = new WorktreeManager(directory, "run-create-unbound-staging", undefined, {
@@ -1255,7 +1289,7 @@ describe("WorktreeManager", () => {
 
   it("recovers a creation interrupted after intent publication but before placeholder promotion", async () => {
     const { directory, base } = await initRepo();
-    const worktreesRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const worktreesRoot = managedRootOf(directory);
     const worktreePath = join(worktreesRoot, "run-create-intent-crash");
     let interrupted = false;
     const manager = new WorktreeManager(directory, "run-create-intent-crash", undefined, {
@@ -1285,9 +1319,7 @@ describe("WorktreeManager", () => {
 
   it("cleans its durable placeholder after an ordinary git worktree rejection", async () => {
     const { directory, base } = await initRepo();
-    const worktreePath = join(
-      process.env.CLAUDE_PLUGIN_DATA!,
-      "worktrees",
+    const worktreePath = join(managedRootOf(directory),
       "run-create-git-rejection",
     );
     const manager = new WorktreeManager(directory, "run-create-git-rejection", undefined, {
@@ -1304,9 +1336,7 @@ describe("WorktreeManager", () => {
 
   it("publishes before Git and cleans an in-process post-add interruption", async () => {
     const { directory, base } = await initRepo();
-    const worktreePath = join(
-      process.env.CLAUDE_PLUGIN_DATA!,
-      "worktrees",
+    const worktreePath = join(managedRootOf(directory),
       "run-create-post-add-crash",
     );
     const manifestRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktree-removals");
@@ -1335,7 +1365,7 @@ describe("WorktreeManager", () => {
 
   it("durably records a worktree root substitution after git add", async () => {
     const { directory, base } = await initRepo();
-    const worktreesRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const worktreesRoot = managedRootOf(directory);
     const displacedRoot = `${worktreesRoot}-displaced`;
     const worktreePath = join(worktreesRoot, "run-create-root-race");
     let substituted = false;
@@ -1416,23 +1446,55 @@ describe("WorktreeManager", () => {
     },
   );
 
-  it("canonicalizes a runtime state root reached through a symlinked ancestor", async () => {
+  it("canonicalizes a checkout reached through a symlinked ancestor", async () => {
     const { directory, base } = await initRepo();
-    const realParent = await temporaryDirectory("ca-real-state-parent-");
-    const realState = join(realParent, "state");
-    await mkdir(realState, { mode: 0o700 });
-    const aliasParent = `${realParent}-alias`;
-    await symlink(realParent, aliasParent, process.platform === "win32" ? "junction" : "dir");
-    process.env.CLAUDE_PLUGIN_DATA = join(aliasParent, "state");
-    const manager = new WorktreeManager(directory, "run-state-ancestor-alias");
+    const aliasParent = `${directory}-alias`;
+    await symlink(directory, aliasParent, process.platform === "win32" ? "junction" : "dir");
+    const manager = new WorktreeManager(aliasParent, "run-checkout-alias");
 
     try {
       const attempt = await manager.create(base);
-      expect(dirname(attempt.path)).toBe(await realpath(join(realState, "worktrees")));
+      expect(dirname(attempt.path)).toBe(managedRootOf(directory));
       await attempt.cleanup();
     } finally {
       await rm(aliasParent, { force: true });
     }
+  });
+
+  it("places worktrees made from a linked checkout in the main checkout namespace", async () => {
+    const { directory, base } = await initRepo();
+    const linked = join(directory, ".worktrees", "user-linked");
+    await runGit(directory, ["worktree", "add", "-q", "--detach", linked, base]);
+    const manager = new WorktreeManager(linked, "run-from-linked");
+
+    const attempt = await manager.create(base);
+
+    expect(dirname(attempt.path)).toBe(managedRootOf(directory));
+    expect(await runGit(linked, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+    await attempt.cleanup();
+    await expect(stat(attempt.path)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("keeps the checkout clean and never touches user worktrees beside the namespace", async () => {
+    const { directory, base } = await initRepo();
+    const userWorktree = join(directory, ".worktrees", "user-feature");
+    await runGit(directory, ["worktree", "add", "-q", "--detach", userWorktree, base]);
+    await writeFile(join(userWorktree, "user-work.txt"), "keep\n");
+    const manager = new WorktreeManager(directory, "run-namespaced");
+
+    const attempt = await manager.create(base);
+    await writeFile(join(attempt.path, "producer.txt"), "candidate\n");
+
+    expect(dirname(attempt.path)).toBe(managedRootOf(directory));
+    expect(await readFile(join(managedRootOf(directory), ".gitignore"), "utf8")).toBe("*\n");
+    expect(await runGit(directory, ["status", "--porcelain", "--untracked-files=all"]))
+      .toBe("?? .worktrees/user-feature/");
+    await attempt.cleanup();
+    await expect(recoverStaleRuns({ isProcessAlive: () => false })).resolves.toMatchObject({
+      recovered: [],
+    });
+    await expect(readFile(join(userWorktree, "user-work.txt"), "utf8")).resolves.toBe("keep\n");
+    expect(await registeredWorktrees(directory)).toContain(await realpath(userWorktree));
   });
 
   it.runIf(process.platform !== "win32")(
@@ -1479,7 +1541,8 @@ describe("WorktreeManager", () => {
     const outside = await temporaryDirectory("ca-symlinked-worktree-root-");
     const sentinel = join(outside, "sentinel.txt");
     await writeFile(sentinel, "preserve outside root\n");
-    const worktreesRoot = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees");
+    const worktreesRoot = managedRootOf(directory);
+    await mkdir(dirname(worktreesRoot));
     await symlink(outside, worktreesRoot, process.platform === "win32" ? "junction" : "dir");
     let gitCalls = 0;
     const manager = new WorktreeManager(directory, "run-symlinked-root", undefined, {
@@ -1509,9 +1572,7 @@ describe("WorktreeManager", () => {
 
   it("removes the exact registration when a new worktree vanishes before identity capture", async () => {
     const { directory, base } = await initRepo();
-    const worktreePath = join(
-      process.env.CLAUDE_PLUGIN_DATA!,
-      "worktrees",
+    const worktreePath = join(managedRootOf(directory),
       "run-vanished-after-add",
     );
     const manager = new WorktreeManager(directory, "run-vanished-after-add", undefined, {
@@ -1533,7 +1594,7 @@ describe("WorktreeManager", () => {
 
   it("preserves a colliding managed directory when worktree creation fails", async () => {
     const { directory, base } = await initRepo();
-    const collidingPath = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees", "run-collision");
+    const collidingPath = join(managedRootOf(directory), "run-collision");
     const sentinel = join(collidingPath, "sentinel.txt");
     await mkdir(collidingPath, { recursive: true });
     await writeFile(sentinel, "keep\n");
@@ -1563,9 +1624,7 @@ describe("WorktreeManager", () => {
   });
 
   it("rejects a quarantine token that could escape the managed root", async () => {
-    const managedDirectory = join(
-      process.env.CLAUDE_PLUGIN_DATA!,
-      "worktrees",
+    const managedDirectory = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees",
       "run-quarantine-token",
     );
     await mkdir(managedDirectory, { recursive: true });
@@ -1623,7 +1682,7 @@ describe("WorktreeManager", () => {
     const commonDir = await realpath(await runGit(directory, [
       "rev-parse", "--path-format=absolute", "--git-common-dir",
     ]));
-    const physicalRoot = await realpath(join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees"));
+    const physicalRoot = await realpath(managedRootOf(directory));
     const registrationRoot = await realpath(join(commonDir, "worktrees"));
     const registrationQuarantineRoot = join(commonDir, "claude-architect-quarantine");
 
@@ -1638,9 +1697,7 @@ describe("WorktreeManager", () => {
   it("passes no ambient secrets to the native Windows cleanup helpers", async () => {
     const previousSecret = process.env.UNRELATED_SECRET;
     process.env.UNRELATED_SECRET = "do-not-pass";
-    const managedDirectory = join(
-      process.env.CLAUDE_PLUGIN_DATA!,
-      "worktrees",
+    const managedDirectory = join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees",
       "run-windows-environment",
     );
     await mkdir(managedDirectory, { recursive: true });
@@ -1949,9 +2006,7 @@ describe("WorktreeManager", () => {
     const expectedIdentity = await managedWorktreeDirectoryIdentity(attempt.path);
     expect(expectedIdentity).not.toBeNull();
     const displaced = `${attempt.path}-displaced`;
-    const quarantine = join(
-      process.env.CLAUDE_PLUGIN_DATA!,
-      "worktrees",
+    const quarantine = join(managedRootOf(directory),
       ".remove-run-substitution-fixed",
     );
     const sentinel = join(quarantine, "sentinel.txt");

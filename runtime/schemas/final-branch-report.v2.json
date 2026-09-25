@@ -18,7 +18,7 @@
     "evaluatedAt"
   ],
   "properties": {
-    "reportVersion": { "const": "1" },
+    "reportVersion": { "const": "2" },
     "workflowId": { "type": "string", "minLength": 1 },
     "baseCommitOid": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" },
     "headCommitOid": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" },
@@ -38,7 +38,7 @@
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
     },
-    "status": { "enum": ["ready-to-ship", "human-decision-required"] },
+    "status": { "enum": ["ready-for-human-review", "human-decision-required"] },
     "evaluatedAt": { "type": "string", "format": "date-time" }
   }
 }

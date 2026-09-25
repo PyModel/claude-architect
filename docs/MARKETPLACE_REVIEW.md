@@ -19,15 +19,58 @@ No Producer can mark its own work accepted. `decideCandidate` records a provenan
 
 ## Executables invoked
 
-The plugin starts a suitable `node` executable and uses `git`. Depending on the chosen Producer it may invoke `codex`, `opencode`, `pi`, or `pythinker`. Platform confinement/supervision can invoke macOS `/usr/bin/sandbox-exec`, Linux sandbox tooling such as `bwrap` when that backend is selected, and Windows watchdog/helper binaries. Verification invokes only the executable and argv explicitly authorized in the Delegation Spec. The plugin does not expose an unrestricted shell MCP tool.
+The plugin starts a suitable `node` executable and uses `git`. Depending on the chosen Producer it may invoke `codex`, `opencode`, `pi`, `pythinker`, `agy`, or `claude`. Platform confinement/supervision can invoke macOS `/usr/bin/sandbox-exec`, Linux sandbox tooling such as `bwrap` when that backend is selected, and Windows watchdog/helper binaries. Verification invokes only the executable and argv explicitly authorized in the Delegation Spec. The plugin does not expose an unrestricted shell MCP tool.
 
 ## Supported operating systems
 
-The plugin is designed for macOS, Linux, and Windows process/runtime operation. Security capability is narrower than basic runtime compatibility: the Codex MCP edit path is certified on native macOS arm64 with `codex-native-sandbox`; native Linux is marked tested; native Windows Codex editing is unsupported and must fail eligibility checks. Every Producer/platform combination is capability-gated. An unavailable combination fails closed without unconfined execution or substitution, and certification must not be inferred across Producers, backends, or operating systems.
+The plugin is designed for macOS, Linux, and Windows process/runtime operation. Security
+capability is narrower than basic runtime compatibility: every Producer/platform
+combination is capability-gated, an unavailable combination fails closed without
+unconfined execution or substitution, and certification is never inferred across
+Producers, backends, or operating systems.
+
+### Edit-lane confinement evidence
+
+Three words, and each means something different. **Certified**: a real opt-in confinement
+gate has been run on that platform and recorded. **Tested**: the lane runs there under CI
+and integration tests, without a recorded confinement gate. **Unsupported**: the runtime
+refuses the edit lane there — the eligibility check fails closed, so there is nothing to
+certify. A blank is not a lesser claim; every cell below is filled.
+
+| Edit lane | Confinement backend | macOS arm64 | macOS other arch | Linux (native) | Windows (native) |
+|---|---|---|---|---|---|
+| `codex-implementer` | `codex-native-sandbox` | certified | unsupported | tested | unsupported |
+| `opencode-implementer` | `macos-seatbelt` | certified | unsupported | unsupported | unsupported |
+| `pi-implementer` | `macos-seatbelt` | certified | unsupported | unsupported | unsupported |
+| `pythinker-implementer` | `macos-seatbelt` | certified | unsupported | unsupported | unsupported |
+| `agy-implementer` | `macos-seatbelt` | certified | unsupported | unsupported | unsupported |
+| `claude-implementer` | `macos-seatbelt` | certified | unsupported | unsupported | unsupported |
+
+Each cell is the state `selectSandboxBackend` returns for that lane's backend on that
+platform — the same value the eligibility check uses, so the table cannot drift from
+behavior without the runtime changing. The evidence sits on the *backend*, not the lane:
+`macos-seatbelt` was certified on darwin/arm64 on 2026-07-16 by the opt-in
+`RUN_SEATBELT_CONFINEMENT_GATE` test (a worktree write permitted, a write outside it
+blocked), and the five lanes above inherit that one proof rather than each carrying its
+own. The table is `src/platform/sandbox/backends.ts` restated; that file is the contract,
+and a state there may only be promoted by a real green CI or integration run. `macos-seatbelt`
+declares no Linux or Windows platform at all, which is why five of the six lanes are
+unsupported for editing off macOS: with no backend, `selectSandboxBackend` returns
+`no-write-confinement-backend` and the edit lane is refused.
+
+**No lane has native Windows edit evidence, and none is claimed.** Windows is a supported
+*runtime* platform — the MCP server, process supervision via the packaged watchdog and
+helper binaries, recovery, and the read-only and verification paths run there under CI —
+but no Producer may edit a checkout on native Windows, because no confinement backend
+covers it. Producing that evidence requires a Windows write-confinement backend, not a
+smoke run against the current build: the opt-in real-adapter smoke on a Windows runner
+would today record the same fail-closed refusal the table already states.
+
+WSL is a Linux execution environment and is evaluated as Linux, never as native Windows.
 
 ## Network destinations
 
-There is no plugin-maintained fixed destination list. A cloud Producer CLI contacts the provider configured by that CLI: Codex normally uses its configured OpenAI service; OpenCode, Pi, and Pythinker can use various cloud or local endpoints. Claude Code separately contacts its configured Anthropic/model service. Verification commands may contact destinations only when their spec allows network, subject to effective platform enforcement. Codex's coding sandbox is configured with network disabled. Provider authentication, telemetry, transport, and retention are governed by the selected CLI/provider.
+There is no plugin-maintained fixed destination list. A cloud Producer CLI contacts the provider configured by that CLI: Codex normally uses its configured OpenAI service; OpenCode, Pi, Pythinker, and Antigravity CLI can use various cloud or local endpoints; headless Claude Code uses the default Anthropic endpoint (`api.anthropic.com`). Verification commands may contact destinations only when their spec allows network, subject to effective platform enforcement. Codex's coding sandbox is configured with network disabled. Provider authentication, telemetry, transport, and retention are governed by the selected CLI/provider.
 
 ## Persistent state locations
 
@@ -47,7 +90,7 @@ The user chooses the Producer when none is named. After a verified candidate or 
 
 Primary threats are malicious Producer output, prompt injection in repository/diff content, a compromised Producer CLI, scope escape, forged test claims, candidate substitution, state races, credential leakage, and unauthorized acceptance. Mitigations include versioned validation, OS sandboxing where eligible, detached worktrees, environment minimization, timeouts/process-tree cleanup, post-run allowlist checks, Git object anchoring, manifest hashes, separate Host verification, read-only fresh reviewers, bounded/redacted archives, crash recovery with process start tokens, and hash-gated integration.
 
-Known limitations are material: only macOS arm64 Codex is certified; Linux is tested and native Windows Codex editing is unsupported; other Producer/platform combinations depend on reported capability and eligibility; prompt injection and subtle malicious code can pass review/tests; provider retention is outside plugin control; redaction is best effort; same-user or host compromise is out of scope; policy acceptance is not proof of safety; and elicited decisions are not cryptographically authenticated.
+Known limitations are material: editing is confined only on macOS arm64 (Codex additionally tested on Linux), and no lane may edit on native Windows; other Producer/platform combinations depend on reported capability and eligibility; prompt injection and subtle malicious code can pass review/tests; provider retention is outside plugin control; redaction is best effort; same-user or host compromise is out of scope; policy acceptance is not proof of safety; and elicited decisions are not cryptographically authenticated.
 
 ## Installation
 

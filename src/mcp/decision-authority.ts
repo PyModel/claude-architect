@@ -40,35 +40,3 @@ export function decisionAuthority(
   );
   return "human";
 }
-
-export interface AutonomousEligibility {
-  eligible: boolean;
-  /** Why autonomy was refused, for the caller's diagnostic. Empty if eligible. */
-  reasons: string[];
-}
-
-/**
- * Decide whether this candidate may be accepted without a person.
- *
- * Every condition is positive and objective. An unreadable archive refuses
- * rather than falling through to a prompt: under autonomous policy a client may
- * not advertise elicitation at all, so a silent downgrade would dead-end the run
- * with no path forward. Refusing here names the problem instead.
- */
-export function autonomousEligibility(
-  authority: DecisionAuthority,
-  advisory: { warnings: string[]; verifiedClean: boolean; unreadable: boolean },
-): AutonomousEligibility {
-  if (authority !== "autonomous") {
-    return { eligible: false, reasons: [`decision authority is "${authority}"`] };
-  }
-  const reasons: string[] = [];
-  if (advisory.unreadable) reasons.push("the candidate archive could not be read");
-  else {
-    if (!advisory.verifiedClean) {
-      reasons.push("the candidate is not an independently verified result");
-    }
-    reasons.push(...advisory.warnings);
-  }
-  return { eligible: reasons.length === 0, reasons };
-}

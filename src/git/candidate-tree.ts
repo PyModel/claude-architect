@@ -3,12 +3,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { CandidateArtifact } from "../protocol/attempt-result.js";
 import { redact } from "../runtime/redaction.js";
-import { RuntimeError } from "../util/errors.js";
 import { globMatches } from "../util/glob.js";
-import { git, type GitResult } from "./git-exec.js";
+import { isMissing } from "../util/errors.js";
+import { gitChecked, reviewDiffArgs } from "./checked-git.js";
+import type { GitExecOptions } from "./git-exec.js";
 import { computeChangedPathManifest, parseRawDiff, splitNul } from "./changed-path-manifest.js";
 
-const MAX_DIAGNOSTIC_LENGTH = 2_000;
 const MAX_REJECT_PATHS = 25;
 const BINARY_PATCH_PAYLOAD_MARKER = "[[BINARY_PATCH_PAYLOAD_OMITTED]]";
 
@@ -36,25 +36,12 @@ interface WorktreeInventory {
   ignoredPaths: string[];
 }
 
-function gitFailure(action: string, result: GitResult): RuntimeError {
-  const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, MAX_DIAGNOSTIC_LENGTH);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-
 async function checkedGit(
   cwd: string,
   args: string[],
   indexFile?: string,
 ): Promise<string> {
-  const result = await git(cwd, args, indexFile);
-  if (result.truncated?.stdout === true || result.truncated?.stderr === true) {
-    throw new RuntimeError(`git ${args[0] ?? "command"} output exceeded the runtime bound`, {
-      command: args[0] ?? "command",
-      truncated: result.truncated,
-    });
-  }
-  if (result.exitCode !== 0) throw gitFailure(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
+  return await gitChecked(cwd, args, indexFile === undefined ? undefined : { indexFile });
 }
 
 function parsePorcelainPaths(output: string, kind: "changed" | "ignored"): string[] {
@@ -117,14 +104,14 @@ async function advisoryLstatScan(worktreePath: string, changedPaths: string[]): 
     try {
       return (await lstat(path.resolve(worktreePath, changedPath))).isSymbolicLink();
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      if (isMissing(error)) return false;
       throw error;
     }
   }));
   return symlinkResults.some(Boolean);
 }
 
-function sanitizeReviewPatch(patch: string): string {
+export function sanitizeReviewPatch(patch: string): string {
   const sanitizedLines: string[] = [];
   let omittingBinaryPayload = false;
   for (const line of patch.split(/\r?\n/)) {
@@ -140,6 +127,24 @@ function sanitizeReviewPatch(patch: string): string {
     sanitizedLines.push(line);
   }
   return redact(sanitizedLines.join("\n"));
+}
+
+/**
+ * The archived, human-reviewed patch of a candidate: attributes from the
+ * trusted base (see `reviewDiffArgs`), binary payloads omitted, secrets
+ * redacted. Every producer of `CandidateArtifact.patch` uses this.
+ */
+export async function candidateReviewPatch(
+  cwd: string,
+  baseCommitOid: string,
+  candidate: string,
+  options?: GitExecOptions,
+): Promise<string> {
+  return sanitizeReviewPatch(await gitChecked(
+    cwd,
+    reviewDiffArgs(baseCommitOid, candidate, ["--binary", "--full-index"]),
+    options,
+  ));
 }
 
 export async function freezeCandidate(args: FreezeCandidateArgs): Promise<FreezeCandidateResult> {
@@ -219,15 +224,7 @@ export async function freezeCandidate(args: FreezeCandidateArgs): Promise<Freeze
       nameStatusOutput,
       treeOutput,
     });
-    const patch = sanitizeReviewPatch(await checkedGit(args.repoRoot, [
-      "diff",
-      "--no-ext-diff",
-      "--no-textconv",
-      "--binary",
-      "--full-index",
-      args.baseCommitOid,
-      candidateTreeOid,
-    ]));
+    const patch = await candidateReviewPatch(args.repoRoot, args.baseCommitOid, candidateTreeOid);
     const anchorRef = `refs/claude-architect/candidates/${args.runId}`;
     const candidateCommitOid = (await checkedGit(args.repoRoot, [
       "commit-tree",

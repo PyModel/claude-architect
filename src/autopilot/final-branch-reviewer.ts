@@ -1,28 +1,23 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
+import { reviewDiffArgs, gitSucceeded as succeeded } from "../git/checked-git.js";
 import { constants } from "node:fs";
-import { link, lstat, open, readFile, rm } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
 import {
   computeChangedPathManifest,
   parseRawDiff,
 } from "../git/changed-path-manifest.js";
-import { git, type GitResult } from "../git/git-exec.js";
-import { syncDirectoryMetadata } from "../platform/durable-directory.js";
-import { globMatches } from "../util/glob.js";
+import { git } from "../git/git-exec.js";
+import { openDurableDirectorySession, writeAtomic } from "../platform/durable-write.js";
 import { WorktreeManager } from "../runtime/worktree-manager.js";
-import { guardWorktreeMutations } from "../runtime/worktree-mutation-gate.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import { assertNoPendingWorktreeRemovalForRepository } from "../runtime/worktree-removal-manifest.js";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import type { AcceptanceVerifyResult } from "../verify/acceptance-verifier.js";
 import { AcceptanceVerifier } from "../verify/acceptance-verifier.js";
-import {
-  recomputeManifest,
-  type StructuralFailure,
-  type StructuralVerifyArgs,
-  type StructuralVerifyResult,
-} from "../verify/structural-verifier.js";
+import { readRunDecisionSnapshot } from "../runtime/run-decision.js";
 import type { CandidateArtifact, ChangedPath } from "../protocol/attempt-result.js";
 import type { AutopilotSpec } from "../protocol/autopilot-spec.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
@@ -42,7 +37,7 @@ import {
   type RoleRunResult,
 } from "../pipeline/role-runner.js";
 import { extractJson } from "../pipeline/structured-output.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, isMissing } from "../util/errors.js";
 import {
   autopilotEligibilityRecordHash,
   canonicalArtifactHash,
@@ -81,7 +76,7 @@ export const FINAL_SYSTEMS_REVIEW_REF = "final-review-systems.json";
 export const FINAL_ADVISOR_REF = "final-advisor.json";
 
 export interface FinalBranchReport {
-  reportVersion: "1";
+  reportVersion: "2";
   workflowId: string;
   baseCommitOid: string;
   headCommitOid: string;
@@ -92,7 +87,7 @@ export interface FinalBranchReport {
   taskEvidenceHashes: string[];
   eligible: boolean;
   reasons: string[];
-  status: "ready-to-ship" | "human-decision-required";
+  status: "ready-for-human-review" | "human-decision-required";
   evaluatedAt: string;
 }
 
@@ -208,11 +203,6 @@ type StructuredFinalRole = "reviewer-correctness" | "reviewer-systems" | "adviso
 
 const schemas = loadSchemas();
 
-function succeeded(result: GitResult): boolean {
-  return result.exitCode === 0
-    && result.truncated?.stdout !== true
-    && result.truncated?.stderr !== true;
-}
 
 function fail(
   classification: FinalBranchReviewClassification,
@@ -272,14 +262,15 @@ async function validateArchivedTaskEvidence(
   let eligibility;
   let decision;
   try {
-    [result, manifest, pipelineResult, snapshot, advisor, eligibility, decision] = await Promise.all([
-      store.readResult(evidence.runId),
-      store.readManifest(evidence.runId),
-      store.readPipelineArtifact<PipelineResult>(evidence.runId, "pipeline-result"),
-      store.readReviewSnapshot(evidence.runId),
-      store.readAdvisorReport(evidence.runId),
-      store.readAutopilotEligibility(evidence.runId),
-      store.readCandidateDecision(evidence.runId),
+    const decisionSnapshot = await readRunDecisionSnapshot(evidence.runId, { store });
+    result = decisionSnapshot.result;
+    manifest = decisionSnapshot.manifest;
+    snapshot = decisionSnapshot.reviewSnapshot;
+    decision = decisionSnapshot.decision;
+    [pipelineResult, advisor, eligibility] = await Promise.all([
+      store.readPipelineArtifact<PipelineResult>("pipeline-result"),
+      store.readAdvisorReport(),
+      store.readAutopilotEligibility(),
     ]);
   } catch {
     fail("missing-task-evidence", `task evidence archive is invalid: ${task.id}`);
@@ -387,6 +378,20 @@ function evidenceHash(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
+/**
+ * Every structured artifact a task archived — so an undeclared repair still
+ * reaches the final review — but not the Producer role transcripts under
+ * `logs/`, unless the task declared one. Final reviewers judge the branch
+ * without sharing implementer context, and transcripts dominate the size cap.
+ */
+function reviewEvidenceRefs(archived: string[], declared: string[]): string[] {
+  return normalizedEvidenceRefs(
+    [...archived.filter(reference => !reference.startsWith("logs/")), ...declared],
+    false,
+    MAX_TASK_EVIDENCE_REFS,
+  );
+}
+
 async function freezeTaskEvidence(
   evidence: FinalBranchTaskEvidence[],
   evidenceStore: (
@@ -410,8 +415,9 @@ async function freezeTaskEvidence(
       || task.evidenceRefs.some(reference => !archivedReferences.includes(reference))) {
       fail("missing-task-evidence", `task evidence archive is incomplete: ${task.taskId}`);
     }
+    const frozenReferences = reviewEvidenceRefs(archivedReferences, task.evidenceRefs);
     let frozenBytes = 0;
-    const frozen = await Promise.all(archivedReferences.map(async reference => {
+    const frozen = await Promise.all(frozenReferences.map(async reference => {
       let content: string | null;
       try {
         content = await store.readEvidence(reference);
@@ -443,7 +449,7 @@ async function freezeTaskEvidence(
     if (JSON.stringify(finalReferences) !== JSON.stringify(archivedReferences)) {
       fail("missing-task-evidence", `task evidence archive changed: ${task.taskId}`);
     }
-    return { ...task, evidenceRefs: archivedReferences, evidence: frozen };
+    return { ...task, evidenceRefs: frozenReferences, evidence: frozen };
   }));
 }
 
@@ -466,7 +472,8 @@ async function assertTaskEvidenceCurrent(
       fail("missing-task-evidence", `task evidence archive is unavailable: ${task.taskId}`);
     }
     if (task.evidence.length !== task.evidenceRefs.length
-      || JSON.stringify(archivedReferences) !== JSON.stringify(task.evidenceRefs)
+      || JSON.stringify(reviewEvidenceRefs(archivedReferences, task.evidenceRefs))
+        !== JSON.stringify(task.evidenceRefs)
       || task.evidence.some((item, index) => item.reference !== task.evidenceRefs[index])) {
       fail("missing-task-evidence", "frozen task evidence index is inconsistent");
     }
@@ -610,82 +617,6 @@ export async function withHeadRevalidation<T>(request: HeadBoundPhaseRequest<T>)
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort();
-}
-
-function finalPathAllowed(
-  pathname: string,
-  writeAllowlist: string[],
-  forbiddenScope: string[],
-  opaqueDirectory: boolean,
-): boolean {
-  const candidates = opaqueDirectory ? [pathname, `${pathname}/`] : [pathname];
-  return writeAllowlist.some(pattern => candidates.some(candidate => globMatches(pattern, candidate)))
-    && !forbiddenScope.some(pattern =>
-      candidates.some(candidate => globMatches(pattern, candidate, true)));
-}
-
-/** Structural proof adapted to a linear, multi-commit base-to-head artifact. */
-async function structuralVerifyFinalBranch(
-  args: StructuralVerifyArgs,
-  runGit: typeof git = git,
-): Promise<StructuralVerifyResult> {
-  const failures = new Set<StructuralFailure>();
-  const [manifest, baseTree, sourceHead, materializedHead, candidateTree, sourceStatus, materializedStatus] =
-    await Promise.all([
-      recomputeManifest(args),
-      checkedGit(runGit, args.repoRoot, ["rev-parse", "--verify", `${args.baseCommitOid}^{tree}`]),
-      checkedGit(runGit, args.repoRoot, ["rev-parse", "--verify", "HEAD^{commit}"]),
-      checkedGit(runGit, args.worktreePath, ["rev-parse", "--verify", "HEAD^{commit}"]),
-      checkedGit(runGit, args.repoRoot, [
-        "rev-parse", "--verify", `${args.artifact.candidateCommitOid}^{tree}`,
-      ]),
-      checkedGit(runGit, args.repoRoot, [
-        "status", "--porcelain=v1", "-z", "--untracked-files=all",
-      ]),
-      checkedGit(runGit, args.worktreePath, [
-        "status", "--porcelain=v1", "-z", "--untracked-files=all",
-      ]),
-    ]);
-  const ancestry = await runGit(args.repoRoot, [
-    "merge-base", "--is-ancestor", args.baseCommitOid, args.artifact.candidateCommitOid,
-  ]);
-
-  if (args.artifact.baseCommitOid !== args.baseCommitOid) failures.add("artifact-base-mismatch");
-  if (sourceHead.trim() !== args.artifact.candidateCommitOid
-    || materializedHead.trim() !== args.artifact.candidateCommitOid
-    || candidateTree.trim() !== args.artifact.candidateTreeOid
-    || ancestry.exitCode !== 0
-    || ancestry.truncated?.stdout === true
-    || ancestry.truncated?.stderr === true
-    || sourceStatus !== ""
-    || materializedStatus !== "") {
-    failures.add("artifact-divergence");
-  }
-  if (JSON.stringify(args.artifact.changedPaths) !== JSON.stringify(manifest.changedPaths)
-    || args.artifact.manifestHash !== manifest.manifestHash) {
-    failures.add("manifest-divergence");
-  }
-  if (manifest.changedPaths.some(change => !finalPathAllowed(
-    change.path,
-    args.writeAllowlist,
-    args.forbiddenScope,
-    change.mode === "160000",
-  ))) {
-    failures.add("out-of-scope-write");
-  }
-  if (manifest.rawDiff.some(entry =>
-    [entry.oldMode, entry.newMode].some(mode => mode === "120000" || mode === "160000"))) {
-    failures.add("modified-symlink");
-  }
-  if (manifest.changedPaths.length === 0
-    || args.artifact.candidateTreeOid === baseTree.trim()) {
-    failures.add("empty-candidate");
-  }
-  return {
-    ok: failures.size === 0,
-    failures: [...failures],
-    manifestHash: manifest.manifestHash,
-  };
 }
 
 function finalDelegationSpec(spec: AutopilotSpec): DelegationSpec {
@@ -849,51 +780,31 @@ function freezePackage<T>(value: T): T {
   return value;
 }
 
-async function persistImmutableJson(
+/**
+ * Durably write one workflow JSON record. `immutable` records are commit
+ * points: an existing different record is a conflict, never overwritten.
+ * `replaceable` records are evidence the commit point binds by hash, so a
+ * review interrupted before its report rewrites them on resume.
+ */
+async function persistJson(
   workflowDirectory: string,
   reference: string,
   value: unknown,
+  mode: "immutable" | "replaceable",
 ): Promise<void> {
-  const destination = path.join(workflowDirectory, reference);
-  const temporary = path.join(workflowDirectory, `.${reference}.${randomUUID()}.tmp`);
   const serialized = `${JSON.stringify(value, null, 2)}\n`;
-  let handle: FileHandle | undefined;
-  let temporaryExists = false;
   try {
-    handle = await open(
-      temporary,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-      0o600,
-    );
-    temporaryExists = true;
-    await handle.writeFile(serialized, "utf8");
-    await handle.sync();
-    await handle.close();
-    handle = undefined;
+    const session = await openDurableDirectorySession(workflowDirectory, {
+      description: "workflow directory",
+      create: false,
+    });
     try {
-      await link(temporary, destination);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      const metadata = await lstat(destination);
-      if (!metadata.isFile()
-        || metadata.isSymbolicLink()
-        || metadata.nlink !== 1
-        || await readFile(destination, "utf8") !== serialized) {
-        fail("artifact-persistence-failed", `a different ${reference} already exists`);
-      }
+      await writeAtomic(session, reference, serialized, mode === "immutable" ? "immutable" : "replace");
+    } finally {
+      await session.close();
     }
-    await rm(temporary);
-    temporaryExists = false;
-    await syncDirectoryMetadata(workflowDirectory);
-    if (await readFile(destination, "utf8") !== serialized) {
-      fail("artifact-persistence-failed", `${reference} was not durably persisted`);
-    }
-  } catch (error) {
-    if (error instanceof FinalBranchReviewError) throw error;
+  } catch {
     fail("artifact-persistence-failed", `failed to persist ${reference}`);
-  } finally {
-    await handle?.close();
-    if (temporaryExists) await rm(temporary, { force: true });
   }
 }
 
@@ -901,52 +812,47 @@ async function persistFrozenArtifact(
   workflowDirectory: string,
   artifact: CumulativeBranchArtifact,
 ): Promise<void> {
-  const destination = path.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
-  const temporary = path.join(
-    workflowDirectory,
-    `.${FINAL_BRANCH_ARTIFACT_REF}.${randomUUID()}.tmp`,
-  );
-  const serialized = `${JSON.stringify(artifact, null, 2)}\n`;
+  await persistJson(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF, artifact, "immutable");
+}
+
+/**
+ * The report is the review's commit point. One already published for this
+ * exact artifact means a previous run finished; resume returns it instead of
+ * re-running roles whose fresh output could never match it.
+ */
+async function readPublishedReport(
+  workflowDirectory: string,
+  artifact: CumulativeBranchArtifact,
+): Promise<FinalBranchReport | null> {
   let handle: FileHandle | undefined;
-  let temporaryExists = false;
   try {
-    handle = await open(
-      temporary,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-      0o600,
-    );
-    temporaryExists = true;
-    await handle.writeFile(serialized, "utf8");
-    await handle.sync();
-    await handle.close();
-    handle = undefined;
-    try {
-      await link(temporary, destination);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      const metadata = await lstat(destination);
-      if (!metadata.isFile()
-        || metadata.isSymbolicLink()
-        || metadata.nlink !== 1
-        || await readFile(destination, "utf8") !== serialized) {
-        fail("artifact-persistence-failed", "a different final branch artifact already exists");
-      }
+    handle = await open(path.join(workflowDirectory, FINAL_BRANCH_REPORT_REF), constants.O_RDONLY | NO_FOLLOW);
+  } catch (error) {
+    if (isMissing(error)) return null;
+    fail("artifact-persistence-failed", "final branch report is unavailable");
+  }
+  try {
+    const metadata = await handle.stat();
+    if (!metadata.isFile() || metadata.nlink !== 1
+      || metadata.size > MAX_FINAL_BRANCH_ARTIFACT_BYTES) {
+      fail("artifact-persistence-failed", "final branch report is not a safe regular file");
     }
-    await rm(temporary);
-    temporaryExists = false;
-    await syncDirectoryMetadata(workflowDirectory);
-    const persisted = JSON.parse(await readFile(destination, "utf8")) as CumulativeBranchArtifact;
-    const { branchArtifactHash, ...unhashed } = persisted;
-    if (branchArtifactHash !== artifact.branchArtifactHash
-      || branchArtifactHashOf(unhashed) !== artifact.branchArtifactHash) {
-      fail("artifact-persistence-failed", "final branch artifact was not durably persisted");
+    const report = JSON.parse(await handle.readFile("utf8")) as FinalBranchReport;
+    if (report.reportVersion !== "2") {
+      fail("artifact-persistence-failed", "final branch report version is unsupported");
     }
+    if (report.workflowId !== artifact.workflowId
+      || report.baseCommitOid !== artifact.baseCommitOid
+      || report.headCommitOid !== artifact.headCommitOid
+      || report.branchArtifactHash !== artifact.branchArtifactHash) {
+      fail("artifact-persistence-failed", "a final branch report for a different artifact exists");
+    }
+    return report;
   } catch (error) {
     if (error instanceof FinalBranchReviewError) throw error;
-    fail("artifact-persistence-failed", "failed to persist final branch artifact");
+    fail("artifact-persistence-failed", "final branch report is unreadable");
   } finally {
-    await handle?.close();
-    if (temporaryExists) await rm(temporary, { force: true });
+    await handle.close();
   }
 }
 
@@ -1004,12 +910,11 @@ export class FinalBranchReviewer {
     this.branchManager = dependencies.branchManager ?? new WorkflowBranchManager();
     this.workflowStore = dependencies.workflowStore ?? (workflowId => new WorkflowStore(workflowId));
     this.acceptanceVerifier = dependencies.acceptanceVerifier ?? new AcceptanceVerifier({
-      structural: async args => await structuralVerifyFinalBranch(args, this.runGit),
+      mode: "final-branch",
     });
     this.roleRunner = dependencies.roleRunner ?? runRole;
-    this.platformServices = guardWorktreeMutations(
-      dependencies.platformServices ?? getPlatformServices(),
-    );
+    this.platformServices = dependencies.platformServices ?? getPlatformServices();
+
     this.producerRegistry = dependencies.producerRegistry ?? defaultRegistry;
     this.artifactStore = dependencies.artifactStore ?? (workflowId =>
       new ArtifactStore(`final-${canonicalArtifactHash(workflowId).slice(0, 24)}`));
@@ -1097,10 +1002,11 @@ export class FinalBranchReviewer {
           state.baseCommitOid, headTreeOid,
         ]),
         checkedGit(this.runGit, state.worktreePath, ["ls-tree", "-r", "-z", headTreeOid]),
-        checkedGit(this.runGit, state.worktreePath, [
-          "diff", "--no-ext-diff", "--no-textconv", "--binary", "--full-index",
-          state.baseCommitOid, headTreeOid,
-        ]),
+        checkedGit(
+          this.runGit,
+          state.worktreePath,
+          reviewDiffArgs(state.baseCommitOid, headTreeOid, ["--binary", "--full-index"]),
+        ),
       ]);
       const manifest = computeChangedPathManifest({ rawDiff, nameStatusOutput, treeOutput });
       await revalidateHead(state.worktreePath, headCommitOid, this.runGit, headTreeOid);
@@ -1132,36 +1038,17 @@ export class FinalBranchReviewer {
     phase: string,
     execute: (lease: CheckoutLock) => Promise<T>,
   ): Promise<T> {
-    const canonical = await this.platformServices.canonicalizePath(checkoutPath);
-    if (canonical.gitCommonDir === null) {
-      fail("workflow-state-mismatch", "final review checkout is not a repository");
-    }
-    const lease = await this.platformServices.acquireCheckoutLock(canonical.canonical);
-    let primaryError: unknown;
+    const safety = new PlatformSafety(this.platformServices);
     try {
-      if (lease.repositoryIdentity !== canonical.gitCommonDir) {
-        fail("workflow-state-mismatch", "final review checkout lease repository identity mismatch");
-      }
-      return await execute(lease);
+      return await safety.withCheckoutLease(checkoutPath, execute);
     } catch (error) {
-      primaryError = error;
-      throw error;
-    } finally {
-      try {
-        await lease.release();
-      } catch (releaseError) {
-        if (primaryError === undefined) {
-          throw new Error(
-            `${phase} checkout lease release failed: ${errorDiagnostic(releaseError)}`,
-          );
-        }
-        throw new AggregateError(
-          [primaryError, releaseError],
-          `${phase} failed and its checkout lease release also failed: ${errorDiagnostic(releaseError)}`,
-        );
+      if (error instanceof Error && error.message === "checkout Git common directory could not be resolved") {
+        fail("workflow-state-mismatch", "final review checkout is not a repository");
       }
+      throw error;
     }
   }
+
 
   async runHeadBoundPhase<T>(
     artifact: CumulativeBranchArtifact,
@@ -1370,6 +1257,8 @@ export class FinalBranchReviewer {
       || canonicalArtifactHash(request.autopilotSpec) !== state.autopilotSpecHash) {
       fail("workflow-state-mismatch", "final review specification does not match workflow state");
     }
+    const published = await readPublishedReport(store.workflowDirectory, artifact);
+    if (published !== null) return published;
     const spec = finalDelegationSpec(request.autopilotSpec);
     const reasons: string[] = [];
     let verification = failedVerification("final verification did not run");
@@ -1402,18 +1291,20 @@ export class FinalBranchReviewer {
     }
     verificationReasons(verification, spec, this.platformServices, reasons);
 
+    // Each piece of evidence appears once: reviewers read the diff and the
+    // final verification; only the advisor reads the frozen branch artifact,
+    // whose task evidence is already inside it.
     const frozenEvidence = freezePackage({
       autopilotSpec: structuredClone(request.autopilotSpec),
       artifact: structuredClone(artifact),
       verification: structuredClone(verification),
-      taskEvidence: structuredClone(artifact.taskEvidence),
     });
     const pkg = freezePackage<RolePackage>({
       spec,
       baselineCommit: artifact.baseCommitOid,
       candidateCommit: artifact.headCommitOid,
       candidateDiff: artifact.patch,
-      testEvidence: JSON.stringify(frozenEvidence),
+      testEvidence: JSON.stringify(verification),
       advisorEvidence: frozenEvidence,
     });
     const runStructuredFinalRole = async <T>(
@@ -1470,7 +1361,7 @@ export class FinalBranchReviewer {
 
     const reviewReports = [correctness, systems];
     const report: FinalBranchReport = {
-      reportVersion: "1",
+      reportVersion: "2",
       workflowId: artifact.workflowId,
       baseCommitOid: artifact.baseCommitOid,
       headCommitOid: artifact.headCommitOid,
@@ -1481,21 +1372,17 @@ export class FinalBranchReviewer {
       taskEvidenceHashes: artifact.taskEvidence.map(evidence => canonicalArtifactHash(evidence)),
       eligible: reasons.length === 0,
       reasons,
-      status: reasons.length === 0 ? "ready-to-ship" : "human-decision-required",
+      status: reasons.length === 0 ? "ready-for-human-review" : "human-decision-required",
       evaluatedAt: this.now(),
     };
     await this.runHeadBoundPhaseCore(
       artifact,
       "final-evidence-publication",
       async () => {
-        await persistImmutableJson(store.workflowDirectory, FINAL_VERIFICATION_REF, verification);
-        await persistImmutableJson(
-          store.workflowDirectory,
-          FINAL_CORRECTNESS_REVIEW_REF,
-          correctness,
-        );
-        await persistImmutableJson(store.workflowDirectory, FINAL_SYSTEMS_REVIEW_REF, systems);
-        await persistImmutableJson(store.workflowDirectory, FINAL_ADVISOR_REF, advisor);
+        await persistJson(store.workflowDirectory, FINAL_VERIFICATION_REF, verification, "replaceable");
+        await persistJson(store.workflowDirectory, FINAL_CORRECTNESS_REVIEW_REF, correctness, "replaceable");
+        await persistJson(store.workflowDirectory, FINAL_SYSTEMS_REVIEW_REF, systems, "replaceable");
+        await persistJson(store.workflowDirectory, FINAL_ADVISOR_REF, advisor, "replaceable");
       },
       request.checkoutPath,
       checkoutLease,
@@ -1503,10 +1390,11 @@ export class FinalBranchReviewer {
     await this.runHeadBoundPhaseCore(
       artifact,
       "final-report-publication",
-      async () => await persistImmutableJson(
+      async () => await persistJson(
         store.workflowDirectory,
         FINAL_BRANCH_REPORT_REF,
         report,
+        "immutable",
       ),
       request.checkoutPath,
       checkoutLease,

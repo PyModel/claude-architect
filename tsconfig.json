@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ES2023", "module": "NodeNext", "moduleResolution": "NodeNext",
     "strict": true, "noUncheckedIndexedAccess": true, "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
     "resolveJsonModule": true, "skipLibCheck": true, "declaration": false, "types": ["node"],
     "outDir": "dist", "rootDir": "src"
   },

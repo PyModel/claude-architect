@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -25,7 +26,7 @@ import {
 } from "../../../src/autopilot/branch-manager.js";
 import { git, type GitResult } from "../../../src/git/git-exec.js";
 import { getPlatformServices } from "../../../src/platform/select-platform.js";
-import { recoverPendingWorktreeRemovals } from "../../../src/runtime/recovery-manager.js";
+import { recoverPendingWorktreeRemovals } from "../../../src/runtime/recovery-worktree-removals.js";
 import { RuntimeError } from "../../../src/util/errors.js";
 import { logger } from "../../../src/util/logger.js";
 
@@ -292,6 +293,38 @@ describe("WorkflowBranchManager", () => {
       .resolves.toBeNull();
   });
 
+  it("hands off the final-reviewed branch: removes the worktree and base ref, keeps the branch", async () => {
+    const fixture = (await initFixture())!;
+    const created = await fixture.manager.create(fixture.request);
+
+    await expect(fixture.manager.cleanup(created, created.baseCommitOid, { retainBranch: true }))
+      .resolves.toEqual({ ok: true, worktreeRemoved: true, refsRemoved: true });
+
+    await expect(stat(created.worktreePath)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await runGit(fixture.repoRoot, ["rev-parse", "--verify", created.branchRef]))
+      .toBe(created.baseCommitOid);
+    expect((await git(fixture.repoRoot, ["show-ref", "--verify", "--quiet", created.baseRef])).exitCode)
+      .toBe(1);
+    // A crash after ownership removal but before the journal records it leaves
+    // exactly this state; resuming must complete, not fail forever.
+    await expect(fixture.manager.cleanup(created, created.baseCommitOid, { retainBranch: true }))
+      .resolves.toEqual({ ok: true, worktreeRemoved: true, refsRemoved: true });
+    expect(await runGit(fixture.repoRoot, ["rev-parse", "--verify", created.branchRef]))
+      .toBe(created.baseCommitOid);
+  });
+
+  it("refuses to hand off a branch that moved away from the reviewed head", async () => {
+    const fixture = (await initFixture())!;
+    const created = await fixture.manager.create(fixture.request);
+    await writeFile(path.join(created.worktreePath, "late.txt"), "late\n");
+    await runGit(created.worktreePath, ["add", "late.txt"]);
+    await runGit(created.worktreePath, ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "late"]);
+
+    await expect(fixture.manager.cleanup(created, created.baseCommitOid, { retainBranch: true }))
+      .resolves.toEqual({ ok: false, classification: "cleanup-failed" });
+    await expect(stat(created.worktreePath)).resolves.toBeDefined();
+  });
+
   it("derives a fresh branch and leaves the primary checkout untouched", async () => {
     const fixture = (await initFixture())!;
     const before = await snapshotCheckout(fixture.repoRoot);
@@ -363,6 +396,25 @@ describe("WorkflowBranchManager", () => {
       await fixture.manager.cleanup(created);
     },
   );
+
+  it("refuses cleanup from a truncated worktree registration list", async () => {
+    const fixture = (await initFixture())!;
+    const created = await fixture.manager.create(fixture.request);
+    const truncatingManager = new WorkflowBranchManager({
+      remoteTransport: localTransport(fixture.bareRemote),
+      git: async (cwd, args, options) => {
+        const result = await git(cwd, args, options);
+        return args[0] === "worktree" && args[1] === "list"
+          ? { ...result, truncated: { stdout: true, stderr: false } }
+          : result;
+      },
+    });
+
+    await expect(truncatingManager.cleanup(created, created.baseCommitOid, { retainBranch: true }))
+      .resolves.toEqual({ ok: false, classification: "cleanup-failed" });
+    await expect(lstat(created.worktreePath)).resolves.toBeDefined();
+    await fixture.manager.cleanup(created);
+  });
 
   it("preserves and supports a dirty primary checkout", async () => {
     const fixture = (await initFixture())!;
@@ -546,18 +598,22 @@ describe("WorkflowBranchManager", () => {
     await expect(fixture.manager.cleanup(created)).resolves.toMatchObject({ ok: true });
   });
 
-  it("detects a remote identity change without mutating either checkout", async () => {
+  it("revalidates offline: the remote is consulted only at create", async () => {
     const fixture = (await initFixture())!;
     const created = await fixture.manager.create(fixture.request);
     const primaryBefore = await snapshotCheckout(fixture.repoRoot);
+    await advanceRemote(fixture);
     await runGit(fixture.repoRoot, [
       "config", "remote.origin.url", "https://github.com/example/different.git",
     ]);
-
-    await expect(fixture.manager.revalidate(created)).resolves.toEqual({
-      ok: false,
-      classification: "remote-identity-changed",
+    const offline = new WorkflowBranchManager({
+      remoteTransport: {
+        fetch: () => { throw new Error("revalidation must not fetch"); },
+        listHeads: () => { throw new Error("revalidation must not list remote heads"); },
+      },
     });
+
+    await expect(offline.revalidate(created)).resolves.toEqual({ ok: true });
     expect(await snapshotCheckout(fixture.repoRoot)).toEqual(primaryBefore);
   });
 
@@ -597,9 +653,15 @@ describe("WorkflowBranchManager", () => {
     const fixture = (await initFixture())!;
     const managedId = `workflow-${createHash("sha256")
       .update(fixture.request.workflowId).digest("hex").slice(0, 32)}`;
-    const collision = path.join(process.env.CLAUDE_PLUGIN_DATA!, "worktrees", managedId);
+    const collision = path.join(
+      await realpath(fixture.repoRoot),
+      ".worktrees",
+      "claude-architect",
+      managedId,
+    );
     const sentinel = path.join(collision, "sentinel.txt");
     await mkdir(path.dirname(collision), { recursive: true, mode: 0o700 });
+    await writeFile(path.join(path.dirname(collision), ".gitignore"), "*\n", { mode: 0o600 });
     await runGit(fixture.repoRoot, ["worktree", "add", "--detach", collision, fixture.baseOid]);
     await writeFile(sentinel, "keep\n");
     const before = await snapshotCheckout(fixture.repoRoot);
@@ -728,7 +790,7 @@ describe("WorkflowBranchManager", () => {
     const fixture = (await initFixture({ prefix: "ca repo ünicode space " }))!;
     try {
       const created = await fixture.manager.create(fixture.request);
-      expect(created.worktreePath).toContain(statePrefix);
+      expect(created.worktreePath).toContain("ca repo ünicode space ");
       await expect(stat(created.worktreePath)).resolves.toBeDefined();
       await expect(fixture.manager.revalidate(created)).resolves.toEqual({ ok: true });
       await expect(fixture.manager.cleanup(created)).resolves.toEqual({
@@ -810,19 +872,11 @@ describe("WorkflowBranchManager", () => {
       ok: false,
       classification: "in-progress-operation",
     });
-
-    const fifthFixture = (await initFixture())!;
-    const baseDrift = await fifthFixture.manager.create(fifthFixture.request);
-    await advanceRemote(fifthFixture);
-    await expect(fifthFixture.manager.revalidate(baseDrift)).resolves.toEqual({
-      ok: false,
-      classification: "remote-base-changed",
-    });
-    // Builds five separate repository fixtures and revalidates each; the 30s
+    // Builds four separate repository fixtures and revalidates each; the 30s
     // default is not enough for that much real git on Windows.
   }, 120_000);
 
-  it("revalidates ownership and remote identity without discarding staged recovery bytes", async () => {
+  it("revalidates ownership without discarding staged recovery bytes", async () => {
     const fixture = (await initFixture())!;
     const created = await fixture.manager.create(fixture.request);
     await writeFile(path.join(created.worktreePath, "tracked.txt"), "staged candidate bytes\n");
@@ -835,12 +889,6 @@ describe("WorkflowBranchManager", () => {
         lock,
       )).resolves.toEqual({ ok: true });
 
-      await advanceRemote(fixture);
-      await expect(fixture.manager.revalidateForStagedPromotionUnderLock(
-        created,
-        created.baseCommitOid,
-        lock,
-      )).resolves.toEqual({ ok: false, classification: "remote-base-changed" });
 
       expect(await readFile(path.join(created.worktreePath, "tracked.txt"), "utf8"))
         .toBe("staged candidate bytes\n");
@@ -889,24 +937,14 @@ describe("WorkflowBranchManager", () => {
     await expect(stat(created.worktreePath)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(cleanupManager.cleanup(created)).resolves.toEqual({
       ok: true,
-      worktreeRemoved: false,
+      worktreeRemoved: true,
       refsRemoved: true,
     });
   });
 
-  it("returns stable results when transport or lock release reports a failure", async () => {
+  it("returns stable results when lock release reports a failure", async () => {
     const fixture = (await initFixture())!;
     const created = await fixture.manager.create(fixture.request);
-    const rejectingTransport: RemoteTransport = {
-      fetch: () => Promise.reject(new Error("unexpected fetch")),
-      listHeads: () => Promise.reject(new Error("simulated transport rejection")),
-    };
-    const rejectingManager = new WorkflowBranchManager({ remoteTransport: rejectingTransport });
-    await expect(rejectingManager.revalidate(created)).resolves.toEqual({
-      ok: false,
-      classification: "git-command-failed",
-    });
-
     const selected = getPlatformServices();
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const releaseFailingManager = new WorkflowBranchManager({
@@ -1000,8 +1038,8 @@ describe("WorkflowBranchManager", () => {
     });
     await expect(manager.cleanup(created)).resolves.toEqual({
       ok: true,
-      worktreeRemoved: false,
-      refsRemoved: false,
+      worktreeRemoved: true,
+      refsRemoved: true,
     });
   });
 
@@ -1122,7 +1160,7 @@ describe("WorkflowBranchManager", () => {
     await expect(readdir(manifestRoot)).resolves.toEqual([]);
     await expect(fixture.manager.cleanup(created)).resolves.toEqual({
       ok: true,
-      worktreeRemoved: false,
+      worktreeRemoved: true,
       refsRemoved: true,
     });
   });

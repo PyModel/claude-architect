@@ -15,6 +15,7 @@ import type { WorkflowStore } from "../../../src/autopilot/workflow-store.js";
 import type { ArtifactStore } from "../../../src/runtime/artifact-store.js";
 import type { PlatformServices } from "../../../src/platform/platform-services.js";
 import type { GitResult } from "../../../src/git/git-exec.js";
+import { RuntimeError } from "../../../src/util/errors.js";
 import { logger } from "../../../src/util/logger.js";
 
 const baseOid = "a".repeat(40);
@@ -55,7 +56,11 @@ function fixture(options: {
   workflowDrift?: boolean;
   repositoryIdentityDrift?: boolean;
   missingBranchIdentity?: boolean;
+  checkoutLocked?: boolean;
   mergeCommitParents?: boolean;
+  identityMissing?: boolean;
+  stageConflicts?: boolean;
+  decisionAuthority?: "autonomous" | "human";
 } = {}) {
   const events: string[] = [];
   const artifact = {
@@ -219,7 +224,11 @@ function fixture(options: {
     if (args[0] === "log") return ok(`${message}\n`);
     if (args[0] === "write-tree") return ok(`${indexTree}\n`);
     if (args[0] === "symbolic-ref") return ok(`${workflowRef}\n`);
-    if (args[0] === "var") return ok("runtime <runtime@example.invalid> 0 +0000\n");
+    if (args[0] === "var") {
+      return options.identityMissing
+        ? { exitCode: 128, stdout: "", stderr: "fatal: unable to auto-detect email address" }
+        : ok("Jo Doe <jo@example.invalid> 1780000000 +0200\n");
+    }
     if (args[0] === "commit-tree") {
       if (crashAfterCommitTree) {
         crashAfterCommitTree = false;
@@ -268,7 +277,9 @@ function fixture(options: {
   };
   let lockReleaseFails = options.lockReleaseFailsOnce ?? false;
   const platformServices = {
-    acquireCheckoutLock: vi.fn().mockResolvedValue({
+    acquireCheckoutLock: options.checkoutLocked
+      ? vi.fn().mockRejectedValue(new RuntimeError("checkout is locked: /repo", { key: "checkout", classification: "lock-contended" }))
+      : vi.fn().mockResolvedValue({
       key: "checkout",
       repositoryIdentity: options.repositoryIdentityDrift ? "/other/.git" : "/repo/.git",
       release: vi.fn(async () => {
@@ -286,6 +297,9 @@ function fixture(options: {
       crashAfterStage = false;
       throw new Error("crashed after staging candidate bytes");
     }
+    if (options.stageConflicts) {
+      return { integration: "conflicted" as const, detail: "candidate tree conflicted" };
+    }
     return {
       integration: "applied" as const, detail: "candidate tree applied",
     };
@@ -298,6 +312,7 @@ function fixture(options: {
     platformServices: platformServices as unknown as PlatformServices,
     stageCandidate,
     now: () => "2026-07-20T12:01:00.000Z",
+    decisionAuthority: () => options.decisionAuthority ?? "autonomous",
   });
   const request: PromotionRequest = {
     workflowId, runId, workflowCheckoutPath: checkout, expectedHead: baseOid,
@@ -355,6 +370,65 @@ describe("CandidatePromoter", () => {
       args[0] === "update-ref" && !args.includes("-d"))).toHaveLength(0);
     expect(f.runGit.mock.calls.filter(([, args]) =>
       args[0] === "update-ref" && args.includes("-d"))).toHaveLength(0);
+  });
+
+  it("commits the promotion under the user's identity, never the runtime's", async () => {
+    const f = fixture();
+
+    await expect(f.promoter.promote(f.request)).resolves.toEqual({
+      status: "committed", commitOid,
+    });
+
+    const identityReads = f.runGit.mock.calls.filter(([, args]) => args[0] === "var");
+    expect(identityReads.map(([, args, options]) => [args, options])).toEqual([
+      [["var", "GIT_AUTHOR_IDENT"], { userIdentity: true }],
+      [["var", "GIT_COMMITTER_IDENT"], { userIdentity: true }],
+    ]);
+    const commitTree = f.runGit.mock.calls.find(([, args]) => args[0] === "commit-tree");
+    expect(commitTree?.[2]).toEqual({
+      env: {
+        GIT_AUTHOR_NAME: "Jo Doe",
+        GIT_AUTHOR_EMAIL: "jo@example.invalid",
+        GIT_AUTHOR_DATE: "1780000000 +0200",
+        GIT_COMMITTER_NAME: "Jo Doe",
+        GIT_COMMITTER_EMAIL: "jo@example.invalid",
+        GIT_COMMITTER_DATE: "1780000000 +0200",
+      },
+    });
+  });
+
+  it("records no acceptance under the human decision authority", async () => {
+    const f = fixture({ decisionAuthority: "human" });
+
+    await expect(f.promoter.promote(f.request)).resolves.toEqual({
+      status: "rejected", classification: "human-decision-required",
+    });
+    expect(f.stageCandidate).not.toHaveBeenCalled();
+    expect(f.artifactStore.writeAutopilotDecision).not.toHaveBeenCalled();
+    expect(f.runGit).not.toHaveBeenCalled();
+  });
+
+  it("records the acceptance only after the exact bytes are staged", async () => {
+    const conflicted = fixture({ stageConflicts: true });
+    await expect(conflicted.promoter.promote(conflicted.request)).resolves.toEqual({
+      status: "rejected", classification: "human-decision-required",
+    });
+    expect(conflicted.stageCandidate).toHaveBeenCalledOnce();
+    expect(conflicted.artifactStore.writeAutopilotDecision).not.toHaveBeenCalled();
+
+    const applied = fixture();
+    await applied.promoter.promote(applied.request);
+    expect(applied.stageCandidate.mock.invocationCallOrder[0]!)
+      .toBeLessThan(applied.artifactStore.writeAutopilotDecision.mock.invocationCallOrder[0]!);
+  });
+
+  it("refuses to promote without a configured Git identity", async () => {
+    const f = fixture({ identityMissing: true });
+
+    await expect(f.promoter.promote(f.request)).resolves.toEqual({
+      status: "rejected", classification: "git-identity-missing",
+    });
+    expect(f.runGit.mock.calls.filter(([, args]) => args[0] === "commit-tree")).toHaveLength(0);
   });
 
   it("recovers an intent whose durable append crashed before promotion began", async () => {
@@ -530,6 +604,16 @@ describe("CandidatePromoter", () => {
     await expect(f.promoter.promote(f.request)).resolves.toEqual({
       status: "rejected", classification: "branch-identity-changed",
     });
+    expect(f.artifactStore.writeAutopilotDecision).not.toHaveBeenCalled();
+  });
+
+  it("reports checkout contention as busy, not as a branch identity change", async () => {
+    const f = fixture({ checkoutLocked: true });
+
+    await expect(f.promoter.promote(f.request)).resolves.toEqual({
+      status: "rejected", classification: "checkout-busy",
+    });
+    expect(f.stageCandidate).not.toHaveBeenCalled();
     expect(f.artifactStore.writeAutopilotDecision).not.toHaveBeenCalled();
   });
 

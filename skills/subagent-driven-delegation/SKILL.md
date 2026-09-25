@@ -6,7 +6,7 @@ description: Execute an implementation plan with the Superpowers subagent-driven
 # Subagent-Driven Delegation
 
 ```claude-architect-protocol
-PROTOCOL_VERSION: 2.0.0
+PROTOCOL_VERSION: 3.0.0
 ```
 
 Superpowers `subagent-driven-development` (SDD) dispatches a fresh implementer subagent per task, reviews each task, and reviews the whole branch at the end. This skill runs that same loop with one substitution: **the implementer is a Claude Architect delegation, not a generic subagent.** Each task becomes a versioned Delegation Spec executed by an untrusted Producer in an isolated worktree, frozen as a Candidate Artifact, and independently verified by the runtime before any reviewer sees it.
@@ -55,7 +55,7 @@ Two upstream assumptions do not survive the trust boundary, and the table above 
 ## Setup
 
 1. **Isolated workspace.** Delegation already isolates each attempt, but the *branch* still needs a home. Use `superpowers:using-git-worktrees`, or confirm the current branch is not `main`/`master` without the user's explicit consent. This is the architect-owned integration workspace only: pass it as `checkoutPath`, but never dispatch a generic implementer to edit it. The runtime gives every implementation or repair attempt fresh context in its own isolated worktree. A repository delivery gate may later create another managed worktree; never reuse or expose one layer's worktree as another layer's workspace.
-2. **Clean checkout.** Delegation and controlled integration require an exact clean checkout: commit or stash tracked changes first, including tracked planning files such as `tasks/todo.md`. Git-ignored planning files are fine. Never use skip-worktree or assume-unchanged as a workaround.
+2. **Clean checkout.** The repository precondition in `/claude-architect:delegate` applies unchanged to every task in this loop.
 3. **Workspace and ledger.** When Superpowers is installed, run its `scripts/sdd-workspace PLAN_FILE` and use the directory it prints. Otherwise use `<repo-root>/.claude-architect/sdd/<plan-basename>/`. Create `progress.md` whose first line is `# SDD ledger — plan: <plan file path>`. A ledger naming a different plan belongs to that plan: leave it alone and start your own.
 4. **Resume, don't redo.** A task with a `Task <N>: complete` line is done. Re-dispatching completed tasks is the most expensive recoverable failure in this loop, and delegation makes it costly in Producer time as well. Trust the ledger and `git log` over your own recollection.
 5. **Plan conflict scan.** Read the plan once. Batch every contradiction — between tasks, against Global Constraints, or a mandate that the review rubric treats as a defect — into one question before Task 1. Add one delegation-specific check: any task whose success criteria are not objectively checkable cannot become a Delegation Spec. Sharpen those criteria with the user now, because a Producer cannot be verified against a vague goal.
@@ -72,18 +72,16 @@ Run Superpowers' `scripts/task-brief PLAN_FILE N` (or extract the task's full te
 
 Translate the brief into a spec per `/claude-architect:delegate` — success criteria, `writeAllowlist`, and verification commands. Two rules matter more here than in single delegation:
 
-- **Verification commands carry the task's acceptance.** Whatever the brief calls "done" must be an executable check, because the runtime — not the Producer — decides whether it passed.
-- **Widen `writeAllowlist` to allowlist consumers** when the task changes an exported contract, or add a repository-wide verification command. A src-only gate plus focused tests compiles neither, and the breakage lands on you at integration.
+- **Verification commands carry the task's acceptance.** Whatever the brief calls "done" must be an executable check, because the runtime — not the Producer — decides whether it passed. A brief's acceptance criterion that cannot become a command is a plan defect to raise, not a criterion to review by eye.
+- **A task's scope is narrower than the plan's.** Each task's `writeAllowlist` covers that task and its allowlist consumers, never the whole plan; a later task must not be able to reach back into an earlier task's files unannounced.
 
-Set `expectBaselineFailure: true` only on a command that cannot pass at clean HEAD *by design*. It is all-or-nothing per command: split a command that mixes existing and to-be-created paths, or you disable the baseline signal for the whole command. The gate enforces the declaration both ways — a command carrying the flag that cannot run, or that passes, fails the baseline.
-
-Watch the brief for acceptance criteria phrased as an absence ("no bare `except`", "the legacy label is gone"). The obvious gate is a text search expecting no match, and that gate matches the phrase in comments and docstrings too — so a Producer that documents *why* it avoided the pattern fails a check its code satisfies. Anchor such patterns to syntax, or assert over parsed structure.
+Every other spec-authoring rule — allowlist consumers, `expectBaselineFailure`, text-search gates, test-parallelism bounds — is stated once in `/claude-architect:delegate` § Build the Delegation Spec and applies here unchanged.
 
 ### 3. Dispatch
 
 Dispatch through the host's `Agent` tool using the `delegation-lane` agent so the task renders as a native subagent row, or call `delegate`/`delegatePipeline` directly in the foreground for short attempts. Never dispatch two implementation lanes against the same repository as if they were parallel — the runtime serializes them on the repository lock.
 
-Take only `runId` from the lane report. On a malformed report, locate the run directory matching `specSha256` rather than redispatching.
+Correlate the lane report exactly as `/claude-architect:delegate` § Lanes as native subagents requires; a lane report is never evidence for a task's completion.
 
 ### 4. Review the task
 
@@ -108,9 +106,7 @@ Five rounds maximum per task. Each round is one new attempt plus one scoped re-r
 
 ### 6. Close the task
 
-Present the review outcome and your recommendation, then call `decideCandidate`. Under the shipped `autonomous` authority, only an independently verified `delegatePipeline` candidate with durable, commit-bound gate clearance and no warnings may be accepted as `policy-autonomous`; every other case requires the human through MCP elicitation.
-
-Only when `decideCandidate` records `accepted` with integrable provenance, call `integrateCandidate` with the exact candidate `manifestHash` as `expectedArtifactHash`, and report `applied`, `conflicted`, or `aborted` truthfully. Integration stages the reviewed tree; it does not commit. One accepted candidate per clean checkout — never batch-accept against the same checkout.
+Present the review outcome and your recommendation, then run `decideCandidate` and — only on an accepted decision with integrable provenance — `integrateCandidate` with the exact candidate `manifestHash` as `expectedArtifactHash`, exactly as `/claude-architect:delegate` § Manual candidate lifecycle steps 9–10 specify. Nothing about the decision gate changes because a task is part of a plan.
 
 Then append `Task <N>: complete (run <runId>, manifest <hash7>, review clean)` — or `…, <K> parked` after a tripped breaker.
 
@@ -118,7 +114,7 @@ Then append `Task <N>: complete (run <runId>, manifest <hash7>, review clean)` �
 
 ## Final review
 
-After the last task, review the **whole candidate branch and the cumulative attempts**, not just the final diff — a defect introduced in Task 2 and papered over in Task 6 is only visible across the range. Dispatch the final review on the most capable available model, point it at the ledger's deferred-minor and parked lines, and give it the branch range from the merge base.
+After the last task, review the **whole candidate branch and the cumulative attempts**, not just the final diff — a defect introduced in Task 2 and papered over in Task 6 is only visible across the range. Dispatch the final review on the most capable available model — the `candidate-reviewer` agent on `opus`, or `claude-advisor` on `fable` — point it at the ledger's deferred-minor and parked lines, and give it the branch range from the merge base.
 
 If it returns findings, handle them as one fix wave — a single revised delegation carrying the complete findings list, not one delegation per finding — then exactly one scoped re-review. Residual findings are adjudicated as at the breaker.
 

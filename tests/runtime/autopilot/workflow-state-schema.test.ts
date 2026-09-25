@@ -18,7 +18,7 @@ const task = {
 
 function validWorkflowState(): AutopilotWorkflowState {
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId: "workflow-state-contract",
     repositoryIdentity: "/canonical/repository/.git",
     baseCommitOid: "1".repeat(40),
@@ -40,23 +40,7 @@ function validWorkflowState(): AutopilotWorkflowState {
       headCommitOid: "4".repeat(40),
       eligibilityHash: "8".repeat(64),
     },
-    shipping: {
-      branch: "feat/autopilot-state-contract",
-      prNumber: 42,
-      prUrl: "https://github.com/example/repository/pull/42",
-      ciDeadlineAt: "2026-07-20T18:30:00.000Z",
-    },
-    ciObservations: [{
-      observedAt: "2026-07-20T18:00:00.000Z",
-      result: "passed",
-      headCommitOid: "4".repeat(40),
-      checks: [{
-        bucket: "pass",
-        name: "test",
-        state: "SUCCESS",
-        link: "https://github.com/example/repository/actions/runs/1",
-      }],
-    }],
+    branch: "feat/autopilot-state-contract",
     cleanup: {
       status: "succeeded",
       worktreeRemoved: true,
@@ -88,9 +72,7 @@ describe("Autopilot Workflow State v1", () => {
     ["task", (state: any) => { state.tasks[0].unknown = true; }],
     ["intent journal", (state: any) => { state.intentJournal.unknown = true; }],
     ["final gate", (state: any) => { state.finalGate.unknown = true; }],
-    ["shipping", (state: any) => { state.shipping.unknown = true; }],
-    ["CI observation", (state: any) => { state.ciObservations[0].unknown = true; }],
-    ["CI check", (state: any) => { state.ciObservations[0].checks[0].unknown = true; }],
+    ["retired v1 shipping", (state: any) => { state.shipping = { prNumber: 42 }; }],
     ["cleanup", (state: any) => { state.cleanup.unknown = true; }],
     ["terminal", (state: any) => { state.terminal.unknown = true; }],
   ] as const)("rejects an unknown %s key", (_name, mutate) => {
@@ -129,33 +111,25 @@ describe("Autopilot Workflow State v1", () => {
     }
   });
 
-  it("uses the exact 13-value phase type", () => {
+  it("uses the exact 9-value phase type", () => {
     const phases: AutopilotPhase[] = [
       "preflighting",
       "running-task",
       "promoting-task",
       "final-review",
-      "pushing",
-      "creating-draft-pr",
-      "waiting-required-checks",
-      "marking-ready",
       "cleaning-up",
       "ready-for-human-review",
       "human-decision-required",
       "failed",
       "cancelled",
     ];
-    // `AutopilotPhase[]` accepts any subset, so a 14th phase would leave this
+    // `AutopilotPhase[]` accepts any subset, so a 10th phase would leave this
     // green. Pin the list to the union itself via an exhaustive mapping.
     const everyPhase: Record<AutopilotPhase, true> = {
       "preflighting": true,
       "running-task": true,
       "promoting-task": true,
       "final-review": true,
-      "pushing": true,
-      "creating-draft-pr": true,
-      "waiting-required-checks": true,
-      "marking-ready": true,
       "cleaning-up": true,
       "ready-for-human-review": true,
       "human-decision-required": true,
@@ -163,7 +137,7 @@ describe("Autopilot Workflow State v1", () => {
       "cancelled": true,
     };
     expect([...phases].sort()).toEqual(Object.keys(everyPhase).sort());
-    expect(phases).toHaveLength(13);
+    expect(phases).toHaveLength(9);
     for (const phase of phases) {
       expect(validate({ ...validWorkflowState(), phase }), phase).toBe(true);
     }

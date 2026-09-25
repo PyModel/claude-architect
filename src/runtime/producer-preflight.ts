@@ -1,20 +1,16 @@
 import path from "node:path";
 import { WorktreeManager } from "./worktree-manager.js";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
-import { supervise } from "../platform/process-supervisor.js";
-import { selectSandboxBackend } from "../platform/sandbox/backends.js";
-import { wrapInvocationWithSeatbelt } from "../platform/sandbox/seatbelt.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import type {
   CapabilityReport,
   ProducerAdapter,
-  ProducerInvocation,
 } from "../producers/producer-adapter.js";
+import { producerRuntime, type ProducerLaunchResult } from "../producers/producer-runtime.js";
 import { RuntimeError } from "../util/errors.js";
 import { boundedRedactedDiagnostic } from "./redaction.js";
 import { readStableRegularFile } from "../util/stable-file.js";
 import { linkPrimaryDependencies } from "../verify/dependency-link.js";
-import { buildEnvironment } from "./environment-policy.js";
 
 /**
  * A Producer that cannot resolve the project toolchain cannot verify its own
@@ -140,19 +136,22 @@ export async function runProducerPreflight(
   };
   try {
     await linkPrimaryDependencies(args.repoRoot, worktree.path);
-    const invocationCtx = {
-      worktreePath: worktree.path,
-      runId: args.runId,
-      ...(args.tempHome === null ? {} : { tempHome: args.tempHome }),
-      capabilityReport: args.capabilityReport,
-      executable: args.capabilityReport.resolvedExecutable,
-    };
-    let invocation: ProducerInvocation;
+    let launchResult: ProducerLaunchResult;
     try {
-      invocation = args.adapter.buildInvocation(
-        probeSpec(args.spec, executables),
-        invocationCtx,
-      );
+      launchResult = await producerRuntime.launch({
+        adapter: args.adapter,
+        producerId: args.capabilityReport.producerId,
+        spec: probeSpec(args.spec, executables),
+        worktreePath: worktree.path,
+        intent: "edit",
+        ps: args.ps,
+        runId: args.runId,
+        tempHome: args.tempHome,
+        timeoutMs: PREFLIGHT_TIMEOUT_MS,
+        maxOutputBytes: PREFLIGHT_OUTPUT_LIMIT,
+        capabilityReport: args.capabilityReport,
+        ...(args.abortSignal === undefined ? {} : { abortSignal: args.abortSignal }),
+      });
     } catch {
       // Some adapters (e.g. Pythinker) reject ANY reasoningEffort override outright, so a
       // real caller request is never silently substituted. The "low" value forced above is a
@@ -160,42 +159,28 @@ export async function runProducerPreflight(
       // instead of letting every run on such an adapter degrade to "inconclusive". A rejection
       // unrelated to reasoningEffort (e.g. an invalid model override) reproduces identically
       // here and still surfaces below.
-      invocation = args.adapter.buildInvocation(
-        probeSpec(args.spec, executables, { forceLowReasoning: false }),
-        invocationCtx,
-      );
-    }
-    // Faithfulness is the whole value: a probe that runs in a different
-    // environment than the attempt is worse than no probe at all.
-    const selection = selectSandboxBackend(args.capabilityReport);
-    if (selection.backend?.kind === "os" && selection.backend.id === "macos-seatbelt") {
-      invocation = wrapInvocationWithSeatbelt(invocation, {
+      launchResult = await producerRuntime.launch({
+        adapter: args.adapter,
+        producerId: args.capabilityReport.producerId,
+        spec: probeSpec(args.spec, executables, { forceLowReasoning: false }),
         worktreePath: worktree.path,
+        intent: "edit",
+        ps: args.ps,
+        runId: args.runId,
         tempHome: args.tempHome,
-        allowNetwork: invocation.network === "allowed",
+        timeoutMs: PREFLIGHT_TIMEOUT_MS,
+        maxOutputBytes: PREFLIGHT_OUTPUT_LIMIT,
+        capabilityReport: args.capabilityReport,
+        ...(args.abortSignal === undefined ? {} : { abortSignal: args.abortSignal }),
       });
     }
-    const built = buildEnvironment({
-      os: args.ps.os,
-      adapterAllowlist: invocation.requiredEnv,
-      ...(invocation.env === undefined ? {} : { adapterValues: invocation.env }),
-      ...(args.tempHome === null ? {} : { tempHome: args.tempHome }),
-    });
+
     try {
-      const exit = await supervise(args.ps, {
-        executable: invocation.executable,
-        args: invocation.args,
-        cwd: worktree.path,
-        env: built.env,
-        timeoutMs: PREFLIGHT_TIMEOUT_MS,
-        ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-        maxOutputBytes: PREFLIGHT_OUTPUT_LIMIT,
-      }, args.abortSignal === undefined ? {} : { onCancel: args.abortSignal });
-      if (exit.cancelled) {
+      if (launchResult.exit.cancelled) {
         return complete({ status: "inconclusive", reason: "cancelled", missing: [], probe: null });
       }
     } finally {
-      built.secretRegistration.dispose();
+      launchResult.builtEnvironment.secretRegistration.dispose();
     }
 
     let contents: string;

@@ -1,146 +1,76 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { supervise } from "../platform/process-supervisor.js";
-import type { ResolvedExecutable } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
+import { probeOsConfinedCli } from "./cli-probe.js";
 import {
-  normalizeNodeShim,
-  normalizePlainText,
-  renderProducerPrompt,
-  selectOsWriteConfinementBackend,
-} from "./plain-text.js";
+  isProducerAuthenticated,
+  resolveDefaultEnv,
+  resolveInheritedWritablePaths,
+  type HostStoreContext,
+} from "./host-store.js";
+import { normalizePlainText, renderProducerPrompt } from "./plain-text.js";
 import type {
   CapabilityReport,
   InvocationContext,
   ProbeContext,
   ProducerAdapter,
   ProducerConfigurationProfile,
+  ProducerDescriptor,
   ProducerInvocation,
 } from "./producer-adapter.js";
 
 const PI_REQUIRED_ENV = ["PI_API_KEY"] as const;
-const VERSION_TIMEOUT_MS = 10_000;
-const VERSION_OUTPUT_LIMIT = 64 * 1024;
 
-function unavailableReport(
-  ctx: ProbeContext,
-  reason: string,
-  resolvedExecutable: ResolvedExecutable | null = null,
-): CapabilityReport {
-  return {
-    producerId: "pi",
-    available: false,
-    reason,
-    os: ctx.os,
-    arch: ctx.arch,
-    environmentType: ctx.environmentType,
-    resolvedExecutable,
-    version: null,
-    authState: "unknown",
-    executionModes: ["edit"],
-    structuredOutput: false,
-    writeConfinementBackend: null,
-    laneEligibility: { edit: false },
-  };
-}
-
-function parseVersion(stdout: string): string | null {
-  const match = /(?:^|\s)(\d+\.\d+\.\d+(?:[-+][^\s]+)?)(?:\s|$)/u.exec(stdout.trim());
-  return match?.[1] ?? null;
-}
-
-export interface PiAdapterDeps {
-  env: Record<string, string | undefined>;
-  homeDirectory: string;
-  hasAuthStore?: (directory: string) => boolean;
-}
-
-function defaultPiEnv(
-  deps: Required<Pick<PiAdapterDeps, "env" | "homeDirectory">> & {
-    hasConfigDir: (directory: string) => boolean;
+export const piDescriptor: ProducerDescriptor = {
+  id: "pi",
+  executable: { name: "pi" },
+  isolation: "inherited-config-only",
+  hostState: {
+    resolveStore: deps => {
+      const home = deps.env.HOME ?? deps.env.USERPROFILE ?? deps.homeDirectory;
+      return join(home, ".pi", "agent");
+    },
+    authMarker: "auth.json",
+    inheritedWritablePaths: store => [store],
+    defaultEnv: (_store, deps) => {
+      if (deps.env.HOME !== undefined) return {};
+      const configDir = join(deps.homeDirectory, ".pi");
+      const hasConfig = (deps.hasConfigDir ?? existsSync)(configDir);
+      return hasConfig ? { HOME: deps.homeDirectory } : {};
+    },
   },
-): Record<string, string> {
-  if (deps.env.HOME !== undefined) return {};
-  return deps.hasConfigDir(join(deps.homeDirectory, ".pi"))
-    ? { HOME: deps.homeDirectory }
-    : {};
-}
+  prompt: {
+    actionPreamble: true,
+    bootstrapPlacement: "before",
+  },
+  structuredOutput: false,
+  executionModes: ["edit"],
+};
+
+export interface PiAdapterDeps extends HostStoreContext {}
 
 export class PiAdapter implements ProducerAdapter {
-  readonly producerId = "pi";
-  readonly structuredOutput = false;
-  readonly executionModes = ["edit"];
+  readonly producerId = piDescriptor.id;
+  readonly structuredOutput = piDescriptor.structuredOutput!;
+  readonly executionModes = piDescriptor.executionModes!;
+  readonly descriptor = piDescriptor;
 
   constructor(private readonly deps: PiAdapterDeps = {
     env: process.env,
     homeDirectory: homedir(),
   }) {}
 
-  private hasAuthStore(directory: string): boolean {
-    return (this.deps.hasAuthStore ?? (store => existsSync(join(store, "auth.json"))))(directory);
-  }
-
-  private hasConfigDir(directory: string): boolean {
-    return existsSync(directory);
-  }
-
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
-    if (ctx.os === "win32") return unavailableReport(ctx, "unsupported-platform");
-
-    let executable: ResolvedExecutable;
-    try {
-      executable = await normalizeNodeShim(
-        await ctx.ps.resolveExecutable({ name: "pi" }),
-      );
-    } catch {
-      return unavailableReport(ctx, "missing-executable");
-    }
-
-    try {
-      const result = await supervise(ctx.ps, {
-        executable,
-        args: ["--version"],
-        cwd: process.cwd(),
-        env: {},
-        timeoutMs: VERSION_TIMEOUT_MS,
-        maxOutputBytes: VERSION_OUTPUT_LIMIT,
-      }, {});
-      const version = result.spawnError === undefined && result.exitCode === 0
-        ? parseVersion(result.stdout)
-        : null;
-      if (version === null) return unavailableReport(ctx, "probe-failed", executable);
-
-      const writeConfinementBackend = selectOsWriteConfinementBackend(ctx);
-      const authStore = join(this.deps.homeDirectory, ".pi", "agent");
-      const authState = this.hasAuthStore(authStore)
-        ? "authenticated"
-        : "unauthenticated";
-      return {
-        producerId: this.producerId,
-        available: true,
-        reason: null,
-        os: ctx.os,
-        arch: ctx.arch,
-        environmentType: ctx.environmentType,
-        resolvedExecutable: executable,
-        version,
-        authState,
-        executionModes: [...this.executionModes],
-        structuredOutput: this.structuredOutput,
-        writeConfinementBackend,
-        laneEligibility: { edit: writeConfinementBackend !== null },
-      };
-    } catch {
-      return unavailableReport(ctx, "probe-failed", executable);
-    }
+    return probeOsConfinedCli(ctx, {
+      producerId: this.producerId,
+      executableName: "pi",
+      structuredOutput: this.structuredOutput,
+      isAuthenticated: () => isProducerAuthenticated(piDescriptor, this.deps),
+    });
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
-    // The Pi lane always runs the model configured in Pi itself
-    // (~/.pi/agent/models.json). A requested override would silently substitute
-    // a different model — possibly a local one — so it fails the lane instead,
-    // mirroring the Pythinker reasoningEffort precedent.
     if (spec.producerOverrides?.model !== undefined) {
       throw new Error(
         "Pi model override is unsupported: the pi lane always uses the model configured in Pi.",
@@ -160,14 +90,13 @@ export class PiAdapter implements ProducerAdapter {
     return {
       executable: ctx.executable,
       args,
-      stdin: renderProducerPrompt(spec, ctx.readOnly === true),
-      requiredEnv: [...PI_REQUIRED_ENV],
-      env: defaultPiEnv({
-        env: this.deps.env,
-        homeDirectory: this.deps.homeDirectory,
-        hasConfigDir: directory => this.hasConfigDir(directory),
+      stdin: renderProducerPrompt(spec, {
+        readOnly: ctx.readOnly === true,
+        ...piDescriptor.prompt,
       }),
-      // Model sessions must reach the provider API; write-protection remains the confinement goal.
+      requiredEnv: [...PI_REQUIRED_ENV],
+      inheritedStateWritablePaths: resolveInheritedWritablePaths(piDescriptor, this.deps),
+      env: resolveDefaultEnv(piDescriptor, this.deps),
       network: "allowed",
     };
   }

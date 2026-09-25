@@ -4,6 +4,129 @@ All notable changes to Claude Architect are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- Producer-authored bytes can no longer steer Git. Diff-family commands always run with `--no-textconv` and `--no-ext-diff`; review diffs read attributes from the trusted base with `--attr-source=<base>` (Git 2.40+, reported by `doctor` as `git-too-old` below that), so a committed `.gitattributes` cannot hide source as binary; Git calls inside a managed worktree pin `GIT_DIR`, `GIT_COMMON_DIR`, and `GIT_WORK_TREE`, so a rewritten `.git` pointer is ignored; and truncated Git output is a failure everywhere through one `gitChecked`/`gitSucceeded` pair.
+- On macOS, project verification runs under Seatbelt with a private scratch `TMPDIR`, and its evidence records `confinement: "macos-seatbelt"`. The Seatbelt profile denies reads of credential stores under `$HOME` (`.ssh`, `.aws`, `.gnupg`, `.kube`, `.docker`, `.netrc`, `.git-credentials`, `.config/gh`, `.config/gcloud`, `.azure`).
+- Autonomous acceptance is stricter. It requires every executed verification command to have run under a known OS confinement backend (a missing policy record fails closed, so off macOS every decision needs a person), and a plain `delegate` candidate that changes verification inputs — tests, test or build configuration, dependency manifests and lockfiles, `.gitattributes`/`.gitignore`/`.gitmodules` — needs a person too. The decision advisory shown to a human is now exactly the autonomous verdict's reasons.
+- `integrateCandidate` refuses an acceptance that names no artifact (a legacy record without `candidateManifestHash`) with `decision-artifact-mismatch` instead of falling through.
+- Autopilot honors `CLAUDE_ARCHITECT_DECISION_AUTHORITY=human`: it refuses to start (`decision-authority-human`), refuses to resume a workflow that still promotes, and the promoter records no `autopilot-policy` acceptance under it. The acceptance is written only after the exact bytes are staged.
+- A spec's `environment` can no longer override variables the platform sets (`HOME`, `PATH`, `TMPDIR`, …), and every adapter- or spec-supplied value except absolute paths is redacted from output.
+- The watchdog keeps the Producer in its process group and escalates SIGTERM to SIGKILL on the whole group when the supervisor dies or the child exits, so grandchildren cannot outlive a run. `bootstrap.mjs` ignores relative `PATH` entries when locating Node.
+- Dependency inheritance runs `cp` by absolute path and treats lockfiles over 64 MiB or of different sizes as non-matching.
+- `delegation-spec.v1.json` bounds every array (`maxItems`), so an oversized spec is rejected at validation.
+- Review patches in the review snapshot are sanitized (binary payload omitted, redacted), and Git stderr in pipeline errors is redacted.
+
+### Changed
+
+- **Protocol 2.0.0 → 3.0.0.** `autopilotStart` no longer accepts `pullRequest`, and Autopilot specs and workflow states are v2. Callers pinned to 2.0.0 get an explicit `protocol version mismatch` diagnostic. Run archives are bound to the protocol major, so runs recorded under 2.x are refused as incompatible; decide and integrate them before upgrading.
+- Final Branch Report v2: the passing status is `ready-for-human-review`, matching the terminal state, instead of `ready-to-ship`. A v1 report is refused on resume with an explicit version diagnostic.
+- **Autopilot ends at a final-reviewed local branch.** It no longer pushes, opens a draft PR, polls required checks, or marks a PR ready; that belongs to the repository's delivery gate (No Mistakes here). Autopilot Spec v2 drops `shipping`, and Workflow State v2 replaces `shipping`/`ciObservations` with `branch` and drops the `pushing`, `creating-draft-pr`, `waiting-required-checks`, and `marking-ready` phases; v1 specs and states are refused with explicit version diagnostics. Cleanup keeps the reviewed branch and removes only the worktree and the private base ref.
+- Promotion commits carry the user's own Git author and committer, dated now, instead of a fixed runtime identity dated 2000-01-01. Autopilot refuses to start without a configured identity (`git-identity-missing`).
+- One state machine owns an Autopilot workflow: `start` bootstraps and then runs the same resume path, and startup recovery reports an abandoned `cleaning-up` workflow as `resume` (the `finalize` disposition is gone) instead of finishing it with a second proof of the same crash window. Finish it with `autopilotResume`.
+- Autopilot reads the remote only at create. Revalidation before each promotion and the final review no longer runs `ls-remote` or re-resolves the remote URL, so a busy upstream `main` no longer fails a workflow (`remote-base-changed` and `remote-identity-changed` are gone), and the workflow runs offline after create. The local base ref still pins the base.
+- Managed worktrees live in each repository's main checkout under `.worktrees/claude-architect/<id>`, a self-ignoring namespace recorded in the plugin data root so recovery finds it; the legacy state-directory location is still swept.
+- Every pipeline writer, each fixer included, starts in a fresh worktree at the current candidate; its commits are validated and imported into the shared object store before the worktree is removed. A failed promotion now distinguishes a missing candidate commit (`sandbox-violation`) from a host failure (`environment-defect`).
+- Optional Jev screen: with `CLAUDE_ARCHITECT_JEV=on` and `TYPESAFE_API_KEY`, an otherwise autonomous acceptance is screened by the TypeSafe API over the redacted patch and changed paths. A concern routes the decision to a person; an outage or clear result leaves the deterministic verdict unchanged. It never grants autonomy.
+- Minor and nit findings never block the pipeline gate; every undispositioned blocker or major still requires a human.
+- Weakened-test detection covers Python, Go, Rust, JVM, .NET, and RSpec path conventions and skip markers.
+- Autopilot eligibility is derived directly from the pipeline result, review snapshot, and advisor report, so no self-derived projection is re-checked against itself; a missing candidate is reported as `pipeline result has no candidate`.
+- The final branch review freezes only the refs it needs (task `logs/` transcripts excluded), embeds verification once, and is crash-resumable: evidence files are replaceable, the report is immutable, and a report already published for the same artifact is returned on resume.
+- Lock contention during promotion reports `checkout-busy` instead of `branch-identity-changed`.
+- The `ls-files` output bound is 512 MiB; other Git output stays bounded at 8 MB.
+- macOS bound-directory cleanup removes directories in batches of 64 with one `lsof` per batch (a 2,040-directory tree went from over 120 s to about 26 s).
+- A checkout-lease release failure after a finished integration keeps the result and appends `; checkout lock release failed` instead of discarding it.
+- The slice lifecycle moved out of `runPipelineWithLease` into `SliceRunner` (`src/pipeline/slice-runner.ts`): plan wave, create worktree, launch Producer, freeze, verify, review, compose, release anchor. Run-scoped facts travel as a `RunContext` value instead of a shared closure, so `pipeline-runtime.ts` fell from 2464 to ~1540 lines and slice behaviour can be exercised without driving a whole pipeline.
+- One implementation of the slice phase. `SliceRunner.run` superseded the callback-driven `runSlicePhase`/`SlicePhaseDeps` pair, which stayed behind as a second routing loop that nothing called but a test suite still exercised — so the suite proved nothing about the code that runs. The superseded loop is deleted and its evidence-isolation and hard-blocker cases now drive the real runner.
+- One implementation of the managed-worktree lifecycle. `withManagedWorktree` lives beside `WorktreeManager` in `src/runtime/worktree-manager.ts`, and the pipeline, the slice runner, and candidate verification all borrow through it — so creation serialization and the cleanup-failure disposition cannot drift apart, and verification worktrees gain the `git worktree add` serialization they previously lacked.
+- The slice ref namespace has a single declaration (`src/git/ref-namespace.ts`). The pipeline wrote `refs/claude-architect/slices/` while recovery swept the same literal from its own copy; one declaration makes a silent divergence — refs created but never reclaimed — impossible.
+- Unified candidate evaluation into `RunDecision` (`src/runtime/run-decision.ts`). `readRunDecisionSnapshot` loads a run's result, manifest, review snapshot, gate clearance, and decision once and checks their cross-file coherence in one place; `evaluate` returns a typed `RunVerdict` — `accepted` (autonomous), `human-required`, `rejected`, `incomplete`, or `invalid` — replacing the accept-only rule that was written twice, in `mcp/server.ts` and `mcp/tools.ts`. The decide path now reads the archive once: `loadArchivedRun` carries the snapshot it read, and the provenance resolver judges that snapshot through the pure `verdictFor` rather than re-reading five files per caller.
+- `pipelineGateCleared` is a versioned artifact next to `CandidateDecisionV2`, with its own canonical schema at `runtime/schemas/pipeline-gate-cleared.v1.json`. The artifact store validates every durable record against that schema on both read and write, so a malformed clearance is an `invalid` verdict with a reason rather than a shape-sniffed warning string, and a record that reached disk malformed never reads back as "absent".
+- Acceptance verification takes a named `mode` — `candidate`, `composed-slice`, or `final-branch` — instead of an injected structural verifier. `MODE_STRUCTURAL_FAILURES` declares the failure classes each mode may report and now drives `structuralVerify`, which skips the work that proves a class the mode cannot report. The pipeline's `IGNORED_STRUCTURAL_FAILURES` filter, the final branch reviewer's substitute verifier and its private `finalPathAllowed` copy, and the second scope-violation glob in `verifyCandidate` are all gone: one scope rule, one symlink rule, one manifest recomputation across every mode.
+- `runPipelineWithLease` is 345 lines, down from 1048. The increment loop, the review rounds, candidate promotion, the halted-slice path, the salvage and archive paths, and the final gate are named functions over one explicit `PipelineRunState` value, and each phase returns `continue` or a terminal `PipelineResult` instead of writing into a shared closure. Status lines after the slice wave default to the last slice index through `RunContext` rather than a pipeline-local emitter.
+- `ArtifactStore` is descriptor-driven. One `ArtifactDescriptor` per archived kind names the file, the read validator, the write-side redaction and validation, and the write mode; every typed façade is one line over a shared `readArtifact`/`writeArtifact` pair, and `writeArtifact` is built on `PlatformSafety.writeAtomic`. Reads go through the same traversal and identity guards as `readEvidence`, so no façade carries its own copy of them. `tests/runtime/artifact-store-bytes.test.ts` pins the archive bytes with hashes recorded from the hand-written façades, so the rewrite is proven byte-identical.
+- The store is bound to its run once. `ArtifactStore` validated the run id at construction and then took it again on every read; the read façades (`readManifest()`, `readResult()`, `readDecision()`, …) now take no run id, and the `ToolArtifactStore`, `ReviewSnapshotStore`, `RunDecisionStore`, and advisor-stage store interfaces follow. Prune reads each candidate run through a store bound to that run rather than through the caller's.
+- `RecoveryDependencies` drops `requestCooperativeTermination`, `delayMs`, and `graceMs`, which were retained for input compatibility and did nothing, and takes `platformServices` whole. `recoverStaleRuns` no longer rebuilds a `PlatformServices` by grafting a caller's three methods onto the selected platform — production code that existed only to complete an incomplete test double. Recovery never took a checkout lease through that object; leases come from `platformSafety.withRecoveryLease`.
+
+- `src/runtime/recovery-manager.ts` (3,880 lines, nine concerns) is split into one module per concern: `recovery-runs`, `recovery-prune-journal`, `recovery-quarantine`, `recovery-worktree-removals`, `recovery-worktree-sweep`, and `recovery-autopilot`, over a `recovery-shared` leaf. `recovery-manager` keeps only `recoverStaleRuns`, which sequences them. The declarations moved verbatim, and the modules import in one direction.
+- CI pins every GitHub Action to a commit SHA with its version as a comment, and pins the Claude Code CLI it installs. A wiring test enforces both.
+
+### Removed
+
+- The GitHub shipping adapter (`src/ship/`, about 1,190 lines), the Autopilot v1 spec and workflow-state schemas, and the `doctor` checks `autopilot-remote-recovery-required` and `autopilot-pr-recovery-required`.
+- Duplicate primitives: ten `errorCode`/`isMissing` copies (now `src/util/errors.ts`), three hot-path directory flushes (now `flushDirectory`), strict identity comparisons (now `sameDirectoryIdentity`), three workflow-store stable-read copies (now `readSingleLinkFile`), about a dozen per-file Git success helpers (now `src/git/checked-git.ts`), the `LOCK_NAME`/`reclaimLocks` aliases, the last six `NodeJS.ErrnoException` casts, and the unused `SpecInvalidError`, `SpawnFailureError`, and `workflowOwnershipClaimsWorktree`.
+
+### Documentation
+
+- `AGENTS.md`, `README.md`, `docs/SECURITY_MODEL.md`, `docs/THREAT_MODEL.md`, `docs/decision-authority.md`, the delegate skill, and `docs/autopilot-terminal-states.md` describe the confinement and verification-input rules for autonomy, the opt-in Jev screen, the `.worktrees/` layout, the Git 2.40 floor, and Autopilot ending at a local branch handed to No Mistakes.
+- `tests/README.md` maps every test file to the module and exported interface it crosses and lists the tests that reach past an interface, with the disposition of each.
+- `docs/README.md` indexes every document under `docs/` as current, historical, or superseded, naming the superseding document where one exists.
+- `docs/ARCHITECTURE.md` maps each `AGENTS.md` trust invariant to exactly one owning subsystem and file; `SECURITY_MODEL.md`, `TRUST_BOUNDARIES.md`, and `THREAT_MODEL.md` point at that mapping.
+- `docs/MARKETPLACE_REVIEW.md` states edit-lane confinement evidence per lane and platform, and says plainly that no lane has native Windows edit evidence and none is claimed — five of the six lanes are unsupported for editing off macOS because `macos-seatbelt` declares no Linux or Windows platform at all.
+- The delegate skill is 35% shorter (5417 → ~3520 words) with no rule removed: the autopilot and manual lifecycles are one section, the two presentation sections are one, and the sliced pipeline, backgrounded-run monitoring, presentation templates, decision-authority policy, and verification-preflight reference moved to `docs/`. `subagent-driven-delegation` no longer restates the spec-authoring, lane-correlation, and decision rules it shares with `delegate`; it points at them.
+
+## [0.52.0] - 2026-09-02
+
+### Changed
+
+- Unified repository mutations and lease management through `PlatformSafety` (`src/platform/platform-safety.ts`). Checkout locking now inverts ambiguity gate validation so the ambiguity check executes under the acquired lease (`withCheckoutLease`), recovery operations use dedicated recovery leases (`withRecoveryLease`), and `guardWorktreeMutations` along with its nine wrap sites has been removed.
+- Consolidated lock ownership record formatting, parsing, liveness verdicts (`live`, `dead`, `unverifiable`, `malformed`), and reclamation into `src/platform/lock-ownership.ts`. Both POSIX and Windows implementations acquire and describe contention through this module, and `recovery-manager.ts` drops redundant lock parsing.
+- Introduced atomic write operations and directory sessions via `writeAtomic` and `DurableDirectorySession` (`src/platform/durable-write.ts`), guaranteeing temp file cleanup on crash, atomic rename/link, directory fsync barriers, and directory identity verification across sequential writes.
+- Split status emission in `src/runtime/run-status.ts` into durable lifecycle transitions (written synchronously and persisted before the phase begins) and ephemeral progress notifications (coalesced without blocking on disk syncs).
+- Unified prompt assembly across all Producer lanes into `src/producers/prompt-renderer.ts` with `actionPreamble` and `bootstrapPlacement` parameterized from `ProducerDescriptor`. Every edit-lane prompt now carries the action-first preamble (`EDIT_ACTION_PREAMBLE`) and lint-before-typecheck instruction (`LINT_BEFORE_TYPECHECK_INSTRUCTION`). Codex's private `renderPrompt` and duplicate `renderList` have been removed.
+- Unified capability probing across all six Producer lanes through `src/producers/cli-probe.ts`. Codex's probe now routes through the shared probe, eliminating duplicated executable normalization and sandbox detection with an abnormal-termination guard.
+- Unified process launch across all Producer lanes into `src/producers/producer-runtime.ts` (`ProducerRuntime.planLaunch` and `ProducerRuntime.launch`), with temporary HOME directories created only when the descriptor's isolation profile requires them.
+- Added within-process capability probe caching scoped to each run in `src/producers/producer-runtime.ts`, keyed by `(producerId, resolvedExecutablePath, hostStoreRoot, configRevision)`. In multi-role pipelines, subsequent role dispatches reuse cached results, swapped executables are detected as cache misses, and diagnostic checks (`doctor`) probe fresh.
+- Minimized Producer startup cost in `src/producers/producer-runtime.ts` and `src/runtime/attempt-runtime.ts` by resolving configuration once, computing writable roots once, and building the sandbox policy once per attempt.
+
+## [0.50.0] - 2026-09-02
+
+### Changed
+
+- The repository moved to the `PyModel` GitHub organization. Every homepage,
+  repository, issue, advisory, and release link now points at
+  `PyModel/claude-architect`, and the install command is
+  `claude plugin marketplace add PyModel/claude-architect`.
+- README trimmed: the lead paragraph absorbs "Why it exists", lane overrides
+  are a per-lane table (Claude Code takes model and reasoning effort only; Pi
+  takes a thinking level and refuses a model override), and the filesystem
+  and cleanup guarantees moved to `docs/operations.md`. The banner names all
+  six lanes and no longer carries a stale version.
+- Cross-platform isolation and adapter test hardening:
+  - macOS Seatbelt strictly validates declared `inheritedStateWritablePaths` against filesystem root `/`, relative paths, and traversal escapes, failing closed without grants on invalid paths.
+  - Claude probe confirms required CLI flags `--no-session-persistence`, `--strict-mcp-config`, and `--setting-sources` via `inspectSurface`, failing closed if unsupported.
+  - OpenCode adapter uses a unified helper for `XDG_DATA_HOME` data directory resolution across probing and invocation.
+  - Adapter tests and resolvers support `USERPROFILE` and platform path separators cleanly across macOS, Linux, and Windows.
+
+### Added
+
+- `claude-implementer`: a sixth delegation-lane Producer that runs a headless
+  Claude Code session (`claude -p --output-format json`) as an untrusted
+  Producer, so the architect can delegate implementation to Opus or Sonnet
+  (`producerOverrides.model`) with an optional `--effort` override. The attempt
+  runs with `--strict-mcp-config`, `--setting-sources ""`,
+  `--disable-slash-commands`, `--no-session-persistence`, and a built-in tool
+  allowlist without `Agent`, so it sees only the Delegation Spec, cannot load
+  this plugin's own MCP tools, and cannot nest subagents. darwin/arm64 only,
+  confined by the same host Seatbelt backend as the Pi, OpenCode, Pythinker,
+  and agy lanes.
+- The delegate skill now names the architect-side roles a Claude subagent
+  (Opus or Sonnet) may take — scouting, spec drafting, and independent candidate
+  review through the new read-only `candidate-reviewer` agent — and the one it
+  never takes: editing the checkout.
+
+### Changed
+
+- Producers declare their own host state directories through
+  `ProducerInvocation.inheritedStateWritablePaths`; the macOS Seatbelt backend
+  grants exactly those paths instead of guessing a Producer's config directory
+  from its executable name or required environment variables. A new adapter
+  therefore touches only its adapter file and the registry.
+- The four OS-confined CLI adapters share one probe (`probeOsConfinedCli`)
+  instead of four copies of the resolve → version → confinement → auth flow.
+
 ## [0.49.0] - 2026-08-08
 
 ### Changed

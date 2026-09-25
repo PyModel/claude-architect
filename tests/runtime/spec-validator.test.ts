@@ -20,6 +20,17 @@ const base = {
 };
 describe("validateSpec", () => {
   it("accepts a valid spec", () => expect(validateSpec(base).ok).toBe(true));
+  it("bounds every list a spec can carry", () => {
+    const commands = Array.from({ length: 33 }, (_, index) => ({
+      ...base.verification[0],
+      id: `check-${index}`,
+    }));
+    expect(validateSpec({ ...base, verification: commands }).ok).toBe(false);
+    expect(validateSpec({
+      ...base,
+      writeAllowlist: Array.from({ length: 513 }, (_, index) => `src/${index}.ts`),
+    }).ok).toBe(false);
+  });
   it("validates verification command cwd within the checkout", () => {
     expect(validateSpec({
       ...base,

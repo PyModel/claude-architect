@@ -16,16 +16,15 @@ import {
   type RemoteTransport,
   type WorkflowBranchIdentity,
 } from "../../../src/autopilot/branch-manager.js";
+import { AutopilotController } from "../../../src/autopilot/autopilot-controller.js";
 import { canonicalArtifactHash } from "../../../src/autopilot/autopilot-eligibility.js";
 import type { AutopilotWorkflowState } from "../../../src/autopilot/types.js";
 import { WorkflowStore } from "../../../src/autopilot/workflow-store.js";
 import { git } from "../../../src/git/git-exec.js";
 import { getPlatformServices } from "../../../src/platform/select-platform.js";
 import type { AutopilotSpec } from "../../../src/protocol/autopilot-spec.js";
-import {
-  recoverStaleRuns,
-  type AutopilotRecoveryDisposition,
-} from "../../../src/runtime/recovery-manager.js";
+import { recoverStaleRuns } from "../../../src/runtime/recovery-manager.js";
+import type { AutopilotRecoveryDisposition } from "../../../src/runtime/recovery-autopilot.js";
 import {
   makeBootstrapOwnerDead,
   makeLeaseDead,
@@ -93,7 +92,7 @@ function autopilotSpec(): AutopilotSpec {
     expectedExitCodes: [0],
   }];
   return {
-    specVersion: "1",
+    specVersion: "2",
     topic: "recovery-cutpoint",
     base: { remote: "origin", branch: "main" },
     tasks: [{
@@ -115,20 +114,12 @@ function autopilotSpec(): AutopilotSpec {
     }],
     finalSuccessCriteria: ["The recovered workflow remains trustworthy."],
     finalVerification: verification,
-    shipping: {
-      provider: "github",
-      draft: true,
-      markReadyWhenRequiredChecksPass: true,
-      requiredChecksTimeoutMs: 1_800_000,
-      pullRequestTitle: "Exercise workflow recovery",
-      pullRequestBody: "Crash cut-point coverage.",
-    },
   };
 }
 
 function initialState(branch: WorkflowBranchIdentity): AutopilotWorkflowState {
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId: branch.workflowId,
     repositoryIdentity: branch.repositoryIdentity,
     baseCommitOid: branch.baseCommitOid,
@@ -148,13 +139,7 @@ function initialState(branch: WorkflowBranchIdentity): AutopilotWorkflowState {
     }],
     intentJournal: { ref: "journal.ndjson", entryCount: 0, lastEntryHash: null },
     finalGate: null,
-    shipping: {
-      branch: branch.branch,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: "2026-07-21T20:00:00.000Z",
-    },
-    ciObservations: [],
+    branch: branch.branch,
     cleanup: null,
     terminal: null,
     createdAt: "2026-07-21T18:00:00.000Z",
@@ -284,11 +269,11 @@ async function persistPromotion(fixture: Fixture): Promise<AutopilotWorkflowStat
   });
 }
 
-async function advanceToWaitingChecks(fixture: Fixture): Promise<AutopilotWorkflowState> {
-  let state = await persistPromotion(fixture);
-  state = await fixture.store.transition({
-    expectedRevision: state.revision,
-    to: "pushing",
+async function advanceToCleaningUp(fixture: Fixture): Promise<AutopilotWorkflowState> {
+  const reviewed = await persistPromotion(fixture);
+  return await fixture.store.transition({
+    expectedRevision: reviewed.revision,
+    to: "cleaning-up",
     update(draft) {
       draft.finalGate = {
         reportRef: "reports/final.json",
@@ -297,53 +282,6 @@ async function advanceToWaitingChecks(fixture: Fixture): Promise<AutopilotWorkfl
         eligibilityHash: "4".repeat(64),
       };
     },
-  });
-  state = await fixture.store.transition({
-    expectedRevision: state.revision,
-    to: "creating-draft-pr",
-  });
-  return await fixture.store.transition({
-    expectedRevision: state.revision,
-    to: "waiting-required-checks",
-    update(draft) {
-      draft.shipping.prNumber = 42;
-      draft.shipping.prUrl = "https://github.com/example/project/pull/42";
-    },
-  });
-}
-
-async function appendCiObservation(
-  fixture: Fixture,
-  result: "pending" | "passed",
-): Promise<AutopilotWorkflowState> {
-  const waiting = await advanceToWaitingChecks(fixture);
-  return await fixture.store.update({
-    expectedRevision: waiting.revision,
-    update(draft) {
-      draft.ciObservations.push({
-        observedAt: "2026-07-21T18:05:00.000Z",
-        result,
-        headCommitOid: expectedHead(draft),
-        checks: [{
-          bucket: result === "passed" ? "pass" : "pending",
-          name: "build",
-          state: result === "passed" ? "SUCCESS" : "IN_PROGRESS",
-          link: null,
-        }],
-      });
-    },
-  });
-}
-
-async function advanceToCleaningUp(fixture: Fixture): Promise<AutopilotWorkflowState> {
-  let state = await appendCiObservation(fixture, "passed");
-  state = await fixture.store.transition({
-    expectedRevision: state.revision,
-    to: "marking-ready",
-  });
-  return await fixture.store.transition({
-    expectedRevision: state.revision,
-    to: "cleaning-up",
   });
 }
 
@@ -367,8 +305,47 @@ async function beginCleanup(fixture: Fixture): Promise<{
 }
 
 async function performCleanup(fixture: Fixture, headCommitOid: string): Promise<void> {
-  await expect(fixture.branchManager.cleanup(fixture.branch, headCommitOid))
+  await expect(fixture.branchManager.cleanup(fixture.branch, headCommitOid, { retainBranch: true }))
     .resolves.toEqual({ ok: true, worktreeRemoved: true, refsRemoved: true });
+}
+
+/**
+ * Finish an abandoned cleanup the way a user would: through the controller's
+ * resume, which owns the cleanup transition. Nothing task-related may run.
+ */
+async function resumeToTerminal(fixture: Fixture): Promise<AutopilotWorkflowState> {
+  const unused = async (): Promise<never> => {
+    throw new Error("a cleanup resume must not run task work");
+  };
+  const controller = new AutopilotController({
+    workflowLock: { runExclusive: async (_workflowId, operation) => await operation() },
+    workflowStore: () => fixture.store,
+    repositoryIdentity: async () => fixture.branch.repositoryIdentity,
+    branchManager: fixture.branchManager,
+    pipelineRunner: { run: unused },
+    reviewSnapshotter: { create: unused },
+    eligibilityEvaluator: { evaluate: unused },
+    promoter: { promote: unused },
+    finalBranchReviewer: { review: unused },
+    decisionAuthority: () => "autonomous",
+    now: () => "2026-07-21T18:02:00.000Z",
+  });
+  return await controller.resume(fixture.branch.checkoutPath, fixture.branch.workflowId);
+}
+
+async function expectResumedCleanup(fixture: Fixture, headCommitOid: string): Promise<void> {
+  await expectRecovery(fixture, "resume");
+  await expect(resumeToTerminal(fixture)).resolves.toMatchObject({
+    phase: "ready-for-human-review",
+    cleanup: { status: "succeeded", worktreeRemoved: true, lockReleased: true },
+  });
+  // The reviewed branch is the hand-off; the worktree and base ref are gone.
+  expect(await runGit(fixture.branch.checkoutPath, ["rev-parse", fixture.branch.branchRef]))
+    .toBe(headCommitOid);
+  expect((await git(fixture.branch.checkoutPath, [
+    "show-ref", "--verify", "--quiet", fixture.branch.baseRef,
+  ])).exitCode).toBe(1);
+  expect((await recoverStaleRuns(recoveryDependencies())).workflows).toBeUndefined();
 }
 
 async function snapshot(directory: string): Promise<ByteSnapshot> {
@@ -420,7 +397,7 @@ async function expectRecovery(
 
   const second = await recoverStaleRuns(recoveryDependencies());
 
-  if (expected === null || expected === "dispose" || expected === "finalize") {
+  if (expected === null || expected === "dispose") {
     expect(second.workflows).toBeUndefined();
   } else {
     expect(second.workflows).toEqual(first.workflows);
@@ -536,37 +513,37 @@ describe("autopilot workflow recovery crash cut points", () => {
     await expectRecovery(fixture, "resume");
   });
 
-  it("7 resumes after a CI observation is durably appended", async () => {
+  it("7 resumes after promotion is persisted and before the final review", async () => {
     const fixture = await createFixture();
     await initializeActiveWorkflow(fixture);
-    await appendCiObservation(fixture, "pending");
+    await persistPromotion(fixture);
     await makeBootstrapOwnerDead(fixture);
     await makeLeaseDead(fixture.store);
 
     await expectRecovery(fixture, "resume");
   });
 
-  it("8 requires human decision after cleanup intent when the worktree remains", async () => {
+  it("8 resumes cleanup after its intent when the worktree remains", async () => {
     const fixture = await createFixture();
     await initializeActiveWorkflow(fixture);
-    await beginCleanup(fixture);
+    const cleanup = await beginCleanup(fixture);
     await makeBootstrapOwnerDead(fixture);
     await makeLeaseDead(fixture.store);
 
-    await expectRecovery(fixture, "human-decision-required");
+    await expectResumedCleanup(fixture, cleanup.headCommitOid);
   });
 
-  it("9 finalizes after real cleanup removes ownership before intent completion", async () => {
+  it("9 resumes after real cleanup removes ownership before intent completion", async () => {
     const fixture = await createFixture();
     await initializeActiveWorkflow(fixture);
     const cleanup = await beginCleanup(fixture);
     await performCleanup(fixture, cleanup.headCommitOid);
     await makeLeaseDead(fixture.store);
 
-    await expectRecovery(fixture, "finalize");
+    await expectResumedCleanup(fixture, cleanup.headCommitOid);
   });
 
-  it("10 finalizes after cleanup intent completion and before terminal persistence", async () => {
+  it("10 resumes after cleanup intent completion and before terminal persistence", async () => {
     const fixture = await createFixture();
     await initializeActiveWorkflow(fixture);
     const cleanup = await beginCleanup(fixture);
@@ -578,7 +555,7 @@ describe("autopilot workflow recovery crash cut points", () => {
     });
     await makeLeaseDead(fixture.store);
 
-    await expectRecovery(fixture, "finalize");
+    await expectResumedCleanup(fixture, cleanup.headCommitOid);
   });
 
   it("11 skips a terminal workflow and does not resurrect or release its dead lease", async () => {

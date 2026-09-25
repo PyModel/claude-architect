@@ -1,40 +1,18 @@
 import { open } from "node:fs/promises";
 import type { ResolvedExecutable, SupervisedExit } from "../platform/platform-services.js";
 import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
-import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import type { AdapterEvent, ProbeContext } from "./producer-adapter.js";
-import { renderSkillBootstrap } from "./skill-bootstrap.js";
+export {
+  EDIT_ACTION_PREAMBLE,
+  LINT_BEFORE_TYPECHECK_INSTRUCTION,
+  renderList,
+  renderProducerPrompt,
+  type PromptRenderOptions,
+  type PromptRenderInput,
+} from "./prompt-renderer.js";
 
 const PLAIN_TEXT_LIMIT = 8_000;
 
-function renderList(values: string[]): string {
-  return values.length === 0 ? "- (none)" : values.map(value => `- ${value}`).join("\n");
-}
-
-export function renderProducerPrompt(spec: DelegationSpec, readOnly = false): string {
-  return [
-    "You are an untrusted implementation Producer operating inside an isolated worktree.",
-    "Do not delegate to other agents or expand the authorized scope.",
-    ...(readOnly ? [] : ["", renderSkillBootstrap()]),
-    "",
-    "Objective:",
-    spec.objective,
-    "",
-    "Context:",
-    spec.context,
-    "",
-    "Authorized write allowlist:",
-    renderList(spec.writeAllowlist),
-    "",
-    "Forbidden scope:",
-    renderList(spec.forbiddenScope),
-    "",
-    "Success criteria:",
-    renderList(spec.successCriteria),
-    "",
-    "Make only the requested edits. Return a concise final summary of the work performed.",
-  ].join("\n");
-}
 
 export function normalizePlainText(raw: {
   stdout: string;

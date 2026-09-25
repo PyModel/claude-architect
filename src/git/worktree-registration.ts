@@ -1,6 +1,6 @@
 import { realpath } from "node:fs/promises";
 import path from "node:path";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, isMissing } from "../util/errors.js";
 import { platformPathsEqual } from "../util/platform-path.js";
 
 export async function canonicalizeWorktreePath(
@@ -14,7 +14,7 @@ export async function canonicalizeWorktreePath(
   try {
     return await realpath(resolved);
   } catch (error) {
-    if (!allowMissing || (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if (!allowMissing || !isMissing(error)) throw error;
   }
   const missingSegments: string[] = [];
   let ancestor = resolved;
@@ -28,7 +28,7 @@ export async function canonicalizeWorktreePath(
     try {
       return path.join(await realpath(ancestor), ...missingSegments);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if (!isMissing(error)) throw error;
     }
   }
 }
@@ -55,7 +55,7 @@ export async function findWorktreeRegistration(
         allowMissing,
       );
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      if (isMissing(error)) continue;
       throw error;
     }
     if (platformPathsEqual(reported, expected)) return index;

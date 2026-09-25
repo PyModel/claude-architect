@@ -264,6 +264,7 @@ function legacyAcceptedDecision(recordedAt: string): RunDecision {
     decision: "accepted",
     authority: "human",
     recordedAt,
+    candidateManifestHash: candidate.manifestHash,
   };
 }
 
@@ -295,7 +296,7 @@ function dependencies(
     ps,
     storeFactory: () => store,
     git: async (_cwd, args) => {
-      if (args[0] === "diff") return gitResult("exact unredacted patch\n");
+      if (args[1] === "diff") return gitResult("exact unredacted patch\n");
       if (args.includes(`${candidate.anchorRef}^{commit}`)) {
         return gitResult(`${candidate.candidateCommitOid}\n`);
       }
@@ -661,7 +662,7 @@ describe("MCP tool handlers", () => {
 
     const output = await handleDelegate(
       "/repo",
-      { ...validSpec, producerPreferences: ["codex", "opencode", "pi", "pythinker", "agy"] },
+      { ...validSpec, producerPreferences: ["codex", "opencode", "pi", "pythinker", "agy", "claude"] },
       deps,
     );
 
@@ -1008,7 +1009,7 @@ describe("MCP tool handlers", () => {
     await expect(handleDecideCandidate(repoRoot, "run-tools", "accepted", candidate.manifestHash, deps))
       .resolves.toEqual({ recorded: true });
 
-    const recorded = await store.readCandidateDecision("run-tools");
+    const recorded = await store.readCandidateDecision();
     expect(recorded).toMatchObject({
       decision: "accepted",
       authority: "caller-asserted",
@@ -1026,8 +1027,23 @@ describe("MCP tool handlers", () => {
 
     await handleDecideCandidate(repoRoot, "run-tools", "accepted", candidate.manifestHash, deps);
 
-    expect(await store.readCandidateDecision("run-tools"))
+    expect(await store.readCandidateDecision())
       .toMatchObject({ authority: "human" });
+  });
+
+  it("refuses to spend a legacy acceptance that names no artifact", async () => {
+    const repoRoot = await createRepository();
+    const store = new FakeStore(result, manifestFor(repoRoot));
+    store.decision = {
+      decisionVersion: "1",
+      decision: "accepted",
+      authority: "human",
+      recordedAt: "2026-07-20T09:00:00.000Z",
+    };
+
+    await expect(handleIntegrateCandidate(
+      repoRoot, "run-tools", candidate.manifestHash, dependencies(store, getPlatformServices()),
+    )).resolves.toEqual({ integration: "aborted", detail: "decision-artifact-mismatch" });
   });
 
   it("refuses to spend an acceptance on a different artifact", async () => {
@@ -1543,7 +1559,9 @@ describe("MCP tool handlers", () => {
     expect(store.reviewSnapshot).toEqual(expectedReviewSnapshot);
     expect(JSON.stringify(output)).toBe(JSON.stringify(store.reviewSnapshot));
     expect(gitCalls.at(-1)).toEqual([
+      `--attr-source=${candidate.baseCommitOid}`,
       "diff",
+      "--no-color",
       "--no-ext-diff",
       "--no-textconv",
       "--binary",
@@ -1585,7 +1603,7 @@ describe("MCP tool handlers", () => {
     const originalGit = deps.git!;
     deps.git = async (cwd, args, indexFile) => {
       const output = await originalGit(cwd, args, indexFile);
-      return args[0] === "diff"
+      return args[1] === "diff"
         ? { ...output, truncated: { stdout: true, stderr: false } }
         : output;
     };
@@ -1886,7 +1904,9 @@ describe("MCP tool handlers", () => {
       ["rev-parse", "--verify", "--quiet", `${candidate.anchorRef}^{commit}`],
       ["rev-parse", "--verify", `${candidate.candidateCommitOid}^{tree}`],
       [
+        `--attr-source=${candidate.baseCommitOid}`,
         "diff",
+        "--no-color",
         "--no-ext-diff",
         "--no-textconv",
         "--binary",
@@ -1910,7 +1930,9 @@ describe("MCP tool handlers", () => {
       ],
       ["rev-parse", "--verify", `${candidate.candidateCommitOid}^{tree}`],
       [
+        `--attr-source=${candidate.baseCommitOid}`,
         "diff",
+        "--no-color",
         "--no-ext-diff",
         "--no-textconv",
         "--binary",

@@ -268,6 +268,16 @@ function taskIdForDelegationPath(
 }
 
 export function validateAutopilotSpec(input: unknown): ValidateAutopilotResult {
+  if (isRecord(input) && input.specVersion === "1") {
+    return {
+      ok: false,
+      errors: [{
+        path: "#/specVersion",
+        message: "autopilot spec v1 is unsupported: Autopilot now ends at a final-reviewed "
+          + "local branch; remove `shipping` and set specVersion to \"2\"",
+      }],
+    };
+  }
   const schemaValid = schemas.autopilotSpec(input);
   const errors: ValidationError[] = (schemas.autopilotSpec.errors ?? [])
     .filter(error => taskIdForDelegationPath(input, error.instancePath) === undefined)

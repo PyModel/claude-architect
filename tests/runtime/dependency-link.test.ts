@@ -45,7 +45,7 @@ describe("probeCowSupport", () => {
     await expect(probeCowSupport({
       platform: "linux",
       execFile: async (file, args) => {
-        expect(file).toBe("cp");
+        expect(["/bin/cp", "/usr/bin/cp"]).toContain(file);
         expect(args.slice(0, 2)).toEqual(["-a", "--reflink=always"]);
         probeRoot = path.dirname(args.at(-1)!);
         throw new Error("forced cp failure");

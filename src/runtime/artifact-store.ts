@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import {
-  link,
   lstat,
   mkdir,
   open,
@@ -28,9 +27,13 @@ import type {
   HumanCandidateDecisionV2,
   LegacyDecisionAuthority,
 } from "../protocol/candidate-decision.js";
+import {
+  type PipelineGateCleared,
+  parsePipelineGateCleared,
+} from "../protocol/pipeline-gate-cleared.js";
 import type { VerificationCommand } from "../protocol/delegation-spec.js";
 import { loadSchemas } from "../protocol/schema-loader.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
 import {
   containsRegisteredSecret,
   containsRegisteredSecretValue,
@@ -49,13 +52,12 @@ import {
 } from "./run-manifest.js";
 import { resolveStateDir } from "./state-dir.js";
 import { getPlatformServices } from "../platform/select-platform.js";
-import { guardWorktreeMutations } from "./worktree-mutation-gate.js";
-import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
+import { PlatformSafety, platformSafety, openDurableDirectorySession } from "../platform/platform-safety.js";
+import type { PlatformServices } from "../platform/platform-services.js";
 import {
   advisorReportHash,
   autopilotDecisionEligibilityProjection,
   canonicalArtifactHash,
-  eligibilityInputFromArtifacts,
   evaluateAutopilotEligibility,
   pipelineResultHash,
   type AutopilotEligibilityRecord,
@@ -63,6 +65,7 @@ import {
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { AdvisorReport } from "../pipeline/report-types.js";
 import type { RunStatus } from "./run-status.js";
+import { flushDirectory } from "../platform/durable-directory.js";
 
 const SAFE_COMPONENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const WINDOWS_RESERVED_COMPONENT = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
@@ -79,6 +82,7 @@ const candidateDecisionSchema = schemas.candidateDecision;
 const advisorReportSchema = schemas.advisorReport;
 const autopilotEligibilitySchema = schemas.autopilotEligibility;
 const runStatusSchema = schemas.runStatus;
+const pipelineGateClearedSchema = schemas.pipelineGateCleared;
 
 export interface PrunePolicy {
   maxAgeMs: number;
@@ -189,18 +193,10 @@ function isSafeComponent(value: string): boolean {
 const STORE_TEMPORARY_RESIDUE =
   /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/u;
 
-function validateComponent(value: string, kind: "run id" | "log name"): void {
+export function validateComponent(value: string, kind: "run id" | "log name"): void {
   if (!isSafeComponent(value) || (kind === "run id" && value !== value.toLowerCase())) {
     throw new RuntimeError(`invalid ${kind}: ${JSON.stringify(value)}`);
   }
-}
-
-function errorCode(error: unknown): string | undefined {
-  return (error as NodeJS.ErrnoException).code;
-}
-
-function isMissing(error: unknown): boolean {
-  return errorCode(error) === "ENOENT";
 }
 
 function isAlreadyPresent(error: unknown): boolean {
@@ -248,7 +244,7 @@ async function ensurePlainDirectory(directory: string): Promise<DirectoryIdentit
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
   }
-  if (created) await syncDirectory(path.dirname(directory));
+  if (created) await flushDirectory(path.dirname(directory));
   return { dev: metadata.dev, ino: metadata.ino };
 }
 
@@ -274,20 +270,6 @@ async function assertDirectoryIdentity(
     || metadata.dev !== expected.dev
     || metadata.ino !== expected.ino) {
     throw new RuntimeError("archive directory identity changed during operation");
-  }
-}
-
-async function syncDirectory(directory: string): Promise<void> {
-  let handle;
-  try {
-    handle = await open(directory, constants.O_RDONLY | NO_FOLLOW);
-    await handle.sync();
-  } catch (error) {
-    const unsupportedOnWindows = process.platform === "win32"
-      && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode(error) ?? "");
-    if (!unsupportedOnWindows) throw error;
-  } finally {
-    await handle?.close();
   }
 }
 
@@ -734,6 +716,160 @@ function validatePostPipelineAutopilotArtifacts(
   };
 }
 
+type ArtifactWriteMode = "immutable" | "replace" | "replace-if-present";
+
+/**
+ * One archived artifact kind: where it lives under the run directory, how
+ * archived bytes are proven to be this kind on the way out (`parse`), and —
+ * for kinds the store writes — how a value is redacted and proven valid on
+ * the way in (`prepare`) and whether a second write is refused, replaces the
+ * file, or is skipped for a vanished run. Adding an artifact kind is one
+ * descriptor plus one façade.
+ */
+interface ArtifactDescriptor<Read, Write = Read> {
+  readonly relativePath: string;
+  readonly parse: (value: unknown, runId: string) => Read;
+  readonly write?: {
+    readonly mode: ArtifactWriteMode;
+    readonly prepare: (value: Write, runId: string) => Write;
+  };
+}
+
+type WritableArtifactDescriptor<Read, Write = Read> =
+  ArtifactDescriptor<Read, Write> & Required<Pick<ArtifactDescriptor<Read, Write>, "write">>;
+
+function validatePipelineActiveMarker(value: unknown, message: string): PipelineActiveMarker {
+  const marker = value as Partial<PipelineActiveMarker> | null;
+  if (typeof marker !== "object"
+    || marker === null
+    || typeof marker.pid !== "number"
+    || !Number.isSafeInteger(marker.pid)
+    || marker.pid <= 1
+    || (marker.processToken !== null && typeof marker.processToken !== "string")
+    || typeof marker.startedAt !== "string"
+    || !Number.isFinite(Date.parse(marker.startedAt))
+    || typeof marker.sliced !== "boolean") {
+    throw new RuntimeError(message);
+  }
+  return marker as PipelineActiveMarker;
+}
+
+const RUN_STATUS: WritableArtifactDescriptor<RunStatus> = {
+  relativePath: "status.json",
+  parse(value) {
+    if (!runStatusSchema(value)) throw new RuntimeError("archived run status is malformed");
+    return value as RunStatus;
+  },
+  write: {
+    mode: "replace-if-present",
+    prepare(status) {
+      const sanitized: RunStatus = {
+        ...structuredClone(status),
+        detail: status.detail === null ? null : redact(status.detail).slice(0, 200),
+      };
+      if (!runStatusSchema(sanitized)) throw new RuntimeError("run status is invalid");
+      return sanitized;
+    },
+  },
+};
+
+const RESULT: WritableArtifactDescriptor<AttemptResult> = {
+  relativePath: "result.json",
+  parse: verifyAttemptResult,
+  write: {
+    mode: "immutable",
+    prepare: (result, runId) => verifyAttemptResult(sanitizeAttemptResult(result), runId),
+  },
+};
+
+const MANIFEST: WritableArtifactDescriptor<RunManifest> = {
+  relativePath: "manifest.json",
+  parse: verifyRunManifest,
+  write: {
+    mode: "immutable",
+    prepare: (manifest, runId) => verifyRunManifest(sanitizeRunManifest(manifest), runId),
+  },
+};
+
+/** Written by run start, never by the store; only the spec hash is read back. */
+const RUN_START_SPEC_SHA256: ArtifactDescriptor<string | null> = {
+  relativePath: "run-start.json",
+  parse(record) {
+    if (typeof record !== "object" || record === null) return null;
+    const value = (record as { specSha256?: unknown }).specSha256;
+    return typeof value === "string" && /^[0-9a-f]{64}$/u.test(value) ? value : null;
+  },
+};
+
+const REVIEW_SNAPSHOT: WritableArtifactDescriptor<ReviewSnapshot> = {
+  relativePath: "review-snapshot.json",
+  parse(value, runId) {
+    const snapshot = validateReviewSnapshot(value, runId);
+    reviewSnapshotHash(snapshot);
+    return snapshot;
+  },
+  write: { mode: "immutable", prepare: validateReviewSnapshot },
+};
+
+const DECISION: WritableArtifactDescriptor<CandidateDecision, CandidateDecisionV2> = {
+  relativePath: "decision.json",
+  parse: parsePersistedDecision,
+  write: { mode: "immutable", prepare: decision => decision },
+};
+
+const PIPELINE_GATE_CLEARED: WritableArtifactDescriptor<PipelineGateCleared> = {
+  relativePath: "pipeline-gate-cleared.json",
+  parse(value) {
+    // The canonical schema decides the shape; the parser narrows it to the type.
+    // A record that reached disk malformed must not read back as "absent".
+    if (!pipelineGateClearedSchema(value)) {
+      throw new RuntimeError("the pipeline gate clearance record is malformed");
+    }
+    return parsePipelineGateCleared(value);
+  },
+  write: {
+    mode: "immutable",
+    prepare(cleared) {
+      const validated = parsePipelineGateCleared(cleared);
+      if (!pipelineGateClearedSchema(validated)) {
+        throw new RuntimeError("the pipeline gate clearance record is malformed");
+      }
+      return validated;
+    },
+  },
+};
+
+const PIPELINE_ACTIVE_MARKER: WritableArtifactDescriptor<PipelineActiveMarker> = {
+  relativePath: "pipeline-active.json",
+  parse: value => validatePipelineActiveMarker(value, "archived pipeline-active marker is malformed"),
+  write: {
+    mode: "replace",
+    prepare: marker => validatePipelineActiveMarker(marker, "pipeline-active marker is invalid"),
+  },
+};
+
+const POST_PIPELINE_AUTOPILOT: WritableArtifactDescriptor<PostPipelineAutopilotArtifacts> = {
+  relativePath: "pipeline/post-pipeline-autopilot.json",
+  parse: validatePostPipelineAutopilotArtifacts,
+  write: { mode: "immutable", prepare: artifacts => artifacts },
+};
+
+/** Any pipeline stage record: redacted on the way in, trusted as `T` on the way out. */
+function pipelineArtifact<T>(name: string): WritableArtifactDescriptor<T> {
+  validateComponent(name, "log name");
+  return {
+    relativePath: path.posix.join("pipeline", `${name}.json`),
+    parse: value => value as T,
+    write: { mode: "immutable", prepare: value => redactRecord(value) as T },
+  };
+}
+
+function logReference(name: string): string {
+  validateComponent(name, "log name");
+  return path.posix.join("logs", `${name}.log`);
+}
+
+
 export class ArtifactStore {
   readonly runDirectory: string;
   private readonly runsRoot: string;
@@ -802,163 +938,86 @@ export class ArtifactStore {
 
   private async writeArchiveFile(relativePath: string, text: string): Promise<void> {
     const directory = await this.ensureArchiveDirectory(relativePath);
-    const directoryIdentity = await ensurePlainDirectory(directory);
-    const destination = path.join(directory, path.basename(relativePath));
-    const temporaryPath = path.join(directory, `.${path.basename(destination)}.${randomUUID()}.tmp`);
-    let handle;
-    let temporaryCreated = false;
+    const session = await openDurableDirectorySession(directory);
     try {
-      await assertDirectoryIdentity(directory, directoryIdentity);
-      handle = await open(
-        temporaryPath,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-        0o600,
-      );
-      temporaryCreated = true;
-      await assertDirectoryIdentity(directory, directoryIdentity);
-      await handle.writeFile(text, { encoding: "utf8" });
-      await handle.sync();
-      await handle.close();
-      handle = undefined;
-
-      try {
-        await assertDirectoryIdentity(directory, directoryIdentity);
-        await link(temporaryPath, destination);
-        await assertDirectoryIdentity(directory, directoryIdentity);
-      } catch (error) {
-        if (!isAlreadyPresent(error)) throw error;
-        await assertDirectoryIdentity(directory, directoryIdentity);
-        const existing = await readRegularFile(destination, directoryIdentity);
-        if (existing !== text) {
-          throw new RuntimeError(`archive entry already exists with different content: ${relativePath}`);
-        }
-      }
+      await platformSafety.writeAtomic(session, path.basename(relativePath), text, "immutable");
     } finally {
-      await handle?.close();
-      if (temporaryCreated) {
-        await assertDirectoryIdentity(directory, directoryIdentity);
-        await rm(temporaryPath, { force: true });
-        await syncDirectory(directory);
-        await assertDirectoryIdentity(directory, directoryIdentity);
-      }
+      await session.close();
     }
   }
 
-  private async writeJson(relativePath: string, value: unknown): Promise<void> {
-    const serialized = `${serializeJson(value, 2)}\n`;
-    await this.writeArchiveFile(relativePath, serialized);
+  /**
+   * Read one archived artifact of this run. Traversal, symlinks, and directory
+   * identity are policed by `readEvidence`; the descriptor proves the bytes are
+   * the kind it names. Absent artifacts read as null; malformed ones throw.
+   */
+  private async readArtifact<Read, Write>(
+    descriptor: ArtifactDescriptor<Read, Write>,
+  ): Promise<Read | null> {
+    const text = await this.readEvidence(descriptor.relativePath);
+    if (text === null) return null;
+    return descriptor.parse(JSON.parse(text), this.runId);
   }
 
-  private async replaceJson(relativePath: string, value: unknown): Promise<void> {
-    if (path.isAbsolute(relativePath)
-      || path.dirname(relativePath) !== "."
-      || path.basename(relativePath) !== relativePath
-      || !isSafeComponent(relativePath)) {
+  /**
+   * Write one archived artifact of this run. The descriptor's `prepare` step
+   * redacts and validates the value; the write mode decides whether a second
+   * write is refused (`immutable`), replaces the file (`replace`), or is
+   * skipped when the run archive is gone (`replace-if-present`). A caller may
+   * name `replace` explicitly for the one documented promotion path.
+   */
+  private async writeArtifact<Read, Write>(
+    descriptor: WritableArtifactDescriptor<Read, Write>,
+    value: NoInfer<Write>,
+    mode: ArtifactWriteMode = descriptor.write.mode,
+  ): Promise<void> {
+    const serialized = `${serializeJson(descriptor.write.prepare(value, this.runId), 2)}\n`;
+    if (mode === "immutable") {
+      await this.writeArchiveFile(descriptor.relativePath, serialized);
+      return;
+    }
+    const leaf = descriptor.relativePath;
+    if (path.posix.dirname(leaf) !== "." || !isSafeComponent(leaf)) {
       throw new RuntimeError("replacement archive path must be a safe relative leaf");
     }
     const directory = await this.ensureRunDirectory(false);
-    if (directory === null) throw new RuntimeError("run archive does not exist");
-    const directoryIdentity = await ensurePlainDirectory(directory);
-    const destination = path.join(directory, relativePath);
-    const temporaryPath = path.join(directory, `.${relativePath}.${randomUUID()}.tmp`);
-    const serialized = `${serializeJson(value, 2)}\n`;
-    let handle;
-    let temporaryCreated = false;
-    try {
-      await assertDirectoryIdentity(directory, directoryIdentity);
-      handle = await open(
-        temporaryPath,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-        0o600,
-      );
-      temporaryCreated = true;
-      await handle.writeFile(serialized, { encoding: "utf8" });
-      await handle.sync();
-      await handle.close();
-      handle = undefined;
-      await assertDirectoryIdentity(directory, directoryIdentity);
-      await rename(temporaryPath, destination);
-      temporaryCreated = false;
-      await syncDirectory(directory);
-      await assertDirectoryIdentity(directory, directoryIdentity);
-    } finally {
-      await handle?.close();
-      if (temporaryCreated) await rm(temporaryPath, { force: true });
+    if (directory === null) {
+      if (mode === "replace-if-present") return;
+      throw new RuntimeError("run archive does not exist");
     }
+    const session = await openDurableDirectorySession(directory);
+    try {
+      await platformSafety.writeAtomic(session, leaf, serialized, "replace");
+    } finally {
+      await session.close();
+    }
+  }
+
+  private assertOwned(runId: string, what: string): void {
+    if (runId !== this.runId) throw new RuntimeError(`${what} does not match artifact store`);
   }
 
   async writeRunStatus(status: RunStatus): Promise<void> {
-    if (status.runId !== this.runId) {
-      throw new RuntimeError("run status id does not match artifact store");
-    }
-    const sanitized: RunStatus = {
-      ...structuredClone(status),
-      detail: status.detail === null ? null : redact(status.detail).slice(0, 200),
-    };
-    if (!runStatusSchema(sanitized)) {
-      throw new RuntimeError("run status is invalid");
-    }
-    const directory = await this.ensureRunDirectory(false);
-    if (directory === null) return;
-    await this.replaceJson("status.json", sanitized);
+    this.assertOwned(status.runId, "run status id");
+    await this.writeArtifact(RUN_STATUS, status);
   }
 
-  async readRunStatus(runId: string): Promise<RunStatus | null> {
-    validateComponent(runId, "run id");
-    const runDirectory = path.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      const value: unknown = JSON.parse(await readRegularFile(
-        path.join(validated.path, "status.json"),
-        validated.identity,
-      ));
-      if (!runStatusSchema(value)) throw new RuntimeError("archived run status is malformed");
-      return value as RunStatus;
-    } catch (error) {
-      if (isMissing(error)) return null;
-      throw error;
-    }
+  async readRunStatus(): Promise<RunStatus | null> {
+    return this.readArtifact(RUN_STATUS);
   }
 
   async writeLog(name: string, text: string): Promise<string> {
-    validateComponent(name, "log name");
-    const ref = path.posix.join("logs", `${name}.log`);
+    const ref = logReference(name);
     await this.writeArchiveFile(ref, redact(text));
     return ref;
   }
 
   async writePipelineArtifact(name: string, value: unknown): Promise<void> {
-    validateComponent(name, "log name");
-    await this.writeJson(
-      path.posix.join("pipeline", `${name}.json`),
-      redactRecord(value),
-    );
+    await this.writeArtifact(pipelineArtifact<unknown>(name), value);
   }
 
-  async readPipelineArtifact<T>(runId: string, name: string): Promise<T | null> {
-    validateComponent(runId, "run id");
-    validateComponent(name, "log name");
-    const runDirectory = path.join(this.runsRoot, runId);
-    const validatedRun = await this.ensureExistingRunDirectory(runDirectory);
-    if (validatedRun === null) return null;
-    const validated = await this.ensureExistingRunDirectory(path.join(runDirectory, "pipeline"));
-    if (validated === null) return null;
-    if (!isWithin(validatedRun.path, validated.path)) {
-      throw new RuntimeError("pipeline archive directory escapes run directory");
-    }
-    await assertDirectoryIdentity(validatedRun.path, validatedRun.identity);
-    try {
-      const value = JSON.parse(await readRegularFile(
-        path.join(validated.path, `${name}.json`),
-        validated.identity,
-      )) as T;
-      await assertDirectoryIdentity(validatedRun.path, validatedRun.identity);
-      return value;
-    } catch (error) {
-      if (isMissing(error)) return null;
-      throw error;
-    }
+  async readPipelineArtifact<T>(name: string): Promise<T | null> {
+    return this.readArtifact(pipelineArtifact<T>(name));
   }
 
   /**
@@ -1081,61 +1140,36 @@ export class ArtifactStore {
   }
 
   async writeResult(result: AttemptResult): Promise<void> {
-    if (result.runId !== this.runId) {
-      throw new RuntimeError("attempt result run id does not match artifact store");
-    }
-    const sanitized = sanitizeAttemptResult(result);
-    verifyAttemptResult(sanitized, this.runId);
-    await this.writeJson("result.json", sanitized);
+    this.assertOwned(result.runId, "attempt result run id");
+    await this.writeArtifact(RESULT, result);
   }
 
   async writeManifest(manifest: RunManifest): Promise<void> {
-    if (manifest.runId !== this.runId) {
-      throw new RuntimeError("run manifest id does not match artifact store");
-    }
-    const sanitized = sanitizeRunManifest(manifest);
-    verifyRunManifest(sanitized, this.runId);
-    await this.writeJson("manifest.json", sanitized);
+    this.assertOwned(manifest.runId, "run manifest id");
+    await this.writeArtifact(MANIFEST, manifest);
   }
 
+  /**
+   * Replace the terminal result and manifest in place. This is the one path
+   * that rewrites an immutable artifact: the pipeline promotes the reviewed
+   * branch over the initial attempt's record. It is refused once a decision
+   * exists, because the decision was made about the earlier bytes.
+   */
   async promoteTerminalArtifacts(args: {
     result: AttemptResult;
     manifest: RunManifest;
   }): Promise<void> {
-    if (args.result.runId !== this.runId) {
-      throw new RuntimeError("attempt result run id does not match artifact store");
-    }
-    if (args.manifest.runId !== this.runId) {
-      throw new RuntimeError("run manifest id does not match artifact store");
-    }
-    if (await this.readCandidateDecision(this.runId) !== null) {
+    this.assertOwned(args.result.runId, "attempt result run id");
+    this.assertOwned(args.manifest.runId, "run manifest id");
+    if (await this.readCandidateDecision() !== null) {
       throw new RuntimeError("terminal artifacts cannot be promoted after a decision");
     }
-    const result = sanitizeAttemptResult(args.result);
-    verifyAttemptResult(result, this.runId);
-    const manifest = sanitizeRunManifest(args.manifest);
-    verifyRunManifest(manifest, this.runId);
-    await this.replaceJson("result.json", result);
-    await this.replaceJson("manifest.json", manifest);
+    await this.writeArtifact(RESULT, args.result, "replace");
+    await this.writeArtifact(MANIFEST, args.manifest, "replace");
   }
 
-  async readResult(runId: string): Promise<AttemptResult | null> {
-    validateComponent(runId, "run id");
-    const runDirectory = path.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      return verifyAttemptResult(
-        JSON.parse(await readRegularFile(
-          path.join(validated.path, "result.json"),
-          validated.identity,
-        )),
-        runId,
-      );
-    } catch (error) {
-      if (isMissing(error)) return null;
-      throw error;
-    }
+  async readResult(): Promise<AttemptResult | null> {
+    return this.readArtifact(RESULT);
   }
 
   private async ensureExistingRunDirectory(directory: string): Promise<ValidatedDirectory | null> {
@@ -1158,23 +1192,8 @@ export class ArtifactStore {
     }
   }
 
-  async readManifest(runId: string): Promise<RunManifest | null> {
-    validateComponent(runId, "run id");
-    const runDirectory = path.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      return verifyRunManifest(
-        JSON.parse(await readRegularFile(
-          path.join(validated.path, "manifest.json"),
-          validated.identity,
-        )),
-        runId,
-      );
-    } catch (error) {
-      if (isMissing(error)) return null;
-      throw error;
-    }
+  async readManifest(): Promise<RunManifest | null> {
+    return this.readArtifact(MANIFEST);
   }
 
   /**
@@ -1182,32 +1201,17 @@ export class ArtifactStore {
    * record is absent. Lets a caller prove a reported run id actually belongs to
    * the spec it dispatched, rather than trusting the reporter's echo of it.
    */
-  async readRunStartSpecSha256(runId: string): Promise<string | null> {
-    validateComponent(runId, "run id");
-    const validated = await this.ensureExistingRunDirectory(path.join(this.runsRoot, runId));
-    if (validated === null) return null;
-    try {
-      const record: unknown = JSON.parse(await readRegularFile(
-        path.join(validated.path, "run-start.json"),
-        validated.identity,
-      ));
-      if (typeof record !== "object" || record === null) return null;
-      const value = (record as { specSha256?: unknown }).specSha256;
-      return typeof value === "string" && /^[0-9a-f]{64}$/u.test(value) ? value : null;
-    } catch (error) {
-      if (isMissing(error)) return null;
-      throw error;
-    }
+  async readRunStartSpecSha256(): Promise<string | null> {
+    return this.readArtifact(RUN_START_SPEC_SHA256);
   }
 
   async writeReviewSnapshot(snapshot: ReviewSnapshot): Promise<void> {
-    const validated = validateReviewSnapshot(snapshot, this.runId);
-    const attemptedHash = reviewSnapshotHash(validated);
+    const attemptedHash = reviewSnapshotHash(validateReviewSnapshot(snapshot, this.runId));
     try {
-      await this.writeJson("review-snapshot.json", validated);
+      await this.writeArtifact(REVIEW_SNAPSHOT, snapshot);
       return;
     } catch (error) {
-      const existing = await this.readReviewSnapshot(this.runId);
+      const existing = await this.readReviewSnapshot();
       if (existing === null) throw error;
       if (reviewSnapshotHash(existing) === attemptedHash) return;
       throw new RuntimeError(
@@ -1217,59 +1221,39 @@ export class ArtifactStore {
     }
   }
 
-  async readReviewSnapshot(runId: string): Promise<ReviewSnapshot | null> {
-    validateComponent(runId, "run id");
-    const runDirectory = path.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      const snapshot = validateReviewSnapshot(
-        JSON.parse(await readRegularFile(
-          path.join(validated.path, "review-snapshot.json"),
-          validated.identity,
-        )),
-        runId,
-      );
-      reviewSnapshotHash(snapshot);
-      return snapshot;
-    } catch (error) {
-      if (isMissing(error)) return null;
-      throw error;
-    }
+  async readReviewSnapshot(): Promise<ReviewSnapshot | null> {
+    return this.readArtifact(REVIEW_SNAPSHOT);
   }
 
-  async readAdvisorReport(runId: string): Promise<AdvisorReport | null> {
-    const value = await this.readPipelineArtifact<unknown>(runId, "post-pipeline-autopilot");
-    return value === null
-      ? null
-      : validatePostPipelineAutopilotArtifacts(value, runId).advisorReport;
+  async readAdvisorReport(): Promise<AdvisorReport | null> {
+    return (await this.readArtifact(POST_PIPELINE_AUTOPILOT))?.advisorReport ?? null;
   }
 
   private async recomputeArchivedEligibility(
     record: AutopilotEligibilityRecord,
   ): Promise<AutopilotEligibilityRecord | null> {
     const [pipelineResult, reviewSnapshot, advisorReport] = await Promise.all([
-      this.readPipelineArtifact<PipelineResult>(this.runId, "pipeline-result"),
-      this.readReviewSnapshot(this.runId),
-      this.readAdvisorReport(this.runId),
+      this.readPipelineArtifact<PipelineResult>("pipeline-result"),
+      this.readReviewSnapshot(),
+      this.readAdvisorReport(),
     ]);
     if (pipelineResult === null || reviewSnapshot === null || advisorReport === null) return null;
-    return evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    return evaluateAutopilotEligibility({
       pipelineResult,
       reviewSnapshot,
       advisor: advisorReport,
       evaluatedAt: record.evaluatedAt,
-    }));
+    });
   }
 
-  async readAutopilotEligibility(runId: string): Promise<AutopilotEligibilityRecord | null> {
-    validateComponent(runId, "run id");
-    const value = await this.readPipelineArtifact<unknown>(runId, "post-pipeline-autopilot");
-    if (value === null) return null;
-    const record = validatePostPipelineAutopilotArtifacts(value, runId).eligibility;
-    if (runId !== this.runId) {
-      return new ArtifactStore(runId).readAutopilotEligibility(runId);
-    }
+  /**
+   * The archived eligibility record, re-derived from the archived evidence it
+   * claims to summarize. A record that no longer matches its evidence is an
+   * error, not a value.
+   */
+  async readAutopilotEligibility(): Promise<AutopilotEligibilityRecord | null> {
+    const record = (await this.readArtifact(POST_PIPELINE_AUTOPILOT))?.eligibility ?? null;
+    if (record === null) return null;
     const expected = await this.recomputeArchivedEligibility(record);
     if (expected === null) return null;
     if (canonicalArtifactHash(expected) !== canonicalArtifactHash(record)) {
@@ -1285,8 +1269,8 @@ export class ArtifactStore {
     eligibility: AutopilotEligibilityRecord;
   }): Promise<{ advisorReportHash: string; eligibilityRecordHash: string }> {
     const [archivedPipelineResult, archivedReviewSnapshot] = await Promise.all([
-      this.readPipelineArtifact<PipelineResult>(this.runId, "pipeline-result"),
-      this.readReviewSnapshot(this.runId),
+      this.readPipelineArtifact<PipelineResult>("pipeline-result"),
+      this.readReviewSnapshot(),
     ]);
     if (archivedPipelineResult === null || archivedReviewSnapshot === null) {
       throw new RuntimeError("post-pipeline artifacts require a durable pipeline result and review snapshot");
@@ -1301,12 +1285,12 @@ export class ArtifactStore {
       throw new RuntimeError("advisor report cannot be safely persisted after redaction");
     }
     const record = validateAutopilotEligibilityRecord(structuredClone(args.eligibility), this.runId);
-    const expected = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+    const expected = evaluateAutopilotEligibility({
       pipelineResult: archivedPipelineResult,
       reviewSnapshot: archivedReviewSnapshot,
       advisor: sanitizedReport,
       evaluatedAt: record.evaluatedAt,
-    }));
+    });
     if (canonicalArtifactHash(expected) !== canonicalArtifactHash(record)) {
       throw new RuntimeError("post-pipeline eligibility was not derived from the supplied frozen evidence");
     }
@@ -1320,10 +1304,7 @@ export class ArtifactStore {
       advisorReportHash: persistedAdvisorHash,
       eligibilityRecordHash,
     };
-    await this.writeJson(
-      path.posix.join("pipeline", "post-pipeline-autopilot.json"),
-      artifacts,
-    );
+    await this.writeArtifact(POST_PIPELINE_AUTOPILOT, artifacts);
     return { advisorReportHash: persistedAdvisorHash, eligibilityRecordHash };
   }
 
@@ -1361,7 +1342,7 @@ export class ArtifactStore {
     } catch {
       throw new RuntimeError("autopilot decision eligibility is invalid");
     }
-    const archived = await this.readAutopilotEligibility(this.runId);
+    const archived = await this.readAutopilotEligibility();
     if (archived === null
       || canonicalArtifactHash(archived) !== canonicalArtifactHash(validated)
       || candidate.baseCommitOid !== validated.baseCommitOid
@@ -1389,10 +1370,10 @@ export class ArtifactStore {
     normalized: CandidateDecision,
   ): Promise<void> {
     try {
-      await this.writeJson("decision.json", persisted);
+      await this.writeArtifact<CandidateDecision, CandidateDecisionV2>(DECISION, persisted);
       return;
     } catch (error) {
-      const existing = await this.readCandidateDecision(this.runId);
+      const existing = await this.readCandidateDecision();
       if (existing === null) throw error;
       if (hasIdenticalDecisionProvenance(existing, normalized)) return;
       throw new RuntimeError(
@@ -1402,75 +1383,36 @@ export class ArtifactStore {
     }
   }
 
-  async readCandidateDecision(runId: string): Promise<CandidateDecision | null> {
-    validateComponent(runId, "run id");
-    const runDirectory = path.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      const value: unknown = JSON.parse(await readRegularFile(
-        path.join(validated.path, "decision.json"),
-        validated.identity,
-      ));
-      return parsePersistedDecision(value);
-    } catch (error) {
-      if (isMissing(error)) return null;
-      throw error;
-    }
+  async readCandidateDecision(): Promise<CandidateDecision | null> {
+    return this.readArtifact(DECISION);
   }
 
+  async readDecision(): Promise<CandidateDecision | null> {
+    return this.readCandidateDecision();
+  }
 
-  async readDecision(runId: string): Promise<CandidateDecision | null> {
-    return this.readCandidateDecision(runId);
+  async writePipelineGateCleared(cleared: PipelineGateCleared): Promise<void> {
+    await this.writeArtifact(PIPELINE_GATE_CLEARED, cleared);
+  }
+
+  async readPipelineGateCleared(): Promise<PipelineGateCleared | null> {
+    return this.readArtifact(PIPELINE_GATE_CLEARED);
   }
 
   async writePipelineActiveMarker(marker: PipelineActiveMarker): Promise<void> {
-    if (typeof marker !== "object"
-      || marker === null
-      || !Number.isSafeInteger(marker.pid)
-      || marker.pid <= 1
-      || (marker.processToken !== null && typeof marker.processToken !== "string")
-      || typeof marker.startedAt !== "string"
-      || !Number.isFinite(Date.parse(marker.startedAt))
-      || typeof marker.sliced !== "boolean") {
-      throw new RuntimeError("pipeline-active marker is invalid");
-    }
-    await this.replaceJson("pipeline-active.json", marker);
+    await this.writeArtifact(PIPELINE_ACTIVE_MARKER, marker);
   }
 
-  async readPipelineActiveMarker(runId: string): Promise<PipelineActiveMarker | null> {
-    validateComponent(runId, "run id");
-    const runDirectory = path.join(this.runsRoot, runId);
-    const validated = await this.ensureExistingRunDirectory(runDirectory);
-    if (validated === null) return null;
-    try {
-      const value = JSON.parse(await readRegularFile(
-        path.join(validated.path, "pipeline-active.json"),
-        validated.identity,
-      )) as Partial<PipelineActiveMarker>;
-      if (typeof value !== "object"
-        || value === null
-        || typeof value.pid !== "number"
-        || !Number.isSafeInteger(value.pid)
-        || value.pid <= 1
-        || (value.processToken !== null && typeof value.processToken !== "string")
-        || typeof value.startedAt !== "string"
-        || !Number.isFinite(Date.parse(value.startedAt))
-        || typeof value.sliced !== "boolean") {
-        throw new RuntimeError("archived pipeline-active marker is malformed");
-      }
-      return value as PipelineActiveMarker;
-    } catch (error) {
-      if (isMissing(error)) return null;
-      throw error;
-    }
+  async readPipelineActiveMarker(): Promise<PipelineActiveMarker | null> {
+    return this.readArtifact(PIPELINE_ACTIVE_MARKER);
   }
 
   async clearPipelineActiveMarker(): Promise<void> {
     const directory = await this.ensureRunDirectory(false);
     if (directory === null) return;
-    await rm(path.join(directory, "pipeline-active.json"), { force: true });
+    await rm(path.join(directory, PIPELINE_ACTIVE_MARKER.relativePath), { force: true });
   }
+
 
   async list(): Promise<string[]> {
     await this.ensureRunsRoot();
@@ -1684,7 +1626,7 @@ export class ArtifactStore {
           await handle.close();
         }
         await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-        await syncDirectory(this.runsRoot);
+        await flushDirectory(this.runsRoot);
         await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
       } finally {
         await journalLock.release();
@@ -1721,11 +1663,11 @@ export class ArtifactStore {
     await assertDirectoryIdentity(entry.directory, entry.identity);
     await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
     await rename(entry.directory, quarantinePath);
-    await syncDirectory(this.runsRoot);
+    await flushDirectory(this.runsRoot);
     await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
     await assertDirectoryIdentity(quarantinePath, entry.identity);
     await rm(quarantinePath, { recursive: true, force: false });
-    await syncDirectory(this.runsRoot);
+    await flushDirectory(this.runsRoot);
     await this.appendCleanupRecord({
       event: "prune-cleanup-complete",
       runId: entry.runId,
@@ -1759,24 +1701,25 @@ export class ArtifactStore {
       attempted.add(entry.runId);
       const quarantineName = `.prune-${entry.runId}-${randomUUID()}`;
       const quarantinePath = path.join(this.runsRoot, quarantineName);
+      // Every archive read below is about `entry`'s run, not this store's.
+      const runStore = new ArtifactStore(entry.runId);
       let prepared: PreparedAnchorCleanup | null = null;
       let transaction: AnchorCleanupTransaction | null = null;
       let runsRootIdentity: DirectoryIdentity | null = null;
       let archiveRemovalCommitted = false;
-      let lease: CheckoutLock | null = null;
       try {
         // Fast path: never wait on a checkout lease for a run that still
         // advertises a live pipeline. Refuse before canonicalizing or locking.
-        if (await this.readPipelineActiveMarker(entry.runId) !== null) {
+        if (await runStore.readPipelineActiveMarker() !== null) {
           retained.push({ runId: entry.runId, reason: "active-run" });
           return;
         }
-        const initialManifest = await this.readManifest(entry.runId);
+        const initialManifest = await runStore.readManifest();
         if (initialManifest === null) {
           retained.push({ runId: entry.runId, reason: "incomplete-run" });
           return;
         }
-        const initialResult = await this.readResult(entry.runId);
+        const initialResult = await runStore.readResult();
         if (initialResult === null) {
           retained.push({ runId: entry.runId, reason: "incomplete-run" });
           return;
@@ -1784,23 +1727,12 @@ export class ArtifactStore {
         // Serialize archive removal against the checkout lifecycle: hold the
         // repository's checkout lease so recovery/integration cannot race a
         // prune that is deleting the same candidate anchors.
-        const platformServices = guardWorktreeMutations(
-          dependencies.platformServices ?? getPlatformServices(),
-        );
+        const platformServices = dependencies.platformServices ?? getPlatformServices();
         let canonical;
         try {
           canonical = await platformServices.canonicalizePath(initialManifest.repoRoot);
         } catch (error) {
           if (errorCode(error) !== "ENOENT") throw error;
-          // The repository this run was delegated from is gone. Its candidate/backup
-          // refs died with it and no live checkout can integrate from a vanished
-          // repository, so reclaim the archive directly — no lease, no Git — instead of
-          // retaining the run forever and blocking maxBytes/maxAge convergence. Any other
-          // canonicalization failure stays fail-closed (retained) via the outer catch.
-          // Tradeoff: a transiently-unmounted volume also reads as ENOENT, so a run on it
-          // may be reclaimed early. This is bounded — only maxAge/maxBytes-eligible runs
-          // reach here, and no Git runs, so the repository's refs survive a remount — and
-          // preferable to retaining unreclaimable runs forever.
           await this.reclaimRepoAbsentArchive(
             entry, reason, quarantineName, quarantinePath, initialManifest.repoRoot,
           );
@@ -1808,81 +1740,88 @@ export class ArtifactStore {
           retainedBytes -= entry.bytes;
           return;
         }
-        const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
-        lease = await platformServices.acquireCheckoutLock(
-          canonical.canonical, { runId: entry.runId },
-        );
-        if (lease.repositoryIdentity !== repositoryIdentity) {
-          throw new RuntimeError("checkout lease repository identity changed before pruning");
-        }
-        await assertDirectoryIdentity(entry.directory, entry.identity);
-        // Re-establish authority under the lease: the manifest, terminal
-        // result, and active marker may all have changed while we waited.
-        const currentManifest = await this.readManifest(entry.runId);
-        if (currentManifest === null
-          || serializeJson(currentManifest) !== serializeJson(initialManifest)) {
-          retained.push({ runId: entry.runId, reason: "run identity changed while waiting" });
-          return;
-        }
-        if (await this.readPipelineActiveMarker(entry.runId) !== null) {
-          retained.push({ runId: entry.runId, reason: "active-run" });
-          return;
-        }
-        const result = await this.readResult(entry.runId);
-        if (result === null) {
-          retained.push({ runId: entry.runId, reason: "incomplete-run" });
-          return;
-        }
-        if (serializeJson(result) !== serializeJson(initialResult)) {
-          retained.push({ runId: entry.runId, reason: "terminal authority changed while waiting" });
-          return;
-        }
-        prepared = await this.prepareCandidateAnchorCleanup(
-          entry.runId,
-          result,
-          currentManifest,
-          canonical.canonical,
-        );
-        await this.appendCleanupRecord({
-          event: "prune-cleanup-intent",
+        const safety = new PlatformSafety(platformServices);
+        await safety.withCheckoutLease(canonical.canonical, async () => {
+          await assertDirectoryIdentity(entry.directory, entry.identity);
+          // Re-establish authority under the lease: the manifest, terminal
+          // result, and active marker may all have changed while we waited.
+          const currentManifest = await runStore.readManifest();
+          if (currentManifest === null
+            || serializeJson(currentManifest) !== serializeJson(initialManifest)) {
+            retained.push({ runId: entry.runId, reason: "run identity changed while waiting" });
+            return;
+          }
+          if (await runStore.readPipelineActiveMarker() !== null) {
+            retained.push({ runId: entry.runId, reason: "active-run" });
+            return;
+          }
+          const result = await runStore.readResult();
+          if (result === null) {
+            retained.push({ runId: entry.runId, reason: "incomplete-run" });
+            return;
+          }
+          if (serializeJson(result) !== serializeJson(initialResult)) {
+            retained.push({ runId: entry.runId, reason: "terminal authority changed while waiting" });
+            return;
+          }
+          prepared = await this.prepareCandidateAnchorCleanup(
+            entry.runId,
+            result,
+            currentManifest,
+            canonical.canonical,
+          );
+          await this.appendCleanupRecord({
+            event: "prune-cleanup-intent",
+            runId: entry.runId,
+            reason,
+            anchorCleanup: "pending",
+            archiveBytes: entry.bytes,
+            quarantineName,
+            repoRoot: prepared.repoRoot,
+            anchorRef: prepared.anchorRef,
+            backupRef: prepared.backupRef,
+            candidateCommitOid: prepared.candidateCommitOid,
+            recordedAt: new Date().toISOString(),
+          });
+          transaction = await this.beginCandidateAnchorCleanup(prepared, entry.runId);
+          runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
+          await assertDirectoryIdentity(entry.directory, entry.identity);
+          await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
+          await rename(entry.directory, quarantinePath);
+          await flushDirectory(this.runsRoot);
+          await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
+          await assertDirectoryIdentity(quarantinePath, entry.identity);
+          archiveRemovalCommitted = true;
+          await rm(quarantinePath, { recursive: true, force: false });
+          await flushDirectory(this.runsRoot);
+          await transaction.commit();
+          await this.appendCleanupRecord({
+            event: "prune-cleanup-complete",
+            runId: entry.runId,
+            reason,
+            anchorCleanup: transaction.outcome,
+            archiveBytes: entry.bytes,
+            quarantineName,
+            repoRoot: prepared.repoRoot,
+            anchorRef: prepared.anchorRef,
+            backupRef: prepared.backupRef,
+            candidateCommitOid: prepared.candidateCommitOid,
+            recordedAt: new Date().toISOString(),
+          });
+          removed.add(entry.runId);
+          retainedBytes -= entry.bytes;
+        }, {
           runId: entry.runId,
-          reason,
-          anchorCleanup: "pending",
-          archiveBytes: entry.bytes,
-          quarantineName,
-          repoRoot: prepared.repoRoot,
-          anchorRef: prepared.anchorRef,
-          backupRef: prepared.backupRef,
-          candidateCommitOid: prepared.candidateCommitOid,
-          recordedAt: new Date().toISOString(),
+          onReleaseError: (releaseError) => {
+            const reason = redact(releaseError instanceof Error ? releaseError.message : String(releaseError));
+            retained.push({
+              runId: entry.runId,
+              reason: archiveRemovalCommitted
+                ? `archive removed; checkout lease release failed: ${reason}`
+                : reason,
+            });
+          },
         });
-        transaction = await this.beginCandidateAnchorCleanup(prepared, entry.runId);
-        runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
-        await assertDirectoryIdentity(entry.directory, entry.identity);
-        await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-        await rename(entry.directory, quarantinePath);
-        await syncDirectory(this.runsRoot);
-        await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-        await assertDirectoryIdentity(quarantinePath, entry.identity);
-        archiveRemovalCommitted = true;
-        await rm(quarantinePath, { recursive: true, force: false });
-        await syncDirectory(this.runsRoot);
-        await transaction.commit();
-        await this.appendCleanupRecord({
-          event: "prune-cleanup-complete",
-          runId: entry.runId,
-          reason,
-          anchorCleanup: transaction.outcome,
-          archiveBytes: entry.bytes,
-          quarantineName,
-          repoRoot: prepared.repoRoot,
-          anchorRef: prepared.anchorRef,
-          backupRef: prepared.backupRef,
-          candidateCommitOid: prepared.candidateCommitOid,
-          recordedAt: new Date().toISOString(),
-        });
-        removed.add(entry.runId);
-        retainedBytes -= entry.bytes;
       } catch (error) {
         let rollbackError: unknown;
         if (!archiveRemovalCommitted) {
@@ -1897,7 +1836,7 @@ export class ArtifactStore {
               await assertDirectoryIdentity(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity(quarantinePath, entry.identity);
               await rename(quarantinePath, entry.directory);
-              await syncDirectory(this.runsRoot);
+              await flushDirectory(this.runsRoot);
               await assertDirectoryIdentity(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity(entry.directory, entry.identity);
             } else if (runDirectoryExists) {
@@ -1905,19 +1844,19 @@ export class ArtifactStore {
             } else {
               throw new RuntimeError("archive run directory disappeared during rollback");
             }
-            await transaction?.rollback();
+            await (transaction as any)?.rollback();
             if (prepared !== null) {
               await this.appendCleanupRecord({
                 event: "prune-cleanup-rollback",
                 runId: entry.runId,
                 reason,
-                anchorCleanup: prepared.outcome,
+                anchorCleanup: (prepared as any).outcome,
                 archiveBytes: entry.bytes,
                 quarantineName,
-                repoRoot: prepared.repoRoot,
-                anchorRef: prepared.anchorRef,
-                backupRef: prepared.backupRef,
-                candidateCommitOid: prepared.candidateCommitOid,
+                repoRoot: (prepared as any).repoRoot,
+                anchorRef: (prepared as any).anchorRef,
+                backupRef: (prepared as any).backupRef,
+                candidateCommitOid: (prepared as any).candidateCommitOid,
                 recordedAt: new Date().toISOString(),
               });
             }
@@ -1928,6 +1867,7 @@ export class ArtifactStore {
           removed.add(entry.runId);
           retainedBytes -= entry.bytes;
         }
+
         const primary = error instanceof Error ? error.message : String(error);
         const rollback = rollbackError instanceof Error
           ? `; rollback failed: ${rollbackError.message}`
@@ -1937,22 +1877,6 @@ export class ArtifactStore {
             runId: entry.runId,
             reason: redact(`${primary}${rollback}`),
           });
-        }
-      } finally {
-        if (lease !== null) {
-          try {
-            await lease.release();
-          } catch (error) {
-            // A release failure must never be swallowed. Surface it, and make
-            // clear whether the archive was already removed under the lease.
-            const reason = redact(error instanceof Error ? error.message : String(error));
-            retained.push({
-              runId: entry.runId,
-              reason: archiveRemovalCommitted
-                ? `archive removed; checkout lease release failed: ${reason}`
-                : reason,
-            });
-          }
         }
       }
     };

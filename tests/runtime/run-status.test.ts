@@ -35,7 +35,7 @@ import { ArtifactStore } from "../../src/runtime/artifact-store.js";
 import { runAttempt, type AttemptRuntimeDependencies } from "../../src/runtime/attempt-runtime.js";
 import { clearRegisteredSecrets, registerSecretValue } from "../../src/runtime/redaction.js";
 import { buildRunManifest } from "../../src/runtime/run-manifest.js";
-import type { RunStatus } from "../../src/runtime/run-status.js";
+import { StatusEmitter, type RunStatus } from "../../src/runtime/run-status.js";
 import { initializeRunStart } from "../../src/runtime/run-start.js";
 import { logger } from "../../src/util/logger.js";
 
@@ -481,7 +481,7 @@ describe("trusted run status", () => {
       runId: "status-redacted",
       detail: `status-secret-value ${"x".repeat(250)}`,
     });
-    const persisted = await store.readRunStatus("status-redacted");
+    const persisted = await store.readRunStatus();
     expect(persisted?.detail).not.toContain("status-secret-value");
     expect(persisted?.detail?.length).toBeLessThanOrEqual(200);
     await expect(store.writeRunStatus({ ...base, runId: "status-redacted", phase: "unknown" as RunStatus["phase"] }))
@@ -624,13 +624,13 @@ describe("trusted run status", () => {
       });
       const stale = new Date(Date.now() - 16 * 60 * 1000).toISOString();
       await store.writeRunStatus({
-        ...(await store.readRunStatus("statusline-live"))!,
+        ...(await store.readRunStatus())!,
         updatedAt: stale,
       });
       await expect(run()).resolves.toBe("");
 
       await store.writeRunStatus({
-        ...(await store.readRunStatus("statusline-live"))!,
+        ...(await store.readRunStatus())!,
         updatedAt: now,
       });
       await store.writePipelineActiveMarker({
@@ -643,4 +643,75 @@ describe("trusted run status", () => {
       expect(runsRoot).toContain("runs");
     },
   );
+
+  it("splits into durable transitions and ephemeral progress with exactly one durable write per transition", async () => {
+    const store = new ArtifactStore("status-emitter-test");
+    await initializeRunStart(store, {
+      runId: "status-emitter-test",
+      lockKey: "lock",
+      canonicalCommonDir: "/repo",
+      pid: process.pid,
+      processToken: "token",
+      startedAt: new Date().toISOString(),
+    });
+
+    const initial: RunStatus = {
+      statusVersion: "1",
+      runId: "status-emitter-test",
+      mode: "single",
+      phase: "preflight",
+      sliceIndex: null,
+      sliceCount: null,
+      round: null,
+      role: null,
+      producerId: null,
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      detail: null,
+    };
+    await store.writeRunStatus(initial);
+
+    let writeCount = 0;
+    const originalWrite = store.writeRunStatus.bind(store);
+    store.writeRunStatus = async status => {
+      writeCount++;
+      return originalWrite(status);
+    };
+
+    const progressReports: string[] = [];
+    const emitter = new StatusEmitter(store, "status-emitter-test", text => {
+      progressReports.push(text);
+    });
+
+    // Durable transition 1: implementing
+    await emitter.transition("implementing", { role: "implementer", producerId: "codex" });
+    expect(writeCount).toBe(1);
+    expect((await store.readRunStatus())?.phase).toBe("implementing");
+
+    // Ephemeral progress reports do NOT perform durable disk writes
+    await emitter.ephemeral("running tests: 1/5 passed");
+    await emitter.ephemeral("running tests: 2/5 passed");
+    await emitter.ephemeral("running tests: 3/5 passed");
+    expect(writeCount).toBe(1);
+    expect(progressReports).toEqual([
+      "running tests: 1/5 passed",
+      "running tests: 2/5 passed",
+      "running tests: 3/5 passed",
+    ]);
+
+    // Durable transition 2: verifying
+    await emitter.transition("verifying");
+    expect(writeCount).toBe(2);
+    expect((await store.readRunStatus())?.phase).toBe("verifying");
+
+    // Ephemeral progress
+    await emitter.ephemeral("verifying candidate tree");
+    expect(writeCount).toBe(2);
+    expect(progressReports).toHaveLength(4);
+
+    // Durable transition 3: done
+    await emitter.transition("done");
+    expect(writeCount).toBe(3);
+    expect((await store.readRunStatus())?.phase).toBe("done");
+  });
 });

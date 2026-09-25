@@ -4,27 +4,27 @@ import { constants, promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import nodeProcess from "node:process";
-import { resolveStateDir } from "../runtime/state-dir.js";
 import { BoundedBuffer } from "../util/bounded-buffer.js";
 import { gitPathOutput } from "../git/git-output.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode } from "../util/errors.js";
 import { logger } from "../util/logger.js";
-import { lockOwnerStatus, parseLockOwner, type LockOwnerStatus } from "./lock-owner.js";
 import type {
   CanonicalPath, CheckoutLock, ExecutableRequest, FileLock, LockOwnerAnnotation, PlatformServices,
   ResolvedExecutable, SpawnRequest, SupervisedExit, SupervisedProcess,
 } from "./platform-services.js";
+import {
+  lockFilePath,
+  acquireWxFileLock,
+  describeLockContention,
+  withLockContentionDetail,
+} from "./lock-ownership.js";
 
-const LOCK_RETRY_MS = 30;
-// Windows process spawns and identity-bound removals are an order of magnitude
-// slower than POSIX, so a live contender legitimately holds the checkout lock
-// far longer there. 2.5s on Windows CI turned designed serialization (parallel
-// cleanups, concurrent branch creation) into spurious checkout-locked failures.
-const LOCK_TIMEOUT_MS = nodeProcess.platform === "win32" ? 15_000 : 2500;
-// The owner probe shells out to `ps` on darwin. Bound it: a diagnostic must
-// never turn a lock timeout that was about to return into an indefinite hang.
-const OWNER_PROBE_TIMEOUT_MS = 1000;
-const SAFE_RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+export {
+  lockFilePath,
+  acquireWxFileLock,
+  describeLockContention,
+  withLockContentionDetail,
+};
 
 // Fixed 64-hex key for the state-dir-scoped cleanup-journal mutex. sha256 so it
 // matches the recovery lock-name pattern and is reclaimed like any dead lock, and
@@ -32,170 +32,7 @@ const SAFE_RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 export const CLEANUP_JOURNAL_LOCK_KEY =
   createHash("sha256").update("claude-architect:cleanup-journal:v1").digest("hex");
 
-function errorCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String(error.code) : undefined;
-}
 
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-export function lockFilePath(key: string): string {
-  return path.join(resolveStateDir(), "locks", `${key}.lock`);
-}
-
-export async function acquireWxFileLock(
-  key: string,
-  timeoutMessage?: string,
-  ownerToken: string | null = null,
-  owner: LockOwnerAnnotation = {},
-): Promise<Omit<CheckoutLock, "repositoryIdentity">> {
-  const lockPath = lockFilePath(key);
-  await fs.mkdir(path.dirname(lockPath), { recursive: true });
-  const deadline = Date.now() + LOCK_TIMEOUT_MS;
-  for (;;) {
-    try {
-      const handle = await fs.open(lockPath, "wx");
-      const ownerPid = nodeProcess.pid;
-      // pid and processToken are load-bearing: startup recovery reclaims a lock
-      // only when they prove the owner is gone. The remaining fields are read
-      // by nothing but contention diagnostics and must never gate reclamation.
-      const record = {
-        pid: ownerPid,
-        processToken: ownerToken,
-        acquiredAt: new Date().toISOString(),
-        ...(owner.runId === undefined ? {} : { runId: owner.runId }),
-      };
-      try { await handle.writeFile(JSON.stringify(record)); }
-      finally { await handle.close(); }
-      return {
-        key,
-        release: async () => {
-          let recordedOwner: unknown;
-          try { recordedOwner = JSON.parse(await fs.readFile(lockPath, "utf8")); }
-          catch { return; }
-          if (!isRecord(recordedOwner)
-            || recordedOwner.pid !== ownerPid
-            || recordedOwner.processToken !== ownerToken) return;
-          await fs.rm(lockPath, { force: true });
-        },
-      };
-    } catch (error) {
-      if (errorCode(error) !== "EEXIST") throw error;
-      if (Date.now() >= deadline) {
-        throw new RuntimeError(timeoutMessage ?? `lock is held: ${key}`, { key });
-      }
-      await delay(LOCK_RETRY_MS);
-    }
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function processIsAlive(pid: number): boolean {
-  try { nodeProcess.kill(pid, 0); return true; }
-  // EPERM means the pid exists but belongs to another user: alive, not absent.
-  catch (error) { return errorCode(error) === "EPERM"; }
-}
-
-function heldFor(acquiredAt: unknown): string {
-  if (typeof acquiredAt !== "string") return "";
-  const startedMs = Date.parse(acquiredAt);
-  if (!Number.isFinite(startedMs)) return "";
-  const elapsedMs = Date.now() - startedMs;
-  if (elapsedMs < 0) return "";
-  return `, held for ${Math.round(elapsedMs / 1000)}s`;
-}
-
-function heldByRun(runId: unknown): string {
-  return typeof runId === "string" && SAFE_RUN_ID.test(runId) ? `, run ${runId}` : "";
-}
-
-/**
- * Explains a lock-acquisition timeout in terms of what the holder actually is.
- *
- * "checkout is locked" alone cannot be acted on: a live sibling session clears
- * on its own, a leaked file clears at the next server start, and a lock whose
- * record recovery refuses to parse clears only when a human deletes it. The
- * three demand different responses and used to be indistinguishable.
- *
- * Strictly best-effort. Every failure path returns null and leaves the original
- * error untouched, because a diagnostic that can fail an operation harder than
- * no diagnostic at all is worse than none. The owner's process token is used to
- * derive a status and is never reported.
- */
-export async function describeLockContention(
-  key: string,
-  getProcessStartToken: (pid: number) => Promise<string | null>,
-): Promise<string | null> {
-  let contents: string;
-  try { contents = await fs.readFile(lockFilePath(key), "utf8"); }
-  catch { return null; }
-
-  const owner = parseLockOwner(contents);
-  if (owner === null) {
-    return "its owner cannot be identified, and startup recovery preserves a lock "
-      + `it cannot parse, so remove it by hand: ${lockFilePath(key)}`;
-  }
-
-  const annotations: unknown = (() => {
-    try { return JSON.parse(contents.trim()); }
-    catch { return {}; }
-  })();
-  const extras = isRecord(annotations)
-    ? `${heldByRun(annotations.runId)}${heldFor(annotations.acquiredAt)}`
-    : "";
-
-  let status: LockOwnerStatus;
-  try {
-    status = await lockOwnerStatus(
-      owner,
-      processIsAlive,
-      pid => withTimeout(getProcessStartToken(pid), OWNER_PROBE_TIMEOUT_MS, null),
-    );
-  } catch { return null; }
-
-  if (status === "dead") {
-    return `it was left behind by a process that exited (pid ${owner.pid}${extras}); `
-      + "startup recovery reclaims it on the next server start";
-  }
-  if (status === "unverifiable") {
-    return `it is held by pid ${owner.pid}${extras}, whose identity could not be `
-      + "verified; startup recovery preserves it until that changes";
-  }
-  const self = owner.pid === nodeProcess.pid ? " (this same process)" : "";
-  return `it is held by live pid ${owner.pid}${self}${extras}`;
-}
-
-function withTimeout<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
-  return new Promise<T>(resolve => {
-    const timer = setTimeout(() => resolve(fallback), ms);
-    void work.then(
-      value => { clearTimeout(timer); resolve(value); },
-      () => { clearTimeout(timer); resolve(fallback); },
-    );
-  });
-}
-
-/**
- * Wraps a checkout-lock timeout with holder detail. Enrichment failures are
- * swallowed so the caller still sees the original, accurate timeout.
- */
-export async function withLockContentionDetail(
-  error: unknown,
-  key: string,
-  getProcessStartToken: (pid: number) => Promise<string | null>,
-): Promise<unknown> {
-  if (!(error instanceof RuntimeError)) return error;
-  let description: string | null;
-  try { description = await describeLockContention(key, getProcessStartToken); }
-  catch { return error; }
-  if (description === null) return error;
-  return new RuntimeError(`${error.message} — ${description}`, { ...error.detail, key });
-}
 
 async function gitCommonDir(cwd: string): Promise<string> {
   // Intentional bootstrap exception until Task 8 provides the shared argv-based Git helper.

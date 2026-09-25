@@ -878,8 +878,8 @@ describe("runPipeline", () => {
     lease = await checkoutLeaseHarness(repo, {
       onRelease: async () => {
         expect(lease.held()).toBe(true);
-        await expect(store.readPipelineActiveMarker(runId)).resolves.toBeNull();
-        await expect(store.readPipelineArtifact(runId, "pipeline-result"))
+        await expect(store.readPipelineActiveMarker()).resolves.toBeNull();
+        await expect(store.readPipelineArtifact("pipeline-result"))
           .resolves.toMatchObject({ status: "decision-ready" });
         releaseObservedLast = true;
       },
@@ -960,8 +960,8 @@ describe("runPipeline", () => {
       onRelease: async () => {
         expect(lease.held()).toBe(true);
         await expectRefMissing(repo, temporaryRef);
-        await expect(store.readPipelineActiveMarker(runId)).resolves.toBeNull();
-        await expect(store.readPipelineArtifact(runId, "pipeline-result"))
+        await expect(store.readPipelineActiveMarker()).resolves.toBeNull();
+        await expect(store.readPipelineArtifact("pipeline-result"))
           .resolves.toMatchObject({ status: "decision-ready" });
         releaseObservedLast = true;
       },
@@ -970,7 +970,7 @@ describe("runPipeline", () => {
       runId,
       edit: async checkout => {
         expect(lease.held()).toBe(true);
-        await expect(store.readPipelineActiveMarker(runId)).resolves.toMatchObject({
+        await expect(store.readPipelineActiveMarker()).resolves.toMatchObject({
           sliced: true,
         });
         await writeFile(path.join(checkout, "slice-one.txt"), "slice one candidate\n");
@@ -1147,7 +1147,7 @@ describe("runPipeline", () => {
     const result = await runPipeline(repo, slicedSpec(), dependencies({
       runId,
       edit: async checkout => {
-        markerBeforeEdit = await new ArtifactStore(runId).readPipelineActiveMarker(runId);
+        markerBeforeEdit = await new ArtifactStore(runId).readPipelineActiveMarker();
         await writeFile(path.join(checkout, "slice-one.txt"), "slice one candidate\n");
       },
       roleRunner: async args => {
@@ -1190,7 +1190,7 @@ describe("runPipeline", () => {
     }))).rejects.toThrow("pipeline marker write failed");
 
     expect(editCalled).toBe(false);
-    await expect(new ArtifactStore(runId).readResult(runId)).resolves.toBeNull();
+    await expect(new ArtifactStore(runId).readResult()).resolves.toBeNull();
   });
 
   it("advances disjoint slices through private provenance and composed gates", async () => {
@@ -1261,7 +1261,7 @@ describe("runPipeline", () => {
     expect(reviewArgs[0]?.pkg.candidateDiff).toContain("slice two candidate");
     expect(reviewArgs[0]?.pkg.testEvidence).toContain('"sliceIndex":1');
     expect(reviewArgs[0]?.pkg.testEvidence).toContain('"sliceIndex":2');
-    expect(path.basename(reviewArgs[0]?.worktreePath ?? "")).toBe(`${runId}-composed-review`);
+    expect(path.basename(reviewArgs[0]?.worktreePath ?? "")).toBe(`${runId}-round-1-review`);
 
     expect(result).toMatchObject({
       status: "decision-ready",
@@ -1318,16 +1318,16 @@ describe("runPipeline", () => {
       ...nestedWorktrees,
     ]).size).toBe(8);
 
-    await expect(store.readPipelineArtifact(runId, "slice-1-attempt-0"))
+    await expect(store.readPipelineArtifact("slice-1-attempt-0"))
       .resolves.toMatchObject({ sliceIndex: 1, attempt: 0, route: "advance" });
-    await expect(store.readPipelineArtifact(runId, "slice-1"))
+    await expect(store.readPipelineArtifact("slice-1"))
       .resolves.toMatchObject({ index: 1, route: "advance" });
-    await expect(store.readPipelineArtifact(runId, "slice-2-attempt-0"))
+    await expect(store.readPipelineArtifact("slice-2-attempt-0"))
       .resolves.toMatchObject({ sliceIndex: 2, attempt: 0, route: "advance" });
-    await expect(store.readPipelineArtifact(runId, "slice-2"))
+    await expect(store.readPipelineArtifact("slice-2"))
       .resolves.toMatchObject({ index: 2, route: "advance" });
     expect(result.attempt.candidate?.candidateCommitOid).toBe(result.finalCandidateCommit);
-    await expect(store.readResult(runId)).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       candidate: { candidateCommitOid: result.finalCandidateCommit },
     });
     expect(await runGit(repo, ["rev-parse", result.attempt.candidate!.anchorRef]))
@@ -1394,7 +1394,7 @@ describe("runPipeline", () => {
     expect(messages).toContain("primary composed-review failure");
     expect(messages.some(message => message.includes("delete temporary slice ref"))).toBe(true);
     expect(markerCleanup).not.toHaveBeenCalled();
-    await expect(new ArtifactStore(runId).readPipelineActiveMarker(runId)).resolves.toMatchObject({
+    await expect(new ArtifactStore(runId).readPipelineActiveMarker()).resolves.toMatchObject({
       sliced: true,
     });
     expect(await runGit(repo, ["rev-parse", "--verify", temporarySliceRef]))
@@ -1443,13 +1443,13 @@ describe("runPipeline", () => {
       .rejects.toThrow("delete temporary slice ref");
 
     const store = new ArtifactStore(runId);
-    await expect(store.readResult(runId)).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       status: "failed",
       failure: "verification-failure",
       candidate: expect.any(Object),
     });
-    await expect(store.readPipelineActiveMarker(runId)).resolves.toMatchObject({ sliced: true });
-    const archived = await store.readResult(runId);
+    await expect(store.readPipelineActiveMarker()).resolves.toMatchObject({ sliced: true });
+    const archived = await store.readResult();
     await expectPipelineAuthorityBlocksTools(
       repo,
       runId,
@@ -1489,8 +1489,8 @@ describe("runPipeline", () => {
 
     const store = new ArtifactStore(runId);
     expect(promotion).toHaveBeenCalledOnce();
-    await expect(store.readPipelineActiveMarker(runId)).resolves.toMatchObject({ sliced: true });
-    const archived = await store.readResult(runId);
+    await expect(store.readPipelineActiveMarker()).resolves.toMatchObject({ sliced: true });
+    const archived = await store.readResult();
     expect(archived).toMatchObject({ status: "verified-candidate" });
     await expectRefMissing(repo, archived!.candidate!.anchorRef);
     await expectPipelineAuthorityBlocksTools(
@@ -1509,12 +1509,12 @@ describe("runPipeline", () => {
       isProcessAlive: () => false,
     })).resolves.toEqual({ recovered: [], quarantined: [] });
 
-    await expect(store.readResult(runId)).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       status: "failed",
       failure: "verification-failure",
       candidate: expect.any(Object),
     });
-    await expect(store.readPipelineActiveMarker(runId)).resolves.toBeNull();
+    await expect(store.readPipelineActiveMarker()).resolves.toBeNull();
     await expectRefMissing(repo, archived!.candidate!.anchorRef);
     const oldTime = new Date(Date.now() - 60_000);
     await utimes(store.runDirectory, oldTime, oldTime);
@@ -1522,7 +1522,7 @@ describe("runPipeline", () => {
       maxAgeMs: 1_000,
       maxBytes: Number.MAX_SAFE_INTEGER,
     })).resolves.toMatchObject({ removed: [runId] });
-    await expect(store.readResult(runId)).resolves.toBeNull();
+    await expect(store.readResult()).resolves.toBeNull();
   }, 120_000);
 
   it("refuses candidate-null archival when the exact run anchor moved", async () => {
@@ -1568,9 +1568,9 @@ describe("runPipeline", () => {
     expect(messages.some(message => message.includes("delete sliced candidate anchor"))).toBe(true);
     expect(await runGit(repo, ["rev-parse", anchorRef])).toBe(movedOid);
     const store = new ArtifactStore(runId);
-    const archived = await store.readResult(runId);
+    const archived = await store.readResult();
     expect(archived).toMatchObject({ status: "verified-candidate" });
-    await expect(store.readPipelineActiveMarker(runId)).resolves.toMatchObject({ sliced: true });
+    await expect(store.readPipelineActiveMarker()).resolves.toMatchObject({ sliced: true });
     await expectPipelineAuthorityBlocksTools(
       repo,
       runId,
@@ -1628,8 +1628,8 @@ describe("runPipeline", () => {
     const canonicalOid = await runGit(repo, ["rev-parse", canonicalRef]);
     expect(await runGit(repo, ["rev-parse", foreignRef])).toBe(canonicalOid);
     const store = new ArtifactStore(runId);
-    await expect(store.readResult(runId)).resolves.toMatchObject({ status: "verified-candidate" });
-    await expect(store.readPipelineActiveMarker(runId)).resolves.toMatchObject({ sliced: true });
+    await expect(store.readResult()).resolves.toMatchObject({ status: "verified-candidate" });
+    await expect(store.readPipelineActiveMarker()).resolves.toMatchObject({ sliced: true });
   }, 120_000);
 
   it("runs independent per-slice reviewers with slice-local evidence and logs", async () => {
@@ -1672,7 +1672,7 @@ describe("runPipeline", () => {
     expect(reviewerArgs.map(args => path.basename(args.worktreePath))).toEqual([
       `${runId}-slice-1-attempt-0-review`,
       `${runId}-slice-2-attempt-0-review`,
-      `${runId}-composed-review`,
+      `${runId}-round-1-review`,
     ]);
     expect(reviewerArgs[0]?.baseSpec.objective).toBe("Implement slice one only.");
     expect(reviewerArgs[0]?.pkg.candidateDiff).toContain("slice one candidate");
@@ -1753,13 +1753,13 @@ describe("runPipeline", () => {
     expect(reviewerCalls).toBe(0);
     expect(result.attempt.candidate?.candidateCommitOid).not.toBe(result.finalCandidateCommit);
     const store = new ArtifactStore(runId);
-    await expect(store.readPipelineArtifact(runId, "slice-1-attempt-0"))
+    await expect(store.readPipelineArtifact("slice-1-attempt-0"))
       .resolves.toMatchObject({ route: "repair" });
-    await expect(store.readPipelineArtifact(runId, "slice-1-attempt-1"))
+    await expect(store.readPipelineArtifact("slice-1-attempt-1"))
       .resolves.toMatchObject({ route: "halt" });
-    await expect(store.readPipelineArtifact(runId, "slice-1"))
+    await expect(store.readPipelineArtifact("slice-1"))
       .resolves.toMatchObject({ route: "halt" });
-    const archived = await store.readResult(runId);
+    const archived = await store.readResult();
     expect(archived).toMatchObject({
       status: "failed",
       failure: "verification-failure",
@@ -1846,7 +1846,7 @@ describe("runPipeline", () => {
     // The promoted partial is a real verified-candidate anchored at the partial
     // branch, so the human can accept it — the crux of a human-decision halt.
     const store = new ArtifactStore(runId);
-    const archivedResult = await store.readResult(runId);
+    const archivedResult = await store.readResult();
     expect(archivedResult).toMatchObject({
       status: "verified-candidate",
       failure: null,
@@ -1898,7 +1898,7 @@ describe("runPipeline", () => {
       },
     });
     const store = new ArtifactStore(runId);
-    await expect(store.readResult(runId)).resolves.toEqual(result.attempt);
+    await expect(store.readResult()).resolves.toEqual(result.attempt);
     await expectRefMissing(repo, `refs/claude-architect/candidates/${runId}`);
     await expect(readFile(
       path.join(store.runDirectory, "pipeline-active.json"),
@@ -1969,7 +1969,7 @@ describe("runPipeline", () => {
         candidate: null,
       },
     });
-    await expect(new ArtifactStore(runId).readResult(runId)).resolves.toEqual(result.attempt);
+    await expect(new ArtifactStore(runId).readResult()).resolves.toEqual(result.attempt);
     await expectRefMissing(repo, `refs/claude-architect/candidates/${runId}`);
   }, 120_000);
 
@@ -2026,10 +2026,10 @@ describe("runPipeline", () => {
 
     // Salvage is only worth anything if the trusted accept path can load these
     // bytes: the archived result — not the in-memory one — is what it reads.
-    const archived = await new ArtifactStore(runId).readResult(runId);
+    const archived = await new ArtifactStore(runId).readResult();
     expect(archived).toMatchObject({ status: "verified-candidate", failure: null });
     expect(archived?.candidate?.candidateCommitOid).toBe(result.finalCandidateCommit);
-    const archivedManifest = await new ArtifactStore(runId).readManifest(runId);
+    const archivedManifest = await new ArtifactStore(runId).readManifest();
     expect(archivedManifest?.candidateManifestHash).toBe(archived?.candidate?.manifestHash);
     expect(archived?.evidence.pipelineReviewIncomplete).toMatchObject({
       failure: "producer-failure",
@@ -2085,7 +2085,7 @@ describe("runPipeline", () => {
       .rejects.toThrow("final verification infrastructure failed");
 
     const store = new ArtifactStore(runId);
-    await expect(store.readResult(runId)).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       status: "failed",
       failure: "verification-failure",
       candidate: expect.any(Object),
@@ -2185,7 +2185,7 @@ describe("runPipeline", () => {
     });
     expect(reviewedDiff).toContain("increment complete");
     const store = new ArtifactStore("pipeline-increment-complete");
-    await expect(store.readPipelineArtifact("pipeline-increment-complete", "increment-2"))
+    await expect(store.readPipelineArtifact("increment-2"))
       .resolves.toMatchObject({ status: "complete", summary: "completed with [s]" });
     expect(delegatePipelineOutput.parse({ ok: true, result })).toMatchObject({
       result: { increments: [{ increment: 2, report: { status: "complete" } }] },
@@ -2303,9 +2303,9 @@ describe("runPipeline", () => {
       reasons: ["increment loop ended 'stalled' without completion"],
     });
     const store = new ArtifactStore("pipeline-increment-stalled");
-    await expect(store.readPipelineArtifact("pipeline-increment-stalled", "increment-2"))
+    await expect(store.readPipelineArtifact("increment-2"))
       .resolves.toMatchObject({ summary: "increment 1" });
-    await expect(store.readPipelineArtifact("pipeline-increment-stalled", "increment-3"))
+    await expect(store.readPipelineArtifact("increment-3"))
       .resolves.toMatchObject({ summary: "increment 2" });
   }, 120_000);
 
@@ -2633,7 +2633,7 @@ describe("runPipeline", () => {
     );
 
     const store = new ArtifactStore(runId);
-    const archived = await store.readPipelineArtifact<IncrementReport>(runId, "increment-2");
+    const archived = await store.readPipelineArtifact<IncrementReport>("increment-2");
     expect(archived?.summary).not.toContain(secret);
     expect(archived?.summary).toContain("[s]");
     expect(incrementThreeProgress).not.toContain(secret);
@@ -2738,7 +2738,7 @@ describe("runPipeline", () => {
 
     expect(recovery).toEqual({ recovered: [], quarantined: [] });
     expect(terminated).toEqual([]);
-    await expect(store.readResult(runId)).resolves.toMatchObject({
+    await expect(store.readResult()).resolves.toMatchObject({
       status: "verified-candidate",
     });
     const anchor = await git(repo, [
@@ -2749,7 +2749,7 @@ describe("runPipeline", () => {
     ]);
     expect(anchor.exitCode, anchor.stderr).toBe(0);
     expect(anchor.stdout.trim()).toBe(candidateCommit);
-    await expect(store.readPipelineArtifact(runId, "increment-2"))
+    await expect(store.readPipelineArtifact("increment-2"))
       .resolves.toMatchObject({ summary: "increment two" });
   }, 120_000);
 
@@ -2792,7 +2792,7 @@ describe("runPipeline", () => {
       "logs/role-reviewer-correctness-round1.log",
       "logs/role-reviewer-systems-round1.log",
     ]);
-    await expect(store.readPipelineArtifact(runId, "delegation-spec")).resolves.toEqual(spec);
+    await expect(store.readPipelineArtifact("delegation-spec")).resolves.toEqual(spec);
     await expect(readFile(
       path.join(store.runDirectory, "logs", "role-reviewer-correctness-round1.log"),
       "utf8",
@@ -2842,6 +2842,50 @@ describe("runPipeline", () => {
       },
     });
   }, 120_000);
+
+  it("gives every fixer a fresh worktree that no earlier role could leave residue in", async () => {
+    const repo = await initRepo();
+    const worktrees: Array<{ role: string; path: string; residue: boolean }> = [];
+    const base = roundReviews([
+      { correctness: blocker, systems: approve },
+      { correctness: blocker, systems: approve },
+      { correctness: approve, systems: approve },
+    ], async (args, round) => {
+      const commit = await commitFix(args, `fixed ${round}\n`);
+      // Ignored residue (a build cache, say) passes provenance, and a shared
+      // worktree would carry it into the next fixer.
+      const commonDir = await runGit(args.worktreePath, ["rev-parse", "--git-common-dir"]);
+      await mkdir(path.resolve(args.worktreePath, commonDir, "info"), { recursive: true });
+      await writeFile(path.resolve(args.worktreePath, commonDir, "info", "exclude"), "residue.txt\n");
+      await writeFile(path.join(args.worktreePath, "residue.txt"), "left behind\n");
+      return success(fenced({
+        reportVersion: "1",
+        candidateCommit: commit,
+        dispositions: [{ findingId: "F-001", disposition: "fixed", evidence: "Fixed.", commit }],
+      }));
+    });
+    const roleRunner = async (args: RoleRunArgs): Promise<RoleRunResult> => {
+      const residue = await readFile(path.join(args.worktreePath, "residue.txt")).then(() => true, () => false);
+      worktrees.push({ role: args.role, path: args.worktreePath, residue });
+      return await base(args);
+    };
+
+    const result = await runPipeline(
+      repo,
+      validSpec({ reviewers: ["correctness", "systems"], maxRounds: 3 }),
+      dependencies({ runId: "pipeline-fresh-fixers", roleRunner }),
+    );
+
+    // Two blockers at one location end at the non-convergence gate; what
+    // matters here is where each role ran.
+    expect(result.rounds).toHaveLength(3);
+    const fixers = worktrees.filter(entry => entry.role === "fixer");
+    expect(fixers.map(entry => path.basename(entry.path))).toEqual([
+      "pipeline-fresh-fixers-round-1-fix",
+      "pipeline-fresh-fixers-round-2-fix",
+    ]);
+    expect(worktrees.every(entry => !entry.residue)).toBe(true);
+  });
 
   it("fixes a blocker and returns decision-ready after a clean re-review", async () => {
     const repo = await initRepo();
@@ -2898,7 +2942,7 @@ describe("runPipeline", () => {
       expectedArtifactHash: promotedArtifact.manifestHash,
     })).resolves.toMatchObject({ integration: "applied" });
     await expect(readFile(path.join(repo, "a.txt"), "utf8")).resolves.toBe("fixed\n");
-  });
+  }, 120_000);
 
   it("emits ordered pipeline-stage progress phases across review and fix rounds", async () => {
     const repo = await initRepo();
@@ -3560,13 +3604,13 @@ describe("runPipeline", () => {
     expect(result.verification?.evidence).not.toHaveProperty("authorizedTestDeletions");
 
     const store = new ArtifactStore(runId);
-    await expect(store.readPipelineArtifact(runId, "round-1-review-correctness"))
+    await expect(store.readPipelineArtifact("round-1-review-correctness"))
       .resolves.toEqual(approve);
-    await expect(store.readPipelineArtifact(runId, "round-1-review-systems"))
+    await expect(store.readPipelineArtifact("round-1-review-systems"))
       .resolves.toEqual(approve);
-    await expect(store.readPipelineArtifact(runId, "round-1-consolidated"))
+    await expect(store.readPipelineArtifact("round-1-consolidated"))
       .resolves.toMatchObject({ findings: [] });
-    const persistedVerification = await store.readPipelineArtifact(runId, "verification");
+    const persistedVerification = await store.readPipelineArtifact("verification");
     expect(persistedVerification.evidence).not.toHaveProperty("authorizedTestDeletions");
     expect(persistedVerification)
       .toMatchObject({
@@ -3588,7 +3632,7 @@ describe("runPipeline", () => {
       path.join(store.runDirectory, "logs", "pipeline-verification-0-stderr.log"),
       "utf8",
     )).resolves.toBe("");
-    await expect(store.readPipelineArtifact(runId, "pipeline-result"))
+    await expect(store.readPipelineArtifact("pipeline-result"))
       .resolves.toMatchObject({ status: "decision-ready", runId });
   });
 
@@ -3688,6 +3732,29 @@ describe("detectWeakenedTests", () => {
       "+it.skip(\"was passing\", () => {});",
     ].join("\n");
     expect(detectWeakenedTests(diff)).toEqual({ testsDeleted: 1, testsSkipped: 1 });
+  });
+
+  it.each([
+    ["tests/test_api.py", "@pytest.mark.skip(reason=\"flaky\")"],
+    ["tests/test_api.py", "    self.skipTest(\"later\")"],
+    ["pkg/api_test.go", "\tt.Skip(\"later\")"],
+    ["tests/api.rs", "#[ignore]"],
+    ["src/test/java/ApiTest.java", "  @Disabled"],
+    ["Tests/ApiTests.cs", "  [Ignore(\"later\")]"],
+    ["spec/api_spec.rb", "    skip \"later\""],
+    ["tests/api.test.ts", "xdescribe(\"api\", () => {"],
+  ])("counts a skip added to %s", (file, added) => {
+    const diff = [`diff --git a/${file} b/${file}`, `+${added}`].join("\n");
+    expect(detectWeakenedTests(diff)).toEqual({ testsDeleted: 0, testsSkipped: 1 });
+  });
+
+  it("does not count ordinary identifiers that resemble skip markers", () => {
+    const diff = [
+      "diff --git a/pkg/api_test.go b/pkg/api_test.go",
+      "+\tskip := len(cases) == 0",
+      "+\tpending := 3",
+    ].join("\n");
+    expect(detectWeakenedTests(diff)).toEqual({ testsDeleted: 0, testsSkipped: 0 });
   });
 
   it("ignores skips in non-test files", () => {

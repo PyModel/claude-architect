@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { git, type GitResult } from "../../src/git/git-exec.js";
+import { git, userCommitEnvironment, type GitResult } from "../../src/git/git-exec.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 
 const temporaryPaths: string[] = [];
@@ -173,5 +173,164 @@ describe("git execution hardening", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.truncated?.stdout).toBe(true);
+  });
+});
+
+describe("diff driver suppression", () => {
+  it("never runs a configured textconv or external diff bound by in-tree attributes", async () => {
+    const { repo } = await makeRepo();
+    const marker = path.join(repo, "..", `driver-ran-${path.basename(repo)}`);
+    temporaryPaths.push(marker);
+    const script = `require('fs').writeFileSync(${JSON.stringify(marker)},'')`;
+    await rawGit(repo, ["config", "diff.x.textconv", `"${process.execPath}" -e "${script.replaceAll("\"", "\\\"")}"`]);
+    await rawGit(repo, ["config", "diff.x.command", `"${process.execPath}" -e "${script.replaceAll("\"", "\\\"")}"`]);
+    await writeFile(path.join(repo, ".gitattributes"), "* diff=x\n");
+    await writeFile(path.join(repo, "tracked.txt"), "changed\n");
+
+    for (const args of [
+      ["diff"],
+      ["-c", "core.quotepath=false", "diff", "HEAD"],
+      ["log", "-p", "-1"],
+      ["show", "HEAD"],
+    ]) {
+      const result = await git(repo, args);
+      expect(result.exitCode, `${args.join(" ")}: ${result.stderr}`).toBe(0);
+    }
+    await expect(readFile(marker)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+});
+
+
+describe("index listing bound", () => {
+  it("lists an index larger than the default output bound in full", async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), "ca-git-ls-files-"));
+    try {
+      expect((await git(repo, ["init", "-q"])).exitCode).toBe(0);
+      await writeFile(path.join(repo, "blob"), "x");
+      const blob = (await git(repo, ["hash-object", "-w", "blob"])).stdout.trim();
+      // Index-only entries with long names: ~9 MB of listing, no files on disk.
+      const directory = "d".repeat(200);
+      const total = 11_000;
+      for (let start = 0; start < total; start += 500) {
+        const args = ["update-index", "--add"];
+        for (let index = start; index < start + 500; index += 1) {
+          args.push("--cacheinfo", `100644,${blob},${directory}/${directory}/${directory}/${directory}/f${index}`);
+        }
+        expect((await git(repo, args)).exitCode).toBe(0);
+      }
+
+      const listed = await git(repo, ["ls-files", "-v", "-z"]);
+
+      expect(listed.truncated?.stdout).toBe(false);
+      expect(listed.stdout.length).toBeGreaterThan(8_000_000);
+      expect(listed.stdout.split("\0").filter(Boolean)).toHaveLength(total);
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
+
+describe("commit identity", () => {
+  it("reads the user's global identity only for promotion commits", async () => {
+    const { root, repo } = await makeRepo();
+    const home = path.join(root, "home");
+    await mkdir(home);
+    await writeFile(
+      path.join(home, ".gitconfig"),
+      "[user]\n\tname = Global Person\n\temail = global@example.invalid\n",
+    );
+    const saved = Object.fromEntries(
+      ["HOME", "XDG_CONFIG_HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM"]
+        .map(key => [key, process.env[key]]),
+    );
+    for (const key of Object.keys(saved)) delete process.env[key];
+    process.env.HOME = home;
+    try {
+      const environment = await userCommitEnvironment(repo);
+      expect(environment).toMatchObject({
+        GIT_AUTHOR_NAME: "Global Person",
+        GIT_AUTHOR_EMAIL: "global@example.invalid",
+        GIT_COMMITTER_NAME: "Global Person",
+        GIT_COMMITTER_EMAIL: "global@example.invalid",
+      });
+      expect(environment?.GIT_AUTHOR_DATE).toMatch(/^\d+ [+-]\d{4}$/);
+      expect(Number(environment!.GIT_AUTHOR_DATE!.split(" ")[0]))
+        .toBeGreaterThan(Date.parse("2020-01-01") / 1000);
+
+      const tree = (await expectGit(repo, ["rev-parse", "HEAD^{tree}"])).stdout.trim();
+      const promoted = (await git(repo, ["commit-tree", tree, "-m", "promoted"], {
+        env: environment!,
+      })).stdout.trim();
+      expect((await expectGit(repo, ["log", "-1", "--format=%an <%ae>|%cn", promoted])).stdout)
+        .toBe("Global Person <global@example.invalid>|Global Person\n");
+
+      // Every other Git call still sees neither global config nor the user.
+      const internal = (await expectGit(repo, ["commit-tree", tree, "-m", "internal"])).stdout.trim();
+      expect((await expectGit(repo, ["log", "-1", "--format=%an|%ad", "--date=unix", internal])).stdout)
+        .toBe("claude-architect|946684800\n");
+      expect((await git(repo, ["config", "user.name"])).exitCode).toBe(1);
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("honors the caller's GIT_CONFIG_GLOBAL when reading the user identity", async () => {
+    const { root, repo } = await makeRepo();
+    const config = path.join(root, "chosen.gitconfig");
+    await writeFile(config, "[user]\n\tname = Chosen Config\n\temail = chosen@example.invalid\n");
+    const original = process.env.GIT_CONFIG_GLOBAL;
+    process.env.GIT_CONFIG_GLOBAL = config;
+    try {
+      expect(await userCommitEnvironment(repo)).toMatchObject({
+        GIT_AUTHOR_NAME: "Chosen Config",
+        GIT_COMMITTER_EMAIL: "chosen@example.invalid",
+      });
+    } finally {
+      if (original === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+      else process.env.GIT_CONFIG_GLOBAL = original;
+    }
+  });
+
+  it("refuses the user-identity mode for anything but git var of an identity", async () => {
+    const { repo } = await makeRepo();
+    for (const args of [["config", "user.name"], ["var", "GIT_EDITOR"], ["var"]]) {
+      const result = await git(repo, args, { userIdentity: true });
+      expect(result.exitCode, args.join(" ")).toBe(2);
+      expect(result.stderr).toContain("userIdentity");
+    }
+  });
+
+  it("refuses a machine-guessed identity when none is configured", async () => {
+    const { root, repo } = await makeRepo();
+    const home = path.join(root, "empty-home");
+    await mkdir(home);
+    const empty = path.join(root, "empty.gitconfig");
+    await writeFile(empty, "");
+    const saved = Object.fromEntries(
+      ["HOME", "XDG_CONFIG_HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM"]
+        .map(key => [key, process.env[key]]),
+    );
+    for (const key of Object.keys(saved)) delete process.env[key];
+    process.env.HOME = home;
+    process.env.GIT_CONFIG_GLOBAL = empty;
+    process.env.GIT_CONFIG_NOSYSTEM = "1";
+    try {
+      expect(await userCommitEnvironment(repo)).toBeNull();
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("reports a missing identity instead of inventing one", async () => {
+    const result = await userCommitEnvironment("/unused", async () => ({
+      stdout: "", stderr: "fatal: unable to auto-detect email address", exitCode: 128,
+    }));
+    expect(result).toBeNull();
   });
 });

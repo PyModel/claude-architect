@@ -20,7 +20,7 @@ The kind of work being delegated, such as implementation, review, investigation,
 
 ### Producer
 
-An external CLI runtime that performs delegated work. Codex, OpenCode, Pi, and Pythinker are Producers.
+An external CLI runtime that performs delegated work. Agy, Claude, Codex, OpenCode, Pi, and Pythinker are Producers.
 
 ### Delegation Spec
 
@@ -34,9 +34,17 @@ One execution of a valid Delegation Spec by a selected Producer under an explici
 
 The Producer-neutral module that executes a Delegation Attempt. It owns worktree allocation, environment construction, process supervision, timeout and cancellation, artifact collection, failure classification, and result verification orchestration.
 
+### Producer Descriptor
+
+A declarative specification defining a Producer's identification, executable resolution, CLI argument layout, prompt framing, isolation model, host state requirements, and capabilities. Descriptors parameterize common behavior across adapters, eliminating bespoke duplication.
+
+### Producer Runtime
+
+The unified execution layer for Producers. It coordinates capability probing, probe caching within a run, shared prompt rendering, launch planning (computing sandbox policy, environment, and secure temporary HOME only when isolation profiles mandate it), and process supervision with watchdog protection.
+
 ### Producer Adapter
 
-An adapter at the Producer seam. It owns Producer discovery, capability observations, invocation construction, and normalization of native events and errors. It does not choose the canonical Failure Classification.
+A Producer Descriptor plus whatever custom code that CLI genuinely requires — nothing more. The descriptor states identification, executable resolution, argument layout, prompt framing, isolation model, and host state; custom code exists only where the CLI's own behavior differs, such as `buildInvocation` for an unusual argument shape or a native event format to normalize. An adapter never chooses the canonical Failure Classification and never gains acceptance authority.
 
 ### Attempt Result
 
@@ -44,7 +52,11 @@ The canonical, machine-readable outcome of a Delegation Attempt. It records arti
 
 ### Host Decision
 
-Claude's decision after reviewing a verified Candidate Artifact and its evidence. A Host Decision is `accepted`, `rejected`, or `revision-requested`.
+Claude's decision after reviewing a verified Candidate Artifact and its evidence. A Host Decision is `accepted`, `rejected`, or `revision-requested`. Evaluated via the unified `RunDecision` subsystem into one of five `RunVerdict` states: `accepted` (autonomous: true), `human-required`, `rejected`, `incomplete`, or `invalid`. Cross-file coherence of archived evidence, manifest, review snapshot, gate clearance, and decision is loaded concurrently via `readRunDecisionSnapshot`.
+
+### RunDecision & RunVerdict
+
+The unified subsystem (`src/runtime/run-decision.ts`) that determines candidate eligibility and authority clearance. It evaluates autonomous eligibility, provenance allowlists, and the accept-only rule once across all call sites, returning a typed `RunVerdict`.
 
 ### Integration Result
 
@@ -52,7 +64,7 @@ The outcome of applying an accepted Candidate Artifact to the main checkout thro
 
 ### Acceptance Verification
 
-Independent executable verification of an Attempt Result and its candidate artifacts. Acceptance Verification checks declared tests, changed paths, worktree state, command outcomes, and scope before controlled integration.
+Independent executable verification of an Attempt Result and its candidate artifacts. Acceptance Verification operates under named verification modes (`candidate`, `composed-slice`, and `final-branch`), with unified scope-checking via canonical path rules before controlled integration.
 
 ### Candidate Artifact
 
@@ -66,6 +78,10 @@ A machine-readable observation of a Producer's availability, version, authentica
 
 The reproducibility record for a Delegation Attempt. It identifies the base commit, Producer version and model, effective configuration policy, repository instruction paths and hashes, prompt hash, execution policy, and runtime version.
 
+### Artifact Descriptor
+
+The data record behind one kind of archived artifact in the Artifact Store: its file under the run directory, the validator that proves archived bytes are that kind on the way out, and, for kinds the store writes, the redaction-and-validation step on the way in plus the write mode (immutable, replace, or replace-if-present). Every typed store façade (`readManifest()`, `readDecision()`, …) is one line over the shared `readArtifact`/`writeArtifact` pair. A store is bound to one run at construction; its façades name no run id.
+
 ### Routing Policy
 
 Host-owned rules that order Producer preferences and required capabilities. Routing Policy is distinct from the Producer registry, which contains machine facts rather than preferences.
@@ -77,6 +93,10 @@ The canonical reason a Delegation Attempt did not produce a verified Candidate A
 ### Sandbox Backend
 
 An internal adapter used by the Attempt Runtime to enforce the execution policy on a supported operating system. Its defining responsibility is write confinement to the attempt worktree; process-tree supervision alone does not satisfy it. Producer-native confinement may satisfy the policy; otherwise a named, tested operating-system mechanism must. A platform without a proven write-confinement path remains operational for diagnostics but ineligible for the implementation Lane.
+
+### PlatformSafety
+
+The trusted orchestration layer for repository mutations, lease management, and crash-resilient file persistence. It wraps raw Platform Services checkout locking to enforce ambiguity checks under the lease (`withCheckoutLease`), provides named recovery lease paths (`withRecoveryLease`), and guarantees atomic disk durability and directory identity validation (`writeAtomic`, `DurableDirectorySession`). Higher runtime layers interact through `PlatformSafety` rather than naked platform locks or unguarded writes.
 
 ### Platform Services
 
@@ -188,21 +208,35 @@ Claude Code
       |-- SpecValidator
       |-- ProducerRegistry
       |-- RoutingPolicy
-      |-- CapabilityProbe
+      |-- ProducerRuntime
+      |     |-- ProducerDescriptors (agy, claude, codex, opencode, pi, pythinker)
+      |     |-- HostStoreResolver
+      |     |-- SharedPromptRenderer
+      |     |-- CliProbe (with abnormal-termination guard & run-scoped cache)
+      |     `-- LaunchPlanner & Supervisor
+      |-- PipelineRuntime
+      |     |-- RunContext (run-scoped facts; no shared mutable closure)
+      |     |-- PipelineRunState -> increments -> review rounds -> promote -> gate
+      |     `-- SliceRunner
+      |           |-- plan wave -> worktree -> launch -> freeze -> verify -> review
+      |           `-- compose -> release anchor
       |-- AttemptRuntime
       |     |-- WorktreeManager
       |     |-- EnvironmentPolicy
-      |     |-- PlatformServices
-      |     |     |-- PosixPlatformServices
-      |     |     `-- WindowsPlatformServices
       |     |-- ProcessSupervisor
-      |     |-- ArtifactStore
+      |     |-- ArtifactStore (run-bound; one ArtifactDescriptor per kind)
       |     `-- RecoveryManager
-      |-- ProducerAdapters
-      |     |-- CodexAdapter
-      |     |-- OpenCodeAdapter
-      |     |-- PiAdapter
-      |     `-- PythinkerAdapter
+      |-- RunDecision
+      |     |-- RunDecisionSnapshot (one read per decision)
+      |     |-- RunVerdict (accepted | human-required | rejected | incomplete | invalid)
+      |     `-- VerificationMode (candidate | composed-slice | final-branch)
+      |-- PlatformSafety
+      |     |-- withCheckoutLease / withRecoveryLease
+      |     |-- writeAtomic & DurableDirectorySession
+      |     |-- LockOwnership
+      |     `-- PlatformServices
+      |           |-- PosixPlatformServices
+      |           `-- WindowsPlatformServices
       |-- AcceptanceVerifier
       |-- ControlledIntegrator
       `-- Doctor
@@ -214,7 +248,7 @@ Claude Code
 - A Delegation Spec must identify its objective, relevant context, positive write allowlist, forbidden scope, success criteria, verification commands, execution mode, timeout, Producer preferences, and expected output.
 - Repository-wide write scope must be explicit rather than implied by an absent allowlist.
 - The Host supplies an ordered Producer preference list. The Attempt Runtime filters it by required capabilities and selects the first available Producer; learned quality, speed, and cost scoring are deferred.
-- Local availability and version probing runs before each P0 attempt, has no intentional side effects, and is not cached across attempts.
+- Local availability and version probing runs before each P0 attempt, has no intentional side effects, and is cached within the process for the duration of a run keyed by (producer id, resolved executable path, host-store root, configuration revision). Probes are never cached across process restarts, and diagnostic checks (such as `doctor`) always probe fresh.
 - Authentication, model availability, and remote capabilities are reported as `unknown` unless the Producer offers a documented local, non-mutating probe. P0 does not contact a remote service merely to complete a Capability Report.
 - Capability Reports identify the operating system, architecture, environment type such as native Windows or WSL, resolved executable form, and Lane-specific eligibility. Unsupported platforms are reported as `available: false` with a machine-readable reason such as `unsupported-platform`.
 - Native Windows and WSL capabilities are probed and certified separately. A Producer's WSL support is not evidence of native Windows support.
@@ -294,17 +328,28 @@ Windows     Job Object / helper     Producer-native sandbox or named backend    
 - Stdout and stderr are always drained to prevent deadlock. Persisted output is bounded and includes explicit truncation facts while process supervision continues draining excess bytes.
 - Network access follows the Producer Adapter's declared execution requirements. Acceptance Verification runs without network access unless the Delegation Spec explicitly authorizes it.
 
-The Platform Services contract is:
+The Platform Services contract encapsulates raw operating system operations:
 
 ```ts
 interface PlatformServices {
+  os: "darwin" | "linux" | "win32";
   resolveExecutable(request: ExecutableRequest): Promise<ResolvedExecutable>;
   spawnSupervised(request: SpawnRequest): Promise<SupervisedProcess>;
   requestCooperativeCancellation(process: SupervisedProcess): Promise<void>;
   terminateProcessTree(process: SupervisedProcess): Promise<void>;
-  acquireCheckoutLock(checkout: string): Promise<CheckoutLock>;
+  acquireCheckoutLock(checkout: string, owner?: LockOwnerAnnotation): Promise<CheckoutLock>;
   createSecureTempDirectory(): Promise<string>;
   canonicalizePath(path: string): Promise<CanonicalPath>;
+}
+```
+
+The higher-level `PlatformSafety` contract coordinates repository leases, ambiguity gates, and atomic disk durability:
+
+```ts
+class PlatformSafety {
+  withCheckoutLease<T>(checkout: string, fn: (lease: CheckoutLock) => Promise<T>, options?: CheckoutLeaseOptions<T>): Promise<T>;
+  withRecoveryLease<T>(checkout: string, fn: (lease: CheckoutLock) => Promise<T>, options?: CheckoutLeaseOptions<T>): Promise<T>;
+  writeAtomic(session: DurableDirectorySession, name: string, bytes: Buffer | string, mode: DurableWriteMode): Promise<void>;
 }
 ```
 

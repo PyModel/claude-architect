@@ -1,6 +1,6 @@
 {
   "name": "claude-architect",
-  "description": "CLI coding-agent orchestration for Claude through Codex, OpenCode, Pi, and Pythinker Code, with a commitment-boundary advisor.",
+  "description": "CLI coding-agent orchestration for Claude through Codex, OpenCode, Pi, Pythinker Code, Antigravity CLI, and headless Claude Code, with a commitment-boundary advisor.",
   "owner": {
     "name": "elkaix"
   },
@@ -12,7 +12,7 @@
       "name": "claude-architect",
       "displayName": "Claude Architect",
       "source": "./",
-      "version": "0.49.0",
+      "version": "0.52.0",
       "description": "Verified P0-A MCP delegation with macOS arm64 certified; eligible Linux Codex editing is tested; native Windows Codex editing is unsupported. Codex edit eligibility requires its proven native sandbox.",
       "author": {
         "name": "elkaix",

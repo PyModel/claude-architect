@@ -52,7 +52,9 @@ function findSupportedNode() {
   const searchPath = process.env.PATH ?? "";
   const visited = new Set();
   for (const directory of searchPath.split(path.delimiter)) {
-    if (directory.length === 0) continue;
+    // A relative entry resolves against the current directory, which is the
+    // user's checkout — never execute a `node` a repository can plant.
+    if (!path.isAbsolute(directory)) continue;
     for (const name of nodeNames()) {
       const candidate = path.resolve(directory, name);
       if (visited.has(candidate)) continue;

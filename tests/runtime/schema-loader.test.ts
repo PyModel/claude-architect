@@ -58,13 +58,13 @@ describe("schema loader", () => {
     expect(v.delegationSpec({ specVersion: "1" })).toBe(false); // missing required fields
   });
 
-  // Both paths this used to walk resolved to runtime/schemas/autopilot-spec.v1.json,
+  // Both paths this used to walk resolved to one runtime/schemas/autopilot-spec file,
   // so the "source versus packaged" comparison read one file twice and could not
   // have caught a divergence. There is only one schema file; assert that the
   // packaged runtime resolves it and that the loader agrees.
-  it("loads Autopilot Spec v1 from the packaged runtime schema path", () => {
+  it("loads the Autopilot Spec from the packaged runtime schema path", () => {
     const packagedRuntimeUrl = new URL("../../runtime/server.mjs", import.meta.url);
-    const schemaUrl = new URL("./schemas/autopilot-spec.v1.json", packagedRuntimeUrl);
+    const schemaUrl = new URL(`./schemas/autopilot-spec.v${AUTOPILOT_SPEC_VERSION}.json`, packagedRuntimeUrl);
     const schema = JSON.parse(fs.readFileSync(fileURLToPath(schemaUrl), "utf8"));
 
     expect(schema.$id).toBe(`autopilot-spec.v${AUTOPILOT_SPEC_VERSION}.json`);
@@ -230,7 +230,7 @@ describe("checkVersionCompat", () => {
   });
 
   it("rejects every non-matching protocol version", () => {
-    for (const version of ["1.0.0", "1.3.0", "1.99.0", "3.0.0", "not-semver"]) {
+    for (const version of ["1.0.0", "2.0.0", "2.99.0", "4.0.0", "not-semver"]) {
       const result = checkVersionCompat(version);
       expect(result.ok).toBe(false);
       expect(result.diagnostic).toContain(`skill declares ${version}`);

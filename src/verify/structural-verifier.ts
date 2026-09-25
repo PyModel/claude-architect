@@ -1,4 +1,5 @@
-import { git, type GitResult } from "../git/git-exec.js";
+import { git } from "../git/git-exec.js";
+import { gitChecked as checkedGit } from "../git/checked-git.js";
 import {
   foldPathForCollision,
   inspectChangedPathManifest,
@@ -7,11 +8,8 @@ import {
   type RawDiffEntry,
 } from "../git/changed-path-manifest.js";
 import type { CandidateArtifact, ChangedPath } from "../protocol/attempt-result.js";
-import { redact } from "../runtime/redaction.js";
-import { RuntimeError } from "../util/errors.js";
 import { globMatches } from "../util/glob.js";
 
-const MAX_DIAGNOSTIC_LENGTH = 2_000;
 
 export type StructuralFailure =
   | "manifest-divergence"
@@ -32,6 +30,49 @@ export type StructuralFailure =
    * They are reported as `checkoutDrift` evidence instead.
    */
   | "artifact-base-mismatch";
+
+export type VerificationMode = "candidate" | "composed-slice" | "final-branch";
+
+/**
+ * The failure classes each mode may report. A mode never reports a class absent
+ * from its list, and `structuralVerify` skips the work that proves one. This
+ * table is the only place a mode's scope is written down: an omission here is
+ * the whole difference between the modes, so two modes cannot drift apart in
+ * one branch and agree in another.
+ *
+ * `composed-slice` omits `artifact-divergence` because a composed slice's
+ * commit is replayed onto the wave head and no longer has the base as its
+ * parent. `final-branch` omits `case-collision` because the branch is proven
+ * against a materialized worktree the host already checked out, and proves
+ * `artifact-divergence` over a multi-commit range instead of a single parent.
+ */
+export const MODE_STRUCTURAL_FAILURES: Record<VerificationMode, readonly StructuralFailure[]> = {
+  candidate: [
+    "manifest-divergence",
+    "artifact-divergence",
+    "out-of-scope-write",
+    "modified-symlink",
+    "case-collision",
+    "empty-candidate",
+    "artifact-base-mismatch",
+  ],
+  "composed-slice": [
+    "manifest-divergence",
+    "out-of-scope-write",
+    "modified-symlink",
+    "case-collision",
+    "empty-candidate",
+    "artifact-base-mismatch",
+  ],
+  "final-branch": [
+    "manifest-divergence",
+    "artifact-divergence",
+    "out-of-scope-write",
+    "modified-symlink",
+    "empty-candidate",
+    "artifact-base-mismatch",
+  ],
+} as const;
 
 /** Observed state of the shared checkout. Never a verification failure. */
 export interface CheckoutDrift {
@@ -61,26 +102,11 @@ export interface StructuralVerifyResult {
   checkoutDrift?: CheckoutDrift;
 }
 
-function gitFailure(action: string, result: GitResult): RuntimeError {
-  const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, MAX_DIAGNOSTIC_LENGTH);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
-
-async function checkedGit(cwd: string, args: string[]): Promise<string> {
-  const result = await git(cwd, args);
-  if (result.exitCode !== 0) throw gitFailure(`git ${args[0] ?? "command"}`, result);
-  // Truncated output is a partial answer, and every caller here treats what it
-  // gets as the complete path set — a clipped `ls-tree` would silently hide a
-  // real case collision. Proof cannot rest on a truncated read.
-  if (result.truncated?.stdout === true || result.truncated?.stderr === true) {
-    throw gitFailure(`git ${args[0] ?? "command"}`, { ...result, stderr: "output truncated" });
-  }
-  return result.stdout;
-}
 
 
 
-function isAllowed(
+
+export function isAllowed(
   pathname: string,
   writeAllowlist: string[],
   forbiddenScope: string[],
@@ -164,7 +190,11 @@ export async function recomputeManifest(args: Pick<
   return { changedPaths, manifestHash, rawDiff };
 }
 
-async function artifactIdentityMatches(args: StructuralVerifyArgs): Promise<boolean> {
+/**
+ * Proves the candidate commit is exactly the artifact the run froze, for a
+ * single-commit candidate whose parent must be the base.
+ */
+async function singleCommitIdentityMatches(args: StructuralVerifyArgs): Promise<boolean> {
   const [anchorResult, treeResult, parentResult] = await Promise.all([
     git(args.repoRoot, ["rev-parse", "--verify", `${args.artifact.anchorRef}^{commit}`]),
     git(args.repoRoot, [
@@ -191,67 +221,124 @@ async function artifactIdentityMatches(args: StructuralVerifyArgs): Promise<bool
     && commitAndParents[1] === args.baseCommitOid;
 }
 
-export async function structuralVerify(args: StructuralVerifyArgs): Promise<StructuralVerifyResult> {
+/**
+ * The same proof for a linear, multi-commit base-to-head branch: the branch has
+ * no single parent commit to compare, so identity rests on both the source
+ * repository and the materialized worktree standing at the candidate commit
+ * with clean trees, and on the base being an ancestor of it.
+ */
+async function branchIdentityMatches(args: StructuralVerifyArgs): Promise<boolean> {
+  const [sourceHead, materializedHead, candidateTree, sourceStatus, materializedStatus] =
+    await Promise.all([
+      checkedGit(args.repoRoot, ["rev-parse", "--verify", "HEAD^{commit}"]),
+      checkedGit(args.worktreePath, ["rev-parse", "--verify", "HEAD^{commit}"]),
+      checkedGit(args.repoRoot, [
+        "rev-parse", "--verify", `${args.artifact.candidateCommitOid}^{tree}`,
+      ]),
+      checkedGit(args.repoRoot, [
+        "status", "--porcelain=v1", "-z", "--untracked-files=all",
+      ]),
+      checkedGit(args.worktreePath, [
+        "status", "--porcelain=v1", "-z", "--untracked-files=all",
+      ]),
+    ]);
+  const ancestry = await git(args.repoRoot, [
+    "merge-base", "--is-ancestor", args.baseCommitOid, args.artifact.candidateCommitOid,
+  ]);
+  return sourceHead.trim() === args.artifact.candidateCommitOid
+    && materializedHead.trim() === args.artifact.candidateCommitOid
+    && candidateTree.trim() === args.artifact.candidateTreeOid
+    && ancestry.exitCode === 0
+    && ancestry.truncated?.stdout !== true
+    && ancestry.truncated?.stderr !== true
+    && sourceStatus === ""
+    && materializedStatus === "";
+}
+
+/**
+ * Independent structural proof of a frozen candidate. `mode` selects which
+ * failure classes apply (see `MODE_STRUCTURAL_FAILURES`) and which identity
+ * proof the artifact shape calls for; every mode shares one manifest
+ * recomputation, one scope rule, and one symlink rule, so no two modes can
+ * disagree about what "out of scope" or "modified symlink" means.
+ */
+export async function structuralVerify(
+  args: StructuralVerifyArgs,
+  mode: VerificationMode = "candidate",
+): Promise<StructuralVerifyResult> {
+  const applicable = new Set<StructuralFailure>(MODE_STRUCTURAL_FAILURES[mode]);
   const failures = new Set<StructuralFailure>();
+  const record = (failure: StructuralFailure, failed: boolean): void => {
+    if (failed && applicable.has(failure)) failures.add(failure);
+  };
+  // A branch candidate stands at its own HEAD by construction, so shared-checkout
+  // drift is neither observable nor meaningful for it.
+  const observesCheckoutDrift = mode !== "final-branch";
+
   const [
     manifest,
     baseTreeOid,
     currentHead,
     mainStatus,
-    artifactIdentityValid,
+    identityValid,
     caseCollision,
   ] = await Promise.all([
     recomputeManifest(args),
     checkedGit(args.repoRoot, ["rev-parse", `${args.baseCommitOid}^{tree}`]),
-    checkedGit(args.repoRoot, ["rev-parse", "--verify", "HEAD"]),
-    checkedGit(args.repoRoot, [
-      "status",
-      "--porcelain=v1",
-      "--untracked-files=all",
-      "--ignore-submodules=none",
-    ]),
-    artifactIdentityMatches(args),
-    candidateHasCaseCollision(args),
+    observesCheckoutDrift
+      ? checkedGit(args.repoRoot, ["rev-parse", "--verify", "HEAD"])
+      : Promise.resolve(""),
+    observesCheckoutDrift
+      ? checkedGit(args.repoRoot, [
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+      ])
+      : Promise.resolve(""),
+    !applicable.has("artifact-divergence")
+      ? Promise.resolve(true)
+      : mode === "final-branch"
+        ? branchIdentityMatches(args)
+        : singleCommitIdentityMatches(args),
+    applicable.has("case-collision")
+      ? candidateHasCaseCollision(args)
+      : Promise.resolve(false),
   ]);
 
-  if (caseCollision) failures.add("case-collision");
-  if (args.artifact.baseCommitOid !== args.baseCommitOid) {
-    failures.add("artifact-base-mismatch");
-  }
-  const checkoutDrift: CheckoutDrift = {
-    headMoved: currentHead.trim() !== args.baseCommitOid,
-    dirty: mainStatus.length > 0,
-  };
-  if (manifest.manifestHash === null
-    || JSON.stringify(args.artifact.changedPaths) !== JSON.stringify(manifest.changedPaths)
-    || args.artifact.manifestHash !== manifest.manifestHash) {
-    failures.add("manifest-divergence");
-  }
-  if (!artifactIdentityValid) {
-    failures.add("artifact-divergence");
-  }
-  if (manifest.changedPaths.some(change =>
+  record("case-collision", caseCollision);
+  record("artifact-base-mismatch", args.artifact.baseCommitOid !== args.baseCommitOid);
+  record(
+    "manifest-divergence",
+    manifest.manifestHash === null
+      || JSON.stringify(args.artifact.changedPaths) !== JSON.stringify(manifest.changedPaths)
+      || args.artifact.manifestHash !== manifest.manifestHash,
+  );
+  record("artifact-divergence", !identityValid);
+  record("out-of-scope-write", manifest.changedPaths.some(change =>
     !isAllowed(
       change.path,
       args.writeAllowlist,
       args.forbiddenScope,
       change.mode === "160000",
-    ))) {
-    failures.add("out-of-scope-write");
-  }
-  if (manifest.rawDiff.some(entry =>
-    [entry.oldMode, entry.newMode].some(mode => mode === "120000" || mode === "160000"))) {
-    failures.add("modified-symlink");
-  }
-  if (manifest.changedPaths.length === 0
-    || args.artifact.candidateTreeOid === baseTreeOid.trim()) {
-    failures.add("empty-candidate");
-  }
+    )));
+  record("modified-symlink", manifest.rawDiff.some(entry =>
+    [entry.oldMode, entry.newMode].some(entryMode =>
+      entryMode === "120000" || entryMode === "160000")));
+  record(
+    "empty-candidate",
+    manifest.changedPaths.length === 0
+      || args.artifact.candidateTreeOid === baseTreeOid.trim(),
+  );
 
+  const checkoutDrift: CheckoutDrift = {
+    headMoved: currentHead.trim() !== args.baseCommitOid,
+    dirty: mainStatus.length > 0,
+  };
   return {
     ok: failures.size === 0,
     failures: [...failures],
     manifestHash: manifest.manifestHash,
-    checkoutDrift,
+    ...(observesCheckoutDrift ? { checkoutDrift } : {}),
   };
 }

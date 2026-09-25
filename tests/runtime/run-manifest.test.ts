@@ -46,18 +46,18 @@ function withProtocolVersion(protocolVersion: string): RunManifest {
 
 describe("run manifest protocol provenance", () => {
   it("accepts an archived protocol version with the current major", () => {
-    const manifest = withProtocolVersion("2.0.0");
+    const manifest = withProtocolVersion("3.0.0");
 
     expect(verifyRunManifest(manifest)).toEqual(manifest);
   });
 
   it("accepts a same-major archive from a different minor", () => {
-    const manifest = withProtocolVersion("2.7.0");
+    const manifest = withProtocolVersion("3.7.0");
 
     expect(verifyRunManifest(manifest)).toEqual(manifest);
   });
 
-  it.each(["1.0.0", "1.3.0", "3.0.0", "not-a-version"])(
+  it.each(["1.0.0", "2.0.0", "4.0.0", "not-a-version"])(
     "rejects incompatible archived protocol %s with both versions in the diagnostic",
     archivedVersion => {
       expect(() => verifyRunManifest(withProtocolVersion(archivedVersion))).toThrow(

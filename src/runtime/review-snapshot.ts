@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { sanitizeReviewPatch } from "../git/candidate-tree.js";
+import { gitSucceeded, reviewDiffArgs } from "../git/checked-git.js";
 import { git as runGit, type GitResult } from "../git/git-exec.js";
 import { manifestHashOf } from "../git/changed-path-manifest.js";
 import type { PlatformServices } from "../platform/platform-services.js";
@@ -30,8 +32,8 @@ export interface ReviewSnapshot {
 }
 
 export interface ReviewSnapshotStore {
-  readResult(runId: string): Promise<AttemptResult | null>;
-  readManifest(runId: string): Promise<RunManifest | null>;
+  readResult(): Promise<AttemptResult | null>;
+  readManifest(): Promise<RunManifest | null>;
 }
 
 export interface ReviewSnapshotRun {
@@ -221,9 +223,13 @@ function requireCoherentCandidate(
 }
 
 export async function createReviewSnapshot(run: ReviewSnapshotRun): Promise<ReviewSnapshot> {
+  // Deliberately not the run-decision snapshot: this function *produces* the
+  // review snapshot that snapshot reads, and it needs neither the gate record
+  // nor the decision. Reading them here would cost three extra files and invert
+  // the dependency between an artifact and the policy that judges it.
   const [result, manifest] = await Promise.all([
-    run.store.readResult(run.runId),
-    run.store.readManifest(run.runId),
+    run.store.readResult(),
+    run.store.readManifest(),
   ]);
   if (result === null || manifest === null) {
     throw reviewError("archived run was not found", "run-not-found");
@@ -268,21 +274,15 @@ export async function createReviewSnapshot(run: ReviewSnapshotRun): Promise<Revi
     throw reviewError("candidate anchor no longer matches the archive", "candidate-anchor-mismatch");
   }
 
-  const patch = await git(run.repoRoot, [
-    "diff",
-    "--no-ext-diff",
-    "--no-textconv",
-    "--binary",
-    "--full-index",
+  const patchResult = await git(run.repoRoot, reviewDiffArgs(
     candidate.baseCommitOid,
     candidate.candidateTreeOid,
-    "--",
-  ]);
-  if (patch.exitCode !== 0
-    || patch.truncated?.stdout === true
-    || patch.truncated?.stderr === true) {
+    ["--binary", "--full-index"],
+  ));
+  if (!gitSucceeded(patchResult)) {
     throw reviewError("failed to regenerate candidate patch", "candidate-review-failed");
   }
+  const patch = sanitizeReviewPatch(patchResult.stdout);
 
   const snapshot: ReviewSnapshot = {
     runId: run.runId,
@@ -290,7 +290,7 @@ export async function createReviewSnapshot(run: ReviewSnapshotRun): Promise<Revi
     candidateCommitOid: candidate.candidateCommitOid,
     candidateTreeOid: candidate.candidateTreeOid,
     manifestHash: candidate.manifestHash,
-    patch: patch.stdout,
+    patch,
     changedPaths: candidate.changedPaths.map(change => ({ ...change })),
     evidence: boundEvidence(result.evidence),
     executedVerification: result.executedVerification.map(outcome => ({

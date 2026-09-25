@@ -161,6 +161,28 @@ describe("runtime bootstrap", () => {
     expect(result.stderr).toContain("fake server ready");
   });
 
+  it.skipIf(process.platform === "win32")("never re-execs a node from a relative PATH entry", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ca-bootstrap-relative-"));
+    temporaryPaths.push(root);
+    const serverPath = await fakeServer(root);
+    const preludePath = await nodeVersionPrelude(root, "20.19.0");
+    await mkdir(path.join(root, "bin"));
+    await symlink(process.execPath, path.join(root, "bin", "node"));
+
+    const result = spawnSync(
+      process.execPath,
+      ["--import", preludePath, bootstrapPath],
+      {
+        cwd: root,
+        encoding: "utf8",
+        env: { ...process.env, PATH: "bin", CLAUDE_ARCHITECT_SERVER_PATH: serverPath },
+      },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).not.toContain("fake server ready");
+  });
+
   it("uses the shipped parser to accept the Node.js 22 boundary", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ca-bootstrap-boundary-"));
     temporaryPaths.push(root);

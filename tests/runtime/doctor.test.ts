@@ -224,6 +224,25 @@ describe("doctor", () => {
     expect(JSON.stringify(result)).not.toContain("sk-doctorsecret");
   });
 
+  it.each([
+    ["2.39.5", true],
+    ["2.40.0", false],
+    ["2.49.0.windows.1", false],
+    ["3.0.0", false],
+  ])("flags git %s as too old: %s", async (version, tooOld) => {
+    const result = await doctor({
+      ps: platform("darwin"),
+      env: { CLAUDE_PLUGIN_DATA: "/plugin-data" },
+      nodeVersion: "22.17.0",
+      arch: "arm64",
+      environmentType: "native",
+      git: async () => ({ stdout: `git version ${version}\n`, stderr: "", exitCode: 0 }),
+      probeAll: async () => [],
+    });
+    expect(result.git.version).toBe(version);
+    expect(result.issues.includes("git-too-old")).toBe(tooOld);
+  });
+
   it("reports unsupported for a sandbox backend without a matching host row", async () => {
     const result = await doctor({
       ps: platform("win32"),

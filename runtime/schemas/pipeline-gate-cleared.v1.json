@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pipeline-gate-cleared.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "clearedVersion",
+    "candidateCommitOid",
+    "requiresHumanDecision"
+  ],
+  "properties": {
+    "clearedVersion": {
+      "const": "1"
+    },
+    "candidateCommitOid": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "requiresHumanDecision": {
+      "type": "boolean"
+    },
+    "clearedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

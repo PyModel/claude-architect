@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -25,6 +25,17 @@ export interface DependencyLinkDependencies {
 
 const LOCKFILES = ["package-lock.json", "bun.lockb", "pnpm-lock.yaml", "yarn.lock"] as const;
 const COPY_TIMEOUT_MS = 120_000;
+const MAX_LOCKFILE_BYTES = 64 * 1024 * 1024;
+// The system `cp` by absolute path: a PATH lookup would let the checkout's
+// environment choose the program that copies the dependency tree.
+const SYSTEM_CP = ["/bin/cp", "/usr/bin/cp"] as const;
+
+async function systemCp(): Promise<string> {
+  for (const candidate of SYSTEM_CP) {
+    if (await exists(candidate)) return candidate;
+  }
+  throw new Error("system cp is unavailable");
+}
 
 type CowStrategy = "clonefile" | "reflink" | "unsupported";
 
@@ -68,7 +79,9 @@ export async function probeCowSupport(
     await mkdir(source);
     await writeFile(path.join(source, "sentinel"), "probe\n");
     try {
-      await (dependencies.execFile ?? execFileAsync)("cp", clone.args, { timeout: COPY_TIMEOUT_MS });
+      await (dependencies.execFile ?? execFileAsync)(await systemCp(), clone.args, {
+        timeout: COPY_TIMEOUT_MS,
+      });
       return { cowSupported: true, strategy: clone.strategy };
     } catch {
       return { cowSupported: false, strategy: clone.strategy };
@@ -98,6 +111,12 @@ export async function linkPrimaryDependencies(
   try {
     const comparisons = await Promise.all(LOCKFILES.map(async (lockfile, index) => {
       if (!primaryLockfiles[index]) return true;
+      const sizes = await Promise.all([
+        stat(path.join(primaryRepo, lockfile)),
+        stat(path.join(worktreePath, lockfile)),
+      ]);
+      if (sizes.some(entry => entry.size > MAX_LOCKFILE_BYTES)
+        || sizes[0].size !== sizes[1].size) return false;
       const [primaryLock, worktreeLock] = await Promise.all([
         readFile(path.join(primaryRepo, lockfile)),
         readFile(path.join(worktreePath, lockfile)),
@@ -115,7 +134,9 @@ export async function linkPrimaryDependencies(
   if (clone === null) return "skipped-cow-unsupported";
 
   try {
-    await (dependencies.execFile ?? execFileAsync)("cp", clone.args, { timeout: COPY_TIMEOUT_MS });
+    await (dependencies.execFile ?? execFileAsync)(await systemCp(), clone.args, {
+      timeout: COPY_TIMEOUT_MS,
+    });
     return "inherited";
   } catch {
     await rm(targetModules, { recursive: true, force: true });

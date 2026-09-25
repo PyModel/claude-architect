@@ -30,10 +30,6 @@ const PRIMARY_PATH: AutopilotPhase[] = [
   "running-task",
   "promoting-task",
   "final-review",
-  "pushing",
-  "creating-draft-pr",
-  "waiting-required-checks",
-  "marking-ready",
   "cleaning-up",
 ];
 
@@ -50,7 +46,7 @@ async function temporaryDirectory(): Promise<string> {
 
 function initialState(workflowId: string): AutopilotWorkflowState {
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId,
     repositoryIdentity: "/canonical/repository/.git",
     baseCommitOid: "1".repeat(40),
@@ -74,13 +70,7 @@ function initialState(workflowId: string): AutopilotWorkflowState {
       lastEntryHash: null,
     },
     finalGate: null,
-    shipping: {
-      branch: `autopilot/${workflowId}`,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: "2026-07-20T20:00:00.000Z",
-    },
-    ciObservations: [],
+    branch: `autopilot/${workflowId}`,
     cleanup: null,
     terminal: null,
     createdAt: "2026-07-20T18:00:00.000Z",
@@ -239,7 +229,7 @@ describe("WorkflowStore", () => {
   it("rejects an illegal edge without changing persisted state", async () => {
     const store = await createStore("illegal-edge");
 
-    await expect(store.transition({ expectedRevision: 0, to: "marking-ready" }))
+    await expect(store.transition({ expectedRevision: 0, to: "cleaning-up" }))
       .rejects.toMatchObject({ detail: { toolError: "invalid-workflow-transition" } });
     expect(await store.read()).toMatchObject({ revision: 0, phase: "preflighting" });
   });
@@ -255,21 +245,7 @@ describe("WorkflowStore", () => {
         "failed",
         "cancelled",
       ],
-      "final-review": ["pushing", "human-decision-required", "failed", "cancelled"],
-      pushing: ["creating-draft-pr", "human-decision-required", "failed", "cancelled"],
-      "creating-draft-pr": [
-        "waiting-required-checks",
-        "human-decision-required",
-        "failed",
-        "cancelled",
-      ],
-      "waiting-required-checks": [
-        "marking-ready",
-        "human-decision-required",
-        "failed",
-        "cancelled",
-      ],
-      "marking-ready": ["cleaning-up", "human-decision-required", "failed", "cancelled"],
+      "final-review": ["cleaning-up", "human-decision-required", "failed", "cancelled"],
       "cleaning-up": ["ready-for-human-review", "human-decision-required", "failed", "cancelled"],
       "ready-for-human-review": [],
       "human-decision-required": [],
@@ -343,9 +319,9 @@ describe("WorkflowStore", () => {
       .toEqual([]);
   }, 10_000);
 
-  it("requires marking-ready then cleaning-up and successful cleanup before success", async () => {
+  it("requires final review then cleaning-up and successful cleanup before success", async () => {
     const store = await createStore("successful-ending");
-    let state = await advanceTo(store, "marking-ready");
+    let state = await advanceTo(store, "final-review");
 
     await expect(store.transition({
       expectedRevision: state.revision,
@@ -379,14 +355,14 @@ describe("WorkflowStore", () => {
       .rejects.toMatchObject({ detail: { toolError: "invalid-workflow-transition" } });
   });
 
-  it("increments revisions while preserving immutable identity and the absolute CI deadline", async () => {
+  it("increments revisions while preserving immutable identity and the hand-off branch", async () => {
     const store = await createStore("immutable-fields");
     const state = await store.transition({
       expectedRevision: 0,
       to: "running-task",
       update: draft => {
         draft.repositoryIdentity = "/substituted";
-        draft.shipping.ciDeadlineAt = "2099-01-01T00:00:00.000Z";
+        draft.branch = "substituted/branch";
         draft.tasks[0]!.status = "running";
       },
     });
@@ -395,40 +371,32 @@ describe("WorkflowStore", () => {
       revision: 1,
       phase: "running-task",
       repositoryIdentity: "/canonical/repository/.git",
-      shipping: { ciDeadlineAt: "2026-07-20T20:00:00.000Z" },
+      branch: initialState("immutable-fields").branch,
       tasks: [{ status: "running" }],
     });
   });
 
-  it("records pending CI observations with a CAS update that preserves the phase", async () => {
-    const store = await createStore("pending-ci-update");
-    const waiting = await advanceTo(store, "waiting-required-checks");
+  it("records a CAS update that preserves the phase", async () => {
+    const store = await createStore("cas-update");
+    const running = await advanceTo(store, "running-task");
     const updated = await store.update({
-      expectedRevision: waiting.revision,
-      patch: {
-        ciObservations: [...waiting.ciObservations, {
-          observedAt: "2026-07-20T18:01:00.000Z",
-          result: "pending",
-          headCommitOid: "2".repeat(40),
-          checks: [{
-            bucket: "pending",
-            name: "test",
-            state: "IN_PROGRESS",
-            link: null,
-          }],
-        }],
-      },
+      expectedRevision: running.revision,
+      patch: { currentTaskIndex: 0 },
     });
 
-    expect(updated).toMatchObject({
-      revision: waiting.revision + 1,
-      phase: "waiting-required-checks",
-      ciObservations: [{ result: "pending" }],
-    });
+    expect(updated).toMatchObject({ revision: running.revision + 1, phase: "running-task" });
     await expect(store.update({
-      expectedRevision: waiting.revision,
-      patch: { ciObservations: [] },
+      expectedRevision: running.revision,
+      patch: { currentTaskIndex: 0 },
     })).rejects.toMatchObject({ detail: { toolError: "workflow-revision-conflict" } });
+  });
+
+  it("names a workflow persisted by the shipping (v1) runtime instead of calling it malformed", async () => {
+    const store = await createStore("retired-v1-state");
+    const persisted = JSON.parse(await readFile(store.statePath, "utf8"));
+    await writeFile(store.statePath, JSON.stringify({ ...persisted, stateVersion: "1" }), "utf8");
+    await expect(store.read())
+      .rejects.toMatchObject({ detail: { toolError: "workflow-state-version-unsupported" } });
   });
 
   it("rejects malformed, oversize, and symlink-substituted persisted state", async () => {

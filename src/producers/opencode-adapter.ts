@@ -1,134 +1,77 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { supervise } from "../platform/process-supervisor.js";
-import type { ResolvedExecutable } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
+import { probeOsConfinedCli } from "./cli-probe.js";
 import {
-  normalizeNodeShim,
-  normalizePlainText,
-  renderProducerPrompt,
-  selectOsWriteConfinementBackend,
-} from "./plain-text.js";
+  isProducerAuthenticated,
+  resolveDefaultEnv,
+  resolveInheritedWritablePaths,
+  type HostStoreContext,
+} from "./host-store.js";
+import { normalizePlainText, renderProducerPrompt } from "./plain-text.js";
 import type {
   CapabilityReport,
   InvocationContext,
   ProbeContext,
   ProducerAdapter,
   ProducerConfigurationProfile,
+  ProducerDescriptor,
   ProducerInvocation,
 } from "./producer-adapter.js";
 
 const OPENCODE_REQUIRED_ENV = ["OPENCODE_CONFIG_DIR", "XDG_DATA_HOME"] as const;
-const VERSION_TIMEOUT_MS = 10_000;
-const VERSION_OUTPUT_LIMIT = 64 * 1024;
 
-function unavailableReport(
-  ctx: ProbeContext,
-  reason: string,
-  resolvedExecutable: ResolvedExecutable | null = null,
-): CapabilityReport {
-  return {
-    producerId: "opencode",
-    available: false,
-    reason,
-    os: ctx.os,
-    arch: ctx.arch,
-    environmentType: ctx.environmentType,
-    resolvedExecutable,
-    version: null,
-    authState: "unknown",
-    executionModes: ["edit"],
-    structuredOutput: false,
-    writeConfinementBackend: null,
-    laneEligibility: { edit: false },
-  };
-}
+export const openCodeDescriptor: ProducerDescriptor = {
+  id: "opencode",
+  executable: { name: "opencode" },
+  isolation: "controlled-config-with-copied-credentials",
+  hostState: {
+    resolveStore: deps => {
+      const dataHome = deps.env.XDG_DATA_HOME ?? join(deps.homeDirectory, ".local", "share");
+      return join(dataHome, "opencode");
+    },
+    authMarker: "auth.json",
+    inheritedWritablePaths: (store, deps) => {
+      const stateHome = deps.env.XDG_STATE_HOME ?? join(deps.homeDirectory, ".local", "state");
+      return [store, join(stateHome, "opencode")];
+    },
+    defaultEnv: (_store, deps) => {
+      if (deps.env.XDG_DATA_HOME !== undefined) return {};
+      const dataHome = join(deps.homeDirectory, ".local", "share");
+      const dataDir = join(dataHome, "opencode");
+      const hasAuth = (deps.hasAuthStore ?? (dir => existsSync(join(dir, "auth.json"))))(dataDir);
+      return hasAuth ? { XDG_DATA_HOME: dataHome } : {};
+    },
+  },
+  prompt: {
+    actionPreamble: true,
+    bootstrapPlacement: "before",
+  },
+  structuredOutput: false,
+  executionModes: ["edit"],
+};
 
-function parseVersion(stdout: string): string | null {
-  const match = /(?:^|\s)(\d+\.\d+\.\d+(?:[-+][^\s]+)?)(?:\s|$)/u.exec(stdout.trim());
-  return match?.[1] ?? null;
-}
-
-export interface OpenCodeAdapterDeps {
-  env: Record<string, string | undefined>;
-  homeDirectory: string;
-  hasAuthStore?: (directory: string) => boolean;
-}
-
-function defaultOpenCodeEnv(
-  deps: Required<Pick<OpenCodeAdapterDeps, "env" | "homeDirectory" | "hasAuthStore">>,
-): Record<string, string> {
-  if (deps.env.XDG_DATA_HOME !== undefined) return {};
-  const dataHome = join(deps.homeDirectory, ".local", "share");
-  return deps.hasAuthStore(join(dataHome, "opencode"))
-    ? { XDG_DATA_HOME: dataHome }
-    : {};
-}
+export interface OpenCodeAdapterDeps extends HostStoreContext {}
 
 export class OpenCodeAdapter implements ProducerAdapter {
-  readonly producerId = "opencode";
-  readonly structuredOutput = false;
-  readonly executionModes = ["edit"];
+  readonly producerId = openCodeDescriptor.id;
+  readonly structuredOutput = openCodeDescriptor.structuredOutput!;
+  readonly executionModes = openCodeDescriptor.executionModes!;
+  readonly descriptor = openCodeDescriptor;
 
   constructor(private readonly deps: OpenCodeAdapterDeps = {
     env: process.env,
     homeDirectory: homedir(),
   }) {}
 
-  private hasAuthStore(directory: string): boolean {
-    return (this.deps.hasAuthStore ?? (store => existsSync(join(store, "auth.json"))))(directory);
-  }
-
   async probe(ctx: ProbeContext): Promise<CapabilityReport> {
-    if (ctx.os === "win32") return unavailableReport(ctx, "unsupported-platform");
-
-    let executable: ResolvedExecutable;
-    try {
-      executable = await normalizeNodeShim(
-        await ctx.ps.resolveExecutable({ name: "opencode" }),
-      );
-    } catch {
-      return unavailableReport(ctx, "missing-executable");
-    }
-
-    try {
-      const result = await supervise(ctx.ps, {
-        executable,
-        args: ["--version"],
-        cwd: process.cwd(),
-        env: {},
-        timeoutMs: VERSION_TIMEOUT_MS,
-        maxOutputBytes: VERSION_OUTPUT_LIMIT,
-      }, {});
-      const version = result.spawnError === undefined && result.exitCode === 0
-        ? parseVersion(result.stdout)
-        : null;
-      if (version === null) return unavailableReport(ctx, "probe-failed", executable);
-
-      const writeConfinementBackend = selectOsWriteConfinementBackend(ctx);
-      const authStore = join(this.deps.homeDirectory, ".local", "share", "opencode");
-      const authState = this.hasAuthStore(authStore)
-        ? "authenticated"
-        : "unauthenticated";
-      return {
-        producerId: this.producerId,
-        available: true,
-        reason: null,
-        os: ctx.os,
-        arch: ctx.arch,
-        environmentType: ctx.environmentType,
-        resolvedExecutable: executable,
-        version,
-        authState,
-        executionModes: [...this.executionModes],
-        structuredOutput: this.structuredOutput,
-        writeConfinementBackend,
-        laneEligibility: { edit: writeConfinementBackend !== null },
-      };
-    } catch {
-      return unavailableReport(ctx, "probe-failed", executable);
-    }
+    return probeOsConfinedCli(ctx, {
+      producerId: this.producerId,
+      executableName: "opencode",
+      structuredOutput: this.structuredOutput,
+      isAuthenticated: () => isProducerAuthenticated(openCodeDescriptor, this.deps),
+    });
   }
 
   buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
@@ -149,14 +92,13 @@ export class OpenCodeAdapter implements ProducerAdapter {
     return {
       executable: ctx.executable,
       args,
-      stdin: renderProducerPrompt(spec, ctx.readOnly === true),
-      requiredEnv: [...OPENCODE_REQUIRED_ENV],
-      env: defaultOpenCodeEnv({
-        env: this.deps.env,
-        homeDirectory: this.deps.homeDirectory,
-        hasAuthStore: directory => this.hasAuthStore(directory),
+      stdin: renderProducerPrompt(spec, {
+        readOnly: ctx.readOnly === true,
+        ...openCodeDescriptor.prompt,
       }),
-      // Model sessions must reach the provider API; write-protection remains the confinement goal.
+      requiredEnv: [...OPENCODE_REQUIRED_ENV],
+      inheritedStateWritablePaths: resolveInheritedWritablePaths(openCodeDescriptor, this.deps),
+      env: resolveDefaultEnv(openCodeDescriptor, this.deps),
       network: "allowed",
     };
   }

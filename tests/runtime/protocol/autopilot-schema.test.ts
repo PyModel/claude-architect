@@ -39,7 +39,7 @@ function delegation(objective: string) {
 // would re-run this suite's describe blocks in the importing suite.
 function validAutopilotSpec() {
   return {
-    specVersion: "1",
+    specVersion: "2",
     topic: "delegation-autopilot",
     base: { remote: "origin", branch: "main" },
     tasks: [
@@ -56,32 +56,34 @@ function validAutopilotSpec() {
     ],
     finalSuccessCriteria: ["The complete branch passes every release gate."],
     finalVerification: verificationCommands(),
-    shipping: {
-      provider: "github",
-      draft: true,
-      markReadyWhenRequiredChecksPass: true,
-      requiredChecksTimeoutMs: 1_800_000,
-      pullRequestTitle: "Add delegation autopilot",
-      pullRequestBody: "Implements the reviewed autonomous workflow.",
-    },
   };
 }
 
-describe("Autopilot Spec v1", () => {
+describe("Autopilot Spec v2", () => {
   it("accepts the canonical fixture", () => {
     expect(validateAutopilotSpec(validAutopilotSpec())).toMatchObject({ ok: true });
   }, 5_000);
 
-  it("accepts inclusive task, topic, commit-byte, and CI-timeout boundaries", () => {
+  it("names the retired v1 contract instead of reporting a generic schema error", () => {
+    const spec: any = validAutopilotSpec();
+    spec.specVersion = "1";
+    expect(validateAutopilotSpec(spec)).toEqual({
+      ok: false,
+      errors: [expect.objectContaining({
+        path: "#/specVersion",
+        message: expect.stringContaining("final-reviewed local branch"),
+      })],
+    });
+  });
+
+  it("accepts inclusive task, topic, and commit-byte boundaries", () => {
     const spec = validAutopilotSpec();
     spec.topic = "abc";
     spec.tasks = [spec.tasks[0]!];
     spec.tasks[0]!.commitMessage = "a".repeat(200);
-    spec.shipping.requiredChecksTimeoutMs = 600_000;
     expect(validateAutopilotSpec(spec)).toMatchObject({ ok: true });
 
     spec.topic = `a${"b".repeat(46)}z`;
-    spec.shipping.requiredChecksTimeoutMs = 3_600_000;
     expect(validateAutopilotSpec(spec)).toMatchObject({ ok: true });
   }, 5_000);
 
@@ -95,7 +97,9 @@ describe("Autopilot Spec v1", () => {
     ["unknown final verification key", (s: any) => {
       s.finalVerification[0].extra = true;
     }],
-    ["unknown shipping key", (s: any) => { s.shipping.extra = true; }],
+    ["a shipping section (v1 contract)", (s: any) => {
+      s.shipping = { provider: "github", draft: true };
+    }],
     ["no tasks", (s: any) => { s.tasks = []; }],
     ["more than 32 tasks", (s: any) => {
       s.tasks = Array.from({ length: 33 }, (_, index) => ({
@@ -112,17 +116,7 @@ describe("Autopilot Spec v1", () => {
     ["empty final verification", (s: any) => { s.finalVerification = []; }],
     ["non-origin remote", (s: any) => { s.base.remote = "upstream"; }],
     ["non-main target", (s: any) => { s.base.branch = "develop"; }],
-    ["non-GitHub provider", (s: any) => { s.shipping.provider = "gitlab"; }],
-    ["non-draft shipping", (s: any) => { s.shipping.draft = false; }],
-    ["disabled required-check readiness", (s: any) => {
-      s.shipping.markReadyWhenRequiredChecksPass = false;
-    }],
-    ["CI timeout below the floor", (s: any) => {
-      s.shipping.requiredChecksTimeoutMs = 599_999;
-    }],
-    ["CI timeout above the ceiling", (s: any) => {
-      s.shipping.requiredChecksTimeoutMs = 3_600_001;
-    }],
+    ["the retired v1 version", (s: any) => { s.specVersion = "1"; }],
     ["multiline commit message", (s: any) => {
       s.tasks[0].commitMessage = "feat: x\nbody";
     }],

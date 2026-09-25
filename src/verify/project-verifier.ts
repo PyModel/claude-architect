@@ -1,6 +1,9 @@
-import { realpath } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
+import { seatbeltArgv } from "../platform/sandbox/seatbelt.js";
+import { gitChecked as checkedGit } from "../git/checked-git.js";
 import path from "node:path";
-import { git, type GitResult } from "../git/git-exec.js";
 import { WorktreeManager } from "../runtime/worktree-manager.js";
 import type {
   CheckoutLock,
@@ -16,11 +19,9 @@ import type { CandidateArtifact, CommandOutcome } from "../protocol/attempt-resu
 import type { VerificationCommand } from "../protocol/delegation-spec.js";
 import { registerSensitiveEnvironment, WIN32_ESSENTIAL_ENV } from "../runtime/environment-policy.js";
 import { redact } from "../runtime/redaction.js";
-import { RuntimeError } from "../util/errors.js";
 import { linkPrimaryDependencies, type DependencyLink } from "./dependency-link.js";
 
 const MAX_COMMAND_OUTPUT_BYTES = 1_000_000;
-const MAX_DIAGNOSTIC_LENGTH = 2_000;
 const POSIX_ESSENTIAL_ENV = [
   "HOME",
   "PATH",
@@ -47,9 +48,35 @@ export interface ProjectVerifyArgs {
   borrowedCheckoutLease?: CheckoutLock;
 }
 
+/**
+ * Verification executes Producer-authored code (tests, package scripts), so it
+ * runs under the same OS confinement as the Producer wherever the runtime owns
+ * a backend. `null` means no backend exists here; the evidence then records
+ * `confinement: "none"` and the decision policy refuses autonomous acceptance.
+ */
+export interface VerificationConfinement {
+  backend: "macos-seatbelt";
+  worktreePath: string;
+  scratchDir: string;
+}
+
+export type VerificationConfinementBackend = VerificationConfinement["backend"] | "none";
+
+export function verificationConfinementBackend(
+  os: PlatformServices["os"],
+  arch: string,
+): VerificationConfinement["backend"] | null {
+  const platform = SANDBOX_BACKENDS.find(backend => backend.id === "macos-seatbelt")
+    ?.platforms.find(candidate =>
+      candidate.os === os
+      && candidate.environmentType === "native"
+      && (candidate.arch === undefined || candidate.arch === arch));
+  return platform === undefined || platform.state === "unsupported" ? null : "macos-seatbelt";
+}
+
 export interface ProjectCommandEvidence {
   id: string;
-  confinement: "none";
+  confinement: VerificationConfinementBackend;
   networkPolicy: "unenforced";
   requestedNetwork: VerificationCommand["network"];
   skipped: boolean;
@@ -93,16 +120,7 @@ export interface ExecutedCommand {
   terminal: CommandTermination;
 }
 
-function gitFailure(action: string, result: GitResult): RuntimeError {
-  const diagnostic = redact(result.stderr || result.stdout).trim().slice(0, MAX_DIAGNOSTIC_LENGTH);
-  return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
-}
 
-async function checkedGit(cwd: string, args: string[]): Promise<string> {
-  const result = await git(cwd, args);
-  if (result.exitCode !== 0) throw gitFailure(`git ${args[0] ?? "command"}`, result);
-  return result.stdout;
-}
 
 function defineEnvironmentValue(environment: Record<string, string>, name: string, value: string): void {
   Object.defineProperty(environment, name, {
@@ -207,6 +225,7 @@ export async function executeCommand(args: {
   now: () => number;
   abortSignal?: AbortSignal;
   logNamePrefix?: string;
+  confinement?: VerificationConfinement | null;
 }): Promise<ExecutedCommand> {
   const { command, index, cwd, ps, now } = args;
   const registration = registerSensitiveEnvironment(command.environment ?? {});
@@ -223,9 +242,27 @@ export async function executeCommand(args: {
       ...(path.isAbsolute(command.executable) ? { explicitPath: command.executable } : {}),
       searchPath: environment.PATH ?? environment.Path ?? "",
     });
+    let spawned = { executable, args: command.args };
+    if (args.confinement) {
+      defineEnvironmentValue(environment, "TMPDIR", args.confinement.scratchDir);
+      const confined = seatbeltArgv(args.confinement, [
+        executable.command,
+        ...executable.prefixArgs,
+        ...command.args,
+      ]);
+      spawned = {
+        executable: {
+          kind: "native",
+          command: confined.command,
+          prefixArgs: [],
+          resolvedFrom: `seatbelt:${executable.resolvedFrom}`,
+        },
+        args: confined.args,
+      };
+    }
     exit = await supervise(ps, {
-      executable,
-      args: command.args,
+      executable: spawned.executable,
+      args: spawned.args,
       cwd,
       env: environment,
       timeoutMs: command.timeoutMs,
@@ -270,7 +307,7 @@ export async function executeCommand(args: {
       },
       evidence: {
         id: redact(command.id),
-        confinement: "none",
+        confinement: args.confinement?.backend ?? "none",
         networkPolicy: "unenforced",
         requestedNetwork: command.network,
         skipped: false,
@@ -369,8 +406,16 @@ export async function projectVerify(args: ProjectVerifyArgs): Promise<ProjectVer
       : { borrowedCheckoutLease: args.borrowedCheckoutLease },
   );
   const materialized = await manager.create(args.artifact.candidateCommitOid);
+  const backend = verificationConfinementBackend(ps.os, arch);
+  let scratchDir: string | null = null;
   let primaryError: unknown;
   try {
+    scratchDir = backend === null
+      ? null
+      : await mkdtemp(path.join(tmpdir(), "claude-architect-verify-"));
+    const confinement: VerificationConfinement | null = backend === null || scratchDir === null
+      ? null
+      : { backend, worktreePath: materialized.path, scratchDir };
     const dependencyLink = await linkPrimaryDependencies(args.repoRoot, materialized.path);
     const materializedTree = (await checkedGit(
       materialized.path,
@@ -423,6 +468,7 @@ export async function projectVerify(args: ProjectVerifyArgs): Promise<ProjectVer
         cwd,
         ps,
         now,
+        confinement,
         ...(args.logNamePrefix === undefined ? {} : { logNamePrefix: args.logNamePrefix }),
       });
       commandOutcomes.push(executed.outcome);
@@ -456,6 +502,7 @@ export async function projectVerify(args: ProjectVerifyArgs): Promise<ProjectVer
     primaryError = error;
     throw error;
   } finally {
+    if (scratchDir !== null) await rm(scratchDir, { recursive: true, force: true });
     try {
       await materialized.cleanup();
     } catch (cleanupError) {

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { git, type GitResult } from "../git/git-exec.js";
+import { gitSucceeded as succeeded } from "../git/checked-git.js";
+import { git, userCommitEnvironment } from "../git/git-exec.js";
 import {
   stageCandidateTreeUnderLock,
   statusMatchesArtifact,
@@ -10,9 +11,12 @@ import { getPlatformServices } from "../platform/select-platform.js";
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { CandidateArtifact } from "../protocol/attempt-result.js";
 import { ArtifactStore } from "../runtime/artifact-store.js";
-import { guardWorktreeMutations } from "../runtime/worktree-mutation-gate.js";
+import { decisionAuthority, type DecisionAuthority } from "../mcp/decision-authority.js";
+import { isLockContention } from "../platform/lock-ownership.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import { redact } from "../runtime/redaction.js";
 import { reviewSnapshotHash } from "../runtime/review-snapshot.js";
+import { readRunDecisionSnapshot } from "../runtime/run-decision.js";
 import { logger } from "../util/logger.js";
 import {
   WorkflowBranchManager,
@@ -42,6 +46,7 @@ export type PromotionClassification =
   | "evidence-mismatch"
   | "decision-conflict"
   | "branch-identity-changed"
+  | "checkout-busy"
   | "dirty-worktree"
   | "head-changed"
   | "apply-conflict"
@@ -76,6 +81,7 @@ export interface CandidatePromoterDependencies {
   artifactStore?: (runId: string) => ArtifactStore;
   stageCandidate?: typeof stageCandidateTreeUnderLock;
   now?: () => string;
+  decisionAuthority?: () => DecisionAuthority;
 }
 
 function safeCommitMessage(message: string): boolean {
@@ -87,11 +93,6 @@ function safeCommitMessage(message: string): boolean {
     && !/\b(?:ai|claude|codex|chatgpt|copilot|gemini|llm)[ -]generated\b/iu.test(message);
 }
 
-function succeeded(result: GitResult): boolean {
-  return result.exitCode === 0
-    && result.truncated?.stdout !== true
-    && result.truncated?.stderr !== true;
-}
 
 function rejected(classification: PromotionClassification): PromotionResult {
   return { status: "rejected", classification };
@@ -164,6 +165,7 @@ const PROMOTION_CLASSIFICATION_RECORD = {
   "journal-failed": true,
   "anchor-deletion-failed": true,
   "lock-release-failed": true,
+  "checkout-busy": true,
   "human-decision-required": true,
 } as const satisfies Record<PromotionClassification, true>;
 const PROMOTION_CLASSIFICATIONS: ReadonlySet<string> = new Set(
@@ -187,17 +189,18 @@ export class CandidatePromoter {
   private readonly artifactStore: (runId: string) => ArtifactStore;
   private readonly stageCandidate: typeof stageCandidateTreeUnderLock;
   private readonly now: () => string;
+  private readonly decisionAuthority: () => DecisionAuthority;
 
   constructor(dependencies: CandidatePromoterDependencies = {}) {
     this.runGit = dependencies.git ?? git;
-    this.platformServices = guardWorktreeMutations(
-      dependencies.platformServices ?? getPlatformServices(),
-    );
+    this.platformServices = dependencies.platformServices ?? getPlatformServices();
+
     this.branchManager = dependencies.branchManager ?? new WorkflowBranchManager();
     this.workflowStore = dependencies.workflowStore ?? (workflowId => new WorkflowStore(workflowId));
     this.artifactStore = dependencies.artifactStore ?? (runId => new ArtifactStore(runId));
     this.stageCandidate = dependencies.stageCandidate ?? stageCandidateTreeUnderLock;
     this.now = dependencies.now ?? (() => new Date().toISOString());
+    this.decisionAuthority = dependencies.decisionAuthority ?? (() => decisionAuthority());
   }
 
   private async proveCommit(
@@ -290,10 +293,10 @@ export class CandidatePromoter {
     eligibilityHash: string,
   ): Promise<boolean> {
     try {
-      let decision = await artifactStore.readCandidateDecision(runId);
+      let decision = await artifactStore.readCandidateDecision();
       if (decision === null) {
         await artifactStore.writeAutopilotDecision(artifact, eligibility, this.now());
-        decision = await artifactStore.readCandidateDecision(runId);
+        decision = await artifactStore.readCandidateDecision();
       }
       return decision?.decisionVersion === "2"
         && decision.authority === "autopilot-policy"
@@ -310,6 +313,9 @@ export class CandidatePromoter {
       || !SHA256.test(request.expectedArtifactHash)
       || request.workflowCheckoutPath.length === 0) return rejected("invalid-request");
     if (!safeCommitMessage(request.commitMessage)) return rejected("invalid-commit-message");
+    // Promotion records an `autopilot-policy` acceptance. Under the `human`
+    // authority no acceptance may be recorded without a person.
+    if (this.decisionAuthority() === "human") return rejected("human-decision-required");
 
     const workflowStore = this.workflowStore(request.workflowId);
     const artifactStore = this.artifactStore(request.runId);
@@ -371,13 +377,14 @@ export class CandidatePromoter {
     let advisor;
     let eligibility: AutopilotEligibilityRecord | null;
     try {
-      [result, manifest, pipelineResult, snapshot, advisor, eligibility] = await Promise.all([
-        artifactStore.readResult(request.runId),
-        artifactStore.readManifest(request.runId),
-        artifactStore.readPipelineArtifact<PipelineResult>(request.runId, "pipeline-result"),
-        artifactStore.readReviewSnapshot(request.runId),
-        artifactStore.readAdvisorReport(request.runId),
-        artifactStore.readAutopilotEligibility(request.runId),
+      const decisionSnapshot = await readRunDecisionSnapshot(request.runId, { store: artifactStore });
+      result = decisionSnapshot.result;
+      manifest = decisionSnapshot.manifest;
+      snapshot = decisionSnapshot.reviewSnapshot;
+      [pipelineResult, advisor, eligibility] = await Promise.all([
+        artifactStore.readPipelineArtifact<PipelineResult>("pipeline-result"),
+        artifactStore.readAdvisorReport(),
+        artifactStore.readAutopilotEligibility(),
       ]);
     } catch {
       return finishFailure("evidence-mismatch");
@@ -423,17 +430,15 @@ export class CandidatePromoter {
       return finishFailure("branch-identity-changed");
     }
 
-    let lock;
-    try {
-      lock = await this.platformServices.acquireCheckoutLock(request.workflowCheckoutPath);
-    } catch {
-      return finishFailure("branch-identity-changed");
-    }
+    const safety = new PlatformSafety(this.platformServices);
+    let enteredLease = false;
     let terminal: PromotionResult | undefined;
     try {
-      const completedOid = intent.completion === null
-        ? null
-        : completionCommit(intent.completion.completion);
+      await safety.withCheckoutLease(request.workflowCheckoutPath, async (lock) => {
+        enteredLease = true;
+        const completedOid = intent.completion === null
+          ? null
+          : completionCommit(intent.completion.completion);
       let lockedOutcome: LockedPromotionOutcome;
       try {
         lockedOutcome = await workflowStore.withLockedState(workflow.revision, async locked => {
@@ -519,13 +524,6 @@ export class CandidatePromoter {
                 journalFailure: false,
               };
             }
-            if (!await this.ensureAcceptedDecision(
-              artifactStore, request.runId, artifact, eligibility, eligibilityHash,
-            )) {
-              return {
-                kind: "rejected", classification: "decision-conflict", journalFailure: true,
-              };
-            }
             const staged = await this.stageCandidate({
               repoRoot: request.workflowCheckoutPath,
               artifact,
@@ -543,7 +541,11 @@ export class CandidatePromoter {
                   kind: "rejected", classification: classifyStage(staged), journalFailure: true,
                 };
             }
-          } else if (!await this.ensureAcceptedDecision(
+          }
+          // Recorded only once the exact bytes are staged, so a conflicted or
+          // failed stage never leaves an acceptance behind for bytes that were
+          // not applied. A crash after staging lands here again via recovery.
+          if (!await this.ensureAcceptedDecision(
             artifactStore, request.runId, artifact, eligibility, eligibilityHash,
           )) {
             return {
@@ -555,11 +557,12 @@ export class CandidatePromoter {
               kind: "rejected", classification: "human-decision-required", journalFailure: false,
             };
           }
-          const [author, committer] = await Promise.all([
-            this.runGit(request.workflowCheckoutPath, ["var", "GIT_AUTHOR_IDENT"]),
-            this.runGit(request.workflowCheckoutPath, ["var", "GIT_COMMITTER_IDENT"]),
-          ]);
-          if (!succeeded(author) || !succeeded(committer)) {
+          // The promoted commit is handed off under the user's name, so it
+          // carries their identity rather than the runtime's fixed one.
+          const identityEnv = await userCommitEnvironment(
+            request.workflowCheckoutPath, this.runGit,
+          );
+          if (identityEnv === null) {
             return {
               kind: "rejected", classification: "git-identity-missing", journalFailure: true,
             };
@@ -567,7 +570,7 @@ export class CandidatePromoter {
           const created = await this.runGit(request.workflowCheckoutPath, [
             "commit-tree", artifact.candidateTreeOid, "-p", request.expectedHead,
             "-m", request.commitMessage,
-          ]);
+          ], { env: identityEnv });
           const commitOid = created.stdout.trim();
           if (!succeeded(created) || !OBJECT_ID.test(commitOid)) {
             return {
@@ -596,50 +599,51 @@ export class CandidatePromoter {
             };
           }
           return { kind: "committed", commitOid, needsJournal: true };
-        });
-      } catch (error) {
-        const toolError = (error as { detail?: { toolError?: unknown } }).detail?.toolError;
-        if (toolError !== "workflow-revision-conflict") throw error;
-        lockedOutcome = {
-          kind: "rejected", classification: "human-decision-required", journalFailure: false,
-        };
-      }
 
-      if (lockedOutcome.kind === "rejected") {
-        terminal = lockedOutcome.journalFailure
-          ? await finishFailure(lockedOutcome.classification)
-          : rejected(lockedOutcome.classification);
-      } else {
-        let journaled = !lockedOutcome.needsJournal;
-        if (!journaled) {
-          try {
-            await workflowStore.completeIntent({
-              idempotencyKey, completion: { commitOid: lockedOutcome.commitOid },
-            });
-            journaled = true;
-          } catch {
-            journaled = false;
-          }
-        }
-        terminal = !journaled
-          ? rejected("journal-failed")
-          : await this.deleteAnchor(request.workflowCheckoutPath, artifact)
-            ? { status: "committed", commitOid: lockedOutcome.commitOid }
-            : rejected("anchor-deletion-failed");
-      }
-    } finally {
-      try {
-        await lock.release();
-      } catch (releaseError) {
-        if (terminal?.status === "committed") {
-          logger.warn("checkout lock release failed after candidate promotion", {
-            event: "checkout-lock-release-failed",
-            workflowId: request.workflowId,
-            reason: redact(String(releaseError)),
           });
-        } else {
-          terminal = rejected("lock-release-failed");
+        } catch (error) {
+          const toolError = (error as { detail?: { toolError?: unknown } }).detail?.toolError;
+          if (toolError !== "workflow-revision-conflict") throw error;
+          lockedOutcome = {
+            kind: "rejected", classification: "human-decision-required", journalFailure: false,
+          };
         }
+
+        if (lockedOutcome.kind === "rejected") {
+          terminal = lockedOutcome.journalFailure
+            ? await finishFailure(lockedOutcome.classification)
+            : rejected(lockedOutcome.classification);
+        } else {
+          let journaled = !lockedOutcome.needsJournal;
+          if (!journaled) {
+            try {
+              await workflowStore.completeIntent({
+                idempotencyKey, completion: { commitOid: lockedOutcome.commitOid },
+              });
+              journaled = true;
+            } catch {
+              journaled = false;
+            }
+          }
+          terminal = !journaled
+            ? rejected("journal-failed")
+            : await this.deleteAnchor(request.workflowCheckoutPath, artifact)
+              ? { status: "committed", commitOid: lockedOutcome.commitOid }
+              : rejected("anchor-deletion-failed");
+        }
+      });
+    } catch (error) {
+      if (terminal?.status === "committed") {
+        logger.warn("checkout lock release failed after candidate promotion", {
+          event: "checkout-lock-release-failed",
+          workflowId: request.workflowId,
+          reason: redact(String(error)),
+        });
+      } else if (!enteredLease) {
+        // Contention is transient and says nothing about branch identity.
+        return finishFailure(isLockContention(error) ? "checkout-busy" : "branch-identity-changed");
+      } else {
+        throw error;
       }
     }
     return terminal!;

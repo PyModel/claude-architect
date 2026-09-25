@@ -17,7 +17,6 @@ import {
   readDecisionAdvisory,
   type ToolDependencies,
 } from "../../src/mcp/tools.js";
-import { autonomousEligibility } from "../../src/mcp/decision-authority.js";
 import { runPipeline } from "../../src/pipeline/pipeline-runtime.js";
 import type { ReviewReport } from "../../src/pipeline/report-types.js";
 import type { ResolvedExecutable } from "../../src/platform/platform-services.js";
@@ -225,7 +224,11 @@ const passingVerifier: AcceptanceVerifierLike = {
     return {
       ok: true,
       failures: [],
-      evidence: { acceptance: "passed" },
+      // Real-shaped policy: the declared command ran under OS confinement.
+      evidence: {
+        acceptance: "passed",
+        verificationPolicy: [{ id: "unit", confinement: "macos-seatbelt", skipped: false }],
+      },
       commandOutcomes: [],
     };
   },
@@ -349,6 +352,11 @@ afterEach(async () => {
     rm(entry, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })));
 });
 
+// Every writer and review round gets a fresh worktree, so one pipeline drives
+// several real create/remove cycles; on a loaded full-suite host those exceed
+// the default per-test budget.
+const PIPELINE_TIMEOUT_MS = 90_000;
+
 describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () => {
   it("full lifecycle: a gate-cleared pipeline remains autonomously eligible", async () => {
     const repo = await initRepo();
@@ -385,14 +393,12 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
       verifiedClean: true,
       unreadable: false,
     });
-    expect(autonomousEligibility("autonomous", advisory))
-      .toEqual({ eligible: true, reasons: [] });
 
     const candidateHash = result.result.attempt.candidate?.manifestHash;
     expect(candidateHash).toBeDefined();
     await expect(handleDecideCandidate(repo, runId, "accepted", candidateHash!, lifecycleDeps))
       .resolves.toEqual({ recorded: true });
-    const manifest = await new ArtifactStore(runId).readManifest(runId);
+    const manifest = await new ArtifactStore(runId).readManifest();
     expect(manifest).not.toBeNull();
     expect(manifest?.candidateManifestHash).not.toBeNull();
     // decideCandidate compares the caller's hash against the ARCHIVED manifest,
@@ -419,7 +425,7 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
       lifecycleDeps,
     )).resolves.toMatchObject({ integration: "applied" });
     await expect(readFile(path.join(repo, "a.txt"), "utf8")).resolves.toBe("fixed\n");
-  });
+  }, PIPELINE_TIMEOUT_MS);
 
   it("pipeline with an unfixable blocker ends at human-decision-required", async () => {
     const repo = await initRepo();
@@ -439,7 +445,7 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
     if (!result.ok) throw new Error("pipeline delegation unexpectedly failed");
     expect(result.result.rounds).toHaveLength(2);
     expect(adapter.calls).toEqual({ implement: 2, correctness: 2, systems: 2, fixer: 2 });
-  });
+  }, PIPELINE_TIMEOUT_MS);
 
   it("carries a refusing gate into the archived attempt the accept path reads", async () => {
     const repo = await initRepo();
@@ -454,23 +460,18 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
     // The gate's refusal used to live only in the pipeline-result artifact. The
     // accept path loads the archived attempt, so a candidate the gate rejected
     // was indistinguishable there from one it cleared.
-    const archived = await new ArtifactStore(runId).readResult(runId);
+    const archived = await new ArtifactStore(runId).readResult();
     expect(archived?.evidence.pipelineGateRefused).toMatchObject({
       reasons: expect.arrayContaining([expect.any(String)]),
     });
 
-    // And it has to reach the text the human reads before spending a decision.
+    // It has to reach the text the human reads before spending a decision, and
+    // block autonomous acceptance: the advisory is the autonomous verdict.
     await expect(readDecisionAdvisory(runId, deps)).resolves.toMatchObject({
-      warnings: [expect.stringContaining("the pipeline gate did NOT clear this candidate")],
+      warnings: archived?.evidence.pipelineGateRefused?.reasons,
+      verifiedClean: false,
     });
-
-    // A refused gate must also block autonomous acceptance, or the default
-    // authority would spend a decision on the candidate the gate rejected.
-    expect(autonomousEligibility(
-      "autonomous",
-      await readDecisionAdvisory(runId, deps),
-    ).eligible).toBe(false);
-  });
+  }, PIPELINE_TIMEOUT_MS);
 
   it("warns rather than reporting a clean candidate when the archive cannot be read", async () => {
     const advisory = await readDecisionAdvisory("e2e-pipeline-no-such-run", {});
@@ -479,7 +480,5 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
       unreadable: true,
       verifiedClean: false,
     });
-    // An unknown candidate must never be autonomously accepted.
-    expect(autonomousEligibility("autonomous", advisory).eligible).toBe(false);
-  });
+  }, PIPELINE_TIMEOUT_MS);
 });

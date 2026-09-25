@@ -15,7 +15,7 @@ import {
   ensurePrivateDirectory as ensurePlatformPrivateDirectory,
   syncDirectoryMetadata,
 } from "../platform/durable-directory.js";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode } from "../util/errors.js";
 import { platformPathsEqual } from "../util/platform-path.js";
 import { readStableRegularFile } from "../util/stable-file.js";
 import { resolveStateDir } from "./state-dir.js";
@@ -89,12 +89,6 @@ function sameIdentity(
     && metadata.ino === expected.ino
     && metadata.birthtimeNs > 0n
     && metadata.birthtimeNs === expected.birthtimeNs;
-}
-
-function errorCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String(error.code)
-    : undefined;
 }
 
 function manifestRoot(): string {

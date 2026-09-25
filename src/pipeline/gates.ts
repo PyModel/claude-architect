@@ -33,14 +33,15 @@ export function evaluateGates(input: GateInput): GateResult {
   const dispositionsById = new Map(input.dispositions.map((d) => [d.findingId, d]));
 
   for (const finding of input.findings) {
-    if (finding.severity === "nit") continue; // nits never block
+    // Minors and nits never block (role-prompts rubric). An approving final
+    // round runs no fixer, so its minors carry no disposition by design.
+    if (finding.severity === "nit" || finding.severity === "minor") continue;
     const disposition = dispositionsById.get(finding.id);
     if (!disposition) {
       reasons.push(`finding ${finding.id} (${finding.severity}) has no disposition`);
-      if (finding.severity === "blocker" || finding.severity === "major") requiresHumanDecision = true;
+      requiresHumanDecision = true;
       continue;
     }
-    if (finding.severity === "minor") continue; // dispositioned minors never block
     if (RESOLVING.has(disposition.disposition)) {
       if (disposition.disposition === "fixed" && !disposition.commit) {
         reasons.push(`finding ${finding.id} marked fixed without a commit`);

@@ -2,6 +2,9 @@
 
 Claude Architect separates planning and acceptance from untrusted implementation. “Trusted” here means trusted to enforce workflow policy, not infallible or safe from a compromised host.
 
+Each invariant named here has exactly one owner in the source; the mapping is
+[ARCHITECTURE.md § Who owns each trust invariant](ARCHITECTURE.md#who-owns-each-trust-invariant).
+
 ```mermaid
 flowchart LR
   H[Human operator] -->|requirements, Producer choice, authority policy| C[Claude architect session]

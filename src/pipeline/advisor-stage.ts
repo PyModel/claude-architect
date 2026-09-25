@@ -1,7 +1,6 @@
 import {
   advisorReportHash,
   canonicalArtifactHash,
-  eligibilityInputFromArtifacts,
   evaluateAutopilotEligibility,
   pipelineResultHash,
   type AutopilotEligibilityRecord,
@@ -18,11 +17,13 @@ import {
 import { transitionRunStatusSafely } from "../runtime/run-status.js";
 import { RuntimeError } from "../util/errors.js";
 import {
-  runStructuredRole,
   type PipelineDependencies,
   type PipelineResult,
-  type StructuredRoleRunResult,
 } from "./pipeline-runtime.js";
+import {
+  runStructuredRole,
+  type StructuredRoleRunResult,
+} from "./pipeline-roles.js";
 import type { AdvisorReport } from "./report-types.js";
 import {
   canRenderUntrustedBlockExactly,
@@ -32,8 +33,8 @@ import {
 const schemas = loadSchemas();
 
 export interface AdvisorStageStore {
-  readPipelineArtifact<T>(runId: string, name: string): Promise<T | null>;
-  readReviewSnapshot(runId: string): Promise<ReviewSnapshot | null>;
+  readPipelineArtifact<T>(name: string): Promise<T | null>;
+  readReviewSnapshot(): Promise<ReviewSnapshot | null>;
   writePostPipelineAutopilotArtifacts(args: {
     pipelineResult: PipelineResult;
     reviewSnapshot: ReviewSnapshot;
@@ -131,9 +132,9 @@ export async function runAdvisorStage(args: RunAdvisorStageArgs): Promise<Adviso
   });
   try {
   const [archivedPipelineResult, archivedReviewSnapshot, archivedSpec] = await Promise.all([
-    store.readPipelineArtifact<PipelineResult>(args.runId, "pipeline-result"),
-    store.readReviewSnapshot(args.runId),
-    store.readPipelineArtifact<DelegationSpec>(args.runId, "delegation-spec"),
+    store.readPipelineArtifact<PipelineResult>("pipeline-result"),
+    store.readReviewSnapshot(),
+    store.readPipelineArtifact<DelegationSpec>("delegation-spec"),
   ]);
   if (archivedPipelineResult === null) {
     throw new RuntimeError("advisor stage requires a durable archived PipelineResult");
@@ -234,12 +235,12 @@ export async function runAdvisorStage(args: RunAdvisorStageArgs): Promise<Adviso
   const report = outcome.ok
     ? redactRecord(outcome.report) as AdvisorReport
     : failureReport(outcome.failure, outcome.failedRoleLogRef);
-  const eligibility = evaluateAutopilotEligibility(eligibilityInputFromArtifacts({
+  const eligibility = evaluateAutopilotEligibility({
     pipelineResult: archivedPipelineResult,
     reviewSnapshot: archivedReviewSnapshot,
     advisor: report,
     evaluatedAt: args.evaluatedAt,
-  }));
+  });
   await transitionRunStatusSafely(statusStore, args.runId, "gating", {
     role: "advisor",
   });

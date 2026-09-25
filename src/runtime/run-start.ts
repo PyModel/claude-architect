@@ -18,6 +18,7 @@ import type {
 } from "../platform/platform-services.js";
 import { RuntimeError } from "../util/errors.js";
 import type { ArtifactStore } from "./artifact-store.js";
+import { flushDirectory } from "../platform/durable-directory.js";
 
 const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 
@@ -46,10 +47,6 @@ export interface RunStartTarget {
 export interface RunStartContext {
   target: RunStartTarget;
   record: RunStartRecord;
-}
-
-function errorCode(error: unknown): string | undefined {
-  return (error as NodeJS.ErrnoException).code;
 }
 
 export async function resolveWatchdogPath(): Promise<string> {
@@ -108,20 +105,6 @@ function assertDirectoryIdentity(target: RunStartTarget): Promise<void> {
   });
 }
 
-async function syncDirectory(directory: string): Promise<void> {
-  let handle;
-  try {
-    handle = await open(directory, constants.O_RDONLY | NO_FOLLOW);
-    await handle.sync();
-  } catch (error) {
-    const unsupportedOnWindows = process.platform === "win32"
-      && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode(error) ?? "");
-    if (!unsupportedOnWindows) throw error;
-  } finally {
-    await handle?.close();
-  }
-}
-
 export async function writeRunStart(
   target: RunStartTarget,
   record: RunStartRecord,
@@ -142,7 +125,7 @@ export async function writeRunStart(
     } finally {
       await handle.close();
     }
-    await syncDirectory(target.canonicalDirectory);
+    await flushDirectory(target.canonicalDirectory);
     await assertDirectoryIdentity(target);
     return;
   }
@@ -167,7 +150,7 @@ export async function writeRunStart(
     await assertDirectoryIdentity(target);
     await rename(temporaryPath, destination);
     created = false;
-    await syncDirectory(target.canonicalDirectory);
+    await flushDirectory(target.canonicalDirectory);
     await assertDirectoryIdentity(target);
   } finally {
     await handle?.close();

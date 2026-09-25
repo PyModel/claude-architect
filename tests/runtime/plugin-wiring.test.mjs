@@ -80,7 +80,7 @@ describe("P0-A plugin wiring", () => {
     const runtimeVersion = /RUNTIME_VERSION\s*=\s*"([^"]+)"/u.exec(versions)?.[1];
     const skill = read("skills/delegate/SKILL.md");
     const skillProtocol = /^PROTOCOL_VERSION:\s*([^\s]+)$/mu.exec(skill)?.[1];
-    assert.equal(runtimeProtocol, "2.0.0", "runtime must expose the current wire protocol");
+    assert.equal(runtimeProtocol, "3.0.0", "runtime must expose the current wire protocol");
     assert.equal(
       runtimeVersion,
       JSON.parse(read(".claude-plugin/plugin.json")).version,
@@ -138,7 +138,7 @@ describe("P0-A plugin wiring", () => {
       /hash you computed/u,
       "review correlation must retain the runtime digest rather than reintroducing caller hashing",
     );
-    for (const rosterName of ["codex-implementer", "opencode-implementer", "pi-implementer", "pythinker-implementer"]) {
+    for (const rosterName of ["codex-implementer", "opencode-implementer", "pi-implementer", "pythinker-implementer", "agy-implementer", "claude-implementer"]) {
       assert.ok(skill.includes(`\`${rosterName}\``), `delegate skill must retain ${rosterName} in its selection roster`);
     }
     const trustedLifecycleHeading = skill.indexOf("## Trusted MCP lifecycle");
@@ -233,8 +233,8 @@ describe("P0-A plugin wiring", () => {
     const marketplace = JSON.parse(read(".claude-plugin/marketplace.json"));
     const readme = read("README.md");
     const changelog = read("CHANGELOG.md");
-    assert.equal(plugin.version, "0.49.0");
-    assert.equal(marketplace.plugins[0].version, "0.49.0");
+    assert.equal(plugin.version, "0.52.0");
+    assert.equal(marketplace.plugins[0].version, "0.52.0");
     // Derived from plugin.json, not written out: a literal here is a seventh
     // place to edit on every bump, and it is the one that keeps being missed.
     assert.match(readme, new RegExp(`badge/version-${plugin.version.replace(/\./gu, "\\.")}-`, "u"));
@@ -366,9 +366,11 @@ test("project policy composes Superpowers SDD with exclusive delivery controller
   const guide = read("AGENTS.md");
   assert.match(guide, /manual SDD[^.]*bare `\/no-mistakes` validate-only mode/u,
     "manual SDD must hand a final committed branch to No Mistakes validate-only mode");
-  assert.match(guide, /Autopilot is a separate trusted delivery controller/u,
-    "Autopilot must remain distinct from the No Mistakes delivery path");
-  assert.match(guide, /Never start or stack No Mistakes while Autopilot is active/u,
+  assert.match(guide, /Autopilot ends at a final-reviewed local branch; it never pushes, opens a PR, or polls checks/u,
+    "Autopilot must stop before delivery");
+  assert.match(guide, /handed to No Mistakes like any other feature branch/u,
+    "the reviewed Autopilot branch must be delivered through No Mistakes");
+  assert.match(guide, /Never start No Mistakes while Autopilot is active on the branch/u,
     "project policy must prohibit No Mistakes inside Autopilot custody");
   assert.match(guide, /Never start Autopilot while No Mistakes is active/u,
     "project policy must prohibit Autopilot inside No Mistakes custody");
@@ -463,6 +465,18 @@ test("codex skill ships the direct CLI lane without obscuring its trust boundary
     "README must not describe a worktree as production");
 });
 
+test("CI pins every action to a commit and every installed tool to a version", () => {
+  for (const file of [".github/workflows/ci.yml", ".github/workflows/codeql.yml"]) {
+    const workflow = read(file);
+    for (const [, reference] of workflow.matchAll(/uses:\s*(\S+)/gu)) {
+      assert.match(reference, /@[0-9a-f]{40}$/u, `${file}: ${reference} must be pinned to a commit`);
+    }
+    for (const [line] of workflow.matchAll(/npm install -g \S+/gu)) {
+      assert.match(line, /@\d+\.\d+\.\d+$/u, `${file}: ${line} must pin a version`);
+    }
+  }
+});
+
 test("CI exercises the supported macOS 15, Ubuntu, and Windows runners", () => {
   const workflow = read(".github/workflows/ci.yml");
   assert.match(
@@ -471,12 +485,12 @@ test("CI exercises the supported macOS 15, Ubuntu, and Windows runners", () => {
     "CI must test the approved three-platform runner matrix",
   );
   assert.doesNotMatch(workflow, /macos-14/u);
-  assert.match(workflow, /actions\/checkout@v7/u);
-  assert.match(workflow, /actions\/setup-node@v7/u);
+  assert.match(workflow, /actions\/checkout@[0-9a-f]{40} # v7\./u);
+  assert.match(workflow, /actions\/setup-node@[0-9a-f]{40} # v7\./u);
   assert.match(workflow, /node-version:\s*22/u);
-  assert.match(workflow, /actions\/upload-artifact@v7/u);
+  assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40} # v7\./u);
   assert.match(workflow, /win32-job-kill-x64\.exe/u);
-  assert.match(workflow, /setup-zig@v2[^]*version: 0\.15\.2/u,
+  assert.match(workflow, /setup-zig@[0-9a-f]{40} # v2\.[^]*version: 0\.15\.2/u,
     "Windows CI must use the pinned compiler that produced the shipped helper");
   assert.match(workflow, /win32-filesystem-x64-reviewed\.exe[^]*fc \/b/u,
     "Windows x64 CI must byte-compare rebuilt and reviewed helper binaries");

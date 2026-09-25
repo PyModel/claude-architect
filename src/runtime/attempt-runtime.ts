@@ -1,18 +1,16 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { freezeCandidate } from "../git/candidate-tree.js";
 import { git } from "../git/git-exec.js";
 import { checkPreconditions } from "../git/repo-preconditions.js";
 import { WorktreeManager } from "./worktree-manager.js";
-import { guardWorktreeMutations } from "./worktree-mutation-gate.js";
+import { PlatformSafety } from "../platform/platform-safety.js";
 import type {
   CheckoutLock,
   PlatformServices,
   SupervisedExit,
 } from "../platform/platform-services.js";
-import { supervise } from "../platform/process-supervisor.js";
 import { selectSandboxBackend } from "../platform/sandbox/backends.js";
-import { wrapInvocationWithSeatbelt } from "../platform/sandbox/seatbelt.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import type {
   AttemptResult,
@@ -24,7 +22,6 @@ import type {
 import { classifyFailure } from "../protocol/attempt-result.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { specSha256 } from "../protocol/spec-hash.js";
-import { probeAll } from "../producers/capability-probe.js";
 import {
   detectEnvironmentType,
   type CapabilityReport,
@@ -36,13 +33,13 @@ import {
   ProducerRegistry,
   registry,
 } from "../producers/producer-registry.js";
+import { ProducerRuntime, producerRuntime } from "../producers/producer-runtime.js";
 import { route } from "../producers/routing-policy.js";
 import { NestedDelegationError, RuntimeError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { verifyBaseline } from "../verify/baseline-verifier.js";
 import { ArtifactStore } from "./artifact-store.js";
 import {
-  buildEnvironment,
   registerSensitiveEnvironment,
   type BuiltEnvironment,
   type EnvProvenance,
@@ -60,10 +57,8 @@ import {
 } from "./run-manifest.js";
 import {
   initializeRunStart,
-  parentDeathWatchdogInvocation,
   type RunStartContext,
   type RunStartRecord,
-  withRunStartPidRecording,
 } from "./run-start.js";
 import {
   writeRunStatusSafely,
@@ -71,7 +66,6 @@ import {
   type RunStatusPhase,
 } from "./run-status.js";
 
-const MAX_PRODUCER_OUTPUT_BYTES = 1_000_000;
 const MAX_SNAPSHOT_DIFF_BYTES = 100_000;
 
 // Best-effort salvage evidence for attempts that end without a frozen candidate
@@ -179,6 +173,7 @@ interface TerminalContext {
   producerLog: string;
   repositoryInstructions: RepositoryInstructionInput[];
   packagedVerifier: PackagedVerifierInput;
+  probeCacheHits?: number;
 }
 
 // Host-facing progress only. Durability belongs to `emitStatus`, which writes
@@ -233,22 +228,7 @@ function producerLog(exit: SupervisedExit | null): string {
   ].join("\n");
 }
 
-function preCancelledExit(): SupervisedExit {
-  return {
-    exitCode: null,
-    signal: null,
-    timedOut: false,
-    cancelled: true,
-    stdout: "",
-    stderr: "",
-    truncated: { stdout: false, stderr: false },
-  };
-}
 
-function shouldUseTemporaryHome(profile: ProducerConfigurationProfile): boolean {
-  return profile.isolationState === "controlled-config-supported"
-    || profile.isolationState === "controlled-config-with-copied-credentials";
-}
 
 async function archiveTerminal(context: TerminalContext): Promise<AttemptResult> {
   const verificationSecretRegistrations: Array<{ dispose(): void }> = [];
@@ -301,7 +281,11 @@ async function archiveTerminal(context: TerminalContext): Promise<AttemptResult>
             configurationProfile: context.profile,
             temporaryHomeApplied: context.temporaryHomeApplied,
           }),
-        verificationPolicy: context.evidence.verificationPolicy ?? [],
+        // Absent stays absent: "the verifier recorded nothing" must not read as
+        // "no command ran", which the decision policy treats as confined.
+        ...(context.evidence.verificationPolicy === undefined
+          ? {}
+          : { verificationPolicy: context.evidence.verificationPolicy }),
       },
       repositoryInstructions: context.repositoryInstructions,
       prompt: context.invocation?.stdin ?? `${context.spec.objective}\n${context.spec.context}`,
@@ -310,6 +294,7 @@ async function archiveTerminal(context: TerminalContext): Promise<AttemptResult>
         network: context.invocation?.network ?? "not-started",
         writeAllowlist: context.spec.writeAllowlist,
         forbiddenScope: context.spec.forbiddenScope,
+        probeCacheHits: context.probeCacheHits ?? 0,
       },
       environment: context.environment,
       packagedVerifier: context.packagedVerifier,
@@ -365,7 +350,8 @@ export async function runAttempt(
 ): Promise<AttemptResult> {
   if (hasEnvironmentMarker(deps.env ?? process.env)) throw new NestedDelegationError();
 
-  const ps = guardWorktreeMutations(deps.ps ?? getPlatformServices());
+  const ps = deps.ps ?? getPlatformServices();
+  const safety = new PlatformSafety(ps);
   const producerRegistry = deps.producerRegistry ?? registry;
   const now = deps.now ?? Date.now;
   const startedAtMs = now();
@@ -400,13 +386,20 @@ export async function runAttempt(
       detail: fields.detail ?? null,
     });
   };
+  const runtime = deps.producerRegistry !== undefined
+    ? new ProducerRuntime(deps.producerRegistry)
+    : producerRuntime;
   const archiveWithStatus = async (context: TerminalContext): Promise<AttemptResult> => {
     // Positive provenance for the decision gate: a plain `delegate` run never
     // enters a pipeline gate, so autonomy over its candidate must key on this
     // recorded marker, never on the mere absence of pipeline evidence.
+    const effectiveContext: TerminalContext = {
+      ...context,
+      probeCacheHits: context.probeCacheHits ?? runtime.probeCacheHits,
+    };
     const result = await archiveTerminal(statusContext.pipelineManaged
-      ? context
-      : { ...context, evidence: { ...context.evidence, plainDelegate: true } });
+      ? effectiveContext
+      : { ...effectiveContext, evidence: { ...context.evidence, plainDelegate: true } });
     if (!statusContext.pipelineManaged) {
       await emitStatus(result.status === "verified-candidate" ? "done" : "failed", {
         producerId: result.producerId,
@@ -417,20 +410,15 @@ export async function runAttempt(
   };
   const canonical = await ps.canonicalizePath(checkoutPath);
   const repositoryIdentity = canonical.gitCommonDir ?? canonical.canonical;
-  let lock: CheckoutLock | null = deps.borrowedCheckoutLease ?? null;
-  let ownedLock: CheckoutLock | null = null;
-  let worktree: { path: string; cleanup(): Promise<void> } | null = null;
-  let tempHome: string | null = null;
-  let builtEnvironment: BuiltEnvironment | null = null;
-  let primaryError: unknown;
-  let archivedResult: AttemptResult | null = null;
-  try {
-    if (lock === null) {
-      ownedLock = await ps.acquireCheckoutLock(canonical.canonical, { runId });
-      lock = ownedLock;
-    }
+  const runWithLease = async (lock: CheckoutLock, ownership: "borrowed" | "owned"): Promise<AttemptResult> => {
+    let worktree: { path: string; cleanup(): Promise<void> } | null = null;
+    let tempHome: string | null = null;
+    let builtEnvironment: BuiltEnvironment | null = null;
+    let primaryError: unknown;
+    let archivedResult: AttemptResult | null = null;
+    try {
+
     if (lock.repositoryIdentity !== repositoryIdentity) {
-      const ownership = ownedLock === null ? "borrowed" : "owned";
       throw new RuntimeError(`${ownership} checkout lease repository identity mismatch`);
     }
     const preconditions = await checkPreconditions(canonical.canonical, {
@@ -526,12 +514,12 @@ export async function runAttempt(
   }
 
   await reportPhase(deps, "probing producers");
-  const reports = await probeAll({
+  const reports = await runtime.probeAll({
     ps,
     os: ps.os,
     arch: process.arch,
     environmentType: detectEnvironmentType(),
-  }, producerRegistry);
+  }, undefined, producerRegistry);
   const routing = route(spec.producerPreferences, reports);
   if (routing.producerId === null) {
     const signals: FailureSignals = routing.reason === "authentication-required"
@@ -598,15 +586,21 @@ export async function runAttempt(
       borrowedCheckoutLease: lock,
     }).create(preconditions.baseCommitOid);
     const profile = adapter.configurationProfile();
-    if (shouldUseTemporaryHome(profile)) tempHome = await ps.createSecureTempDirectory();
-    let invocation = adapter.buildInvocation(spec, {
+    const launchPlan = await runtime.planLaunch({
+      producerId: report.producerId,
+      adapter,
+      spec,
       worktreePath: worktree.path,
+      intent: spec.executionMode === "edit" ? "edit" : "read-only",
+      ps,
       runId,
-      ...(tempHome === null ? {} : { tempHome }),
       capabilityReport: report,
-      executable: report.resolvedExecutable,
     });
-    let confinement: string | null = null;
+    tempHome = launchPlan.tempHome;
+    builtEnvironment = launchPlan.builtEnvironment;
+    let invocation = launchPlan.invocation;
+    let confinement: string | null = launchPlan.confinementBackend;
+
     if (spec.executionMode === "edit") {
       const selection = selectSandboxBackend(report);
       if (selection.backend === null) {
@@ -632,14 +626,6 @@ export async function runAttempt(
           producerLog: producerLog(null),
           repositoryInstructions,
           packagedVerifier,
-        });
-      }
-      confinement = selection.backend.id;
-      if (selection.backend.kind === "os" && selection.backend.id === "macos-seatbelt") {
-        invocation = wrapInvocationWithSeatbelt(invocation, {
-          worktreePath: worktree.path,
-          tempHome,
-          allowNetwork: invocation.network === "allowed",
         });
       }
     }
@@ -695,32 +681,29 @@ export async function runAttempt(
         });
       }
     }
-    builtEnvironment = buildEnvironment({
-      os: ps.os,
-      adapterAllowlist: invocation.requiredEnv,
-      ...(invocation.env === undefined ? {} : { adapterValues: invocation.env }),
-      ...(tempHome === null ? {} : { tempHome }),
-    });
-    const recordingServices = withRunStartPidRecording(ps, runStartContext);
-    const watchdog = await parentDeathWatchdogInvocation(
-      invocation.executable,
-      invocation.args,
-    );
     if (!statusContext.pipelineManaged) {
       await emitStatus("implementing", { producerId: report.producerId });
     }
     await reportPhase(deps, "producer running");
-    const exit = deps.abortSignal?.aborted === true
-      ? preCancelledExit()
-      : await supervise(recordingServices, {
-        executable: watchdog.executable,
-        args: watchdog.args,
-        cwd: worktree.path,
-        env: builtEnvironment.env,
-        timeoutMs: spec.timeoutMs,
-        ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-        maxOutputBytes: MAX_PRODUCER_OUTPUT_BYTES,
-      }, deps.abortSignal === undefined ? {} : { onCancel: deps.abortSignal });
+    const launchResult = await runtime.launch({
+      producerId: report.producerId,
+      adapter,
+      spec,
+      worktreePath: worktree.path,
+      intent: spec.executionMode === "edit" ? "edit" : "read-only",
+      ps,
+      runId,
+      tempHome,
+      abortSignal: deps.abortSignal,
+      timeoutMs: spec.timeoutMs,
+      runStartContext,
+      capabilityReport: report,
+      plan: launchPlan,
+    });
+    invocation = launchResult.invocation;
+    builtEnvironment = launchResult.builtEnvironment;
+    const exit = launchResult.exit;
+    confinement = launchResult.confinementBackend;
 
     const signals: FailureSignals = {};
     let producerSummary: string | null = null;
@@ -735,9 +718,8 @@ export async function runAttempt(
     if (exit.timedOut) signals.timeout = true;
 
     if (!hasFailureSignal(signals)) {
-      const normalized = adapter.normalizeEvents({ stdout: exit.stdout, stderr: exit.stderr, exit });
-      producerSummary = normalized.producerSummary;
-      if (!normalized.ok) signals["invalid-output"] = true;
+      producerSummary = launchResult.producerSummary;
+      if (!launchResult.ok) signals["invalid-output"] = true;
       if (exit.exitCode !== 0) signals["producer-failure"] = true;
     }
 
@@ -853,7 +835,7 @@ export async function runAttempt(
       builtEnvironment,
       worktree,
       tempHome,
-      lock: ownedLock,
+      lock: null,
     });
     if (cleanupError !== null) {
       const detail = redact(
@@ -885,4 +867,15 @@ export async function runAttempt(
       }
     }
   }
+};
+
+
+
+  if (deps.borrowedCheckoutLease !== undefined && deps.borrowedCheckoutLease !== null) {
+    return await runWithLease(deps.borrowedCheckoutLease, "borrowed");
+  }
+  return await safety.withCheckoutLease(canonical.canonical, async (acquiredLock) => {
+    return await runWithLease(acquiredLock, "owned");
+  }, { runId });
 }
+

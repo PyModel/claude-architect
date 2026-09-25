@@ -24,7 +24,7 @@
     <circle cx="70" cy="44" r="6.5" fill="#febc2e"/>
     <circle cx="94" cy="44" r="6.5" fill="#28c840"/>
     <text x="126" y="49" font-size="15" fill="#6e7681">PyModel/claude-architect · architect session</text>
-    <text x="1158" y="49" font-size="14" fill="#4b5563" text-anchor="end">v0.6.0</text>
+    <text x="1158" y="49" font-size="14" fill="#4b5563" text-anchor="end">github.com/PyModel/claude-architect</text>
   </g>
   <line x1="10" y1="70" x2="1190" y2="70" stroke="#1a212c" stroke-width="1"/>
 
@@ -63,15 +63,18 @@
       <rect x="282" y="308" width="112" height="30" rx="7" fill="#58a6ff"/>
       <text x="338" y="328" text-anchor="middle" fill="#0b0e14">opencode</text>
 
-      <rect x="406" y="308" width="86"  height="30" rx="7" fill="#3fb950"/>
-      <text x="449" y="328" text-anchor="middle" fill="#0b0e14">pi · $0</text>
+      <rect x="406" y="308" width="60"  height="30" rx="7" fill="#3fb950"/>
+      <text x="436" y="328" text-anchor="middle" fill="#0b0e14">pi</text>
 
-      <rect x="504" y="308" width="118" height="30" rx="7" fill="#d29922"/>
-      <text x="563" y="328" text-anchor="middle" fill="#0b0e14">pythinker</text>
+      <rect x="478" y="308" width="118" height="30" rx="7" fill="#d29922"/>
+      <text x="537" y="328" text-anchor="middle" fill="#0b0e14">pythinker</text>
 
-      <rect x="634" y="308" width="82"  height="30" rx="7" fill="#f85149"/>
-      <text x="675" y="328" text-anchor="middle" fill="#0b0e14">fable</text>
+      <rect x="608" y="308" width="66"  height="30" rx="7" fill="#a371f7"/>
+      <text x="641" y="328" text-anchor="middle" fill="#0b0e14">agy</text>
+
+      <rect x="686" y="308" width="92"  height="30" rx="7" fill="#f85149"/>
+      <text x="732" y="328" text-anchor="middle" fill="#0b0e14">claude</text>
     </g>
-    <text x="734" y="328" font-size="15" fill="#6e7681">-&gt; architect reviews every diff</text>
+    <text x="796" y="328" font-size="15" fill="#6e7681">-&gt; architect reviews every diff</text>
   </g>
 </svg>

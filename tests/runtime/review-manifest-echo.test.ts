@@ -108,7 +108,7 @@ function dependencies(storedManifest: RunManifest): ToolDependencies {
     ps,
     storeFactory: () => store,
     git: async (_cwd, args) => {
-      if (args[0] === "diff") return gitResult("exact patch\n");
+      if (args[1] === "diff") return gitResult("exact patch\n");
       if (args.includes(`${candidate.anchorRef}^{commit}`)) {
         return gitResult(`${candidate.candidateCommitOid}\n`);
       }
@@ -139,10 +139,13 @@ describe("reviewCandidate manifest hash contract", () => {
       dependencies(runManifest("f".repeat(64))),
     );
 
+    // The snapshot's coherence pass reaches this divergence before review does
+    // and names the field that diverged. Same classification, same fail-closed
+    // outcome, a diagnostic a reader can act on.
     expect(output).toEqual({
       ok: false,
       error: "archive-inconsistent",
-      diagnostic: "archived candidate does not match its run manifest",
+      diagnostic: "archived candidate manifest hash does not match run manifest",
     });
     expect(output).not.toHaveProperty("manifestHash");
   });

@@ -91,7 +91,7 @@ function localTransport(remote: string): RemoteTransport {
 
 function initialState(branch: WorkflowBranchIdentity): AutopilotWorkflowState {
   return {
-    stateVersion: "1",
+    stateVersion: "2",
     workflowId: branch.workflowId,
     repositoryIdentity: branch.repositoryIdentity,
     baseCommitOid: branch.baseCommitOid,
@@ -111,13 +111,7 @@ function initialState(branch: WorkflowBranchIdentity): AutopilotWorkflowState {
     }],
     intentJournal: { ref: "journal.ndjson", entryCount: 0, lastEntryHash: null },
     finalGate: null,
-    shipping: {
-      branch: branch.branch,
-      prNumber: null,
-      prUrl: null,
-      ciDeadlineAt: "2026-07-21T20:00:00.000Z",
-    },
-    ciObservations: [],
+    branch: branch.branch,
     cleanup: null,
     terminal: null,
     createdAt: "2026-07-21T18:00:00.000Z",
@@ -188,10 +182,6 @@ async function advanceToCleaningUp(store: WorkflowStore): Promise<AutopilotWorkf
     "running-task",
     "promoting-task",
     "final-review",
-    "pushing",
-    "creating-draft-pr",
-    "waiting-required-checks",
-    "marking-ready",
     "cleaning-up",
   ];
   let state = await store.read();
@@ -362,7 +352,7 @@ describe("autopilot startup recovery", () => {
     }]);
   });
 
-  it("finalizes observed cleanup and converges byte-idempotently", async () => {
+  it("hands an abandoned cleanup to the controller without acting on it", async () => {
     const fixture = await createFixture();
     const cleaning = await advanceToCleaningUp(fixture.store);
     await fixture.store.beginIntent({
@@ -371,61 +361,49 @@ describe("autopilot startup recovery", () => {
       idempotencyKey: `cleanup:${fixture.branch.baseCommitOid}`,
       expectedIdentities: { headCommitOid: fixture.branch.baseCommitOid },
     });
-    await expect(fixture.branchManager.cleanup(fixture.branch, fixture.branch.baseCommitOid))
+    await expect(fixture.branchManager.cleanup(
+      fixture.branch,
+      fixture.branch.baseCommitOid,
+      { retainBranch: true },
+    ))
       .resolves.toEqual({ ok: true, worktreeRemoved: true, refsRemoved: true });
     await makeLeaseDead(fixture.store);
+    const before = await snapshot(fixture.store.workflowDirectory);
 
     const first = await recoverStaleRuns(await recoveryDependencies());
-    const afterFirst = await snapshot(fixture.store.workflowDirectory);
-    const state = await fixture.store.read();
-    const journal = await fixture.store.readIntentJournal();
     const second = await recoverStaleRuns(await recoveryDependencies());
 
+    // Finishing cleanup is the controller's resume; recovery only classifies,
+    // so it writes nothing and answers the same way every time.
     expect(first.workflows).toEqual([{
       workflowId: fixture.branch.workflowId,
-      disposition: "finalize",
+      disposition: "resume",
     }]);
-    expect(state).toMatchObject({
-      phase: "ready-for-human-review",
-      cleanup: { status: "succeeded", worktreeRemoved: true, lockReleased: true },
-      terminal: { classification: "ready-for-human-review", reason: null },
-    });
-    expect(journal.intents.find(intent =>
-      intent.intent.operation === "cleanup-workflow-branch")?.completion?.completion)
-      .toEqual({ worktreeRemoved: true, refsRemoved: true });
-    expect(second.workflows).toBeUndefined();
-    expect(await snapshot(fixture.store.workflowDirectory)).toEqual(afterFirst);
+    expect(second.workflows).toEqual(first.workflows);
+    expect(await snapshot(fixture.store.workflowDirectory)).toEqual(before);
+    await expect(fixture.store.read()).resolves.toMatchObject({ phase: "cleaning-up" });
   });
 
-  it("does not finalize cleanup from a truncated worktree registration list", async () => {
+  it("refuses to hand off a cleanup whose recorded branch belongs to another workflow", async () => {
     const fixture = await createFixture();
-    const cleaning = await advanceToCleaningUp(fixture.store);
-    await fixture.store.beginIntent({
-      expectedRevision: cleaning.revision,
-      operation: "cleanup-workflow-branch",
-      idempotencyKey: `cleanup:${fixture.branch.baseCommitOid}`,
-      expectedIdentities: { headCommitOid: fixture.branch.baseCommitOid },
-    });
-    await expect(fixture.branchManager.cleanup(fixture.branch, fixture.branch.baseCommitOid))
-      .resolves.toEqual({ ok: true, worktreeRemoved: true, refsRemoved: true });
+    await advanceToCleaningUp(fixture.store);
+    await makeBootstrapOwnerDead(fixture);
     await makeLeaseDead(fixture.store);
-    const dependencies = await recoveryDependencies();
+    const ownership = autopilotOwnershipPath(fixture.branch.workflowId, process.env.CLAUDE_PLUGIN_DATA!);
+    const record = JSON.parse(await readFile(ownership, "utf8")) as {
+      branch: string;
+      branchRef: string;
+    };
+    record.branch = "feat/another-workflow";
+    record.branchRef = "refs/heads/feat/another-workflow";
+    await writeFile(ownership, `${JSON.stringify(record)}\n`);
 
-    const result = await recoverStaleRuns({
-      ...dependencies,
-      git: async (cwd, args, options) => {
-        const observed = await dependencies.git(cwd, args, options);
-        return args[0] === "worktree" && args[1] === "list"
-          ? { ...observed, truncated: { stdout: true, stderr: false } }
-          : observed;
-      },
-    });
+    const result = await recoverStaleRuns(await recoveryDependencies());
 
     expect(result.workflows).toEqual([{
       workflowId: fixture.branch.workflowId,
       disposition: "human-decision-required",
     }]);
-    await expect(fixture.store.read()).resolves.toMatchObject({ phase: "cleaning-up" });
   });
 
   it("disposes a dead bootstrap orphan and converges byte-idempotently", async () => {
@@ -479,28 +457,5 @@ describe("autopilot startup recovery", () => {
       workflowId: fixture.branch.workflowId,
       disposition: "human-decision-required",
     }]);
-  });
-
-  it("does not infer cleanup success from the cleaning-up phase", async () => {
-    const fixture = await createFixture();
-    const cleaning = await advanceToCleaningUp(fixture.store);
-    await fixture.store.beginIntent({
-      expectedRevision: cleaning.revision,
-      operation: "cleanup-workflow-branch",
-      idempotencyKey: `cleanup:${fixture.branch.baseCommitOid}`,
-      expectedIdentities: { headCommitOid: fixture.branch.baseCommitOid },
-    });
-    await makeBootstrapOwnerDead(fixture);
-    await makeLeaseDead(fixture.store);
-    const before = await snapshot(fixture.store.workflowDirectory);
-
-    const result = await recoverStaleRuns(await recoveryDependencies());
-
-    expect(result.workflows).toEqual([{
-      workflowId: fixture.branch.workflowId,
-      disposition: "human-decision-required",
-    }]);
-    await expect(lstat(fixture.branch.worktreePath)).resolves.toBeDefined();
-    expect(await snapshot(fixture.store.workflowDirectory)).toEqual(before);
   });
 });

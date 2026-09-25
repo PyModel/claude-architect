@@ -104,7 +104,7 @@ function reviewRun(overrides: {
       }),
     },
     git: async (_cwd, args) => {
-      if (args[0] === "diff") return overrides.patch ?? gitResult("exact patch\n");
+      if (args[1] === "diff") return overrides.patch ?? gitResult("exact patch\n");
       if (args.includes(`${candidate.anchorRef}^{commit}`)) {
         return overrides.anchor ?? gitResult(`${candidate.candidateCommitOid}\n`);
       }
@@ -201,7 +201,7 @@ describe("review snapshots", () => {
       ...snapshot,
       evidence: { nested: { x: 3, y: 2 }, z: 1 },
     });
-    await expect(store.readReviewSnapshot(runId)).resolves.toEqual(snapshot);
+    await expect(store.readReviewSnapshot()).resolves.toEqual(snapshot);
 
     await expect(store.writeReviewSnapshot({
       ...snapshot,

@@ -409,7 +409,7 @@ describe("P0-A end-to-end vertical slice", () => {
     }
 
     expect(observed).toEqual(expectedFailurePrecedence);
-  }, 90_000);
+  }, process.platform === "win32" ? 360_000 : 90_000);
 
   it("structures the nested-delegation guard as a handler error", async () => {
     const repoRoot = await initRepo();

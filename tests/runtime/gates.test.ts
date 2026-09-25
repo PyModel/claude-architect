@@ -108,7 +108,6 @@ describe("evaluateGates", () => {
     ["invalid artifact", base({ artifactsValid: false }), false],
     ["baseline drift", base({ baselineDrift: false, ...{ baselineDrift: true } }), false],
     ["round cap exceeded", base({ roundsUsed: 3 }), true],
-    ["minor without disposition", base({ findings: [finding("F-001", "minor")] }), false],
   ])("%s → not decision-ready (human=%s)", (_name, input, expectHuman) => {
     const out = evaluateGates(input);
     expect(out.decisionReady).toBe(false);
@@ -116,9 +115,9 @@ describe("evaluateGates", () => {
     expect(out.requiresHumanDecision).toBe(expectHuman);
   });
 
-  it("nits never block, even undispositioned", () => {
-    const out = evaluateGates(base({ findings: [finding("F-001", "nit")] }));
-    expect(out.decisionReady).toBe(true);
+  it.each(["nit", "minor"] as const)("%s findings never block, even undispositioned", severity => {
+    const out = evaluateGates(base({ findings: [finding("F-001", severity)] }));
+    expect(out).toEqual({ decisionReady: true, requiresHumanDecision: false, reasons: [] });
   });
 
   it("fixed blocker with commit + passing verification is decision-ready", () => {
