@@ -102,7 +102,8 @@ async function canonicalPathsEqual(left: string, right: string): Promise<boolean
 }
 
 function managedRootOf(repo: string): string {
-  return join(realpathSync(repo), ".worktrees", "claude-architect");
+  // native: expands Windows 8.3 short names (RUNNER~1) the way Git reports paths.
+  return join(realpathSync.native(repo), ".worktrees", "claude-architect");
 }
 
 async function runGit(cwd: string, args: string[]): Promise<string> {
@@ -206,6 +207,8 @@ describe("WorktreeManager", () => {
       `[diff "x"]\n\ttextconv = "${process.execPath}" -e "require('fs').writeFileSync('${marker.replaceAll("\\", "/")}','')"\n`,
       { flag: "a" },
     );
+    // Git for Windows marks .git hidden, which a plain overwrite cannot open.
+    await rm(join(attempt.path, ".git"));
     await writeFile(join(attempt.path, ".git"), `gitdir: ${join(hostile, ".git")}\n`);
     await writeFile(join(attempt.path, ".gitattributes"), "a.txt diff=x\n");
     await writeFile(join(attempt.path, "a.txt"), "changed\n");

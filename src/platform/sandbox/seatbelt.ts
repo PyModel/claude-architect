@@ -108,7 +108,7 @@ function isDeclaredStateRoot(
   }
 
   const userHomePattern = /^(\/Users\/[^/]+|\/home\/[^/]+|\/root)(?:\/.*)?$/u;
-  const winUserHomePattern = /^[a-zA-Z]:\\Users\\[^\\]+(?:\\.*)?$/u;
+  const winUserHomePattern = /^(?:[a-zA-Z]:)?\\Users\\[^\\]+(?:\\.*)?$/u;
   return userHomePattern.test(normalized) || winUserHomePattern.test(normalized);
 }
 
