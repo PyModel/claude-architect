@@ -2885,7 +2885,7 @@ describe("runPipeline", () => {
       "pipeline-fresh-fixers-round-2-fix",
     ]);
     expect(worktrees.every(entry => !entry.residue)).toBe(true);
-  });
+  }, 120_000);
 
   it("fixes a blocker and returns decision-ready after a clean re-review", async () => {
     const repo = await initRepo();

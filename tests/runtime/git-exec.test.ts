@@ -211,13 +211,12 @@ describe("index listing bound", () => {
       // Index-only entries with long names: ~9 MB of listing, no files on disk.
       const directory = "d".repeat(200);
       const total = 11_000;
-      for (let start = 0; start < total; start += 500) {
-        const args = ["update-index", "--add"];
-        for (let index = start; index < start + 500; index += 1) {
-          args.push("--cacheinfo", `100644,${blob},${directory}/${directory}/${directory}/${directory}/f${index}`);
-        }
-        expect((await git(repo, args)).exitCode).toBe(0);
+      // Through stdin: Windows caps a command line at 32K characters.
+      let entries = "";
+      for (let index = 0; index < total; index += 1) {
+        entries += `100644 ${blob}\t${directory}/${directory}/${directory}/${directory}/f${index}\n`;
       }
+      expect((await git(repo, ["update-index", "--index-info"], { stdin: entries })).exitCode).toBe(0);
 
       const listed = await git(repo, ["ls-files", "-v", "-z"]);
 
