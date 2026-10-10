@@ -40,6 +40,13 @@ async function waitForFile(filePath: string, timeoutMs = 10_000): Promise<string
   throw new Error(`timed out waiting for ${filePath}`);
 }
 
+// Reads the pid the server wrote. The server's writeFileSync truncates before it
+// writes, so an early read can see an empty file; Number("") is 0, and
+// kill(0, 0) "succeeds" against the caller's own process group.
+async function waitForPid(filePath: string, timeoutMs = 10_000): Promise<number> {
+  return Number(await waitForFile(filePath, timeoutMs));
+}
+
 async function waitForExit(child: ChildProcess, timeoutMs = 10_000): Promise<{
   code: number | null;
   signal: NodeJS.Signals | null;
@@ -119,6 +126,19 @@ afterEach(async () => {
 });
 
 describe("runtime bootstrap", () => {
+  it("pid read waits past an empty pid file and returns the real pid", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ca-bootstrap-empty-pid-"));
+    temporaryPaths.push(root);
+    const pidFile = path.join(root, "server.pid");
+    await writeFile(pidFile, "");
+    const writer = setTimeout(() => { void writeFile(pidFile, "4242"); }, 150);
+    try {
+      expect(await waitForPid(pidFile, 5_000)).toBe(4242);
+    } finally {
+      clearTimeout(writer);
+    }
+  });
+
   it("starts the server on a supported runtime without writing protocol noise to stdout", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ca-bootstrap-supported-"));
     temporaryPaths.push(root);
@@ -361,7 +381,7 @@ describe("runtime bootstrap", () => {
     });
     let serverPid = 0;
     try {
-      serverPid = Number(await waitForFile(pidFile));
+      serverPid = await waitForPid(pidFile);
       const readiness = waitForFile(readyFile);
       const readinessProbe = setInterval(() => {
         if (child.exitCode === null && child.signalCode === null) child.kill("SIGIO");
@@ -419,7 +439,7 @@ describe("runtime bootstrap", () => {
       });
       let serverPid = 0;
       try {
-        serverPid = Number(await waitForFile(pidFile));
+        serverPid = await waitForPid(pidFile);
         child.kill("SIGTERM");
         expect(await waitForFile(signalFile)).toBe("SIGTERM");
         const exit = await waitForExit(child, 15_000);
@@ -460,7 +480,7 @@ describe("runtime bootstrap", () => {
     });
     let serverPid = 0;
     try {
-      serverPid = Number(await waitForFile(pidFile));
+      serverPid = await waitForPid(pidFile);
       process.kill(serverPid, "SIGTERM");
       const exit = await waitForExit(child);
       await waitForProcessGone(serverPid);
