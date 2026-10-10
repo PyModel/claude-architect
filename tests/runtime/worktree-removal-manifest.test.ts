@@ -185,6 +185,25 @@ describe("worktree removal manifest recovery", () => {
     }]);
   });
 
+  it("rejects a manifest naming the removed creation-root-changed phase as malformed (o-4)", async () => {
+    const root = path.join(stateRoot, "worktree-removals");
+    await mkdir(root, { mode: 0o700 });
+    const manifestPath = path.join(root, `${transactionId}.json`);
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify({ ...manifest(), phase: "creation-root-changed" })}\n`,
+      { mode: 0o600 },
+    );
+
+    const result = await readPendingWorktreeRemovalManifests();
+
+    expect(result.pending).toEqual([]);
+    expect(result.issues).toEqual([{
+      manifestPath,
+      error: expect.objectContaining({ message: "worktree removal manifest is malformed" }),
+    }]);
+  });
+
   it("retains linked publication residue for settlement under the checkout lease", async () => {
     const root = path.join(stateRoot, "worktree-removals");
     await mkdir(root, { mode: 0o700 });
