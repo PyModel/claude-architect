@@ -33428,10 +33428,11 @@ import { constants as constants4 } from "node:fs";
 import { link as link2, lstat as lstat4, mkdir as mkdir2, open as open3, readFile as readFile2, rename, rm as rm2 } from "node:fs/promises";
 import path6 from "node:path";
 import nodeProcess5 from "node:process";
-var SAFE_COMPONENT = /^\.?[a-z0-9][a-z0-9._-]{0,253}$/i;
-function assertSafeLeaf(name) {
-  if (path6.isAbsolute(name) || path6.basename(name) !== name || !SAFE_COMPONENT.test(name)) {
-    throw new RuntimeError(`atomic write target must be a safe leaf name: ${name}`);
+var SAFE_COMPONENT = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
+var SAFE_HIDDEN_COMPONENT = /^\.?[a-z0-9][a-z0-9._-]{0,253}$/i;
+function assertSafeLeaf(name, operation, pattern = SAFE_COMPONENT) {
+  if (path6.isAbsolute(name) || path6.basename(name) !== name || !pattern.test(name)) {
+    throw new RuntimeError(`${operation} target must be a safe leaf name: ${name}`);
   }
 }
 function isAlreadyPresent(error51) {
@@ -33548,7 +33549,7 @@ async function assertStagedTemporary(temporaryPath, written, name) {
   }
 }
 async function writeAtomic(session, name, bytes, mode) {
-  assertSafeLeaf(name);
+  assertSafeLeaf(name, "atomic write");
   const destination = path6.join(session.directory, name);
   const temporaryPath = path6.join(session.directory, `.${name}.${randomUUID2()}.tmp`);
   let handle;
@@ -33613,7 +33614,7 @@ async function writeAtomic(session, name, bytes, mode) {
   }
 }
 async function appendDurable(session, name, bytes, options = {}) {
-  assertSafeLeaf(name);
+  assertSafeLeaf(name, "durable append");
   const payload = typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes;
   const filename = path6.join(session.directory, name);
   await session.assertIdentity();
@@ -33652,8 +33653,8 @@ async function appendDurable(session, name, bytes, options = {}) {
   await session.assertIdentity();
 }
 async function linkExclusive(session, sourceName, destinationName) {
-  assertSafeLeaf(sourceName);
-  assertSafeLeaf(destinationName);
+  assertSafeLeaf(sourceName, "exclusive link", SAFE_HIDDEN_COMPONENT);
+  assertSafeLeaf(destinationName, "exclusive link", SAFE_HIDDEN_COMPONENT);
   const source = path6.join(session.directory, sourceName);
   const destination = path6.join(session.directory, destinationName);
   await session.assertIdentity();
@@ -33691,7 +33692,7 @@ function isMissingEntry(error51) {
   return typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "ENOENT";
 }
 async function publishExclusive(session, name, bytes) {
-  assertSafeLeaf(name);
+  assertSafeLeaf(name, "exclusive publish");
   const temporaryName = `.${name}.${randomUUID2()}.tmp`;
   const temporaryPath = path6.join(session.directory, temporaryName);
   const destination = path6.join(session.directory, name);
@@ -33728,8 +33729,8 @@ async function publishExclusive(session, name, bytes) {
   }
 }
 async function moveDirectory(session, sourceName, destinationName) {
-  assertSafeLeaf(sourceName);
-  assertSafeLeaf(destinationName);
+  assertSafeLeaf(sourceName, "directory move", SAFE_HIDDEN_COMPONENT);
+  assertSafeLeaf(destinationName, "directory move", SAFE_HIDDEN_COMPONENT);
   const source = path6.join(session.directory, sourceName);
   const destination = path6.join(session.directory, destinationName);
   await session.assertIdentity();
@@ -55499,7 +55500,6 @@ async function quarantineRun(runsRoot, runId, error51) {
   if (runsIdentity === null) throw new RuntimeError("recovery runs root disappeared");
   const runsSession = new DurableDirectorySession(runsRoot, runsIdentity);
   let runIdentity = null;
-  let renamed = false;
   let journaled = false;
   try {
     runIdentity = await plainDirectoryIdentity2(runDirectory);
@@ -55508,7 +55508,6 @@ async function quarantineRun(runsRoot, runId, error51) {
       throw new RuntimeError("poisoned recovery quarantine already exists");
     }
     await moveDirectory(runsSession, runId, path36.basename(quarantinePath));
-    renamed = true;
     const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
     const currentRoot = await lstat20(runsRoot, { bigint: true });
     if (quarantineIdentity === null || !sameDirectoryIdentity(quarantineIdentity, runIdentity) || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
@@ -55528,24 +55527,26 @@ async function quarantineRun(runsRoot, runId, error51) {
     });
   } catch (quarantineError) {
     const errors = [error51, quarantineError];
-    if (renamed && !journaled && runIdentity !== null) {
+    if (!journaled && runIdentity !== null) {
       try {
-        const quarantineMetadata = await lstat20(quarantinePath, { bigint: true });
-        const currentRoot = await lstat20(runsRoot, { bigint: true });
-        if (!isPlainDirectory3(quarantineMetadata) || !sameDirectoryIdentity(quarantineMetadata, runIdentity) || await plainDirectoryIdentity2(runDirectory) !== null || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
-        }
-        await moveDirectory(runsSession, path36.basename(quarantinePath), runId);
-        const restoredMetadata = await lstat20(runDirectory, { bigint: true });
-        const restoredRoot = await lstat20(runsRoot, { bigint: true });
-        if (!isPlainDirectory3(restoredMetadata) || !sameDirectoryIdentity(restoredMetadata, runIdentity) || !isPlainDirectory3(restoredRoot) || !sameDirectoryIdentity(restoredRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback identity changed");
-        }
-        await syncRecoveryDirectory(runsRoot);
-        const settledMetadata = await lstat20(runDirectory, { bigint: true });
-        const settledRoot = await lstat20(runsRoot, { bigint: true });
-        if (!isPlainDirectory3(settledMetadata) || !sameDirectoryIdentity(settledMetadata, runIdentity) || !isPlainDirectory3(settledRoot) || !sameDirectoryIdentity(settledRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback changed after directory sync");
+        if (await plainDirectoryIdentity2(runDirectory) === null && await plainDirectoryIdentity2(quarantinePath) !== null) {
+          const quarantineMetadata = await lstat20(quarantinePath, { bigint: true });
+          const currentRoot = await lstat20(runsRoot, { bigint: true });
+          if (!isPlainDirectory3(quarantineMetadata) || !sameDirectoryIdentity(quarantineMetadata, runIdentity) || await plainDirectoryIdentity2(runDirectory) !== null || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
+          }
+          await moveDirectory(runsSession, path36.basename(quarantinePath), runId);
+          const restoredMetadata = await lstat20(runDirectory, { bigint: true });
+          const restoredRoot = await lstat20(runsRoot, { bigint: true });
+          if (!isPlainDirectory3(restoredMetadata) || !sameDirectoryIdentity(restoredMetadata, runIdentity) || !isPlainDirectory3(restoredRoot) || !sameDirectoryIdentity(restoredRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback identity changed");
+          }
+          await syncRecoveryDirectory(runsRoot);
+          const settledMetadata = await lstat20(runDirectory, { bigint: true });
+          const settledRoot = await lstat20(runsRoot, { bigint: true });
+          if (!isPlainDirectory3(settledMetadata) || !sameDirectoryIdentity(settledMetadata, runIdentity) || !isPlainDirectory3(settledRoot) || !sameDirectoryIdentity(settledRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback changed after directory sync");
+          }
         }
       } catch (rollbackError) {
         errors.push(rollbackError);
