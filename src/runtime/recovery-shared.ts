@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import nodeProcess from "node:process";
 import { git, type GitResult } from "../git/git-exec.js";
 import { gitPathOutput } from "../git/git-output.js";
+import { checkoutLockKey } from "../platform/checkout-lock.js";
 import {
   ensurePrivateDirectory,
   sameDirectoryIdentity,
@@ -148,10 +148,7 @@ export function parseRunStart(text: string, expectedRunId: string): RunStartReco
     || !Number.isFinite(Date.parse(record.startedAt))) {
     throw new RuntimeError("run-start recovery record is malformed");
   }
-  const expectedLockKey = createHash("sha256")
-    .update(record.canonicalCommonDir)
-    .digest("hex");
-  if (record.lockKey !== expectedLockKey) {
+  if (record.lockKey !== checkoutLockKey(record.canonicalCommonDir)) {
     throw new RuntimeError("run-start lock key does not match its canonical common directory");
   }
   return { ...record, processToken: record.processToken ?? null } as RunStartRecord;

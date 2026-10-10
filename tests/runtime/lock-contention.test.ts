@@ -6,7 +6,12 @@ import path from "node:path";
 import nodeProcess from "node:process";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { isLockContention } from "../../src/platform/lock-ownership.js";
+import {
+  checkoutLockKey,
+  releaseLock,
+  tryAcquireLockReclaimingDead,
+} from "../../src/platform/checkout-lock.js";
+import { defaultIsProcessAlive, isLockContention } from "../../src/platform/lock-ownership.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 
 const execFileAsync = promisify(execFile);
@@ -126,5 +131,44 @@ describe("repository lock contention diagnostics", () => {
     } finally {
       await held.release();
     }
+  });
+
+  it("excludes a recovery claim and a live acquisition from each other on one lock file", async () => {
+    const ps = getPlatformServices();
+    const getToken = (pid: number) => ps.getProcessStartToken(pid);
+    const lockPath = path.join(stateDir, "locks", `${checkoutLockKey(await identityFor(checkout))}.lock`);
+    const recoveryOwner = Buffer.from(JSON.stringify({
+      pid: nodeProcess.pid,
+      processToken: await getToken(nodeProcess.pid),
+    }));
+
+    const live = await ps.acquireCheckoutLock(checkout, { runId: "run-live" });
+    const liveRecord = await fs.readFile(lockPath, "utf8");
+    try {
+      const blocked = await tryAcquireLockReclaimingDead(
+        lockPath, recoveryOwner, defaultIsProcessAlive, getToken,
+      );
+      expect(blocked.lock).toBeNull();
+      expect(blocked.holder).not.toBe("reclaimed");
+      expect(await fs.readFile(lockPath, "utf8")).toBe(liveRecord);
+    } finally {
+      await live.release();
+    }
+
+    const claim = await tryAcquireLockReclaimingDead(
+      lockPath, recoveryOwner, defaultIsProcessAlive, getToken,
+    );
+    expect(claim.lock).not.toBeNull();
+    try {
+      const error = await ps.acquireCheckoutLock(checkout).then(() => null, (caught: unknown) => caught);
+      expect(isLockContention(error)).toBe(true);
+      expect((error as Error).message).toMatch(
+        new RegExp(`^checkout is locked: ${checkout.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")} — it is held by (live )?pid ${nodeProcess.pid}`, "u"),
+      );
+      expect(await fs.readFile(lockPath)).toEqual(recoveryOwner);
+    } finally {
+      await releaseLock(claim.lock!);
+    }
+    await expect(fs.access(lockPath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
