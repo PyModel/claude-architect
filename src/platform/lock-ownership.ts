@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, readdir, readFile, rm, type FileHandle } from "node:fs/promises";
 import path from "node:path";
@@ -157,6 +158,11 @@ export async function removeLockIfUnchanged(
 
 const TEMPORARY_LOCK_NAME = /^\.recovery-lock-[0-9a-f-]{36}\.tmp$/;
 
+/** A fresh name for the exclusive record a holder links into place as its lock. */
+export function temporaryLockFileName(): string {
+  return `.recovery-lock-${randomUUID()}.tmp`;
+}
+
 /**
  * A holder that crashed after linking its record into place but before
  * unlinking the temporary leaves the lock with a second link, its
@@ -184,7 +190,7 @@ async function removeCrashedTemporarySibling(
     try {
       handle = await open(temporaryPath, constants.O_RDONLY | NO_FOLLOW);
     } catch (error) {
-      if (isMissing(error)) return false;
+      if (isMissing(error)) continue;
       throw error;
     }
     try {

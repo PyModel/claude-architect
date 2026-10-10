@@ -372,6 +372,16 @@ describe("LockOwnership", () => {
       expect(await readFile(temporaryPath)).toEqual(before);
     });
 
+    it("stays contended when the lock has a link beyond its temporary sibling", async () => {
+      const { locksDir, lockPath, temporaryPath } = await crashedLock({ pid: 7777, processToken: "dead-tok" });
+      await link(lockPath, path.join(locksDir, "operator-alias"));
+
+      const result = await reclaimDeadLock(lockPath, () => false, async () => null);
+
+      expect(result).toBe("contended");
+      expect(await readFile(temporaryPath)).toEqual(await readFile(lockPath));
+    });
+
     it("stays contended when the second link is not a temporary sibling", async () => {
       const { locksDir, lockPath, temporaryPath } = await crashedLock({ pid: 7777, processToken: "dead-tok" });
       const aliasPath = path.join(locksDir, "operator-alias");
