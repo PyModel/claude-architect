@@ -32,7 +32,7 @@ import { redact, redactRecord } from "../runtime/redaction.js";
 import type { AdvisorReport, ReviewReport } from "../pipeline/report-types.js";
 import type { RolePackage } from "../pipeline/role-prompts.js";
 import {
-  runRole,
+  runRole as defaultRoleRunner,
   type RoleRunArgs,
   type RoleRunResult,
 } from "../pipeline/role-runner.js";
@@ -865,7 +865,7 @@ export class FinalBranchReviewer {
     this.acceptanceVerifier = dependencies.acceptanceVerifier ?? new AcceptanceVerifier({
       mode: "final-branch",
     });
-    this.roleRunner = dependencies.roleRunner ?? runRole;
+    this.roleRunner = dependencies.roleRunner ?? defaultRoleRunner;
     this.platformServices = dependencies.platformServices ?? getPlatformServices();
 
     this.producerRegistry = dependencies.producerRegistry ?? defaultRegistry;

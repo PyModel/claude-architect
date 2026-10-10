@@ -46873,7 +46873,7 @@ async function runRole(args) {
     let builtEnvironment = null;
     let primaryError;
     try {
-      const runtime = args.registry !== void 0 ? new ProducerRuntime(args.registry) : producerRuntime;
+      const runtime = new ProducerRuntime(args.registry);
       const launchResult = await runtime.launch({
         producerId,
         spec: roleSpec,
@@ -52177,14 +52177,14 @@ async function composeSliceOntoHead(args) {
 
 // src/pipeline/pipeline-roles.ts
 var schemas4 = loadSchemas();
-function roleArgs(args) {
-  const ps = args.deps.ps ?? getPlatformServices();
-  return {
+async function runStructuredRole(args) {
+  const runner = args.deps.roleRunner ?? runRole;
+  const callArgs = {
     role: args.role,
     baseSpec: args.spec,
     pkg: args.pkg,
     worktreePath: args.worktreePath,
-    ps,
+    ps: args.deps.ps ?? getPlatformServices(),
     registry: args.deps.registry,
     runId: args.runId,
     ...args.runStart === void 0 ? {} : { runStart: args.runStart },
@@ -52192,27 +52192,13 @@ function roleArgs(args) {
     ...args.deps.env === void 0 ? {} : { env: args.deps.env },
     ...args.deps.abortSignal === void 0 ? {} : { abortSignal: args.deps.abortSignal }
   };
-}
-async function runArchivedRole(runner, args, store, logName2) {
-  const result = await runner(args);
-  const output = result.rawOutput === "" ? `role produced no stdout; failure: ${result.failure ?? "none"}
+  const runArchived = async (runArgs, logName2) => {
+    const result = await runner(runArgs);
+    const output = result.rawOutput === "" ? `role produced no stdout; failure: ${result.failure ?? "none"}
 ` : result.archiveSafeRawOutput ?? result.rawOutput;
-  const logRef2 = await store.writeLog(logName2, output);
-  return { result, logRef: logRef2 };
-}
-async function runStructuredRole(args) {
-  const runner = args.deps.roleRunner ?? args.deps.runRole ?? runRole;
-  const callArgs = roleArgs({
-    role: args.role,
-    spec: args.spec,
-    pkg: args.pkg,
-    worktreePath: args.worktreePath,
-    deps: args.deps,
-    runId: args.runId,
-    ...args.runStart === void 0 ? {} : { runStart: args.runStart },
-    ...args.gitObjectAccess === void 0 ? {} : { gitObjectAccess: args.gitObjectAccess }
-  });
-  const initial = await runArchivedRole(runner, callArgs, args.store, args.logName);
+    return { result, logRef: await args.store.writeLog(logName2, output) };
+  };
+  const initial = await runArchived(callArgs, args.logName);
   const roleLogRefs = [initial.logRef];
   if (!initial.result.ok) {
     return {
@@ -52226,10 +52212,8 @@ async function runStructuredRole(args) {
     initial.result.rawOutput,
     args.schema,
     async (validationErrors) => {
-      const repair = await runArchivedRole(
-        runner,
+      const repair = await runArchived(
         { ...callArgs, pkg: { ...callArgs.pkg, outputRepair: validationErrors } },
-        args.store,
         `${args.logName}-repair`
       );
       roleLogRefs.push(repair.logRef);
@@ -52789,14 +52773,12 @@ var SliceRunner = class {
   runDecision;
   platformSafety;
   ps;
-  runRole;
   roleRunner;
   constructor(dependencies = {}) {
     this.producerRuntime = dependencies.producerRuntime ?? producerRuntime;
     this.runDecision = dependencies.runDecision ?? runDecision;
     this.platformSafety = dependencies.platformSafety ?? platformSafety;
     this.ps = dependencies.ps ?? getPlatformServices();
-    this.runRole = dependencies.runRole ?? runRole;
     this.roleRunner = dependencies.roleRunner;
   }
   async run(options) {
@@ -52846,9 +52828,8 @@ var SliceRunner = class {
                   });
                   const roleDeps = {
                     ps: this.ps,
-                    runRole: this.runRole,
+                    registry: options.registry,
                     ...this.roleRunner === void 0 ? {} : { roleRunner: this.roleRunner },
-                    ...options.registry === void 0 ? {} : { registry: options.registry },
                     ...options.abortSignal === void 0 ? {} : { abortSignal: options.abortSignal }
                   };
                   const incrementRun = await runIncrement({
@@ -54295,7 +54276,6 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
           runDecision: deps.runDecision,
           platformSafety: deps.platformSafety,
           ps,
-          runRole: deps.runRole,
           roleRunner: deps.roleRunner
         });
         phase = await sliceRunner.run({

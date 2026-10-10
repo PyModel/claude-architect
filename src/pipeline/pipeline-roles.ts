@@ -4,7 +4,7 @@ import type { RunStartContext } from "../runtime/run-start.js";
 import type { LinkedWorktreeGitAccess } from "./git-writable-roots.js";
 import type { PipelineRole, RolePackage } from "./role-prompts.js";
 import {
-  runRole as defaultRunRole,
+  runRole as defaultRoleRunner,
   type RoleRunArgs,
   type RoleRunResult,
 } from "./role-runner.js";
@@ -41,51 +41,10 @@ export type StructuredRoleRunResult<T> =
 
 export interface RoleExecutionDependencies {
   ps?: PlatformServices | undefined;
-  registry?: ProducerRegistry | undefined;
+  registry: ProducerRegistry;
   env?: Record<string, string | undefined> | undefined;
   abortSignal?: AbortSignal | undefined;
   roleRunner?: ((args: RoleRunArgs) => Promise<RoleRunResult>) | undefined;
-  runRole?: ((args: RoleRunArgs) => Promise<RoleRunResult>) | undefined;
-}
-
-export function roleArgs(args: {
-  role: PipelineRole;
-  spec: DelegationSpec;
-  pkg: RolePackage;
-  worktreePath: string;
-  deps: RoleExecutionDependencies;
-  runId: string;
-  runStart?: RunStartContext | undefined;
-  gitObjectAccess?: LinkedWorktreeGitAccess | undefined;
-}): RoleRunArgs {
-  const ps = args.deps.ps ?? getPlatformServices();
-  return {
-    role: args.role,
-    baseSpec: args.spec,
-    pkg: args.pkg,
-    worktreePath: args.worktreePath,
-    ps,
-    registry: args.deps.registry!,
-    runId: args.runId,
-    ...(args.runStart === undefined ? {} : { runStart: args.runStart }),
-    ...(args.gitObjectAccess === undefined ? {} : { gitObjectAccess: args.gitObjectAccess }),
-    ...(args.deps.env === undefined ? {} : { env: args.deps.env }),
-    ...(args.deps.abortSignal === undefined ? {} : { abortSignal: args.deps.abortSignal }),
-  };
-}
-
-export async function runArchivedRole(
-  runner: (args: RoleRunArgs) => Promise<RoleRunResult>,
-  args: RoleRunArgs,
-  store: Pick<ArtifactStore, "writeLog">,
-  logName: string,
-): Promise<{ result: RoleRunResult; logRef: string }> {
-  const result = await runner(args);
-  const output = result.rawOutput === ""
-    ? `role produced no stdout; failure: ${result.failure ?? "none"}\n`
-    : result.archiveSafeRawOutput ?? result.rawOutput;
-  const logRef = await store.writeLog(logName, output);
-  return { result, logRef };
 }
 
 export async function runStructuredRole<T>(args: {
@@ -101,18 +60,33 @@ export async function runStructuredRole<T>(args: {
   runStart?: RunStartContext | undefined;
   gitObjectAccess?: LinkedWorktreeGitAccess | undefined;
 }): Promise<StructuredRoleRunResult<T>> {
-  const runner = args.deps.roleRunner ?? args.deps.runRole ?? defaultRunRole;
-  const callArgs = roleArgs({
+  const runner = args.deps.roleRunner ?? defaultRoleRunner;
+  const callArgs: RoleRunArgs = {
     role: args.role,
-    spec: args.spec,
+    baseSpec: args.spec,
     pkg: args.pkg,
     worktreePath: args.worktreePath,
-    deps: args.deps,
+    ps: args.deps.ps ?? getPlatformServices(),
+    registry: args.deps.registry,
     runId: args.runId,
     ...(args.runStart === undefined ? {} : { runStart: args.runStart }),
     ...(args.gitObjectAccess === undefined ? {} : { gitObjectAccess: args.gitObjectAccess }),
-  });
-  const initial = await runArchivedRole(runner, callArgs, args.store, args.logName);
+    ...(args.deps.env === undefined ? {} : { env: args.deps.env }),
+    ...(args.deps.abortSignal === undefined ? {} : { abortSignal: args.deps.abortSignal }),
+  };
+  // Every run, initial or repair, is archived before its result is read, so a
+  // failed or rejected reply always has a log to point at.
+  const runArchived = async (
+    runArgs: RoleRunArgs,
+    logName: string,
+  ): Promise<{ result: RoleRunResult; logRef: string }> => {
+    const result = await runner(runArgs);
+    const output = result.rawOutput === ""
+      ? `role produced no stdout; failure: ${result.failure ?? "none"}\n`
+      : result.archiveSafeRawOutput ?? result.rawOutput;
+    return { result, logRef: await args.store.writeLog(logName, output) };
+  };
+  const initial = await runArchived(callArgs, args.logName);
   const roleLogRefs = [initial.logRef];
   if (!initial.result.ok) {
     return {
@@ -129,10 +103,8 @@ export async function runStructuredRole<T>(args: {
       // Re-running with the identical arguments is a blind retry: the Producer
       // cannot see why its reply was rejected, so it reproduces the defect and
       // the round is spent for nothing. Carry the errors into the retry.
-      const repair = await runArchivedRole(
-        runner,
+      const repair = await runArchived(
         { ...callArgs, pkg: { ...callArgs.pkg, outputRepair: validationErrors } },
-        args.store,
         `${args.logName}-repair`,
       );
       roleLogRefs.push(repair.logRef);

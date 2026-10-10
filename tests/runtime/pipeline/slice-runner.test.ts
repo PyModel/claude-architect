@@ -165,6 +165,7 @@ async function runOneSlice(args: {
     slices: [slice(args.objective)],
     baselineCommit: 'start',
     attempt: { runId: RUN_ID, candidate: null } as unknown as AttemptResult,
+    registry: {} as never,
     initialAttempt: args.initialAttempt,
     maxRounds: args.maxRounds ?? 0,
     ...(args.onAttempt === undefined ? {} : { onAttempt: args.onAttempt }),

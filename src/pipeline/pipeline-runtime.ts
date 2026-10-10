@@ -147,7 +147,6 @@ export interface PipelineDependencies extends AttemptRuntimeDependencies {
   producerRuntime?: ProducerRuntime | undefined;
   runDecision?: RunDecision | undefined;
   platformSafety?: PlatformSafety | undefined;
-  runRole?: ((args: RoleRunArgs) => Promise<RoleRunResult>) | undefined;
   runAttempt?: (
     checkoutPath: string,
     spec: DelegationSpec,
@@ -1144,7 +1143,6 @@ async function runPipelineWithLease(
           runDecision: deps.runDecision,
           platformSafety: deps.platformSafety,
           ps,
-          runRole: deps.runRole,
           roleRunner: deps.roleRunner,
         });
         phase = await sliceRunner.run({

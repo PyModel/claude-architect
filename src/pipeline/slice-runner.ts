@@ -27,11 +27,7 @@ import {
   PlatformSafety,
   platformSafety as defaultPlatformSafety,
 } from "../platform/platform-safety.js";
-import {
-  runRole as defaultRunRole,
-  type RoleRunArgs,
-  type RoleRunResult,
-} from "./role-runner.js";
+import type { RoleRunArgs, RoleRunResult } from "./role-runner.js";
 import {
   runIncrement,
   runReviews,
@@ -292,7 +288,6 @@ export interface SliceRunnerDependencies {
   runDecision?: RunDecision | undefined;
   platformSafety?: PlatformSafety | undefined;
   ps?: PlatformServices | undefined;
-  runRole?: typeof defaultRunRole | undefined;
   roleRunner?: ((args: RoleRunArgs) => Promise<RoleRunResult>) | undefined;
 }
 
@@ -313,7 +308,7 @@ export interface SliceRunnerRunOptions {
   initialRoleLogRefs?: string[] | undefined;
   reviewConfig?: ReviewConfig | undefined;
   reviewers?: ReviewerKind[] | undefined;
-  registry?: ProducerRegistry | undefined;
+  registry: ProducerRegistry;
   abortSignal?: AbortSignal | undefined;
   onAttempt?: ((evidence: SliceAttemptEvidence) => Promise<void>) | undefined;
   onSlice?: ((slice: PipelineSlice) => Promise<void>) | undefined;
@@ -324,7 +319,6 @@ export class SliceRunner {
   readonly runDecision: RunDecision;
   readonly platformSafety: PlatformSafety;
   readonly ps: PlatformServices;
-  readonly runRole: typeof defaultRunRole;
   readonly roleRunner?: ((args: RoleRunArgs) => Promise<RoleRunResult>) | undefined;
 
   constructor(dependencies: SliceRunnerDependencies = {}) {
@@ -332,7 +326,6 @@ export class SliceRunner {
     this.runDecision = dependencies.runDecision ?? defaultRunDecision;
     this.platformSafety = dependencies.platformSafety ?? defaultPlatformSafety;
     this.ps = dependencies.ps ?? getPlatformServices();
-    this.runRole = dependencies.runRole ?? defaultRunRole;
     this.roleRunner = dependencies.roleRunner;
   }
 
@@ -391,9 +384,8 @@ export class SliceRunner {
 
                   const roleDeps: RoleExecutionDependencies = {
                     ps: this.ps,
-                    runRole: this.runRole,
+                    registry: options.registry,
                     ...(this.roleRunner === undefined ? {} : { roleRunner: this.roleRunner }),
-                    ...(options.registry === undefined ? {} : { registry: options.registry }),
                     ...(options.abortSignal === undefined ? {} : { abortSignal: options.abortSignal }),
                   };
 
