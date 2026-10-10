@@ -14,12 +14,14 @@ import { managedWorktreeDirectoryIdentity } from "./worktree-manager.js";
 import {
   lockOwnerStatus,
   type LockOwnerStatus,
-  type AcquiredLock,
   type DeadLockReclaimResult,
-  reclaimDeadLock,
-  createOwnedLock,
-  releaseOwnedLock,
 } from "../platform/lock-ownership.js";
+import {
+  checkoutLockKey,
+  releaseLock,
+  tryAcquireLockReclaimingDead,
+  type AcquiredLock,
+} from "../platform/checkout-lock.js";
 import { sameDirectoryIdentity, type DirectoryIdentity } from "../platform/durable-directory.js";
 import { RuntimeError } from "../util/errors.js";
 import {
@@ -328,27 +330,15 @@ async function sweepOrphanWorktreeRoot(
       continue;
     }
 
-    const lockKey = createHash("sha256").update(commonDir).digest("hex");
     let lease: AcquiredLock | null = null;
-    let contention: DeadLockReclaimResult | undefined;
+    let contention: DeadLockReclaimResult | null = null;
     try {
-      lease = await createOwnedLock(
-        path.join(args.locksRoot, `${lockKey}.lock`),
+      ({ lock: lease, holder: contention } = await tryAcquireLockReclaimingDead(
+        path.join(args.locksRoot, `${checkoutLockKey(commonDir)}.lock`),
         args.ownerContents,
-      );
-      if (lease === null) {
-        contention = await reclaimDeadLock(
-          path.join(args.locksRoot, `${lockKey}.lock`),
-          args.isProcessAlive,
-          args.getProcessStartToken,
-        );
-        if (contention === "reclaimed") {
-          lease = await createOwnedLock(
-            path.join(args.locksRoot, `${lockKey}.lock`),
-            args.ownerContents,
-          );
-        }
-      }
+        args.isProcessAlive,
+        args.getProcessStartToken,
+      ));
     } catch (error) {
       issues.push(worktreeSweepIssue(worktreePath, error, commonDir));
       continue;
@@ -425,7 +415,7 @@ async function sweepOrphanWorktreeRoot(
       cleanupError = error;
     }
     try {
-      await releaseOwnedLock(lease);
+      await releaseLock(lease);
     } catch (releaseError) {
       cleanupError = cleanupError === undefined
         ? releaseError

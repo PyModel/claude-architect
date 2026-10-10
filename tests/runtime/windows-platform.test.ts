@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
-import { acquireWxFileLock } from "../../src/platform/posix-platform-services.js";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import nodeProcess from "node:process";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   canonicalizeForScope,
   WindowsPlatformServices,
@@ -46,17 +49,22 @@ describe("canonicalizeForScope (pure, all OSes)", () => {
   });
 });
 
-describe("acquireWxFileLock (shared, all OSes)", () => {
-  it("locks, releases, and can relock the same key", async () => {
-    const key = `test-${randomUUID()}`;
-    const first = await acquireWxFileLock(key);
-    await first.release();
-    const second = await acquireWxFileLock(key);
-    await second.release();
-  });
-});
-
 describe("WindowsPlatformServices checkout lock contract", () => {
+  let stateDir: string;
+  let previousStateDir: string | undefined;
+
+  beforeEach(async () => {
+    previousStateDir = nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR;
+    stateDir = await mkdtemp(path.join(tmpdir(), "windows-checkout-lock-"));
+    nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR = stateDir;
+  });
+
+  afterEach(async () => {
+    if (previousStateDir === undefined) delete nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR;
+    else nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR = previousStateDir;
+    await rm(stateDir, { recursive: true, force: true });
+  });
+
   it("refuses a checkout lock when the Git common directory is ambiguous", async () => {
     const ps = Object.assign(new WindowsPlatformServices(), {
       async canonicalizePath(input: string) {
@@ -86,6 +94,28 @@ describe("WindowsPlatformServices checkout lock contract", () => {
     } finally {
       await lock.release();
     }
+  });
+
+  it("acquires and releases a checkout lock whose owner has no process token", async () => {
+    const repositoryIdentity = `C:\\repo\\.git-${randomUUID()}`;
+    const ps = Object.assign(new WindowsPlatformServices(), {
+      async canonicalizePath(input: string) {
+        return { input, canonical: "C:\\repo", gitCommonDir: repositoryIdentity };
+      },
+      // The native start-token helper is unavailable: the record carries null.
+      async getProcessStartToken() { return null; },
+    });
+
+    const lock = await ps.acquireCheckoutLock("C:\\repo", { runId: "run-null-token" });
+    const lockPath = path.join(stateDir, "locks", `${lock.key}.lock`);
+    expect(JSON.parse(await readFile(lockPath, "utf8"))).toMatchObject({
+      pid: nodeProcess.pid,
+      processToken: null,
+      runId: "run-null-token",
+    });
+
+    await lock.release();
+    await expect(readFile(lockPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 

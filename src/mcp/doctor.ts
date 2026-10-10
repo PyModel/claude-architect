@@ -17,7 +17,7 @@ import { git as runGit } from "../git/git-exec.js";
 import { gitNulRecords, gitPathOutput } from "../git/git-output.js";
 import { findWorktreeRegistration } from "../git/worktree-registration.js";
 import type { PlatformServices } from "../platform/platform-services.js";
-import { CLEANUP_JOURNAL_LOCK_KEY } from "../platform/posix-platform-services.js";
+import { CLEANUP_JOURNAL_LOCK_KEY } from "../platform/checkout-lock.js";
 import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { probeAll as probeProducers } from "../producers/capability-probe.js";

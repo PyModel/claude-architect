@@ -1,5 +1,4 @@
 import { spawn, execFile } from "node:child_process";
-import { createHash } from "node:crypto";
 import { constants, promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -12,28 +11,8 @@ import type {
   CanonicalPath, CheckoutLock, ExecutableRequest, FileLock, LockOwnerAnnotation, PlatformServices,
   ResolvedExecutable, SpawnRequest, SupervisedExit, SupervisedProcess,
 } from "./platform-services.js";
-import {
-  lockFilePath,
-  acquireWxFileLock,
-  describeLockContention,
-  withLockContentionDetail,
-} from "./lock-ownership.js";
+import { acquireCheckoutLock, acquireCleanupJournalLock } from "./checkout-lock.js";
 import { sameDirectoryIdentity, type DirectoryIdentity } from "./durable-directory.js";
-
-export {
-  lockFilePath,
-  acquireWxFileLock,
-  describeLockContention,
-  withLockContentionDetail,
-};
-
-// Fixed 64-hex key for the state-dir-scoped cleanup-journal mutex. sha256 so it
-// matches the recovery lock-name pattern and is reclaimed like any dead lock, and
-// distinct (by domain prefix) from checkout locks keyed on a repository identity.
-export const CLEANUP_JOURNAL_LOCK_KEY =
-  createHash("sha256").update("claude-architect:cleanup-journal:v1").digest("hex");
-
-
 
 async function gitCommonDir(cwd: string): Promise<string> {
   // Intentional bootstrap exception until Task 8 provides the shared argv-based Git helper.
@@ -153,27 +132,11 @@ export class PosixPlatformServices implements PlatformServices {
     checkout: string,
     owner: LockOwnerAnnotation = {},
   ): Promise<CheckoutLock> {
-    const { gitCommonDir: commonDir } = await this.canonicalizePath(checkout);
-    if (commonDir === null) {
-      throw new RuntimeError("checkout Git common directory could not be resolved");
-    }
-    const repositoryIdentity = commonDir;
-    const key = createHash("sha256").update(repositoryIdentity).digest("hex");
-    const ownerToken = await this.getProcessStartToken(nodeProcess.pid);
-    let lock;
-    try {
-      lock = await acquireWxFileLock(key, `checkout is locked: ${checkout}`, ownerToken, owner);
-    } catch (error) {
-      throw await withLockContentionDetail(
-        error, key, pid => this.getProcessStartToken(pid),
-      );
-    }
-    return { ...lock, repositoryIdentity };
+    return acquireCheckoutLock(this, checkout, owner);
   }
 
   async acquireCleanupJournalLock(): Promise<FileLock> {
-    const ownerToken = await this.getProcessStartToken(nodeProcess.pid);
-    return acquireWxFileLock(CLEANUP_JOURNAL_LOCK_KEY, "cleanup journal is locked", ownerToken);
+    return acquireCleanupJournalLock(this);
   }
 
   async createSecureTempDirectory(): Promise<string> {

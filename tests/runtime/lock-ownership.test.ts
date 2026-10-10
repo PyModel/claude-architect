@@ -1,8 +1,10 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import nodeProcess from "node:process";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHECKOUT_LOCK_NAME_PATTERN,
@@ -20,7 +22,30 @@ import {
   type LockOwner,
   type LockRecord,
 } from "../../src/platform/lock-ownership.js";
+import { getPlatformServices } from "../../src/platform/select-platform.js";
 import { logger } from "../../src/util/logger.js";
+import { acquireLock } from "../../src/platform/checkout-lock.js";
+
+// A passthrough of node:fs/promises whose link() can be armed to fail once with
+// a chosen errno, the way an antivirus scan briefly holds a file on Windows.
+const linkFault = vi.hoisted(() => ({ code: null as string | null, fired: 0 }));
+vi.mock("node:fs/promises", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    async link(source: string, destination: string) {
+      if (linkFault.code !== null) {
+        const code = linkFault.code;
+        linkFault.code = null;
+        linkFault.fired += 1;
+        throw Object.assign(new Error(`${code}: injected link failure`), { code });
+      }
+      return actual.link(source, destination);
+    },
+  };
+});
+
+const execFileAsync = promisify(execFile);
 
 describe("LockOwnership", () => {
   let tempDir: string;
@@ -284,6 +309,85 @@ describe("LockOwnership", () => {
         async () => "tok",
       );
       expect(liveResult).toBe(true);
+    });
+  });
+
+  describe("checkout lock release", () => {
+    let previousStateDir: string | undefined;
+    let checkout: string;
+
+    beforeEach(async () => {
+      previousStateDir = nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR;
+      nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR = path.join(tempDir, "state");
+      checkout = path.join(tempDir, "checkout");
+      await mkdir(checkout);
+      await execFileAsync("git", ["init", "-q"], { cwd: checkout });
+    });
+
+    afterEach(() => {
+      if (previousStateDir === undefined) delete nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR;
+      else nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR = previousStateDir;
+    });
+
+    it("leaves another holder's lock in place when the released lock file was replaced", async () => {
+      const ps = getPlatformServices();
+      const first = await ps.acquireCheckoutLock(checkout, { runId: "run-first" });
+      const lockPath = path.join(tempDir, "state", "locks", `${first.key}.lock`);
+      // The first holder's file disappears (an operator or a reclaim removed it)
+      // and a second holder in the same process publishes its own lock.
+      await rm(lockPath);
+      const second = await ps.acquireCheckoutLock(checkout, { runId: "run-second" });
+      const successorRecord = await readFile(lockPath, "utf8");
+
+      await first.release();
+
+      expect(await readFile(lockPath, "utf8")).toBe(successorRecord);
+      await second.release();
+      await expect(readFile(lockPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    });
+  });
+
+  describe("transient acquisition errors", () => {
+    let previousStateDir: string | undefined;
+
+    beforeEach(() => {
+      previousStateDir = nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR;
+      nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR = path.join(tempDir, "state");
+      linkFault.code = null;
+      linkFault.fired = 0;
+    });
+
+    afterEach(() => {
+      linkFault.code = null;
+      if (previousStateDir === undefined) delete nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR;
+      else nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR = previousStateDir;
+    });
+
+    for (const code of ["EPERM", "EBUSY", "EACCES"]) {
+      it(`retries a transient Windows ${code} and acquires within the deadline`, async () => {
+        const key = createHash("sha256").update(`transient-${code}`).digest("hex");
+        linkFault.code = code;
+        const started = Date.now();
+
+        const lock = await acquireLock(key, { platform: "win32" });
+
+        expect(linkFault.fired).toBe(1);
+        expect(Date.now() - started).toBeLessThan(15_000);
+        const lockPath = path.join(tempDir, "state", "locks", `${key}.lock`);
+        expect(parseLockRecord(await readFile(lockPath, "utf8"))?.pid).toBe(nodeProcess.pid);
+        await lock.release();
+        await expect(readFile(lockPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      });
+    }
+
+    it("does not retry the same error off Windows, where it is not transient", async () => {
+      const key = createHash("sha256").update("transient-posix").digest("hex");
+      linkFault.code = "EACCES";
+
+      await expect(acquireLock(key, { platform: "linux" })).rejects.toMatchObject({ code: "EACCES" });
+      expect(linkFault.fired).toBe(1);
+      const locks = await readdir(path.join(tempDir, "state", "locks"));
+      expect(locks).toEqual([]);
     });
   });
 });

@@ -10,12 +10,15 @@ import {
   reclaimDeadLock,
   reclaimDeadCheckoutLocks,
   lockIsOwnedByLiveProcess,
-  acquireOwnedLock,
-  releaseOwnedLock,
   defaultIsProcessAlive,
 } from "../platform/lock-ownership.js";
+import {
+  CLEANUP_JOURNAL_LOCK_KEY,
+  checkoutLockKey,
+  releaseLock,
+  tryAcquireLockReclaimingDead,
+} from "../platform/checkout-lock.js";
 import type { PlatformServices } from "../platform/platform-services.js";
-import { CLEANUP_JOURNAL_LOCK_KEY } from "../platform/posix-platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { RuntimeError } from "../util/errors.js";
 import { platformPathsEqual } from "../util/platform-path.js";
@@ -83,7 +86,7 @@ async function reclaimPendingRemovalLocks(
       continue;
     }
     if (!platformPathsEqual(commonDir, manifest.commonDir)) continue;
-    const key = createHash("sha256").update(commonDir).digest("hex");
+    const key = checkoutLockKey(commonDir);
     if (seen.has(key)) continue;
     seen.add(key);
     await reclaimDeadLock(
@@ -113,7 +116,7 @@ export async function recoverStaleRuns(
     processToken: await ps.getProcessStartToken(nodeProcess.pid),
   }));
   const recoveryLockPath = path.join(locksRoot, "recovery.lock");
-  const recoveryLock = await acquireOwnedLock(
+  const { lock: recoveryLock } = await tryAcquireLockReclaimingDead(
     recoveryLockPath,
     ownerContents,
     isProcessAlive,
@@ -223,7 +226,7 @@ export async function recoverStaleRuns(
               claimedRunIds.add(entry.name);
               continue;
             }
-            const checkoutLock = await acquireOwnedLock(
+            const { lock: checkoutLock } = await tryAcquireLockReclaimingDead(
               path.join(locksRoot, `${record.lockKey}.lock`),
               ownerContents,
               isProcessAlive,
@@ -293,7 +296,7 @@ export async function recoverStaleRuns(
               cleanupFailed = true;
             } finally {
               try {
-                await releaseOwnedLock(checkoutLock);
+                await releaseLock(checkoutLock);
               } catch (releaseError) {
                 if (!cleanupFailed) throw releaseError;
                 throw new AggregateError(
@@ -349,7 +352,7 @@ export async function recoverStaleRuns(
     }
 
     for (const { record, runStartText } of stale) {
-      const checkoutLock = await acquireOwnedLock(
+      const { lock: checkoutLock } = await tryAcquireLockReclaimingDead(
         path.join(locksRoot, `${record.lockKey}.lock`),
         ownerContents,
         isProcessAlive,
@@ -394,7 +397,7 @@ export async function recoverStaleRuns(
         recoveryFailed = true;
       } finally {
         try {
-          await releaseOwnedLock(checkoutLock);
+          await releaseLock(checkoutLock);
         } catch (cleanupError) {
           if (!recoveryFailed) throw cleanupError;
           throw new AggregateError(
@@ -472,7 +475,7 @@ export async function recoverStaleRuns(
     throw error;
   } finally {
     try {
-      await releaseOwnedLock(recoveryLock);
+      await releaseLock(recoveryLock);
     } catch (cleanupError) {
       if (primaryError === undefined) throw cleanupError;
       throw new AggregateError(

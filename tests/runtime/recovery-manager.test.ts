@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { git } from "../../src/git/git-exec.js";
 import { WorktreeManager } from "../../src/runtime/worktree-manager.js";
 import { start } from "../../src/mcp/server.js";
-import { CLEANUP_JOURNAL_LOCK_KEY } from "../../src/platform/posix-platform-services.js";
+import { CLEANUP_JOURNAL_LOCK_KEY } from "../../src/platform/checkout-lock.js";
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
 import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
 import { buildRunManifest } from "../../src/runtime/run-manifest.js";
@@ -37,6 +37,24 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
   StdioServerTransport: class {},
 }));
+
+// Passthrough of the directory flush that can be armed to fail once for one
+// directory, so a test can cut quarantine after its rename has happened.
+const syncFault = vi.hoisted(() => ({ directory: null as string | null, fired: 0 }));
+vi.mock("../../src/platform/durable-directory.js", async importOriginal => {
+  const actual = await importOriginal<typeof import("../../src/platform/durable-directory.js")>();
+  return {
+    ...actual,
+    async syncDirectoryMetadata(...args: Parameters<typeof actual.syncDirectoryMetadata>) {
+      if (syncFault.directory !== null && args[0] === syncFault.directory) {
+        syncFault.directory = null;
+        syncFault.fired += 1;
+        throw new Error("injected parent-directory sync failure");
+      }
+      return actual.syncDirectoryMetadata(...args);
+    },
+  };
+});
 
 // The interrupted-prune tests below perform real bound-directory cleanup, which
 // routes through the host OS backend (lsof/df on darwin, /proc on linux, the
@@ -1327,6 +1345,50 @@ describe("recoverStaleRuns", () => {
     expect(String(errors[1])).toMatch(/EISDIR|regular file|incompatible/i);
     await expect(access(store.runDirectory)).resolves.toBeUndefined();
     await expectMissing(path.join(runsRoot, `.poisoned-${runId}`));
+  });
+
+  it("restores the run directory with its identity when quarantine fails after the move", async () => {
+    const runId = "run-quarantine-sync-failure";
+    const missingCommonDir = path.join(process.env.CLAUDE_PLUGIN_DATA!, "missing-common-dir");
+    const store = await createUnfinishedRun(runId, missingCommonDir, 4242, "darwin:recorded");
+    const runsRoot = path.dirname(store.runDirectory);
+    // Recovery names the runs root by its canonical path.
+    const canonicalRunsRoot = await realpath(runsRoot);
+    const before = await lstat(store.runDirectory, { bigint: true });
+    syncFault.fired = 0;
+
+    let thrown: unknown;
+    try {
+      await recoverStaleRuns({
+        platformServices: platformServicesDouble({
+          os: "darwin",
+          async getProcessStartToken(pid) {
+            // Arm the fault once the run is classified stale, right before
+            // its recovery fails and quarantine renames it.
+            if (pid === 4242 && syncFault.fired === 0) syncFault.directory = canonicalRunsRoot;
+            return pid === 4242 ? "darwin:replacement" : "darwin:self";
+          },
+          async terminateProcessTreeByPid() {},
+        }),
+        isProcessAlive: pid => pid === 4242,
+      });
+    } catch (error) {
+      thrown = error;
+    } finally {
+      syncFault.directory = null;
+    }
+
+    expect(syncFault.fired).toBe(1);
+    expect(thrown).toBeInstanceOf(AggregateError);
+    const errors = (thrown as AggregateError).errors as unknown[];
+    expect(errors).toHaveLength(2);
+    expect(String(errors[1])).toMatch(/injected parent-directory sync failure/u);
+    const after = await lstat(store.runDirectory, { bigint: true });
+    expect(after.isDirectory()).toBe(true);
+    expect({ dev: after.dev, ino: after.ino, birthtimeNs: after.birthtimeNs })
+      .toEqual({ dev: before.dev, ino: before.ino, birthtimeNs: before.birthtimeNs });
+    await expectMissing(path.join(runsRoot, `.poisoned-${runId}`));
+    await expectMissing(path.join(runsRoot, "recovery-quarantine.ndjson"));
   });
 
   it("rejects a hard-linked quarantine journal without mutating its external alias", async () => {
