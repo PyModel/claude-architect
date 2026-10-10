@@ -1,8 +1,10 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import nodeProcess from "node:process";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHECKOUT_LOCK_NAME_PATTERN,
@@ -20,7 +22,10 @@ import {
   type LockOwner,
   type LockRecord,
 } from "../../src/platform/lock-ownership.js";
+import { getPlatformServices } from "../../src/platform/select-platform.js";
 import { logger } from "../../src/util/logger.js";
+
+const execFileAsync = promisify(execFile);
 
 describe("LockOwnership", () => {
   let tempDir: string;
@@ -284,6 +289,41 @@ describe("LockOwnership", () => {
         async () => "tok",
       );
       expect(liveResult).toBe(true);
+    });
+  });
+
+  describe("checkout lock release", () => {
+    let previousStateDir: string | undefined;
+    let checkout: string;
+
+    beforeEach(async () => {
+      previousStateDir = nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR;
+      nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR = path.join(tempDir, "state");
+      checkout = path.join(tempDir, "checkout");
+      await mkdir(checkout);
+      await execFileAsync("git", ["init", "-q"], { cwd: checkout });
+    });
+
+    afterEach(() => {
+      if (previousStateDir === undefined) delete nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR;
+      else nodeProcess.env.CLAUDE_ARCHITECT_STATE_DIR = previousStateDir;
+    });
+
+    it("leaves another holder's lock in place when the released lock file was replaced", async () => {
+      const ps = getPlatformServices();
+      const first = await ps.acquireCheckoutLock(checkout, { runId: "run-first" });
+      const lockPath = path.join(tempDir, "state", "locks", `${first.key}.lock`);
+      // The first holder's file disappears (an operator or a reclaim removed it)
+      // and a second holder in the same process publishes its own lock.
+      await rm(lockPath);
+      const second = await ps.acquireCheckoutLock(checkout, { runId: "run-second" });
+      const successorRecord = await readFile(lockPath, "utf8");
+
+      await first.release();
+
+      expect(await readFile(lockPath, "utf8")).toBe(successorRecord);
+      await second.release();
+      await expect(readFile(lockPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     });
   });
 });
