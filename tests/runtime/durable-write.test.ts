@@ -23,6 +23,7 @@ import {
   publishExclusive,
   writeAtomic,
 } from "../../src/platform/durable-write.js";
+import { RuntimeError } from "../../src/util/errors.js";
 
 // Pass-through: one test swaps the temp file the moment its handle closes,
 // standing in for a same-user writer racing the publish.
@@ -220,8 +221,10 @@ describe("PlatformSafety durable-write", () => {
         () => undefined,
         (error: unknown) => error,
       );
-      expect(failure).toBeInstanceOf(AggregateError);
-      const [primary, cleanup] = (failure as AggregateError).errors;
+      // A refused-write classifier (instanceof RuntimeError) must still see the refusal.
+      expect(failure).toBeInstanceOf(RuntimeError);
+      expect((failure as { errors?: unknown }).errors).toHaveLength(2);
+      const [primary, cleanup] = (failure as unknown as { errors: unknown[] }).errors;
       expect((primary as Error).message).toContain("atomic write temporary file changed before publish");
       expect(cleanup).toBe(removal);
       expect((failure as Error).message).toContain("atomic write temporary file changed before publish");
