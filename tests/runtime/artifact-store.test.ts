@@ -1577,7 +1577,12 @@ describe("ArtifactStore", () => {
     expect(pruned.removed).not.toContain(runId);
     expect(pruned.retained.some(entry => entry.runId === runId)).toBe(true);
     await expect(stat(join(preservedRunsRoot, runId))).resolves.toBeDefined();
-    await expect(readFile(cleanupJournal, "utf8")).resolves.toBe("");
+    // No intent was written: the journal is absent or empty in the swapped-in root.
+    const journalText = await readFile(cleanupJournal, "utf8").catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return "";
+      throw error;
+    });
+    expect(journalText).toBe("");
   });
 
   it("deletes a candidate anchor before pruning its archive", async () => {
