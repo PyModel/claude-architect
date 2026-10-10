@@ -39,7 +39,9 @@ describe("probeCowSupport", () => {
     },
   );
 
-  it("reports a forced clone failure and removes the probe directory", async () => {
+  // The probe resolves the host's system `cp` by absolute path before cloning.
+  it.skipIf(process.platform !== "darwin" && process.platform !== "linux")(
+    "reports a forced clone failure and removes the probe directory", async () => {
     let probeRoot: string | undefined;
 
     await expect(probeCowSupport({

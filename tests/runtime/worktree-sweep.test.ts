@@ -14,6 +14,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -903,8 +904,12 @@ describe("startup worktree sweep", () => {
 
     await expectMissing(orphan.path);
     const listed = await git(repo.directory, ["worktree", "list", "--porcelain", "-z"]);
-    expect(listed.stdout).not.toContain(orphan.path);
-    expect(listed.stdout).toContain(await realpath(userWorktree));
+    // Git reports forward slashes on Windows; compare resolved paths.
+    const registered = listed.stdout.split("\0")
+      .filter(field => field.startsWith("worktree "))
+      .map(field => path.resolve(field.slice("worktree ".length)));
+    expect(registered).not.toContain(path.resolve(orphan.path));
+    expect(registered).toContain(path.resolve(realpathSync.native(userWorktree)));
     await expect(readFile(
       path.join(repo.directory, ".worktrees", "claude-architect", ".gitignore"),
       "utf8",

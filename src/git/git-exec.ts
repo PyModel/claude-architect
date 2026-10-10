@@ -264,9 +264,11 @@ export async function git(
     ?? (gitSubcommand(args) === "ls-files" ? INDEX_LISTING_MAX_BYTES : DEFAULT_MAX_OUTPUT_BYTES);
   const env: Record<string, string> = {
     PATH: process.env.PATH ?? "",
+    // Git for Windows special-cases "/dev/null" for config paths; "NUL" is
+    // an unreadable file to some builds (Windows ARM64 Git fails on it).
     ...(options.userIdentity === true ? userConfigEnvironment() : {
-      GIT_CONFIG_GLOBAL: nullDevice,
-      GIT_CONFIG_SYSTEM: nullDevice,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_SYSTEM: "/dev/null",
       GIT_CONFIG_NOSYSTEM: "1",
     }),
     GIT_ATTR_NOSYSTEM: "1",
