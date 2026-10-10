@@ -162,6 +162,27 @@ describe("cleanup journal", () => {
     await expect(readPendingCleanupIntents(runsRoot)).resolves.toEqual(new Map());
   });
 
+  it("an append after a torn final line repairs the tail so the journal stays parseable", async () => {
+    const runsRoot = path.join(process.env.CLAUDE_PLUGIN_DATA!, "runs");
+    const journal = path.join(runsRoot, "cleanup.ndjson");
+    await mkdir(runsRoot, { recursive: true });
+    const repoRoot = path.join(process.env.CLAUDE_PLUGIN_DATA!, "repo");
+    const first = intentRecord("run-first", repoRoot);
+    const complete = `${JSON.stringify(first)}\n`;
+    // Another process crashed mid-append: no read has repaired the tail yet.
+    await writeFile(journal, complete + JSON.stringify(intentRecord("run-torn", repoRoot)).slice(0, 60));
+
+    const second = intentRecord("run-second", repoRoot);
+    await appendCleanupRecord(runsRoot, second);
+
+    const intents = await readPendingCleanupIntents(runsRoot);
+    expect([...intents.keys()]).toEqual(["run-first", "run-second"]);
+    expect(intents.get("run-second")).toEqual(second);
+    const text = await readFile(journal, "utf8");
+    expect(text.startsWith(complete)).toBe(true);
+    expect(text.endsWith("\n")).toBe(true);
+  });
+
   it("lands every concurrent append from one process as a complete, parseable line", async () => {
     const runsRoot = path.join(process.env.CLAUDE_PLUGIN_DATA!, "runs");
     await mkdir(runsRoot, { recursive: true });
