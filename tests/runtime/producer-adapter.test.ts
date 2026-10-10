@@ -188,9 +188,11 @@ describe("ProducerAdapter", () => {
       arch: "arm64",
       environmentType: "native",
     });
-    expect(probeReport.available).toBe(true);
+    // No probe hook: authentication is still reported, but nothing proves
+    // write confinement, so the edit lane stays closed.
+    expect(probeReport.available).toBe(false);
     expect(probeReport.authState).toBe("authenticated");
-    expect(probeReport.laneEligibility.edit).toBe(true);
+    expect(probeReport.laneEligibility.edit).toBe(false);
 
     const invocation = adapter.buildInvocation(
       {

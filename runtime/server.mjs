@@ -37459,22 +37459,15 @@ var DescriptorAdapter = class {
     if (this.descriptor.probe) {
       return this.descriptor.probe(ctx, this.deps);
     }
-    const resolved = await ctx.ps.resolveExecutable({ name: this.descriptor.executable.name }).catch(() => null);
-    const authState = isProducerAuthenticated(this.descriptor, this.deps) ? "authenticated" : "unauthenticated";
     return {
-      producerId: this.producerId,
-      available: resolved !== null,
-      reason: resolved !== null ? null : "missing-executable",
-      os: ctx.os,
-      arch: ctx.arch,
-      environmentType: ctx.environmentType,
-      resolvedExecutable: resolved,
-      version: null,
-      authState,
-      executionModes: [...this.executionModes],
-      structuredOutput: this.structuredOutput,
-      writeConfinementBackend: null,
-      laneEligibility: { edit: resolved !== null }
+      ...unavailableCapabilityReport(
+        ctx,
+        this.producerId,
+        this.structuredOutput,
+        "probe-failed"
+      ),
+      authState: isProducerAuthenticated(this.descriptor, this.deps) ? "authenticated" : "unauthenticated",
+      executionModes: [...this.executionModes]
     };
   }
   buildInvocation(spec, ctx) {
