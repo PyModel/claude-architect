@@ -44808,7 +44808,12 @@ async function appendCleanupRecord(runsRoot, record2) {
     const identity = await plainDirectoryIdentity2(runsRoot);
     if (identity === null) throw new RuntimeError("cleanup journal root disappeared");
     const session = new DurableDirectorySession(runsRoot, identity, { syncDirectory: flushDirectory });
-    await appendDurable(session, CLEANUP_JOURNAL, line);
+    const filename = path26.join(runsRoot, CLEANUP_JOURNAL);
+    const { text, tornTail } = await readCleanupJournal(filename);
+    if (tornTail) await truncateCleanupTornTail(filename);
+    await appendDurable(session, CLEANUP_JOURNAL, line, {
+      expectedSize: Buffer.byteLength(text ?? "", "utf8")
+    });
   });
 }
 async function readPendingCleanupIntents(runsRoot) {

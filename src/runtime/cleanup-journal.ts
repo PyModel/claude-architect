@@ -356,7 +356,7 @@ async function truncateCleanupTornTail(filename: string): Promise<void> {
 
 /**
  * Durably append one record: redacting serialization (refuses a record that
- * carries a registered secret), no-follow append to a single-link regular file
+ * carries a registered secret), torn-tail repair, no-follow append to a single-link regular file
  * in the identity-checked runs root, fsync, then a directory flush. The caller
  * owns creating the runs root; a missing root fails closed.
  */
@@ -367,7 +367,15 @@ export async function appendCleanupRecord(runsRoot: string, record: CleanupRecor
     if (identity === null) throw new RuntimeError("cleanup journal root disappeared");
     // A hot path: flushDirectory never spawns the Windows directory helper.
     const session = new DurableDirectorySession(runsRoot, identity, { syncDirectory: flushDirectory });
-    await appendDurable(session, CLEANUP_JOURNAL, line);
+    // Repair a torn tail left by a crashed appender before writing, so this
+    // record never concatenates onto the fragment; the expected size makes
+    // appendDurable refuse if the journal changed since it was read.
+    const filename = path.join(runsRoot, CLEANUP_JOURNAL);
+    const { text, tornTail } = await readCleanupJournal(filename);
+    if (tornTail) await truncateCleanupTornTail(filename);
+    await appendDurable(session, CLEANUP_JOURNAL, line, {
+      expectedSize: Buffer.byteLength(text ?? "", "utf8"),
+    });
   });
 }
 
