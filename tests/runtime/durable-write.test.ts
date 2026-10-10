@@ -28,7 +28,7 @@ import {
 // standing in for a same-user writer racing the publish.
 vi.mock("node:fs/promises", async importOriginal => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
-  return { ...actual, open: vi.fn(actual.open) };
+  return { ...actual, open: vi.fn(actual.open), rm: vi.fn(actual.rm) };
 });
 
 const actualFs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
@@ -207,6 +207,30 @@ describe("PlatformSafety durable-write", () => {
       expect(await readdir(testDir)).toEqual(["state.json"]);
     },
   );
+
+  it("reports a failed temp removal alongside the primary failure", async () => {
+    const session = await openDurableDirectorySession(testDir);
+    try {
+      const { displaced } = substituteTemporaryOnClose();
+      const removal = new Error("simulated temp removal failure");
+      vi.mocked(rm).mockImplementationOnce(async () => {
+        throw removal;
+      });
+      const failure = await writeAtomic(session, "state.json", "next", "replace").then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(AggregateError);
+      const [primary, cleanup] = (failure as AggregateError).errors;
+      expect((primary as Error).message).toContain("atomic write temporary file changed before publish");
+      expect(cleanup).toBe(removal);
+      expect((failure as Error).message).toContain("atomic write temporary file changed before publish");
+      for (const leftover of await readdir(testDir)) await rm(path.join(testDir, leftover));
+      expect(displaced).toHaveLength(1);
+    } finally {
+      await session.close();
+    }
+  });
 
   describe("appendDurable", () => {
     it("appends the bytes and flushes the directory after the write", async () => {
