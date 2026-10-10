@@ -2,6 +2,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  appendCleanupRecord,
+  readPendingCleanupIntents,
+  type CleanupRecord,
+} from "../../src/runtime/cleanup-journal.js";
 import { registerSecretValue, type SecretRegistration } from "../../src/runtime/redaction.js";
 import { replayInterruptedPrunes } from "../../src/runtime/recovery-prune-journal.js";
 import { platformServicesDouble } from "../helpers/platform-services-double.js";
@@ -42,7 +47,7 @@ async function temporaryDirectory(prefix: string): Promise<string> {
   return directory;
 }
 
-function intentRecord(runId: string, repoRoot: string): Record<string, unknown> {
+function intentRecord(runId: string, repoRoot: string): CleanupRecord {
   return {
     event: "prune-cleanup-intent",
     runId,
@@ -122,5 +127,57 @@ describe("cleanup journal recovery appends", () => {
       event.op === "sync" && event.path === path.resolve(runsRoot));
     // Windows cannot fsync a directory handle; the flush is a documented no-op there.
     if (process.platform !== "win32") expect(directorySynced).toBe(true);
+  });
+});
+
+describe("cleanup journal", () => {
+  it("repairs a torn final line and computes pending intents from complete lines only", async () => {
+    const runsRoot = path.join(process.env.CLAUDE_PLUGIN_DATA!, "runs");
+    const journal = path.join(runsRoot, "cleanup.ndjson");
+    await mkdir(runsRoot, { recursive: true });
+    const repoRoot = path.join(process.env.CLAUDE_PLUGIN_DATA!, "repo");
+    const finished = intentRecord("run-finished", repoRoot);
+    const pending = intentRecord("run-pending", repoRoot);
+    const complete = `${[
+      JSON.stringify(finished),
+      JSON.stringify(pending),
+      JSON.stringify({ ...finished, event: "prune-cleanup-complete", anchorCleanup: "deleted" }),
+    ].join("\n")}\n`;
+    // The torn fragment is an intent for a third run; it must not count as pending.
+    const torn = JSON.stringify(intentRecord("run-torn", repoRoot)).slice(0, 60);
+    await writeFile(journal, complete + torn);
+
+    const intents = await readPendingCleanupIntents(runsRoot);
+
+    expect([...intents.keys()]).toEqual(["run-pending"]);
+    expect(intents.get("run-pending")).toEqual(pending);
+    await expect(readFile(journal, "utf8")).resolves.toBe(complete);
+
+    // A record appended after the repair starts on its own line.
+    await appendCleanupRecord(runsRoot, {
+      ...pending,
+      event: "prune-cleanup-rollback",
+      anchorCleanup: "deleted",
+    });
+    await expect(readPendingCleanupIntents(runsRoot)).resolves.toEqual(new Map());
+  });
+
+  it("lands every concurrent append from one process as a complete, parseable line", async () => {
+    const runsRoot = path.join(process.env.CLAUDE_PLUGIN_DATA!, "runs");
+    await mkdir(runsRoot, { recursive: true });
+    const repoRoot = path.join(process.env.CLAUDE_PLUGIN_DATA!, "repo");
+    const runIds = Array.from({ length: 24 }, (_, index) => `run-concurrent-${index}`);
+
+    await Promise.all(runIds.map(runId => appendCleanupRecord(runsRoot, intentRecord(runId, repoRoot))));
+
+    const text = await readFile(path.join(runsRoot, "cleanup.ndjson"), "utf8");
+    expect(text.endsWith("\n")).toBe(true);
+    const lines = text.slice(0, -1).split("\n");
+    expect(lines).toHaveLength(runIds.length);
+    const records = lines.map(line => JSON.parse(line) as CleanupRecord);
+    expect(records.map(record => record.runId).sort()).toEqual([...runIds].sort());
+    for (const record of records) expect(record).toEqual(intentRecord(record.runId, repoRoot));
+    const intents = await readPendingCleanupIntents(runsRoot);
+    expect([...intents.keys()].sort()).toEqual([...runIds].sort());
   });
 });
