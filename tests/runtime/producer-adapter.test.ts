@@ -188,9 +188,11 @@ describe("ProducerAdapter", () => {
       arch: "arm64",
       environmentType: "native",
     });
-    expect(probeReport.available).toBe(true);
+    // No probe hook: authentication is still reported, but nothing proves
+    // write confinement, so the edit lane stays closed.
+    expect(probeReport.available).toBe(false);
     expect(probeReport.authState).toBe("authenticated");
-    expect(probeReport.laneEligibility.edit).toBe(true);
+    expect(probeReport.laneEligibility.edit).toBe(false);
 
     const invocation = adapter.buildInvocation(
       {
@@ -222,6 +224,25 @@ describe("ProducerAdapter", () => {
       expect(adapter, adapter.producerId).toBeInstanceOf(DescriptorAdapter);
       expect((adapter as DescriptorAdapter).descriptor.id).toBe(adapter.producerId);
     }
+  });
+
+  it("keeps the edit lane closed for a descriptor without a probe hook even when its executable resolves", async () => {
+    const adapter = new DescriptorAdapter({
+      id: "no-probe-hook",
+      executable: { name: "no-probe-hook" },
+      isolation: "inherited-config-only",
+      structuredOutput: false,
+    });
+    const report = await adapter.probe({
+      ps: { resolveExecutable: async () => executable } as unknown as PlatformServices,
+      os: "darwin",
+      arch: "arm64",
+      environmentType: "native",
+    });
+    expect(report.laneEligibility.edit).toBe(false);
+    expect(report.available).toBe(false);
+    expect(report.reason).toBe("probe-failed");
+    expect(report.writeConfinementBackend).toBeNull();
   });
 
   it("defaults the descriptor-driven adapter's home directory to the OS home directory", async () => {

@@ -6,7 +6,11 @@ import type {
   SupervisedExit,
 } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
-import { probeOsConfinedCli, type OsConfinedCliProbe } from "./cli-probe.js";
+import {
+  probeOsConfinedCli,
+  unavailableCapabilityReport,
+  type OsConfinedCliProbe,
+} from "./cli-probe.js";
 import {
   isProducerAuthenticated,
   type HostStateDescriptor,
@@ -174,26 +178,20 @@ export class DescriptorAdapter implements ProducerAdapter {
     if (this.descriptor.probe) {
       return this.descriptor.probe(ctx, this.deps);
     }
-    const resolved = await ctx.ps
-      .resolveExecutable({ name: this.descriptor.executable.name })
-      .catch(() => null);
-    const authState = isProducerAuthenticated(this.descriptor, this.deps)
-      ? "authenticated"
-      : "unauthenticated";
+    // Without a probe hook nothing proves write confinement, so the edit lane
+    // stays closed (AGENTS.md: unproven eligibility is unavailable). The
+    // executable is not resolved: nothing could act on it.
     return {
-      producerId: this.producerId,
-      available: resolved !== null,
-      reason: resolved !== null ? null : "missing-executable",
-      os: ctx.os,
-      arch: ctx.arch,
-      environmentType: ctx.environmentType,
-      resolvedExecutable: resolved,
-      version: null,
-      authState,
+      ...unavailableCapabilityReport(
+        ctx,
+        this.producerId,
+        this.structuredOutput,
+        "probe-failed",
+      ),
+      authState: isProducerAuthenticated(this.descriptor, this.deps)
+        ? "authenticated"
+        : "unauthenticated",
       executionModes: [...this.executionModes],
-      structuredOutput: this.structuredOutput,
-      writeConfinementBackend: null,
-      laneEligibility: { edit: resolved !== null },
     };
   }
 
