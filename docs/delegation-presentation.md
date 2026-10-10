@@ -19,7 +19,7 @@ Surface the workflow in the Claude Code subagent look and feel, but treat the ca
 ```text
 ▸ Autopilot · codex-implementer      workflow-owned branch
   Task    <3–5 word description>
-  Model   GPT-5.6 Sol · reasoning low
+  Model   GPT-6.1 Sol · reasoning low
   Phase   running-task      Workflow <workflowId>
 ```
 
@@ -34,7 +34,7 @@ When a lane runs through the `delegation-lane` agent, the host renders dispatch 
 ```text
 ▸ Agent · codex-implementer          edit · worktree-isolated
   Task    <3–5 word description>
-  Model   GPT-5.6 Sol · reasoning low
+  Model   GPT-6.1 Sol · reasoning low
   Mode    foreground        Pipeline  delegatePipeline
 ```
 

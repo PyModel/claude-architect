@@ -72,7 +72,7 @@ Non-trivial work runs through the fresh-context review pipeline. Read the exact 
 The direct, unverified Codex CLI lane runs `codex exec` against your current checkout without an isolated worktree, frozen Candidate Artifact, or independent verification:
 
 ```text
-/claude-architect:codex Review this checkout with gpt-5.6-sol at high reasoning.
+/claude-architect:codex Review this checkout with gpt-6.1-sol at high reasoning.
 ```
 
 Use it for direct Codex assistance when those controls are not required. Use `/claude-architect:delegate` when changes need the verified lane and its isolated worktree, frozen Candidate Artifact, independent verification, and guarded integration.

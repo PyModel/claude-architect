@@ -14,18 +14,18 @@ Always present this skill as `/claude-architect:codex`. Never show a shorter com
 Only `/claude-architect:delegate` produces a frozen, independently verified Candidate Artifact and drives review, decision, and guarded integration. This direct skill must never call itself verified or invoke those lifecycle tools.
 
 ## Running a Task
-1. For a new session (resumes inherit the prior model/effort — see step 5), ask the user (via `AskUserQuestion`) which **model** AND which **reasoning effort** to use, in a **single prompt with two questions**. When the user expresses no preference, default to `gpt-5.6-sol` at `high`.
-   - **Model** — default `gpt-5.6-sol`:
-     - *GPT-5.6:* `gpt-5.6-sol` (frontier / most capable — **default**), `gpt-5.6-terra` (balanced, everyday), `gpt-5.6-luna` (fast & affordable)
-     - *Legacy (kept for compatibility):* `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark`, `gpt-5.3-codex`
+1. For a new session (resumes inherit the prior model/effort — see step 5), ask the user (via `AskUserQuestion`) which **model** AND which **reasoning effort** to use, in a **single prompt with two questions**. When the user expresses no preference, default to `gpt-6.1-sol` at `high`.
+   - **Model** — default `gpt-6.1-sol`:
+     - *GPT-6:* `gpt-6.1-sol` (latest workhorse — **default**), `gpt-6-astra` (frontier), `gpt-6-sol` (previous generation), `gpt-6-luna` (fast & affordable)
+     - *Legacy (kept for compatibility):* `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark`, `gpt-5.3-codex`
    - **Reasoning effort** — default `high`: `low`, `medium`, `high`, `xhigh`, `max`, `ultra`.
-     - `max`/`ultra` require a GPT-5.6 model; `ultra` is only on `sol`/`terra` (`luna` caps at `max`); legacy models cap at `xhigh`.
+     - `max`/`ultra` require a GPT-6 model or a legacy GPT-5.6 model; `ultra` is only on `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol` and legacy `gpt-5.6-sol`/`gpt-5.6-terra` (luna variants cap at `max`); other legacy models cap at `xhigh`.
      - `ultra` = maximum reasoning **with automatic task delegation** (slowest and most expensive — reserve for the hardest jobs).
      - If the chosen effort exceeds the chosen model's maximum, fall back to that model's highest supported effort and tell the user.
 2. Select the sandbox mode required for the task; default to `--sandbox read-only` unless edits or network access are necessary.
 3. Assemble the command with the appropriate options:
    - `-m, --model <MODEL>`
-   - `--config model_reasoning_effort="<low|medium|high|xhigh|max|ultra>"` (max/ultra only on GPT-5.6 models; ultra only on sol/terra — see step 1)
+   - `--config model_reasoning_effort="<low|medium|high|xhigh|max|ultra>"` (max/ultra only on GPT-6 and legacy GPT-5.6 models; ultra not on luna — see step 1)
    - `--sandbox <read-only|workspace-write|danger-full-access>`
    - `-C, --cd <DIR>`
    - `--skip-git-repo-check`
