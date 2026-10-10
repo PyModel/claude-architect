@@ -37634,7 +37634,6 @@ var AgyAdapter = class extends DescriptorAdapter {
 };
 
 // src/producers/claude-adapter.ts
-import { homedir as homedir2 } from "node:os";
 import { join as join3 } from "node:path";
 var CLAUDE_REQUIRED_ENV = ["USER", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY"];
 var EDIT_TOOLS = "Read,Edit,Write,Bash,Grep,Glob";
@@ -37663,6 +37662,94 @@ function resolveClaudeAccountFile(deps) {
   const home = deps.env.HOME ?? deps.env.USERPROFILE ?? deps.homeDirectory;
   return join3(home, ".claude.json");
 }
+var REQUIRED_CLAUDE_FLAGS = [
+  "--no-session-persistence",
+  "--strict-mcp-config",
+  "--setting-sources"
+];
+async function inspectClaudeCliSurface(ctx, executable) {
+  let helpResult;
+  try {
+    helpResult = await runVersionProbe(ctx, executable, ["--help"]);
+  } catch {
+    return "unsupported-cli-surface";
+  }
+  if (helpResult.spawnError !== void 0 || helpResult.exitCode !== 0) {
+    return "unsupported-cli-surface";
+  }
+  const helpOutput = `${helpResult.stdout}
+${helpResult.stderr}`;
+  for (const flag of REQUIRED_CLAUDE_FLAGS) {
+    if (!helpOutput.includes(flag)) {
+      return "unsupported-cli-surface";
+    }
+  }
+  return null;
+}
+function buildClaudeInvocation(spec, ctx, deps) {
+  const effort = spec.producerOverrides?.reasoningEffort;
+  if (effort !== void 0 && !EFFORT_LEVELS.has(effort)) {
+    throw new Error(
+      `Claude effort override ${JSON.stringify(effort)} is unsupported; use one of ${[...EFFORT_LEVELS].join("|")}.`
+    );
+  }
+  const readOnly = ctx.readOnly === true;
+  const args = [
+    "-p",
+    "--output-format",
+    "json",
+    "--no-session-persistence",
+    "--strict-mcp-config",
+    "--setting-sources",
+    "",
+    "--disable-slash-commands",
+    "--dangerously-skip-permissions",
+    "--tools",
+    readOnly ? READ_ONLY_TOOLS : EDIT_TOOLS
+  ];
+  if (spec.producerOverrides?.model !== void 0) {
+    args.push("--model", spec.producerOverrides.model);
+  }
+  if (effort !== void 0) {
+    args.push("--effort", effort);
+  }
+  return {
+    executable: ctx.executable,
+    args,
+    stdin: renderProducerPrompt(spec, {
+      readOnly,
+      ...claudeDescriptor.prompt
+    }),
+    requiredEnv: [...CLAUDE_REQUIRED_ENV],
+    inheritedStateWritablePaths: resolveInheritedWritablePaths(claudeDescriptor, deps),
+    network: "allowed"
+  };
+}
+function normalizeClaudeEvents(raw) {
+  if (raw.exit.truncated.stdout) {
+    return { events: [], producerSummary: null, ok: false };
+  }
+  const envelope = parseEnvelope(raw.stdout);
+  if (envelope === null) {
+    return {
+      events: [{ kind: "error", text: raw.stderr.slice(-TEXT_LIMIT2) }],
+      producerSummary: null,
+      ok: false
+    };
+  }
+  const result = typeof envelope.result === "string" ? envelope.result : void 0;
+  const ok = raw.exit.exitCode === 0 && envelope.is_error === false && envelope.subtype === "success" && result !== void 0;
+  if (ok) {
+    const events2 = [{ kind: "final", text: result, raw: envelope }];
+    return { events: events2, producerSummary: result, ok: true };
+  }
+  const events = [{
+    kind: "error",
+    ...result === void 0 ? {} : { text: result.slice(-TEXT_LIMIT2) },
+    raw: envelope
+  }];
+  return { events, producerSummary: null, ok: false };
+}
 var claudeDescriptor = {
   id: "claude",
   executable: { name: "claude" },
@@ -37688,139 +37775,37 @@ var claudeDescriptor = {
     bootstrapPlacement: "before"
   },
   structuredOutput: true,
-  executionModes: ["edit"]
+  executionModes: ["edit"],
+  configurationProfile: {
+    isolationState: "inherited-config-only",
+    credentialSources: [
+      '~/.claude.json oauthAccount + macOS login keychain ("Claude Code-credentials")',
+      "ANTHROPIC_API_KEY (optional)"
+    ],
+    behavioralConfigSources: [
+      "explicit invocation argv (user/project/local settings, hooks, MCP servers, and skills are all disabled)"
+    ],
+    repositoryInstructionSources: [],
+    environmentDependencies: [...CLAUDE_REQUIRED_ENV],
+    temporaryHomeStrategy: "real HOME inherited by declared policy (OAuth state in ~/.claude.json is not HOME-redirectable); reduced reproducibility recorded in the Run Manifest"
+  },
+  probe: (ctx, deps) => probeDescriptorCli(claudeDescriptor, ctx, deps, {
+    parseVersion,
+    inspectSurface: inspectClaudeCliSurface
+  }),
+  buildInvocation: buildClaudeInvocation,
+  normalizeEvents: normalizeClaudeEvents
 };
-var REQUIRED_CLAUDE_FLAGS = [
-  "--no-session-persistence",
-  "--strict-mcp-config",
-  "--setting-sources"
-];
-var ClaudeAdapter = class {
-  constructor(deps = {
-    env: process.env,
-    homeDirectory: homedir2()
-  }) {
-    this.deps = deps;
-  }
-  deps;
-  producerId = claudeDescriptor.id;
-  structuredOutput = claudeDescriptor.structuredOutput;
-  executionModes = claudeDescriptor.executionModes;
-  descriptor = claudeDescriptor;
-  async inspectCliSurface(ctx, executable) {
-    let helpResult;
-    try {
-      helpResult = await runVersionProbe(ctx, executable, ["--help"]);
-    } catch {
-      return "unsupported-cli-surface";
-    }
-    if (helpResult.spawnError !== void 0 || helpResult.exitCode !== 0) {
-      return "unsupported-cli-surface";
-    }
-    const helpOutput = `${helpResult.stdout}
-${helpResult.stderr}`;
-    for (const flag of REQUIRED_CLAUDE_FLAGS) {
-      if (!helpOutput.includes(flag)) {
-        return "unsupported-cli-surface";
-      }
-    }
-    return null;
-  }
-  async probe(ctx) {
-    return probeOsConfinedCli(ctx, {
-      producerId: this.producerId,
-      executableName: "claude",
-      structuredOutput: this.structuredOutput,
-      parseVersion,
-      inspectSurface: (probeCtx, executable) => this.inspectCliSurface(probeCtx, executable),
-      isAuthenticated: () => isProducerAuthenticated(claudeDescriptor, this.deps)
-    });
-  }
-  buildInvocation(spec, ctx) {
-    const effort = spec.producerOverrides?.reasoningEffort;
-    if (effort !== void 0 && !EFFORT_LEVELS.has(effort)) {
-      throw new Error(
-        `Claude effort override ${JSON.stringify(effort)} is unsupported; use one of ${[...EFFORT_LEVELS].join("|")}.`
-      );
-    }
-    const readOnly = ctx.readOnly === true;
-    const args = [
-      "-p",
-      "--output-format",
-      "json",
-      "--no-session-persistence",
-      "--strict-mcp-config",
-      "--setting-sources",
-      "",
-      "--disable-slash-commands",
-      "--dangerously-skip-permissions",
-      "--tools",
-      readOnly ? READ_ONLY_TOOLS : EDIT_TOOLS
-    ];
-    if (spec.producerOverrides?.model !== void 0) {
-      args.push("--model", spec.producerOverrides.model);
-    }
-    if (effort !== void 0) {
-      args.push("--effort", effort);
-    }
-    return {
-      executable: ctx.executable,
-      args,
-      stdin: renderProducerPrompt(spec, {
-        readOnly,
-        ...claudeDescriptor.prompt
-      }),
-      requiredEnv: [...CLAUDE_REQUIRED_ENV],
-      inheritedStateWritablePaths: resolveInheritedWritablePaths(claudeDescriptor, this.deps),
-      network: "allowed"
-    };
-  }
-  normalizeEvents(raw) {
-    if (raw.exit.truncated.stdout) {
-      return { events: [], producerSummary: null, ok: false };
-    }
-    const envelope = parseEnvelope(raw.stdout);
-    if (envelope === null) {
-      return {
-        events: [{ kind: "error", text: raw.stderr.slice(-TEXT_LIMIT2) }],
-        producerSummary: null,
-        ok: false
-      };
-    }
-    const result = typeof envelope.result === "string" ? envelope.result : void 0;
-    const ok = raw.exit.exitCode === 0 && envelope.is_error === false && envelope.subtype === "success" && result !== void 0;
-    if (ok) {
-      const events2 = [{ kind: "final", text: result, raw: envelope }];
-      return { events: events2, producerSummary: result, ok: true };
-    }
-    const events = [{
-      kind: "error",
-      ...result === void 0 ? {} : { text: result.slice(-TEXT_LIMIT2) },
-      raw: envelope
-    }];
-    return { events, producerSummary: null, ok: false };
-  }
-  configurationProfile() {
-    return {
-      isolationState: "inherited-config-only",
-      credentialSources: [
-        '~/.claude.json oauthAccount + macOS login keychain ("Claude Code-credentials")',
-        "ANTHROPIC_API_KEY (optional)"
-      ],
-      behavioralConfigSources: [
-        "explicit invocation argv (user/project/local settings, hooks, MCP servers, and skills are all disabled)"
-      ],
-      repositoryInstructionSources: [],
-      environmentDependencies: [...CLAUDE_REQUIRED_ENV],
-      temporaryHomeStrategy: "real HOME inherited by declared policy (OAuth state in ~/.claude.json is not HOME-redirectable); reduced reproducibility recorded in the Run Manifest"
-    };
+var ClaudeAdapter = class extends DescriptorAdapter {
+  constructor(deps) {
+    super(claudeDescriptor, deps);
   }
 };
 
 // src/producers/codex-adapter.ts
 import { execFileSync } from "node:child_process";
 import { existsSync as existsSync3, realpathSync } from "node:fs";
-import { homedir as homedir3, tmpdir as tmpdir4 } from "node:os";
+import { tmpdir as tmpdir4 } from "node:os";
 import { join as join4 } from "node:path";
 var CODEX_REQUIRED_ENV = [
   "CODEX_HOME",
@@ -37868,6 +37853,150 @@ function parseVersion2(stdout) {
 function quoteTomlString(value) {
   return JSON.stringify(value);
 }
+function buildCodexInvocation(spec, ctx, deps) {
+  const redirectedGitObjects = ctx.gitObjectDirectory !== void 0 && ctx.gitAlternateObjectDirectories !== void 0;
+  const shellEnvironment = [
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "CLAUDE_ARCHITECT_DELEGATED",
+    ...redirectedGitObjects ? ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"] : []
+  ];
+  const forcedShellEnvironment = {
+    CLAUDE_ARCHITECT_DELEGATED: "1",
+    ...redirectedGitObjects ? {
+      GIT_OBJECT_DIRECTORY: ctx.gitObjectDirectory,
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: ctx.gitAlternateObjectDirectories
+    } : {}
+  };
+  const writableRoots = ctx.readOnly === true ? ctx.extraWritableRoots ?? [] : [.../* @__PURE__ */ new Set([
+    ...ctx.extraWritableRoots ?? [],
+    ...sandboxSupportWritableRoots(process.platform)
+  ])];
+  const args = [
+    "exec",
+    "--json",
+    "--ephemeral",
+    "--sandbox",
+    // Read-only roles use Codex's native read-only sandbox: wrapping Codex in
+    // an outer Seatbelt profile EPERM-crashes its internal sandbox init.
+    ctx.readOnly === true ? "read-only" : "workspace-write",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "--disable",
+    "multi_agent",
+    "-c",
+    MULTI_AGENT_CONTROL,
+    "-c",
+    'approval_policy="never"',
+    "-c",
+    "sandbox_workspace_write.network_access=false",
+    "-c",
+    "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+    "-c",
+    "sandbox_workspace_write.exclude_slash_tmp=true",
+    ...writableRoots.length === 0 ? [] : [
+      "-c",
+      `sandbox_workspace_write.writable_roots=${JSON.stringify(writableRoots)}`
+    ],
+    "-c",
+    'shell_environment_policy.inherit="core"',
+    "-c",
+    `shell_environment_policy.include_only=${JSON.stringify(shellEnvironment)}`,
+    "-c",
+    // Codex re-injects its own credential and packaging variables after the
+    // inherit filter runs, so the auth-store location would otherwise reach the
+    // Producer shell. Deny them explicitly.
+    `shell_environment_policy.exclude=${JSON.stringify(CODEX_SHELL_ENV_EXCLUDE)}`,
+    "-c",
+    `shell_environment_policy.set={${Object.entries(forcedShellEnvironment).map(([name, value]) => `${name}=${quoteTomlString(value)}`).join(",")}}`,
+    "-c",
+    'web_search="disabled"',
+    "--cd",
+    ctx.worktreePath
+  ];
+  if (spec.producerOverrides?.model !== void 0) {
+    args.push("--model", spec.producerOverrides.model);
+  }
+  if (spec.producerOverrides?.reasoningEffort !== void 0) {
+    args.push(
+      "-c",
+      `model_reasoning_effort=${quoteTomlString(spec.producerOverrides.reasoningEffort)}`
+    );
+  }
+  args.push("-");
+  const defaultEnv = resolveDefaultEnv(codexDescriptor, deps);
+  return {
+    executable: ctx.executable,
+    args,
+    stdin: renderProducerPrompt(spec, {
+      readOnly: ctx.readOnly === true,
+      ...codexDescriptor.prompt
+    }),
+    requiredEnv: [...CODEX_REQUIRED_ENV],
+    env: {
+      ...defaultEnv,
+      ...redirectedGitObjects ? {
+        GIT_OBJECT_DIRECTORY: ctx.gitObjectDirectory,
+        GIT_ALTERNATE_OBJECT_DIRECTORIES: ctx.gitAlternateObjectDirectories
+      } : {}
+    },
+    network: "denied"
+  };
+}
+function normalizeCodexEvents(raw) {
+  if (raw.exit.truncated.stdout) {
+    return { events: [], producerSummary: null, ok: false };
+  }
+  const lines = raw.stdout.split(/\r?\n/u).filter((line) => line.trim().length > 0);
+  if (lines.length === 0) return { events: [], producerSummary: null, ok: false };
+  const events = [];
+  let producerSummary = null;
+  let completed = false;
+  let failed = false;
+  try {
+    for (const line of lines) {
+      const parsed = JSON.parse(line);
+      if (!isRecord3(parsed) || typeof parsed.type !== "string") {
+        return { events: [], producerSummary: null, ok: false };
+      }
+      if (parsed.type === "turn.completed") {
+        completed = true;
+        continue;
+      }
+      if (parsed.type === "error" || parsed.type === "turn.failed") {
+        failed = true;
+        const text = stringProperty(parsed, "message") ?? stringProperty(parsed.error, "message");
+        events.push({
+          kind: "error",
+          ...text === void 0 ? {} : { text },
+          raw: parsed
+        });
+        continue;
+      }
+      if (parsed.type !== "item.completed") continue;
+      const item = parsed.item;
+      const itemType = stringProperty(item, "type");
+      if (itemType === "agent_message") {
+        const text = stringProperty(item, "text");
+        if (text === void 0) return { events: [], producerSummary: null, ok: false };
+        producerSummary = text;
+        events.push({ kind: "final", text, raw: parsed });
+      } else if (itemType !== void 0) {
+        events.push({ kind: "tool", raw: parsed });
+      }
+    }
+  } catch {
+    return { events: [], producerSummary: null, ok: false };
+  }
+  return {
+    events,
+    producerSummary,
+    ok: completed && !failed && producerSummary !== null
+  };
+}
 var codexDescriptor = {
   id: "codex",
   executable: { name: "codex" },
@@ -37886,188 +38015,30 @@ var codexDescriptor = {
     bootstrapPlacement: "before"
   },
   structuredOutput: true,
-  executionModes: ["edit"]
+  executionModes: ["edit"],
+  configurationProfile: {
+    isolationState: "controlled-config-supported",
+    credentialSources: [
+      "CODEX_HOME auth store",
+      "CODEX_API_KEY",
+      "CODEX_ACCESS_TOKEN",
+      "operating-system credential store"
+    ],
+    behavioralConfigSources: ["explicit invocation argv"],
+    repositoryInstructionSources: ["worktree AGENTS.md"],
+    environmentDependencies: [...CODEX_REQUIRED_ENV],
+    temporaryHomeStrategy: "use a per-attempt HOME while preserving CODEX_HOME for auth; ignore user config and rules"
+  },
+  probe: (ctx, deps) => probeDescriptorCli(codexDescriptor, ctx, deps, {
+    writeConfinementBackend: "codex-native-sandbox",
+    parseVersion: parseVersion2
+  }),
+  buildInvocation: buildCodexInvocation,
+  normalizeEvents: normalizeCodexEvents
 };
-var CodexAdapter = class {
-  constructor(deps = {
-    env: process.env,
-    homeDirectory: homedir3()
-  }) {
-    this.deps = deps;
-  }
-  deps;
-  producerId = codexDescriptor.id;
-  structuredOutput = codexDescriptor.structuredOutput;
-  executionModes = codexDescriptor.executionModes;
-  descriptor = codexDescriptor;
-  async probe(ctx) {
-    return probeOsConfinedCli(ctx, {
-      producerId: this.producerId,
-      executableName: "codex",
-      structuredOutput: this.structuredOutput,
-      writeConfinementBackend: "codex-native-sandbox",
-      parseVersion: parseVersion2,
-      isAuthenticated: () => isProducerAuthenticated(codexDescriptor, this.deps)
-    });
-  }
-  buildInvocation(spec, ctx) {
-    const redirectedGitObjects = ctx.gitObjectDirectory !== void 0 && ctx.gitAlternateObjectDirectories !== void 0;
-    const shellEnvironment = [
-      "PATH",
-      "HOME",
-      "TMPDIR",
-      "LANG",
-      "LC_ALL",
-      "CLAUDE_ARCHITECT_DELEGATED",
-      ...redirectedGitObjects ? ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"] : []
-    ];
-    const forcedShellEnvironment = {
-      CLAUDE_ARCHITECT_DELEGATED: "1",
-      ...redirectedGitObjects ? {
-        GIT_OBJECT_DIRECTORY: ctx.gitObjectDirectory,
-        GIT_ALTERNATE_OBJECT_DIRECTORIES: ctx.gitAlternateObjectDirectories
-      } : {}
-    };
-    const writableRoots = ctx.readOnly === true ? ctx.extraWritableRoots ?? [] : [.../* @__PURE__ */ new Set([
-      ...ctx.extraWritableRoots ?? [],
-      ...sandboxSupportWritableRoots(process.platform)
-    ])];
-    const args = [
-      "exec",
-      "--json",
-      "--ephemeral",
-      "--sandbox",
-      // Read-only roles use Codex's native read-only sandbox: wrapping Codex in
-      // an outer Seatbelt profile EPERM-crashes its internal sandbox init.
-      ctx.readOnly === true ? "read-only" : "workspace-write",
-      "--ignore-user-config",
-      "--ignore-rules",
-      "--disable",
-      "multi_agent",
-      "-c",
-      MULTI_AGENT_CONTROL,
-      "-c",
-      'approval_policy="never"',
-      "-c",
-      "sandbox_workspace_write.network_access=false",
-      "-c",
-      "sandbox_workspace_write.exclude_tmpdir_env_var=true",
-      "-c",
-      "sandbox_workspace_write.exclude_slash_tmp=true",
-      ...writableRoots.length === 0 ? [] : [
-        "-c",
-        `sandbox_workspace_write.writable_roots=${JSON.stringify(writableRoots)}`
-      ],
-      "-c",
-      'shell_environment_policy.inherit="core"',
-      "-c",
-      `shell_environment_policy.include_only=${JSON.stringify(shellEnvironment)}`,
-      "-c",
-      // Codex re-injects its own credential and packaging variables after the
-      // inherit filter runs, so the auth-store location would otherwise reach the
-      // Producer shell. Deny them explicitly.
-      `shell_environment_policy.exclude=${JSON.stringify(CODEX_SHELL_ENV_EXCLUDE)}`,
-      "-c",
-      `shell_environment_policy.set={${Object.entries(forcedShellEnvironment).map(([name, value]) => `${name}=${quoteTomlString(value)}`).join(",")}}`,
-      "-c",
-      'web_search="disabled"',
-      "--cd",
-      ctx.worktreePath
-    ];
-    if (spec.producerOverrides?.model !== void 0) {
-      args.push("--model", spec.producerOverrides.model);
-    }
-    if (spec.producerOverrides?.reasoningEffort !== void 0) {
-      args.push(
-        "-c",
-        `model_reasoning_effort=${quoteTomlString(spec.producerOverrides.reasoningEffort)}`
-      );
-    }
-    args.push("-");
-    const defaultEnv = resolveDefaultEnv(codexDescriptor, this.deps);
-    return {
-      executable: ctx.executable,
-      args,
-      stdin: renderProducerPrompt(spec, {
-        readOnly: ctx.readOnly === true,
-        ...codexDescriptor.prompt
-      }),
-      requiredEnv: [...CODEX_REQUIRED_ENV],
-      env: {
-        ...defaultEnv,
-        ...redirectedGitObjects ? {
-          GIT_OBJECT_DIRECTORY: ctx.gitObjectDirectory,
-          GIT_ALTERNATE_OBJECT_DIRECTORIES: ctx.gitAlternateObjectDirectories
-        } : {}
-      },
-      network: "denied"
-    };
-  }
-  normalizeEvents(raw) {
-    if (raw.exit.truncated.stdout) {
-      return { events: [], producerSummary: null, ok: false };
-    }
-    const lines = raw.stdout.split(/\r?\n/u).filter((line) => line.trim().length > 0);
-    if (lines.length === 0) return { events: [], producerSummary: null, ok: false };
-    const events = [];
-    let producerSummary = null;
-    let completed = false;
-    let failed = false;
-    try {
-      for (const line of lines) {
-        const parsed = JSON.parse(line);
-        if (!isRecord3(parsed) || typeof parsed.type !== "string") {
-          return { events: [], producerSummary: null, ok: false };
-        }
-        if (parsed.type === "turn.completed") {
-          completed = true;
-          continue;
-        }
-        if (parsed.type === "error" || parsed.type === "turn.failed") {
-          failed = true;
-          const text = stringProperty(parsed, "message") ?? stringProperty(parsed.error, "message");
-          events.push({
-            kind: "error",
-            ...text === void 0 ? {} : { text },
-            raw: parsed
-          });
-          continue;
-        }
-        if (parsed.type !== "item.completed") continue;
-        const item = parsed.item;
-        const itemType = stringProperty(item, "type");
-        if (itemType === "agent_message") {
-          const text = stringProperty(item, "text");
-          if (text === void 0) return { events: [], producerSummary: null, ok: false };
-          producerSummary = text;
-          events.push({ kind: "final", text, raw: parsed });
-        } else if (itemType !== void 0) {
-          events.push({ kind: "tool", raw: parsed });
-        }
-      }
-    } catch {
-      return { events: [], producerSummary: null, ok: false };
-    }
-    return {
-      events,
-      producerSummary,
-      ok: completed && !failed && producerSummary !== null
-    };
-  }
-  configurationProfile() {
-    return {
-      isolationState: "controlled-config-supported",
-      credentialSources: [
-        "CODEX_HOME auth store",
-        "CODEX_API_KEY",
-        "CODEX_ACCESS_TOKEN",
-        "operating-system credential store"
-      ],
-      behavioralConfigSources: ["explicit invocation argv"],
-      repositoryInstructionSources: ["worktree AGENTS.md"],
-      environmentDependencies: [...CODEX_REQUIRED_ENV],
-      temporaryHomeStrategy: "use a per-attempt HOME while preserving CODEX_HOME for auth; ignore user config and rules"
-    };
+var CodexAdapter = class extends DescriptorAdapter {
+  constructor(deps) {
+    super(codexDescriptor, deps);
   }
 };
 
@@ -38347,7 +38318,7 @@ var registry2 = new ProducerRegistry([new CodexAdapter(), new OpenCodeAdapter(),
 
 // src/producers/producer-runtime.ts
 import { existsSync as existsSync7, statSync as statSync2 } from "node:fs";
-import { homedir as homedir5 } from "node:os";
+import { homedir as homedir3 } from "node:os";
 import path14 from "node:path";
 
 // src/runtime/environment-policy.ts
@@ -38661,7 +38632,7 @@ function buildEnvironment(args) {
 
 // src/platform/sandbox/seatbelt.ts
 import { realpathSync as realpathSync2 } from "node:fs";
-import { homedir as homedir4 } from "node:os";
+import { homedir as homedir2 } from "node:os";
 import { isAbsolute, normalize, parse as parse3, relative, resolve } from "node:path";
 function buildReadOnlySeatbeltPolicy(args) {
   return {
@@ -38700,7 +38671,7 @@ function isDeclaredStateRoot(normalized, invocation, policy) {
     process.env.USERPROFILE
   ];
   try {
-    homeCandidates.push(homedir4());
+    homeCandidates.push(homedir2());
   } catch {
   }
   for (const candidate of homeCandidates) {
@@ -38774,7 +38745,7 @@ var CREDENTIAL_PATHS = [
   ".config/gcloud"
 ];
 function credentialReadDenials() {
-  const home = process.env.HOME ?? homedir4();
+  const home = process.env.HOME ?? homedir2();
   if (!isAbsolute(home) || resolve(home) === "/") return [];
   return [...new Set(CREDENTIAL_PATHS.flatMap((entry) => {
     const candidate = resolve(home, entry);
@@ -39039,7 +39010,7 @@ var ProducerRuntime = class {
     }
     const hostStoreContext = {
       env: process.env,
-      homeDirectory: homedir5()
+      homeDirectory: homedir3()
     };
     const hostStoreRoot = descriptor ? resolveHostStoreRoot(descriptor, hostStoreContext) ?? "" : "";
     const configRevision = descriptor ? resolveConfigRevision(descriptor, hostStoreContext) : "";

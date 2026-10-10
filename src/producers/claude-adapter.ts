@@ -1,25 +1,23 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import type { ResolvedExecutable } from "../platform/platform-services.js";
-import { probeOsConfinedCli, runVersionProbe } from "./cli-probe.js";
+import { runVersionProbe } from "./cli-probe.js";
 import {
   defaultHasOauthAccount,
-  isProducerAuthenticated,
   isRecord,
   resolveInheritedWritablePaths,
   type HostStoreContext,
 } from "./host-store.js";
 import { renderProducerPrompt } from "./plain-text.js";
-import type {
-  AdapterEvent,
-  CapabilityReport,
-  InvocationContext,
-  ProbeContext,
-  ProducerAdapter,
-  ProducerConfigurationProfile,
-  ProducerDescriptor,
-  ProducerInvocation,
+import {
+  DescriptorAdapter,
+  probeDescriptorCli,
+  type AdapterEvent,
+  type InvocationContext,
+  type ProbeContext,
+  type ProducerAdapter,
+  type ProducerDescriptor,
+  type ProducerInvocation,
 } from "./producer-adapter.js";
 
 const CLAUDE_REQUIRED_ENV = ["USER", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY"] as const;
@@ -53,6 +51,110 @@ function resolveClaudeAccountFile(deps: HostStoreContext): string {
   return join(home, ".claude.json");
 }
 
+const REQUIRED_CLAUDE_FLAGS = [
+  "--no-session-persistence",
+  "--strict-mcp-config",
+  "--setting-sources",
+] as const;
+
+async function inspectClaudeCliSurface(
+  ctx: ProbeContext,
+  executable: ResolvedExecutable,
+): Promise<string | null> {
+  let helpResult;
+  try {
+    helpResult = await runVersionProbe(ctx, executable, ["--help"]);
+  } catch {
+    return "unsupported-cli-surface";
+  }
+  if (helpResult.spawnError !== undefined || helpResult.exitCode !== 0) {
+    return "unsupported-cli-surface";
+  }
+  const helpOutput = `${helpResult.stdout}\n${helpResult.stderr}`;
+  for (const flag of REQUIRED_CLAUDE_FLAGS) {
+    if (!helpOutput.includes(flag)) {
+      return "unsupported-cli-surface";
+    }
+  }
+  return null;
+}
+
+function buildClaudeInvocation(
+  spec: DelegationSpec,
+  ctx: InvocationContext,
+  deps: HostStoreContext,
+): ProducerInvocation {
+  const effort = spec.producerOverrides?.reasoningEffort;
+  if (effort !== undefined && !EFFORT_LEVELS.has(effort)) {
+    throw new Error(
+      `Claude effort override ${JSON.stringify(effort)} is unsupported; use one of ${[...EFFORT_LEVELS].join("|")}.`,
+    );
+  }
+  const readOnly = ctx.readOnly === true;
+  const args = [
+    "-p",
+    "--output-format",
+    "json",
+    "--no-session-persistence",
+    "--strict-mcp-config",
+    "--setting-sources",
+    "",
+    "--disable-slash-commands",
+    "--dangerously-skip-permissions",
+    "--tools",
+    readOnly ? READ_ONLY_TOOLS : EDIT_TOOLS,
+  ];
+  if (spec.producerOverrides?.model !== undefined) {
+    args.push("--model", spec.producerOverrides.model);
+  }
+  if (effort !== undefined) {
+    args.push("--effort", effort);
+  }
+
+  return {
+    executable: ctx.executable,
+    args,
+    stdin: renderProducerPrompt(spec, {
+      readOnly,
+      ...claudeDescriptor.prompt,
+    }),
+    requiredEnv: [...CLAUDE_REQUIRED_ENV],
+    inheritedStateWritablePaths: resolveInheritedWritablePaths(claudeDescriptor, deps),
+    network: "allowed",
+  };
+}
+
+function normalizeClaudeEvents(
+  raw: Parameters<ProducerAdapter["normalizeEvents"]>[0],
+): ReturnType<ProducerAdapter["normalizeEvents"]> {
+  if (raw.exit.truncated.stdout) {
+    return { events: [], producerSummary: null, ok: false };
+  }
+  const envelope = parseEnvelope(raw.stdout);
+  if (envelope === null) {
+    return {
+      events: [{ kind: "error", text: raw.stderr.slice(-TEXT_LIMIT) }],
+      producerSummary: null,
+      ok: false,
+    };
+  }
+  const result = typeof envelope.result === "string" ? envelope.result : undefined;
+  const ok = raw.exit.exitCode === 0
+    && envelope.is_error === false
+    && envelope.subtype === "success"
+    && result !== undefined;
+  if (ok) {
+    const events: AdapterEvent[] = [{ kind: "final", text: result, raw: envelope }];
+    return { events, producerSummary: result, ok: true };
+  }
+  const events: AdapterEvent[] = [{
+    kind: "error",
+    ...(result === undefined ? {} : { text: result.slice(-TEXT_LIMIT) }),
+    raw: envelope,
+  }];
+  return { events, producerSummary: null, ok: false };
+}
+
 export const claudeDescriptor: ProducerDescriptor = {
   id: "claude",
   executable: { name: "claude" },
@@ -79,146 +181,26 @@ export const claudeDescriptor: ProducerDescriptor = {
   },
   structuredOutput: true,
   executionModes: ["edit"],
+  configurationProfile: {
+    isolationState: "inherited-config-only",
+    credentialSources: [
+      "~/.claude.json oauthAccount + macOS login keychain (\"Claude Code-credentials\")",
+      "ANTHROPIC_API_KEY (optional)",
+    ],
+    behavioralConfigSources: [
+      "explicit invocation argv (user/project/local settings, hooks, MCP servers, and skills are all disabled)",
+    ],
+    repositoryInstructionSources: [],
+    environmentDependencies: [...CLAUDE_REQUIRED_ENV],
+    temporaryHomeStrategy:
+      "real HOME inherited by declared policy (OAuth state in ~/.claude.json is not HOME-redirectable); reduced reproducibility recorded in the Run Manifest",
+  },
+  probe: (ctx, deps) => probeDescriptorCli(claudeDescriptor, ctx, deps, {
+    parseVersion,
+    inspectSurface: inspectClaudeCliSurface,
+  }),
+  buildInvocation: buildClaudeInvocation,
+  normalizeEvents: normalizeClaudeEvents,
 };
 
-export interface ClaudeAdapterDeps extends HostStoreContext {}
-
-const REQUIRED_CLAUDE_FLAGS = [
-  "--no-session-persistence",
-  "--strict-mcp-config",
-  "--setting-sources",
-] as const;
-
-export class ClaudeAdapter implements ProducerAdapter {
-  readonly producerId = claudeDescriptor.id;
-  readonly structuredOutput = claudeDescriptor.structuredOutput!;
-  readonly executionModes = claudeDescriptor.executionModes!;
-  readonly descriptor = claudeDescriptor;
-
-  constructor(private readonly deps: ClaudeAdapterDeps = {
-    env: process.env,
-    homeDirectory: homedir(),
-  }) {}
-
-  private async inspectCliSurface(
-    ctx: ProbeContext,
-    executable: ResolvedExecutable,
-  ): Promise<string | null> {
-    let helpResult;
-    try {
-      helpResult = await runVersionProbe(ctx, executable, ["--help"]);
-    } catch {
-      return "unsupported-cli-surface";
-    }
-    if (helpResult.spawnError !== undefined || helpResult.exitCode !== 0) {
-      return "unsupported-cli-surface";
-    }
-    const helpOutput = `${helpResult.stdout}\n${helpResult.stderr}`;
-    for (const flag of REQUIRED_CLAUDE_FLAGS) {
-      if (!helpOutput.includes(flag)) {
-        return "unsupported-cli-surface";
-      }
-    }
-    return null;
-  }
-
-  async probe(ctx: ProbeContext): Promise<CapabilityReport> {
-    return probeOsConfinedCli(ctx, {
-      producerId: this.producerId,
-      executableName: "claude",
-      structuredOutput: this.structuredOutput,
-      parseVersion,
-      inspectSurface: (probeCtx, executable) => this.inspectCliSurface(probeCtx, executable),
-      isAuthenticated: () => isProducerAuthenticated(claudeDescriptor, this.deps),
-    });
-  }
-
-  buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
-    const effort = spec.producerOverrides?.reasoningEffort;
-    if (effort !== undefined && !EFFORT_LEVELS.has(effort)) {
-      throw new Error(
-        `Claude effort override ${JSON.stringify(effort)} is unsupported; use one of ${[...EFFORT_LEVELS].join("|")}.`,
-      );
-    }
-    const readOnly = ctx.readOnly === true;
-    const args = [
-      "-p",
-      "--output-format",
-      "json",
-      "--no-session-persistence",
-      "--strict-mcp-config",
-      "--setting-sources",
-      "",
-      "--disable-slash-commands",
-      "--dangerously-skip-permissions",
-      "--tools",
-      readOnly ? READ_ONLY_TOOLS : EDIT_TOOLS,
-    ];
-    if (spec.producerOverrides?.model !== undefined) {
-      args.push("--model", spec.producerOverrides.model);
-    }
-    if (effort !== undefined) {
-      args.push("--effort", effort);
-    }
-
-    return {
-      executable: ctx.executable,
-      args,
-      stdin: renderProducerPrompt(spec, {
-        readOnly,
-        ...claudeDescriptor.prompt,
-      }),
-      requiredEnv: [...CLAUDE_REQUIRED_ENV],
-      inheritedStateWritablePaths: resolveInheritedWritablePaths(claudeDescriptor, this.deps),
-      network: "allowed",
-    };
-  }
-
-  normalizeEvents(
-    raw: Parameters<ProducerAdapter["normalizeEvents"]>[0],
-  ): ReturnType<ProducerAdapter["normalizeEvents"]> {
-    if (raw.exit.truncated.stdout) {
-      return { events: [], producerSummary: null, ok: false };
-    }
-    const envelope = parseEnvelope(raw.stdout);
-    if (envelope === null) {
-      return {
-        events: [{ kind: "error", text: raw.stderr.slice(-TEXT_LIMIT) }],
-        producerSummary: null,
-        ok: false,
-      };
-    }
-    const result = typeof envelope.result === "string" ? envelope.result : undefined;
-    const ok = raw.exit.exitCode === 0
-      && envelope.is_error === false
-      && envelope.subtype === "success"
-      && result !== undefined;
-    if (ok) {
-      const events: AdapterEvent[] = [{ kind: "final", text: result, raw: envelope }];
-      return { events, producerSummary: result, ok: true };
-    }
-    const events: AdapterEvent[] = [{
-      kind: "error",
-      ...(result === undefined ? {} : { text: result.slice(-TEXT_LIMIT) }),
-      raw: envelope,
-    }];
-    return { events, producerSummary: null, ok: false };
-  }
-
-  configurationProfile(): ProducerConfigurationProfile {
-    return {
-      isolationState: "inherited-config-only",
-      credentialSources: [
-        "~/.claude.json oauthAccount + macOS login keychain (\"Claude Code-credentials\")",
-        "ANTHROPIC_API_KEY (optional)",
-      ],
-      behavioralConfigSources: [
-        "explicit invocation argv (user/project/local settings, hooks, MCP servers, and skills are all disabled)",
-      ],
-      repositoryInstructionSources: [],
-      environmentDependencies: [...CLAUDE_REQUIRED_ENV],
-      temporaryHomeStrategy:
-        "real HOME inherited by declared policy (OAuth state in ~/.claude.json is not HOME-redirectable); reduced reproducibility recorded in the Run Manifest",
-    };
-  }
-}
+export class ClaudeAdapter extends DescriptorAdapter { constructor(deps?: HostStoreContext) { super(claudeDescriptor, deps); } }

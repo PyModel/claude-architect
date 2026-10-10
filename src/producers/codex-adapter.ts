@@ -1,21 +1,18 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
-import { probeOsConfinedCli } from "./cli-probe.js";
-import type {
-  AdapterEvent,
-  CapabilityReport,
-  InvocationContext,
-  ProbeContext,
-  ProducerAdapter,
-  ProducerConfigurationProfile,
-  ProducerDescriptor,
-  ProducerInvocation,
+import {
+  DescriptorAdapter,
+  probeDescriptorCli,
+  type AdapterEvent,
+  type InvocationContext,
+  type ProducerAdapter,
+  type ProducerDescriptor,
+  type ProducerInvocation,
 } from "./producer-adapter.js";
 import {
-  isProducerAuthenticated,
   isRecord,
   resolveDefaultEnv,
   stringProperty,
@@ -109,6 +106,186 @@ function quoteTomlString(value: string): string {
 
 export const CODEX_EDIT_ACTION_PREAMBLE = EDIT_ACTION_PREAMBLE;
 
+function buildCodexInvocation(
+  spec: DelegationSpec,
+  ctx: InvocationContext,
+  deps: HostStoreContext,
+): ProducerInvocation {
+  const redirectedGitObjects = ctx.gitObjectDirectory !== undefined
+    && ctx.gitAlternateObjectDirectories !== undefined;
+  const shellEnvironment = [
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "CLAUDE_ARCHITECT_DELEGATED",
+    ...(redirectedGitObjects
+      ? ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"]
+      : []),
+  ];
+  // `include_only` narrows the inherited set; it cannot add to it. Under
+  // inherit="none" the inherited set is empty, so the producer shell lost PATH
+  // entirely and could not resolve node, npx, or git — Producers then burned
+  // whole attempts inventing workarounds. inherit="core" delivers the
+  // already-sanitized PATH/HOME/TMPDIR/LANG/LC_ALL from the spawn environment
+  // without leaking CODEX_HOME or any other host variable, and `set` force-adds
+  // the non-core variables (nested-delegation guard, redirected Git objects)
+  // that "core" would otherwise drop.
+  const forcedShellEnvironment: Record<string, string> = {
+    CLAUDE_ARCHITECT_DELEGATED: "1",
+    ...(redirectedGitObjects
+      ? {
+        GIT_OBJECT_DIRECTORY: ctx.gitObjectDirectory!,
+        GIT_ALTERNATE_OBJECT_DIRECTORIES: ctx.gitAlternateObjectDirectories!,
+      }
+      : {}),
+  };
+  // Read-only roles get Codex's read-only sandbox, which has no writable roots
+  // at all; the support roots below only make sense for the edit lane.
+  const writableRoots = ctx.readOnly === true
+    ? (ctx.extraWritableRoots ?? [])
+    : [...new Set([
+      ...(ctx.extraWritableRoots ?? []),
+      ...sandboxSupportWritableRoots(process.platform),
+    ])];
+  const args = [
+    "exec",
+    "--json",
+    "--ephemeral",
+    "--sandbox",
+    // Read-only roles use Codex's native read-only sandbox: wrapping Codex in
+    // an outer Seatbelt profile EPERM-crashes its internal sandbox init.
+    ctx.readOnly === true ? "read-only" : "workspace-write",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "--disable",
+    "multi_agent",
+    "-c",
+    MULTI_AGENT_CONTROL,
+    "-c",
+    'approval_policy="never"',
+    "-c",
+    "sandbox_workspace_write.network_access=false",
+    "-c",
+    "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+    "-c",
+    "sandbox_workspace_write.exclude_slash_tmp=true",
+    ...(writableRoots.length === 0
+      ? []
+      : [
+        "-c",
+        `sandbox_workspace_write.writable_roots=${JSON.stringify(writableRoots)}`,
+      ]),
+    "-c",
+    'shell_environment_policy.inherit="core"',
+    "-c",
+    `shell_environment_policy.include_only=${JSON.stringify(shellEnvironment)}`,
+    "-c",
+    // Codex re-injects its own credential and packaging variables after the
+    // inherit filter runs, so the auth-store location would otherwise reach the
+    // Producer shell. Deny them explicitly.
+    `shell_environment_policy.exclude=${JSON.stringify(CODEX_SHELL_ENV_EXCLUDE)}`,
+    "-c",
+    `shell_environment_policy.set={${
+      Object.entries(forcedShellEnvironment)
+        .map(([name, value]) => `${name}=${quoteTomlString(value)}`)
+        .join(",")
+    }}`,
+    "-c",
+    'web_search="disabled"',
+    "--cd",
+    ctx.worktreePath,
+  ];
+  if (spec.producerOverrides?.model !== undefined) {
+    args.push("--model", spec.producerOverrides.model);
+  }
+  if (spec.producerOverrides?.reasoningEffort !== undefined) {
+    args.push(
+      "-c",
+      `model_reasoning_effort=${quoteTomlString(spec.producerOverrides.reasoningEffort)}`,
+    );
+  }
+  args.push("-");
+  const defaultEnv = resolveDefaultEnv(codexDescriptor, deps);
+  return {
+    executable: ctx.executable,
+    args,
+    stdin: renderProducerPrompt(spec, {
+      readOnly: ctx.readOnly === true,
+      ...codexDescriptor.prompt,
+    }),
+    requiredEnv: [...CODEX_REQUIRED_ENV],
+    env: {
+      ...defaultEnv,
+      ...(redirectedGitObjects
+        ? {
+          GIT_OBJECT_DIRECTORY: ctx.gitObjectDirectory!,
+          GIT_ALTERNATE_OBJECT_DIRECTORIES: ctx.gitAlternateObjectDirectories!,
+        }
+        : {}),
+    },
+    network: "denied",
+  };
+}
+
+function normalizeCodexEvents(
+  raw: Parameters<ProducerAdapter["normalizeEvents"]>[0],
+): ReturnType<ProducerAdapter["normalizeEvents"]> {
+  if (raw.exit.truncated.stdout) {
+    return { events: [], producerSummary: null, ok: false };
+  }
+  const lines = raw.stdout.split(/\r?\n/u).filter(line => line.trim().length > 0);
+  if (lines.length === 0) return { events: [], producerSummary: null, ok: false };
+
+  const events: AdapterEvent[] = [];
+  let producerSummary: string | null = null;
+  let completed = false;
+  let failed = false;
+  try {
+    for (const line of lines) {
+      const parsed: unknown = JSON.parse(line);
+      if (!isRecord(parsed) || typeof parsed.type !== "string") {
+        return { events: [], producerSummary: null, ok: false };
+      }
+      if (parsed.type === "turn.completed") {
+        completed = true;
+        continue;
+      }
+      if (parsed.type === "error" || parsed.type === "turn.failed") {
+        failed = true;
+        const text = stringProperty(parsed, "message")
+          ?? stringProperty(parsed.error, "message");
+        events.push({
+          kind: "error",
+          ...(text === undefined ? {} : { text }),
+          raw: parsed,
+        });
+        continue;
+      }
+      if (parsed.type !== "item.completed") continue;
+      const item = parsed.item;
+      const itemType = stringProperty(item, "type");
+      if (itemType === "agent_message") {
+        const text = stringProperty(item, "text");
+        if (text === undefined) return { events: [], producerSummary: null, ok: false };
+        producerSummary = text;
+        events.push({ kind: "final", text, raw: parsed });
+      } else if (itemType !== undefined) {
+        events.push({ kind: "tool", raw: parsed });
+      }
+    }
+  } catch {
+    return { events: [], producerSummary: null, ok: false };
+  }
+
+  return {
+    events,
+    producerSummary,
+    ok: completed && !failed && producerSummary !== null,
+  };
+}
+
 export const codexDescriptor: ProducerDescriptor = {
   id: "codex",
   executable: { name: "codex" },
@@ -128,224 +305,26 @@ export const codexDescriptor: ProducerDescriptor = {
   },
   structuredOutput: true,
   executionModes: ["edit"],
+  configurationProfile: {
+    isolationState: "controlled-config-supported",
+    credentialSources: [
+      "CODEX_HOME auth store",
+      "CODEX_API_KEY",
+      "CODEX_ACCESS_TOKEN",
+      "operating-system credential store",
+    ],
+    behavioralConfigSources: ["explicit invocation argv"],
+    repositoryInstructionSources: ["worktree AGENTS.md"],
+    environmentDependencies: [...CODEX_REQUIRED_ENV],
+    temporaryHomeStrategy:
+      "use a per-attempt HOME while preserving CODEX_HOME for auth; ignore user config and rules",
+  },
+  probe: (ctx, deps) => probeDescriptorCli(codexDescriptor, ctx, deps, {
+    writeConfinementBackend: "codex-native-sandbox",
+    parseVersion,
+  }),
+  buildInvocation: buildCodexInvocation,
+  normalizeEvents: normalizeCodexEvents,
 };
 
-export interface CodexAdapterDeps extends HostStoreContext {}
-
-export class CodexAdapter implements ProducerAdapter {
-  readonly producerId = codexDescriptor.id;
-  readonly structuredOutput = codexDescriptor.structuredOutput!;
-  readonly executionModes = codexDescriptor.executionModes!;
-  readonly descriptor = codexDescriptor;
-
-  constructor(private readonly deps: CodexAdapterDeps = {
-    env: process.env,
-    homeDirectory: homedir(),
-  }) {}
-
-  async probe(ctx: ProbeContext): Promise<CapabilityReport> {
-    return probeOsConfinedCli(ctx, {
-      producerId: this.producerId,
-      executableName: "codex",
-      structuredOutput: this.structuredOutput,
-      writeConfinementBackend: "codex-native-sandbox",
-      parseVersion,
-      isAuthenticated: () => isProducerAuthenticated(codexDescriptor, this.deps),
-    });
-  }
-
-  buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
-    const redirectedGitObjects = ctx.gitObjectDirectory !== undefined
-      && ctx.gitAlternateObjectDirectories !== undefined;
-    const shellEnvironment = [
-      "PATH",
-      "HOME",
-      "TMPDIR",
-      "LANG",
-      "LC_ALL",
-      "CLAUDE_ARCHITECT_DELEGATED",
-      ...(redirectedGitObjects
-        ? ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"]
-        : []),
-    ];
-    // `include_only` narrows the inherited set; it cannot add to it. Under
-    // inherit="none" the inherited set is empty, so the producer shell lost PATH
-    // entirely and could not resolve node, npx, or git — Producers then burned
-    // whole attempts inventing workarounds. inherit="core" delivers the
-    // already-sanitized PATH/HOME/TMPDIR/LANG/LC_ALL from the spawn environment
-    // without leaking CODEX_HOME or any other host variable, and `set` force-adds
-    // the non-core variables (nested-delegation guard, redirected Git objects)
-    // that "core" would otherwise drop.
-    const forcedShellEnvironment: Record<string, string> = {
-      CLAUDE_ARCHITECT_DELEGATED: "1",
-      ...(redirectedGitObjects
-        ? {
-          GIT_OBJECT_DIRECTORY: ctx.gitObjectDirectory!,
-          GIT_ALTERNATE_OBJECT_DIRECTORIES: ctx.gitAlternateObjectDirectories!,
-        }
-        : {}),
-    };
-    // Read-only roles get Codex's read-only sandbox, which has no writable roots
-    // at all; the support roots below only make sense for the edit lane.
-    const writableRoots = ctx.readOnly === true
-      ? (ctx.extraWritableRoots ?? [])
-      : [...new Set([
-        ...(ctx.extraWritableRoots ?? []),
-        ...sandboxSupportWritableRoots(process.platform),
-      ])];
-    const args = [
-      "exec",
-      "--json",
-      "--ephemeral",
-      "--sandbox",
-      // Read-only roles use Codex's native read-only sandbox: wrapping Codex in
-      // an outer Seatbelt profile EPERM-crashes its internal sandbox init.
-      ctx.readOnly === true ? "read-only" : "workspace-write",
-      "--ignore-user-config",
-      "--ignore-rules",
-      "--disable",
-      "multi_agent",
-      "-c",
-      MULTI_AGENT_CONTROL,
-      "-c",
-      'approval_policy="never"',
-      "-c",
-      "sandbox_workspace_write.network_access=false",
-      "-c",
-      "sandbox_workspace_write.exclude_tmpdir_env_var=true",
-      "-c",
-      "sandbox_workspace_write.exclude_slash_tmp=true",
-      ...(writableRoots.length === 0
-        ? []
-        : [
-          "-c",
-          `sandbox_workspace_write.writable_roots=${JSON.stringify(writableRoots)}`,
-        ]),
-      "-c",
-      'shell_environment_policy.inherit="core"',
-      "-c",
-      `shell_environment_policy.include_only=${JSON.stringify(shellEnvironment)}`,
-      "-c",
-      // Codex re-injects its own credential and packaging variables after the
-      // inherit filter runs, so the auth-store location would otherwise reach the
-      // Producer shell. Deny them explicitly.
-      `shell_environment_policy.exclude=${JSON.stringify(CODEX_SHELL_ENV_EXCLUDE)}`,
-      "-c",
-      `shell_environment_policy.set={${
-        Object.entries(forcedShellEnvironment)
-          .map(([name, value]) => `${name}=${quoteTomlString(value)}`)
-          .join(",")
-      }}`,
-      "-c",
-      'web_search="disabled"',
-      "--cd",
-      ctx.worktreePath,
-    ];
-    if (spec.producerOverrides?.model !== undefined) {
-      args.push("--model", spec.producerOverrides.model);
-    }
-    if (spec.producerOverrides?.reasoningEffort !== undefined) {
-      args.push(
-        "-c",
-        `model_reasoning_effort=${quoteTomlString(spec.producerOverrides.reasoningEffort)}`,
-      );
-    }
-    args.push("-");
-    const defaultEnv = resolveDefaultEnv(codexDescriptor, this.deps);
-    return {
-      executable: ctx.executable,
-      args,
-      stdin: renderProducerPrompt(spec, {
-        readOnly: ctx.readOnly === true,
-        ...codexDescriptor.prompt,
-      }),
-      requiredEnv: [...CODEX_REQUIRED_ENV],
-      env: {
-        ...defaultEnv,
-        ...(redirectedGitObjects
-          ? {
-            GIT_OBJECT_DIRECTORY: ctx.gitObjectDirectory!,
-            GIT_ALTERNATE_OBJECT_DIRECTORIES: ctx.gitAlternateObjectDirectories!,
-          }
-          : {}),
-      },
-      network: "denied",
-    };
-  }
-
-  normalizeEvents(raw: {
-    stdout: string;
-    stderr: string;
-    exit: Parameters<ProducerAdapter["normalizeEvents"]>[0]["exit"];
-  }): ReturnType<ProducerAdapter["normalizeEvents"]> {
-    if (raw.exit.truncated.stdout) {
-      return { events: [], producerSummary: null, ok: false };
-    }
-    const lines = raw.stdout.split(/\r?\n/u).filter(line => line.trim().length > 0);
-    if (lines.length === 0) return { events: [], producerSummary: null, ok: false };
-
-    const events: AdapterEvent[] = [];
-    let producerSummary: string | null = null;
-    let completed = false;
-    let failed = false;
-    try {
-      for (const line of lines) {
-        const parsed: unknown = JSON.parse(line);
-        if (!isRecord(parsed) || typeof parsed.type !== "string") {
-          return { events: [], producerSummary: null, ok: false };
-        }
-        if (parsed.type === "turn.completed") {
-          completed = true;
-          continue;
-        }
-        if (parsed.type === "error" || parsed.type === "turn.failed") {
-          failed = true;
-          const text = stringProperty(parsed, "message")
-            ?? stringProperty(parsed.error, "message");
-          events.push({
-            kind: "error",
-            ...(text === undefined ? {} : { text }),
-            raw: parsed,
-          });
-          continue;
-        }
-        if (parsed.type !== "item.completed") continue;
-        const item = parsed.item;
-        const itemType = stringProperty(item, "type");
-        if (itemType === "agent_message") {
-          const text = stringProperty(item, "text");
-          if (text === undefined) return { events: [], producerSummary: null, ok: false };
-          producerSummary = text;
-          events.push({ kind: "final", text, raw: parsed });
-        } else if (itemType !== undefined) {
-          events.push({ kind: "tool", raw: parsed });
-        }
-      }
-    } catch {
-      return { events: [], producerSummary: null, ok: false };
-    }
-
-    return {
-      events,
-      producerSummary,
-      ok: completed && !failed && producerSummary !== null,
-    };
-  }
-
-  configurationProfile(): ProducerConfigurationProfile {
-    return {
-      isolationState: "controlled-config-supported",
-      credentialSources: [
-        "CODEX_HOME auth store",
-        "CODEX_API_KEY",
-        "CODEX_ACCESS_TOKEN",
-        "operating-system credential store",
-      ],
-      behavioralConfigSources: ["explicit invocation argv"],
-      repositoryInstructionSources: ["worktree AGENTS.md"],
-      environmentDependencies: [...CODEX_REQUIRED_ENV],
-      temporaryHomeStrategy:
-        "use a per-attempt HOME while preserving CODEX_HOME for auth; ignore user config and rules",
-    };
-  }
-}
+export class CodexAdapter extends DescriptorAdapter { constructor(deps?: HostStoreContext) { super(codexDescriptor, deps); } }
