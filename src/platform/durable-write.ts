@@ -3,7 +3,7 @@ import { constants, type BigIntStats } from "node:fs";
 import { link, lstat, mkdir, open, readFile, rename, rm, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import nodeProcess from "node:process";
-import { RuntimeError } from "../util/errors.js";
+import { RuntimeError, errorCode } from "../util/errors.js";
 import {
   NO_FOLLOW,
   ensurePrivateDirectory,
@@ -205,6 +205,26 @@ async function assertStagedTemporary(
   }
 }
 
+/** A RuntimeError that also carries the cleanup failures, so refusal classifiers still match. */
+class AtomicWriteCleanupError extends RuntimeError {
+  constructor(message: string, readonly errors: unknown[], detail: Record<string, unknown> | undefined) {
+    super(message, detail);
+    this.name = "AtomicWriteCleanupError";
+  }
+}
+
+function atomicWriteFailure(name: string, errors: unknown[], hasPrimary: boolean): Error {
+  const lead = errors[0];
+  const message = `atomic write cleanup failed: ${name}`
+    + (hasPrimary ? `; primary failure: ${lead instanceof Error ? lead.message : String(lead)}` : "");
+  if (hasPrimary && lead instanceof RuntimeError) {
+    return new AtomicWriteCleanupError(message, errors, lead.detail);
+  }
+  const aggregate = new AggregateError(errors, message);
+  const code = hasPrimary ? errorCode(lead) : undefined;
+  return code === undefined ? aggregate : Object.assign(aggregate, { code });
+}
+
 export async function writeAtomic(
   session: DurableDirectorySession,
   name: string,
@@ -282,10 +302,9 @@ export async function writeAtomic(
       await rm(temporaryPath, { force: true }).catch((removeError: unknown) => { cleanup.push(removeError); });
     }
     if (cleanup.length > 0) {
-      // Cleanup failures stay visible; the primary failure, when any, leads.
-      const errors = primary === undefined ? cleanup : [primary.error, ...cleanup];
-      throw new AggregateError(errors, `atomic write cleanup failed: ${name}`
-        + (primary === undefined ? "" : `; primary failure: ${primary.error instanceof Error ? primary.error.message : String(primary.error)}`));
+      // Cleanup failures stay visible; the primary failure, when any, leads
+      // and keeps its classification (RuntimeError refusals, errno codes).
+      throw atomicWriteFailure(name, primary === undefined ? cleanup : [primary.error, ...cleanup], primary !== undefined);
     }
   }
 }

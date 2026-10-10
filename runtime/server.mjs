@@ -33562,6 +33562,24 @@ async function assertStagedTemporary(temporaryPath, written, name) {
     throw new RuntimeError(`atomic write temporary file changed before publish: ${name}`);
   }
 }
+var AtomicWriteCleanupError = class extends RuntimeError {
+  constructor(message, errors, detail) {
+    super(message, detail);
+    this.errors = errors;
+    this.name = "AtomicWriteCleanupError";
+  }
+  errors;
+};
+function atomicWriteFailure(name, errors, hasPrimary) {
+  const lead = errors[0];
+  const message = `atomic write cleanup failed: ${name}` + (hasPrimary ? `; primary failure: ${lead instanceof Error ? lead.message : String(lead)}` : "");
+  if (hasPrimary && lead instanceof RuntimeError) {
+    return new AtomicWriteCleanupError(message, errors, lead.detail);
+  }
+  const aggregate = new AggregateError(errors, message);
+  const code = hasPrimary ? errorCode(lead) : void 0;
+  return code === void 0 ? aggregate : Object.assign(aggregate, { code });
+}
 async function writeAtomic(session, name, bytes, mode) {
   assertSafeLeaf(name, "atomic write");
   const destination = path7.join(session.directory, name);
@@ -33629,8 +33647,7 @@ async function writeAtomic(session, name, bytes, mode) {
       });
     }
     if (cleanup.length > 0) {
-      const errors = primary === void 0 ? cleanup : [primary.error, ...cleanup];
-      throw new AggregateError(errors, `atomic write cleanup failed: ${name}` + (primary === void 0 ? "" : `; primary failure: ${primary.error instanceof Error ? primary.error.message : String(primary.error)}`));
+      throw atomicWriteFailure(name, primary === void 0 ? cleanup : [primary.error, ...cleanup], primary !== void 0);
     }
   }
 }
