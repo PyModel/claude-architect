@@ -39993,7 +39993,14 @@ function gitChangedFiles(checkoutPath, deps = {}) {
 // src/autopilot/autopilot-controller.ts
 import { randomUUID as randomUUID8 } from "node:crypto";
 
-// src/mcp/decision-authority.ts
+// src/protocol/candidate-decision.ts
+var INTEGRABLE_DECISION_AUTHORITIES = [
+  "human",
+  "policy-autonomous",
+  "autopilot-policy"
+];
+
+// src/runtime/candidate-decisions.ts
 var DECISION_AUTHORITY_ENV = "CLAUDE_ARCHITECT_DECISION_AUTHORITY";
 function decisionAuthority(env = process.env, warn = (message) => console.error(message)) {
   const raw = env[DECISION_AUTHORITY_ENV];
@@ -40003,6 +40010,93 @@ function decisionAuthority(env = process.env, warn = (message) => console.error(
     `${DECISION_AUTHORITY_ENV}="${raw}" is not a recognized decision authority; requiring human confirmation. Valid values: "autonomous", "human".`
   );
   return "human";
+}
+function authorityForProvenance(provenance) {
+  switch (provenance) {
+    case "human-elicitation":
+      return "human";
+    case "policy-autonomous":
+      return "policy-autonomous";
+    case "caller-asserted":
+      return "caller-asserted";
+    default:
+      return "unknown";
+  }
+}
+function isSameDecision(existing, attempted) {
+  return existing.decisionVersion === "2" && existing.authority === attempted.authority && existing.decision === attempted.decision && existing.candidateManifestHash === attempted.candidateManifestHash && existing.evidenceHash === attempted.evidenceHash && existing.policyVersion === attempted.policyVersion;
+}
+function decisionConflict(existing, attempted) {
+  return new RuntimeError(
+    `candidate decision conflict: recorded ${existing.decision}, attempted ${attempted}`,
+    { toolError: "decision-conflict" }
+  );
+}
+async function recordCandidateDecision(args) {
+  const mapped = authorityForProvenance(args.provenance);
+  const authority = mapped === "unknown" ? "caller-asserted" : mapped;
+  if (authority === "policy-autonomous" && args.decision !== "accepted") {
+    throw new RuntimeError(
+      `a ${authority} authority may only accept, never ${args.decision}`,
+      { toolError: "decision-authority-refused" }
+    );
+  }
+  const record2 = {
+    decisionVersion: "2",
+    authority,
+    decision: args.decision,
+    candidateManifestHash: args.candidateManifestHash,
+    evidenceHash: await args.evidenceHash(),
+    policyVersion: "1",
+    recordedAt: args.recordedAt
+  };
+  if (args.existing !== null) {
+    if (!isSameDecision(args.existing, record2)) throw decisionConflict(args.existing, args.decision);
+    if (args.decision === "rejected") await removeCandidateAnchor(args.anchor, true);
+    return;
+  }
+  await args.store.writeCandidateDecisionRecord(record2);
+  if (args.decision === "rejected") await removeCandidateAnchor(args.anchor, false);
+}
+async function removeCandidateAnchor(anchor, allowAlreadyAbsent) {
+  const git2 = anchor.git ?? git;
+  if (allowAlreadyAbsent) {
+    const listed = await git2(anchor.repoRoot, [
+      "for-each-ref",
+      "--format=%(refname) %(objectname)",
+      anchor.anchorRef
+    ]);
+    if (listed.exitCode !== 0) {
+      throw new RuntimeError("rejected candidate anchor could not be read", { toolError: "anchor-delete-failed" });
+    }
+    const prefix = `${anchor.anchorRef} `;
+    const current = listed.stdout.split("\n").find((line) => line.startsWith(prefix));
+    if (current === void 0) return;
+    if (current.slice(prefix.length) !== anchor.candidateCommitOid) {
+      throw new RuntimeError("rejected candidate anchor changed identity", { toolError: "anchor-delete-failed" });
+    }
+  }
+  const deleted = await git2(anchor.repoRoot, [
+    "update-ref",
+    "--no-deref",
+    "-d",
+    anchor.anchorRef,
+    anchor.candidateCommitOid
+  ]);
+  if (deleted.exitCode !== 0) {
+    throw new RuntimeError("failed to delete rejected candidate anchor", { toolError: "anchor-delete-failed" });
+  }
+}
+function integrationRefusal(decision, artifactHash) {
+  if (decision?.decision !== "accepted") return "no-accepted-decision";
+  if (!INTEGRABLE_DECISION_AUTHORITIES.includes(decision.authority)) {
+    return "accepted-decision-not-confirmed";
+  }
+  if (decision.candidateManifestHash !== artifactHash) return "decision-artifact-mismatch";
+  return null;
+}
+function isAutopilotAcceptance(decision, manifestHash, evidenceHash2) {
+  return decision?.decisionVersion === "2" && decision.authority === "autopilot-policy" && decision.decision === "accepted" && decision.candidateManifestHash === manifestHash && decision.evidenceHash === evidenceHash2;
 }
 
 // src/protocol/spec-validator.ts
@@ -45335,31 +45429,10 @@ function parsePersistedDecision(value) {
   return {
     decisionVersion: "1",
     decision: legacy.decision,
-    authority: legacyDecisionAuthority(legacy.decidedBy),
+    authority: authorityForProvenance(legacy.decidedBy),
     recordedAt: legacy.recordedAt,
     ...hash2 === void 0 ? {} : { candidateManifestHash: hash2 }
   };
-}
-function legacyDecisionAuthority(decidedBy) {
-  switch (decidedBy) {
-    case "human-elicitation":
-      return "human";
-    case "policy-autonomous":
-      return "policy-autonomous";
-    case "caller-asserted":
-      return "caller-asserted";
-    default:
-      return "unknown";
-  }
-}
-function hasIdenticalDecisionProvenance(existing, attempted) {
-  if (existing.decisionVersion !== attempted.decisionVersion || existing.decision !== attempted.decision || existing.authority !== attempted.authority) {
-    return false;
-  }
-  if (existing.decisionVersion === "1" || attempted.decisionVersion === "1") {
-    return true;
-  }
-  return existing.candidateManifestHash === attempted.candidateManifestHash && existing.evidenceHash === attempted.evidenceHash && existing.policyVersion === attempted.policyVersion;
 }
 function validateAdvisorReport(value) {
   if (!advisorReportSchema(value)) {
@@ -45882,26 +45955,17 @@ var ArtifactStore = class _ArtifactStore {
     await this.writeArtifact(POST_PIPELINE_AUTOPILOT, artifacts);
     return { advisorReportHash: persistedAdvisorHash, eligibilityRecordHash };
   }
-  async writeHumanDecision(record2) {
-    const decision = verifyCandidateDecisionV2({
-      ...record2,
-      decisionVersion: "2",
-      authority: "human"
-    });
-    await this.writeCandidateDecision(decision, decision);
-  }
   /**
    * Persist a decision whose authority the caller already resolved.
    *
    * The MCP lifecycle derives the authority from how it obtained the decision —
-   * a human prompt, the autonomous policy, or an unconfirmed caller assertion —
-   * so it cannot go through `writeHumanDecision`, which hard-codes `human`.
-   * Validation is unchanged: the schema still rejects any authority outside the
-   * union, and the accept-only policy constraint still applies.
+   * a human prompt, the autonomous policy, or an unconfirmed caller assertion.
+   * The schema still rejects any authority outside the union, and the
+   * accept-only policy constraint still applies.
    */
   async writeCandidateDecisionRecord(record2) {
     const decision = verifyCandidateDecisionV2(record2);
-    await this.writeCandidateDecision(decision, decision);
+    await this.writeCandidateDecision(decision);
   }
   async writeAutopilotDecision(candidate, eligibility, recordedAt) {
     let validated;
@@ -45924,20 +45988,17 @@ var ArtifactStore = class _ArtifactStore {
       policyVersion: decisionEligibility.policyVersion,
       recordedAt
     });
-    await this.writeCandidateDecision(decision, decision);
+    await this.writeCandidateDecision(decision);
   }
-  async writeCandidateDecision(persisted, normalized) {
+  async writeCandidateDecision(decision) {
     try {
-      await this.writeArtifact(DECISION, persisted);
+      await this.writeArtifact(DECISION, decision);
       return;
     } catch (error51) {
       const existing = await this.readCandidateDecision();
       if (existing === null) throw error51;
-      if (hasIdenticalDecisionProvenance(existing, normalized)) return;
-      throw new RuntimeError(
-        `candidate decision conflict: recorded ${existing.decision}, attempted ${normalized.decision}`,
-        { toolError: "decision-conflict" }
-      );
+      if (isSameDecision(existing, decision)) return;
+      throw decisionConflict(existing, decision.decision);
     }
   }
   async readCandidateDecision() {
@@ -48387,7 +48448,7 @@ async function validateArchivedTaskEvidence(task, evidence, context) {
       `${evidence.promotionCommitOid}^{tree}`
     ])
   ]);
-  if (result === null || manifest === null || pipelineResult === null || snapshot === null || advisor === null || eligibility === null || decision === null || candidate === null || result.status !== "verified-candidate" || result.runId !== evidence.runId || manifest.runId !== evidence.runId || manifest.baseCommitOid !== context.expectedParentCommitOid || pipelineResult.runId !== evidence.runId || candidate.baseCommitOid !== context.expectedParentCommitOid || candidate.manifestHash !== evidence.candidateManifestHash || manifest.candidateManifestHash !== evidence.candidateManifestHash || pipelineResult.finalCandidateCommit !== candidate.candidateCommitOid || eligibility.runId !== evidence.runId || eligibility.baseCommitOid !== context.expectedParentCommitOid || eligibility.candidateCommitOid !== candidate.candidateCommitOid || eligibility.candidateTreeOid !== candidate.candidateTreeOid || eligibility.candidateManifestHash !== evidence.candidateManifestHash || !eligibility.eligible || eligibility.reasons.length !== 0 || task.eligibilityHash === null || autopilotEligibilityRecordHash(eligibility) !== task.eligibilityHash || decision.decisionVersion !== "2" || decision.authority !== "autopilot-policy" || decision.decision !== "accepted" || decision.candidateManifestHash !== evidence.candidateManifestHash || decision.evidenceHash !== task.eligibilityHash || !gitSucceeded(promotionParent) || promotionParent.stdout.trim() !== context.expectedParentCommitOid || !gitSucceeded(promotionTree) || promotionTree.stdout.trim() !== candidate.candidateTreeOid) {
+  if (result === null || manifest === null || pipelineResult === null || snapshot === null || advisor === null || eligibility === null || decision === null || candidate === null || result.status !== "verified-candidate" || result.runId !== evidence.runId || manifest.runId !== evidence.runId || manifest.baseCommitOid !== context.expectedParentCommitOid || pipelineResult.runId !== evidence.runId || candidate.baseCommitOid !== context.expectedParentCommitOid || candidate.manifestHash !== evidence.candidateManifestHash || manifest.candidateManifestHash !== evidence.candidateManifestHash || pipelineResult.finalCandidateCommit !== candidate.candidateCommitOid || eligibility.runId !== evidence.runId || eligibility.baseCommitOid !== context.expectedParentCommitOid || eligibility.candidateCommitOid !== candidate.candidateCommitOid || eligibility.candidateTreeOid !== candidate.candidateTreeOid || eligibility.candidateManifestHash !== evidence.candidateManifestHash || !eligibility.eligible || eligibility.reasons.length !== 0 || task.eligibilityHash === null || autopilotEligibilityRecordHash(eligibility) !== task.eligibilityHash || !isAutopilotAcceptance(decision, evidence.candidateManifestHash, task.eligibilityHash) || !gitSucceeded(promotionParent) || promotionParent.stdout.trim() !== context.expectedParentCommitOid || !gitSucceeded(promotionTree) || promotionTree.stdout.trim() !== candidate.candidateTreeOid) {
     fail2("missing-task-evidence", `task evidence identities do not match: ${task.id}`);
   }
 }
@@ -50233,7 +50294,7 @@ var CandidatePromoter = class {
         await artifactStore.writeAutopilotDecision(artifact, eligibility, this.now());
         decision = await artifactStore.readCandidateDecision();
       }
-      return decision?.decisionVersion === "2" && decision.authority === "autopilot-policy" && decision.decision === "accepted" && decision.candidateManifestHash === artifact.manifestHash && decision.evidenceHash === eligibilityHash;
+      return isAutopilotAcceptance(decision, artifact.manifestHash, eligibilityHash);
     } catch {
       return false;
     }
@@ -54303,13 +54364,6 @@ async function runPipelineWithLease(checkoutPath, spec, deps, ps, borrowedChecko
   }
 }
 
-// src/protocol/candidate-decision.ts
-var INTEGRABLE_DECISION_AUTHORITIES = [
-  "human",
-  "policy-autonomous",
-  "autopilot-policy"
-];
-
 // src/mcp/allowlist-sufficiency.ts
 import { readFile as readFile8 } from "node:fs/promises";
 import path35 from "node:path";
@@ -54913,44 +54967,6 @@ async function sharedReviewSnapshot(run, deps, allowMissingAnchor = false) {
   requireMatchingSnapshotBytes(regenerated, newlyPersisted);
   return newlyPersisted;
 }
-function decisionAuthorityFor(provenance) {
-  switch (provenance) {
-    case "human-elicitation":
-      return "human";
-    case "policy-autonomous":
-      return "policy-autonomous";
-    default:
-      return "caller-asserted";
-  }
-}
-function isIdenticalDecision(existing, attempted) {
-  return existing.decisionVersion === "2" && existing.authority === attempted.authority && existing.decision === attempted.decision && existing.candidateManifestHash === attempted.candidateManifestHash && existing.evidenceHash === attempted.evidenceHash && existing.policyVersion === attempted.policyVersion;
-}
-async function deleteRejectedCandidateAnchor(run, candidate, deps, allowAlreadyAbsent = false) {
-  const git2 = deps.git ?? git;
-  if (allowAlreadyAbsent) {
-    const current = await git2(run.repoRoot, [
-      "show-ref",
-      "--verify",
-      "--hash",
-      candidate.anchorRef
-    ]);
-    if (current.exitCode === 1 && current.stdout.trim().length === 0) return;
-    if (current.exitCode !== 0 || current.stdout.trim() !== candidate.candidateCommitOid) {
-      throw runtimeError("rejected candidate anchor changed identity", "anchor-delete-failed");
-    }
-  }
-  const deleted = await git2(run.repoRoot, [
-    "update-ref",
-    "--no-deref",
-    "-d",
-    candidate.anchorRef,
-    candidate.candidateCommitOid
-  ]);
-  if (deleted.exitCode !== 0) {
-    throw runtimeError("failed to delete rejected candidate anchor", "anchor-delete-failed");
-  }
-}
 async function handleReviewCandidate(checkoutPath, runId, deps = {}, expectedSpecSha256) {
   try {
     return await withCurrentArchivedRun(checkoutPath, runId, deps, async (run) => {
@@ -54983,44 +54999,26 @@ async function handleDecideCandidate(checkoutPath, runId, decision, expectedArti
           "artifact-hash-mismatch"
         );
       }
-      const authority = decisionAuthorityFor(decisionProvenance);
-      if (authority === "policy-autonomous" && decision !== "accepted") {
-        throw runtimeError(
-          `a ${authority} authority may only accept, never ${decision}`,
-          "decision-authority-refused"
-        );
-      }
       const existing = run.snapshot.decision;
-      const reviewSnapshot = await sharedReviewSnapshot(
-        run,
-        deps,
-        existing !== null && decision === "rejected"
-      );
-      const record2 = {
-        decisionVersion: "2",
-        authority,
+      await recordCandidateDecision({
+        store: run.store,
+        existing,
+        provenance: decisionProvenance,
         decision,
         candidateManifestHash: candidate.manifestHash,
-        evidenceHash: reviewSnapshotHash(reviewSnapshot),
-        policyVersion: "1",
-        recordedAt: (deps.now ?? (() => /* @__PURE__ */ new Date()))().toISOString()
-      };
-      if (existing !== null) {
-        if (!isIdenticalDecision(existing, record2)) {
-          throw runtimeError(
-            `candidate decision conflict: recorded ${existing.decision}, attempted ${decision}`,
-            "decision-conflict"
-          );
+        evidenceHash: async () => reviewSnapshotHash(await sharedReviewSnapshot(
+          run,
+          deps,
+          existing !== null && decision === "rejected"
+        )),
+        recordedAt: (deps.now ?? (() => /* @__PURE__ */ new Date()))().toISOString(),
+        anchor: {
+          repoRoot: run.repoRoot,
+          anchorRef: candidate.anchorRef,
+          candidateCommitOid: candidate.candidateCommitOid,
+          git: deps.git
         }
-        if (decision === "rejected") {
-          await deleteRejectedCandidateAnchor(run, candidate, deps, true);
-        }
-        return { recorded: true };
-      }
-      await run.store.writeCandidateDecisionRecord(record2);
-      if (decision === "rejected") {
-        await deleteRejectedCandidateAnchor(run, candidate, deps);
-      }
+      });
       return { recorded: true };
     });
   } catch (error51) {
@@ -55031,17 +55029,13 @@ async function handleIntegrateCandidate(checkoutPath, runId, expectedArtifactHas
   try {
     return await withCurrentArchivedRun(checkoutPath, runId, deps, async (run, lock, ps) => {
       await requireInactivePipeline(run, runId);
-      const decision = await run.store.readCandidateDecision();
-      if (decision?.decision !== "accepted") {
-        return { integration: "aborted", detail: "no-accepted-decision" };
-      }
+      const refusal = integrationRefusal(
+        await run.store.readCandidateDecision(),
+        expectedArtifactHash
+      );
+      if (refusal === "no-accepted-decision") return { integration: "aborted", detail: refusal };
       const artifact = requireVerifiedCandidate(run);
-      if (!INTEGRABLE_DECISION_AUTHORITIES.includes(decision.authority)) {
-        return { integration: "aborted", detail: "accepted-decision-not-confirmed" };
-      }
-      if (decision.candidateManifestHash !== expectedArtifactHash) {
-        return { integration: "aborted", detail: "decision-artifact-mismatch" };
-      }
+      if (refusal !== null) return { integration: "aborted", detail: refusal };
       return (deps.applyCandidateTree ?? applyCandidateTree)({
         repoRoot: run.repoRoot,
         artifact,
