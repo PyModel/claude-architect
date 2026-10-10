@@ -428,7 +428,9 @@ describe("ArtifactStore", () => {
       manifest: buildRunManifest(manifestArgs("different-run", "/repo")),
     })).rejects.toThrow(/manifest id/i);
 
-    await store.writeHumanDecision({
+    await store.writeCandidateDecisionRecord({
+      decisionVersion: "2",
+      authority: "human",
       decision: "accepted",
       candidateManifestHash: "a".repeat(64),
       evidenceHash: "b".repeat(64),
@@ -729,45 +731,6 @@ describe("ArtifactStore", () => {
     expect("writeDecision" in new ArtifactStore("run-no-legacy-writer")).toBe(false);
   });
 
-  it("persists the first v2 decision, treats identical provenance as idempotent, and rejects conflicts", async () => {
-    const runId = "run-decision";
-    const store = new ArtifactStore(runId);
-    await store.writeResult(sampleResult(runId));
-    const first = {
-      decision: "revision-requested" as const,
-      candidateManifestHash: "a".repeat(64),
-      evidenceHash: "b".repeat(64),
-      policyVersion: "1" as const,
-      recordedAt: "2026-07-14T12:00:00.000Z",
-    };
-
-    await store.writeHumanDecision(first);
-    await store.writeHumanDecision({
-      ...first,
-      recordedAt: "2026-07-14T12:01:00.000Z",
-    });
-    await expect(store.writeHumanDecision({
-      ...first,
-      decision: "accepted",
-      recordedAt: "2026-07-14T12:02:00.000Z",
-    })).rejects.toMatchObject({
-      message: "candidate decision conflict: recorded revision-requested, attempted accepted",
-      detail: { toolError: "decision-conflict" },
-    });
-
-    await expect(store.readCandidateDecision()).resolves.toEqual({
-      ...first,
-      decisionVersion: "2",
-      authority: "human",
-    });
-    const stored = JSON.parse(await readFile(join(store.runDirectory, "decision.json"), "utf8"));
-    expect(stored).toEqual({
-      ...first,
-      decisionVersion: "2",
-      authority: "human",
-    });
-  });
-
   it("reads a legacy decision in memory without rewriting its archived bytes", async () => {
     const runId = "run-legacy-decision";
     const store = new ArtifactStore(runId);
@@ -789,7 +752,9 @@ describe("ArtifactStore", () => {
       authority: "unknown",
       recordedAt: legacy.recordedAt,
     });
-    await expect(store.writeHumanDecision({
+    await expect(store.writeCandidateDecisionRecord({
+      decisionVersion: "2",
+      authority: "human",
       decision: "accepted",
       candidateManifestHash: "a".repeat(64),
       evidenceHash: "b".repeat(64),
@@ -800,41 +765,6 @@ describe("ArtifactStore", () => {
     });
     expect(await readFile(decisionPath, "utf8")).toBe(before);
     expect(JSON.parse(before)).toEqual(legacy);
-  });
-
-  it("writes human decisions as v2 and requires identical provenance for idempotence", async () => {
-    const runId = "run-human-decision-v2";
-    const store = new ArtifactStore(runId);
-    const first = {
-      decision: "accepted" as const,
-      candidateManifestHash: "a".repeat(64),
-      evidenceHash: "b".repeat(64),
-      policyVersion: "1" as const,
-      recordedAt: "2026-07-14T12:00:00.000Z",
-    };
-    await store.writeHumanDecision(first);
-    await store.writeHumanDecision({
-      ...first,
-      recordedAt: "2026-07-14T12:01:00.000Z",
-    });
-
-    for (const conflicting of [
-      { ...first, decision: "rejected" as const },
-      { ...first, candidateManifestHash: "c".repeat(64) },
-      { ...first, evidenceHash: "d".repeat(64) },
-    ]) {
-      await expect(store.writeHumanDecision(conflicting)).rejects.toMatchObject({
-        detail: { toolError: "decision-conflict" },
-      });
-    }
-    const expected = {
-      ...first,
-      decisionVersion: "2",
-      authority: "human",
-    };
-    await expect(store.readCandidateDecision()).resolves.toEqual(expected);
-    expect(JSON.parse(await readFile(join(store.runDirectory, "decision.json"), "utf8")))
-      .toEqual(expected);
   });
 
   it("writes accepted autopilot decisions only from the current archived eligibility record", async () => {
@@ -1003,8 +933,8 @@ describe("ArtifactStore", () => {
     };
 
     const pending = [
-      firstStore.writeHumanDecision(records[0]),
-      secondStore.writeHumanDecision(records[1]),
+      firstStore.writeCandidateDecisionRecord({ ...records[0], decisionVersion: "2", authority: "human" }),
+      secondStore.writeCandidateDecisionRecord({ ...records[1], decisionVersion: "2", authority: "human" }),
     ];
     await ready;
     releaseWriters();

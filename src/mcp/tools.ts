@@ -20,10 +20,8 @@ import {
 import { registry } from "../producers/producer-registry.js";
 import type { AttemptResult, CandidateArtifact } from "../protocol/attempt-result.js";
 import {
-  INTEGRABLE_DECISION_AUTHORITIES,
   type CandidateDecision,
   type CandidateDecisionV2,
-  type HumanCandidateDecisionV2,
 } from "../protocol/candidate-decision.js";
 import type { PipelineGateCleared } from "../protocol/pipeline-gate-cleared.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
@@ -36,10 +34,14 @@ import {
 } from "../protocol/versions.js";
 import {
   ArtifactStore,
-  type DecisionProvenance,
   type PipelineActiveMarker,
   type RunDecisionValue,
 } from "../runtime/artifact-store.js";
+import {
+  integrationRefusal,
+  recordCandidateDecision,
+  type DecisionProvenance,
+} from "../runtime/candidate-decisions.js";
 import {
   runAttempt as executeAttempt,
   type AttemptRuntimeDependencies,
@@ -70,11 +72,6 @@ import { boundIgnoredPathEvidence, withRepoLock } from "./serialize.js";
 
 export type RunDecision = CandidateDecision;
 
-export type HumanDecisionRecord = Omit<
-  HumanCandidateDecisionV2,
-  "decisionVersion" | "authority"
->;
-
 export interface ToolArtifactStore {
   readResult(): Promise<AttemptResult | null>;
   readManifest(): Promise<RunManifest | null>;
@@ -87,7 +84,6 @@ export interface ToolArtifactStore {
    */
   writeReviewSnapshot(snapshot: ReviewSnapshot): Promise<void>;
   readReviewSnapshot(): Promise<ReviewSnapshot | null>;
-  writeHumanDecision(record: HumanDecisionRecord): Promise<void>;
   /** Persist a decision whose authority the lifecycle already resolved. */
   writeCandidateDecisionRecord(record: CandidateDecisionV2): Promise<void>;
   readCandidateDecision(): Promise<RunDecision | null>;
@@ -877,74 +873,6 @@ async function sharedReviewSnapshot(
   return newlyPersisted;
 }
 
-/**
- * Map how the runtime obtained a decision onto the authority recorded with it.
- *
- * The caller never supplies this. An absent provenance means no layer claimed to
- * have confirmed a human, which is exactly `caller-asserted` — the value that
- * fails the integration gate — so the default is the safe one.
- */
-function decisionAuthorityFor(
-  provenance: DecisionProvenance | undefined,
-): CandidateDecisionV2["authority"] {
-  switch (provenance) {
-    case "human-elicitation": return "human";
-    case "policy-autonomous": return "policy-autonomous";
-    default: return "caller-asserted";
-  }
-}
-
-/**
- * Compare an archived decision with one being attempted, authority included.
- *
- * Authority is part of identity, not metadata: re-recording the same verdict
- * under a different authority is a different claim about who decided, and
- * silently treating it as idempotent would let a caller-asserted decision
- * inherit a human one's standing.
- */
-function isIdenticalDecision(
-  existing: CandidateDecision,
-  attempted: CandidateDecisionV2,
-): boolean {
-  return existing.decisionVersion === "2"
-    && existing.authority === attempted.authority
-    && existing.decision === attempted.decision
-    && existing.candidateManifestHash === attempted.candidateManifestHash
-    && existing.evidenceHash === attempted.evidenceHash
-    && existing.policyVersion === attempted.policyVersion;
-}
-
-async function deleteRejectedCandidateAnchor(
-  run: ArchivedRun,
-  candidate: CandidateArtifact,
-  deps: ToolDependencies,
-  allowAlreadyAbsent = false,
-): Promise<void> {
-  const git = deps.git ?? runGit;
-  if (allowAlreadyAbsent) {
-    const current = await git(run.repoRoot, [
-      "show-ref",
-      "--verify",
-      "--hash",
-      candidate.anchorRef,
-    ]);
-    if (current.exitCode === 1 && current.stdout.trim().length === 0) return;
-    if (current.exitCode !== 0 || current.stdout.trim() !== candidate.candidateCommitOid) {
-      throw runtimeError("rejected candidate anchor changed identity", "anchor-delete-failed");
-    }
-  }
-  const deleted = await git(run.repoRoot, [
-    "update-ref",
-    "--no-deref",
-    "-d",
-    candidate.anchorRef,
-    candidate.candidateCommitOid,
-  ]);
-  if (deleted.exitCode !== 0) {
-    throw runtimeError("failed to delete rejected candidate anchor", "anchor-delete-failed");
-  }
-}
-
 export async function handleReviewCandidate(
   checkoutPath: string,
   runId: string,
@@ -1036,52 +964,26 @@ export async function handleDecideCandidate(
           "artifact-hash-mismatch",
         );
       }
-      // The authority is derived from how the runtime obtained the decision, not
-      // supplied by the caller. `caller-asserted` is still recorded rather than
-      // refused: the decision happened and the archive should say so, and
-      // INTEGRABLE_DECISION_AUTHORITIES is what keeps it from being spent.
-      const authority = decisionAuthorityFor(decisionProvenance);
-      // Only the policy authorities are accept-only: a policy that could reject
-      // or request revision on its own could bury work nobody reviewed. A
-      // caller-asserted decision may carry any value — a caller can reject, and
-      // refusing to record that would lose the rejection entirely.
-      if (authority === "policy-autonomous" && decision !== "accepted") {
-        throw runtimeError(
-          `a ${authority} authority may only accept, never ${decision}`,
-          "decision-authority-refused",
-        );
-      }
       const existing = run.snapshot.decision;
-      const reviewSnapshot = await sharedReviewSnapshot(
-        run,
-        deps,
-        existing !== null && decision === "rejected",
-      );
-      const record = {
-        decisionVersion: "2",
-        authority,
+      await recordCandidateDecision({
+        store: run.store,
+        existing,
+        provenance: decisionProvenance,
         decision,
         candidateManifestHash: candidate.manifestHash,
-        evidenceHash: reviewSnapshotHash(reviewSnapshot),
-        policyVersion: "1",
+        evidenceHash: async () => reviewSnapshotHash(await sharedReviewSnapshot(
+          run,
+          deps,
+          existing !== null && decision === "rejected",
+        )),
         recordedAt: (deps.now ?? (() => new Date()))().toISOString(),
-      } as CandidateDecisionV2;
-      if (existing !== null) {
-        if (!isIdenticalDecision(existing, record)) {
-          throw runtimeError(
-            `candidate decision conflict: recorded ${existing.decision}, attempted ${decision}`,
-            "decision-conflict",
-          );
-        }
-        if (decision === "rejected") {
-          await deleteRejectedCandidateAnchor(run, candidate, deps, true);
-        }
-        return { recorded: true };
-      }
-      await run.store.writeCandidateDecisionRecord(record);
-      if (decision === "rejected") {
-        await deleteRejectedCandidateAnchor(run, candidate, deps);
-      }
+        anchor: {
+          repoRoot: run.repoRoot,
+          anchorRef: candidate.anchorRef,
+          candidateCommitOid: candidate.candidateCommitOid,
+          git: deps.git,
+        },
+      });
       return { recorded: true };
     });
   } catch (error) {
@@ -1098,31 +1000,16 @@ export async function handleIntegrateCandidate(
   try {
     return await withCurrentArchivedRun(checkoutPath, runId, deps, async (run, lock, ps) => {
       await requireInactivePipeline(run, runId);
-      const decision = await run.store.readCandidateDecision();
-      if (decision?.decision !== "accepted") {
-        return { integration: "aborted", detail: "no-accepted-decision" };
-      }
+      const refusal = integrationRefusal(
+        await run.store.readCandidateDecision(),
+        expectedArtifactHash,
+      );
+      // An absent acceptance is reported before the candidate is inspected,
+      // as it always was; every other refusal follows the verified-candidate
+      // check.
+      if (refusal === "no-accepted-decision") return { integration: "aborted", detail: refusal };
       const artifact = requireVerifiedCandidate(run);
-      // Provenance is recorded, not required to be human here. Under the
-      // autonomous decision authority a verified, unwarned candidate is accepted
-      // as `policy-autonomous`; demanding a human at integration would make that
-      // acceptance unspendable and reintroduce the prompt the authority exists
-      // to remove. `caller-asserted` and `unknown` are still refused: they mean
-      // the runtime does not know how the decision was reached, which is a
-      // different thing from knowing it was policy.
-      //
-      // This reads the shared list rather than naming authorities inline, so a
-      // future authority cannot be added to the union and silently left
-      // unspendable — the failure mode this gate has already produced once.
-      if (!(INTEGRABLE_DECISION_AUTHORITIES as readonly string[]).includes(decision.authority)) {
-        return { integration: "aborted", detail: "accepted-decision-not-confirmed" };
-      }
-      // An acceptance is a judgement about one specific candidate, so it is
-      // spent only on the artifact it names. A legacy record that names none
-      // says nothing about which bytes were accepted and is refused too.
-      if (decision.candidateManifestHash !== expectedArtifactHash) {
-        return { integration: "aborted", detail: "decision-artifact-mismatch" };
-      }
+      if (refusal !== null) return { integration: "aborted", detail: refusal };
       return (deps.applyCandidateTree ?? applyTree)({
         repoRoot: run.repoRoot,
         artifact,

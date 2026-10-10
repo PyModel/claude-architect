@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { userCommitEnvironment } from "../git/git-exec.js";
-import { decisionAuthority, type DecisionAuthority } from "../mcp/decision-authority.js";
+import { decisionAuthority, type DecisionAuthority } from "../runtime/candidate-decisions.js";
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { AutopilotSpec, AutopilotTaskSpec } from "../protocol/autopilot-spec.js";
 import {

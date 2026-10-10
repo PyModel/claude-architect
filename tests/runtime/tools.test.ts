@@ -13,7 +13,6 @@ import {
   handleIntegrateCandidate,
   handleReviewCandidate,
   handleValidateDelegationSpec,
-  type HumanDecisionRecord,
   type RunDecision,
   type ToolArtifactStore,
   type ToolDependencies,
@@ -221,26 +220,6 @@ class FakeStore implements ToolArtifactStore {
       );
     }
     this.decision = structuredClone(decision);
-  }
-
-  async writeHumanDecision(decision: HumanDecisionRecord): Promise<void> {
-    if (this.decision?.decisionVersion === "2"
-      && this.decision.authority === "human"
-      && this.decision.decision === decision.decision
-      && this.decision.candidateManifestHash === decision.candidateManifestHash
-      && this.decision.evidenceHash === decision.evidenceHash
-      && this.decision.policyVersion === decision.policyVersion) return;
-    if (this.decision !== null) {
-      throw new RuntimeError(
-        `candidate decision conflict: recorded ${this.decision.decision}, attempted ${decision.decision}`,
-        { toolError: "decision-conflict" },
-      );
-    }
-    this.decision = {
-      ...decision,
-      decisionVersion: "2",
-      authority: "human",
-    };
   }
 
   async readCandidateDecision(_runId: string): Promise<RunDecision | null> {
@@ -1867,10 +1846,11 @@ describe("MCP tool handlers", () => {
     let anchorPresent = true;
     deps.git = async (cwd, args, indexFile) => {
       gitCalls.push(args);
-      if (args[0] === "show-ref") {
+      if (args[0] === "for-each-ref") {
+        // Real git: an absent ref is empty output with exit 0.
         return anchorPresent
-          ? gitResult(`${candidate.candidateCommitOid}\n`)
-          : gitResult("", 1);
+          ? gitResult(`${candidate.anchorRef} ${candidate.candidateCommitOid}\n`)
+          : gitResult("");
       }
       if (args.includes(`${candidate.anchorRef}^{commit}`) && !anchorPresent) {
         return gitResult("", 1);
@@ -1942,9 +1922,8 @@ describe("MCP tool handlers", () => {
         "--",
       ],
       [
-        "show-ref",
-        "--verify",
-        "--hash",
+        "for-each-ref",
+        "--format=%(refname) %(objectname)",
         candidate.anchorRef,
       ],
     ]);

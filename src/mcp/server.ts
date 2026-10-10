@@ -32,7 +32,7 @@ import {
   decisionAuthority,
   DECISION_AUTHORITY_ENV,
   type DecisionAuthority,
-} from "./decision-authority.js";
+} from "../runtime/candidate-decisions.js";
 import { runDecision } from "../runtime/run-decision.js";
 import { jevScreen, type JevScreen } from "./jev-screen.js";
 import { recoverStaleRuns } from "../runtime/recovery-manager.js";

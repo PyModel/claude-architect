@@ -84,7 +84,7 @@ function dependencies(storedManifest: RunManifest): ToolDependencies {
   const store: ToolArtifactStore = {
     readResult: async () => result,
     readManifest: async () => storedManifest,
-    writeHumanDecision: async () => {},
+    writeCandidateDecisionRecord: async () => {},
     readCandidateDecision: async () => null,
     readPipelineActiveMarker: async () => null,
     // The snapshot must actually round-trip: a store that drops it would let a

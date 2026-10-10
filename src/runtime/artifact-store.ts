@@ -24,9 +24,12 @@ import type {
   CandidateDecision,
   CandidateDecisionV2,
   CandidateDecisionValue,
-  HumanCandidateDecisionV2,
-  LegacyDecisionAuthority,
 } from "../protocol/candidate-decision.js";
+import {
+  authorityForProvenance,
+  decisionConflict,
+  isSameDecision,
+} from "./candidate-decisions.js";
 import {
   type PipelineGateCleared,
   parsePipelineGateCleared,
@@ -104,23 +107,6 @@ export interface PruneDependencies {
 }
 
 export type RunDecisionValue = CandidateDecisionValue;
-
-/**
- * How the runtime obtained a decision, as the MCP lifecycle observed it.
- *
- * Distinct from the authority persisted with the decision: this describes the
- * mechanism the server used, and {@link decisionAuthorityFor} maps it onto the
- * recorded authority. `caller-asserted` means the MCP caller supplied the
- * decision and the runtime never confirmed a human made it — something an agent
- * can do — so recording the distinction is what makes "who accepted this"
- * answerable after the fact rather than assumed.
- */
-export type DecisionProvenance = "human-elicitation" | "caller-asserted" | "policy-autonomous";
-
-type HumanCandidateDecisionV2Input = Omit<
-  HumanCandidateDecisionV2,
-  "decisionVersion" | "authority"
->;
 
 interface PersistedLegacyCandidateDecisionV1 {
   decision: CandidateDecisionValue;
@@ -538,44 +524,10 @@ function parsePersistedDecision(value: unknown): CandidateDecision {
   return {
     decisionVersion: "1",
     decision: legacy.decision,
-    authority: legacyDecisionAuthority(legacy.decidedBy),
+    authority: authorityForProvenance(legacy.decidedBy),
     recordedAt: legacy.recordedAt,
     ...(hash === undefined ? {} : { candidateManifestHash: hash }),
   };
-}
-
-/**
- * Map a 0.39.0-era `decidedBy` onto the authority vocabulary integration reads.
- *
- * An absent value is reported as `unknown` rather than `human`: the record was
- * written before provenance existed, so claiming a person made it would invent
- * evidence — and would hand a pre-provenance archive the one authority that
- * passes the integration gate.
- */
-function legacyDecisionAuthority(decidedBy: unknown): LegacyDecisionAuthority {
-  switch (decidedBy) {
-    case "human-elicitation": return "human";
-    case "policy-autonomous": return "policy-autonomous";
-    case "caller-asserted": return "caller-asserted";
-    default: return "unknown";
-  }
-}
-
-function hasIdenticalDecisionProvenance(
-  existing: CandidateDecision,
-  attempted: CandidateDecision,
-): boolean {
-  if (existing.decisionVersion !== attempted.decisionVersion
-    || existing.decision !== attempted.decision
-    || existing.authority !== attempted.authority) {
-    return false;
-  }
-  if (existing.decisionVersion === "1" || attempted.decisionVersion === "1") {
-    return true;
-  }
-  return existing.candidateManifestHash === attempted.candidateManifestHash
-    && existing.evidenceHash === attempted.evidenceHash
-    && existing.policyVersion === attempted.policyVersion;
 }
 
 function validateAdvisorReport(value: unknown): AdvisorReport {
@@ -1235,27 +1187,17 @@ export class ArtifactStore {
     return { advisorReportHash: persistedAdvisorHash, eligibilityRecordHash };
   }
 
-  async writeHumanDecision(record: HumanCandidateDecisionV2Input): Promise<void> {
-    const decision = verifyCandidateDecisionV2({
-      ...record,
-      decisionVersion: "2",
-      authority: "human",
-    });
-    await this.writeCandidateDecision(decision, decision);
-  }
-
   /**
    * Persist a decision whose authority the caller already resolved.
    *
    * The MCP lifecycle derives the authority from how it obtained the decision —
-   * a human prompt, the autonomous policy, or an unconfirmed caller assertion —
-   * so it cannot go through `writeHumanDecision`, which hard-codes `human`.
-   * Validation is unchanged: the schema still rejects any authority outside the
-   * union, and the accept-only policy constraint still applies.
+   * a human prompt, the autonomous policy, or an unconfirmed caller assertion.
+   * The schema still rejects any authority outside the union, and the
+   * accept-only policy constraint still applies.
    */
   async writeCandidateDecisionRecord(record: CandidateDecisionV2): Promise<void> {
     const decision = verifyCandidateDecisionV2(record);
-    await this.writeCandidateDecision(decision, decision);
+    await this.writeCandidateDecision(decision);
   }
 
   async writeAutopilotDecision(
@@ -1289,24 +1231,18 @@ export class ArtifactStore {
       policyVersion: decisionEligibility.policyVersion,
       recordedAt,
     }) as AutopilotCandidateDecisionV2;
-    await this.writeCandidateDecision(decision, decision);
+    await this.writeCandidateDecision(decision);
   }
 
-  private async writeCandidateDecision(
-    persisted: CandidateDecisionV2,
-    normalized: CandidateDecision,
-  ): Promise<void> {
+  private async writeCandidateDecision(decision: CandidateDecisionV2): Promise<void> {
     try {
-      await this.writeArtifact<CandidateDecision, CandidateDecisionV2>(DECISION, persisted);
+      await this.writeArtifact<CandidateDecision, CandidateDecisionV2>(DECISION, decision);
       return;
     } catch (error) {
       const existing = await this.readCandidateDecision();
       if (existing === null) throw error;
-      if (hasIdenticalDecisionProvenance(existing, normalized)) return;
-      throw new RuntimeError(
-        `candidate decision conflict: recorded ${existing.decision}, attempted ${normalized.decision}`,
-        { toolError: "decision-conflict" },
-      );
+      if (isSameDecision(existing, decision)) return;
+      throw decisionConflict(existing, decision.decision);
     }
   }
 

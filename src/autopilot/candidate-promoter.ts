@@ -11,7 +11,11 @@ import { getPlatformServices } from "../platform/select-platform.js";
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { CandidateArtifact } from "../protocol/attempt-result.js";
 import { ArtifactStore } from "../runtime/artifact-store.js";
-import { decisionAuthority, type DecisionAuthority } from "../mcp/decision-authority.js";
+import {
+  decisionAuthority,
+  isAutopilotAcceptance,
+  type DecisionAuthority,
+} from "../runtime/candidate-decisions.js";
 import { isLockContention } from "../platform/lock-ownership.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
 import { redact } from "../runtime/redaction.js";
@@ -298,11 +302,7 @@ export class CandidatePromoter {
         await artifactStore.writeAutopilotDecision(artifact, eligibility, this.now());
         decision = await artifactStore.readCandidateDecision();
       }
-      return decision?.decisionVersion === "2"
-        && decision.authority === "autopilot-policy"
-        && decision.decision === "accepted"
-        && decision.candidateManifestHash === artifact.manifestHash
-        && decision.evidenceHash === eligibilityHash;
+      return isAutopilotAcceptance(decision, artifact.manifestHash, eligibilityHash);
     } catch {
       return false;
     }
