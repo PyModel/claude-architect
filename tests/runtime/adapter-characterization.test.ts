@@ -5,6 +5,7 @@
 // migration. These snapshots must stay byte-identical across the migration.
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type {
   PlatformServices,
@@ -315,9 +316,24 @@ function captured<T>(run: () => T): T | { error: string } {
   }
 }
 
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+
+/** Rewrite every string as if the repository were checked out at `root`. */
+function relocated(value: unknown, root: string): unknown {
+  if (typeof value === "string") return value.split(REPO_ROOT).join(root);
+  if (Array.isArray(value)) return value.map(entry => relocated(entry, root));
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, relocated(entry, root)]),
+    );
+  }
+  return value;
+}
+
 async function characterize(
   factory: Factory,
   descriptor: ProducerDescriptor,
+  checkoutRoot: string = REPO_ROOT,
 ): Promise<unknown> {
   const reference = factory(DEPS.homeSetAuthed!);
   const identity = {
@@ -378,15 +394,36 @@ async function characterize(
     events[name] = reference.normalizeEvents(raw);
   }
 
-  return canonical({
+  return canonical(relocated({
     identity,
     configurationProfile: reference.configurationProfile(),
     probe,
     invocation,
     environment,
     events,
-  });
+  }, checkoutRoot));
 }
+
+const PRODUCERS: Array<[string, Factory, ProducerDescriptor]> = [
+  ["pi", deps => new PiAdapter(deps), piDescriptor],
+  ["opencode", deps => new OpenCodeAdapter(deps), openCodeDescriptor],
+  ["agy", deps => new AgyAdapter(deps), agyDescriptor],
+  ["pythinker", deps => new PythinkerAdapter(deps), pythinkerDescriptor],
+  ["claude", deps => new ClaudeAdapter(deps), claudeDescriptor],
+  ["codex", deps => new CodexAdapter(deps), codexDescriptor],
+];
+
+describe("Producer Adapter characterization is independent of the checkout path", () => {
+  it.each(PRODUCERS)("%s records the same characterization from two checkout roots", async (
+    _name,
+    factory,
+    descriptor,
+  ) => {
+    const here = await characterize(factory, descriptor);
+    const elsewhere = await characterize(factory, descriptor, "/other/checkout/root/");
+    expect(elsewhere).toEqual(here);
+  });
+});
 
 describe("Producer Adapter characterization (descriptor migration guard)", () => {
   it("pi", async () => {
