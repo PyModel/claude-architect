@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, open, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, open, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import nodeProcess from "node:process";
@@ -24,7 +24,7 @@ import {
 } from "../../src/platform/lock-ownership.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 import { logger } from "../../src/util/logger.js";
-import { acquireLock } from "../../src/platform/checkout-lock.js";
+import { acquireLock, tryAcquireLockReclaimingDead } from "../../src/platform/checkout-lock.js";
 
 // A passthrough of node:fs/promises whose link() can be armed to fail once with
 // a chosen errno, the way an antivirus scan briefly holds a file on Windows.
@@ -309,6 +309,73 @@ describe("LockOwnership", () => {
         async () => "tok",
       );
       expect(liveResult).toBe(true);
+    });
+  });
+
+  describe("crash after publish, before temporary cleanup", () => {
+    // tryAcquireLock links its temporary record into place and only then
+    // unlinks the temporary, so a crash between the two leaves the lock with
+    // two links: <key>.lock and its .recovery-lock-<uuid>.tmp sibling.
+    async function crashedLock(record: { pid: number; processToken: string }) {
+      const locksDir = path.join(tempDir, "locks");
+      await mkdir(locksDir);
+      const key = createHash("sha256").update("crashed-repo").digest("hex");
+      const lockPath = path.join(locksDir, `${key}.lock`);
+      const temporaryPath = path.join(
+        locksDir,
+        ".recovery-lock-0b8e8a3c-6f1d-4c6e-9a51-2f4c1d7e9b10.tmp",
+      );
+      await writeFile(temporaryPath, formatLockRecord({ ...record, acquiredAt: new Date(0).toISOString() }));
+      await link(temporaryPath, lockPath);
+      return { locksDir, lockPath, temporaryPath };
+    }
+
+    it("reclaims a dead holder's two-link lock and the next acquisition succeeds", async () => {
+      const { locksDir, lockPath } = await crashedLock({ pid: 7777, processToken: "dead-tok" });
+      const contents = Buffer.from(formatLockRecord({
+        pid: nodeProcess.pid,
+        processToken: "next-tok",
+        acquiredAt: new Date().toISOString(),
+      }));
+
+      const { lock, holder } = await tryAcquireLockReclaimingDead(
+        lockPath,
+        contents,
+        () => false,
+        async () => null,
+      );
+
+      expect(holder).toBe("reclaimed");
+      expect(lock).not.toBeNull();
+      expect(await readFile(lockPath)).toEqual(contents);
+      expect(await readdir(locksDir)).toEqual([path.basename(lockPath)]);
+    });
+
+    it("never reclaims a live holder's lock in the same two-link state", async () => {
+      const { lockPath, temporaryPath } = await crashedLock({ pid: 5555, processToken: "live-tok" });
+      const before = await readFile(lockPath);
+
+      const result = await reclaimDeadLock(
+        lockPath,
+        pid => pid === 5555,
+        async pid => (pid === 5555 ? "live-tok" : null),
+      );
+
+      expect(result).toBe("live");
+      expect(await readFile(lockPath)).toEqual(before);
+      expect(await readFile(temporaryPath)).toEqual(before);
+    });
+
+    it("stays contended when the second link is not a temporary sibling", async () => {
+      const { locksDir, lockPath, temporaryPath } = await crashedLock({ pid: 7777, processToken: "dead-tok" });
+      const aliasPath = path.join(locksDir, "operator-alias");
+      await rm(temporaryPath);
+      await link(lockPath, aliasPath);
+
+      const result = await reclaimDeadLock(lockPath, () => false, async () => null);
+
+      expect(result).toBe("contended");
+      expect(await readFile(lockPath)).toEqual(await readFile(aliasPath));
     });
   });
 
