@@ -1,4 +1,16 @@
-import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+  type FileHandle,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +23,33 @@ import {
   publishExclusive,
   writeAtomic,
 } from "../../src/platform/durable-write.js";
+
+// Pass-through: one test swaps the temp file the moment its handle closes,
+// standing in for a same-user writer racing the publish.
+vi.mock("node:fs/promises", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...actual, open: vi.fn(actual.open) };
+});
+
+const actualFs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+
+function substituteTemporaryOnClose(): { displaced: string[] } {
+  const displaced: string[] = [];
+  vi.mocked(open).mockImplementationOnce(async (...args: Parameters<typeof open>) => {
+    const handle: FileHandle = await actualFs.open(...args);
+    const close = handle.close.bind(handle);
+    handle.close = async () => {
+      await close();
+      const temporaryPath = String(args[0]);
+      const aside = `${temporaryPath}.displaced`;
+      await actualFs.rename(temporaryPath, aside);
+      displaced.push(aside);
+      await actualFs.copyFile(aside, temporaryPath);
+    };
+    return handle;
+  });
+  return { displaced };
+}
 
 describe("PlatformSafety durable-write", () => {
   let testDir: string;
@@ -147,6 +186,25 @@ describe("PlatformSafety durable-write", () => {
     await expect(session.sync()).rejects.toThrow("durable directory session is closed");
   });
 
+  it.each(["replace", "immutable"] as const)(
+    "refuses a temp substituted before %s publish and keeps the previous record",
+    async (mode) => {
+      await writeFile(path.join(testDir, "state.json"), "previous");
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        const { displaced } = substituteTemporaryOnClose();
+        await expect(writeAtomic(session, "state.json", "next", mode))
+          .rejects.toThrow("atomic write temporary file changed before publish");
+        expect(displaced).toHaveLength(1);
+        await rm(displaced[0]!);
+      } finally {
+        await session.close();
+      }
+      expect(await readFile(path.join(testDir, "state.json"), "utf8")).toBe("previous");
+      expect(await readdir(testDir)).toEqual(["state.json"]);
+    },
+  );
+
   describe("appendDurable", () => {
     it("appends the bytes and flushes the directory after the write", async () => {
       const journal = path.join(testDir, "journal.ndjson");
@@ -235,6 +293,19 @@ describe("PlatformSafety durable-write", () => {
       }
       expect(await readFile(path.join(testDir, "owner.json"), "utf8")).toBe('{"owner":"first"}');
       expect(await readdir(testDir)).toEqual(["owner.json"]);
+    });
+
+    it("refuses a temp substituted before the link and publishes nothing", async () => {
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        const { displaced } = substituteTemporaryOnClose();
+        await expect(publishExclusive(session, "owner.json", "owner"))
+          .rejects.toThrow("atomic write temporary file changed before publish");
+        await rm(displaced[0]!);
+      } finally {
+        await session.close();
+      }
+      expect(await readdir(testDir)).toEqual([]);
     });
 
     it("links a retained source exclusively and refuses an existing destination", async () => {

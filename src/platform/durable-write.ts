@@ -186,6 +186,23 @@ async function renameWithRetry(
   }
 }
 
+/** The temp is published by name: refuse one substituted after its handle closed. */
+async function assertStagedTemporary(
+  temporaryPath: string,
+  written: { dev: bigint; ino: bigint; size: bigint },
+  name: string,
+): Promise<void> {
+  const staged = await lstat(temporaryPath, { bigint: true });
+  if (!staged.isFile()
+    || staged.isSymbolicLink()
+    || staged.nlink !== 1n
+    || staged.dev !== written.dev
+    || staged.ino !== written.ino
+    || staged.size !== written.size) {
+    throw new RuntimeError(`atomic write temporary file changed before publish: ${name}`);
+  }
+}
+
 export async function writeAtomic(
   session: DurableDirectorySession,
   name: string,
@@ -215,10 +232,12 @@ export async function writeAtomic(
       await handle.writeFile(bytes);
     }
     await handle.sync();
+    const written = await handle.stat({ bigint: true });
     await handle.close();
     handle = undefined;
 
     await session.assertIdentity();
+    await assertStagedTemporary(temporaryPath, written, name);
 
     if (mode === "immutable") {
       try {
@@ -410,12 +429,15 @@ export async function publishExclusive(
       0o600,
     );
     temporaryCreated = true;
+    let written;
     try {
       await handle.writeFile(typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes);
       await handle.sync();
+      written = await handle.stat({ bigint: true });
     } finally {
       await handle.close();
     }
+    await assertStagedTemporary(temporaryPath, written, name);
     published = await linkExclusive(session, temporaryName, name);
     await rm(temporaryPath);
     temporaryCreated = false;

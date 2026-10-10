@@ -2,12 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants, type BigIntStats, type Stats } from "node:fs";
 import {
   lstat,
-  link,
   mkdir,
   open,
   readdir,
   realpath,
-  rename,
   rm,
 } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
@@ -23,6 +21,13 @@ import {
   sameDevIno,
   type DirectoryIdentity,
 } from "../platform/durable-directory.js";
+import {
+  DurableDirectorySession,
+  appendDurable,
+  linkExclusive,
+  publishExclusive,
+  writeAtomic,
+} from "../platform/durable-write.js";
 
 const MAX_WRITER_LOCK_BYTES = 512;
 const MAX_WORKFLOW_OWNER_BYTES = 1_024;
@@ -114,13 +119,11 @@ export const LEGAL_WORKFLOW_PHASE_EDGES: Readonly<
   cancelled: [],
 });
 
-/** Workflow state directories compare by exact device and inode plus canonical path. */
-type WorkflowDirectoryIdentity = Pick<DirectoryIdentity, "dev" | "ino"> & { canonicalPath: string };
-
-interface PreciseFileIdentity {
-  dev: bigint;
-  ino: bigint;
-}
+/**
+ * Workflow state directories compare by exact device and inode plus canonical
+ * path; the birth time is carried only for the durable-write session.
+ */
+type WorkflowDirectoryIdentity = DirectoryIdentity & { canonicalPath: string };
 
 interface WriterLockRecord {
   lockVersion: "1";
@@ -202,6 +205,18 @@ interface JournalRead extends WorkflowIntentJournal {
 
 function workflowError(message: string, toolError: string): RuntimeError {
   return new RuntimeError(message, { toolError });
+}
+
+/** Classify an unclassified durable-primitive refusal as unsafe workflow state. */
+async function unsafeOnRefusal<T>(operation: Promise<T>): Promise<T> {
+  try {
+    return await operation;
+  } catch (error) {
+    if (error instanceof RuntimeError && error.detail?.toolError === undefined) {
+      throw workflowError(error.message, "unsafe-workflow-state");
+    }
+    throw error;
+  }
 }
 
 function isPlainDirectory(metadata: Stats | BigIntStats): boolean {
@@ -296,6 +311,7 @@ async function inspectPlainDirectory(directory: string): Promise<WorkflowDirecto
   return {
     dev: metadata.dev,
     ino: metadata.ino,
+    birthtimeNs: metadata.birthtimeNs,
     canonicalPath: await realpath(directory),
   };
 }
@@ -1273,7 +1289,11 @@ export class WorkflowStore {
           throw workflowError("workflow state lock owner was substituted", "unsafe-workflow-state");
         }
         try {
-          await link(ownerPath, this.lockPath);
+          await unsafeOnRefusal(linkExclusive(
+            this.durableSession(directory),
+            path.basename(ownerPath),
+            path.basename(this.lockPath),
+          ));
         } catch (error) {
           await ownerHandle.close();
           ownerHandle = undefined;
@@ -1290,13 +1310,6 @@ export class WorkflowStore {
             await this.retireWriterOwner(existing, directory);
           }
           continue;
-        }
-        const namedLock = await lstat(this.lockPath);
-        if (!namedLock.isFile()
-          || namedLock.isSymbolicLink()
-          || namedLock.dev !== ownerMetadata.dev
-          || namedLock.ino !== ownerMetadata.ino) {
-          throw workflowError("workflow state lock was substituted", "unsafe-workflow-state");
         }
         lockIdentity = {
           dev: ownerMetadata.dev,
@@ -1475,7 +1488,7 @@ export class WorkflowStore {
   private async recoverAbandonedStateFiles(directory: WorkflowDirectoryIdentity): Promise<void> {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     const names = (await readdir(this.workflowDirectory)).filter(name =>
-      /^\.state\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:tmp|publish)$/u
+      /^\.state\.(?:json\.)?[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:tmp|publish)$/u
         .test(name));
     if (names.length === 0) return;
 
@@ -1753,35 +1766,12 @@ export class WorkflowStore {
       throw workflowError("workflow journal exceeds its size limit", "workflow-journal-too-large");
     }
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open(
-      this.journalPath,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | NO_FOLLOW,
-      0o600,
-    );
-    try {
-      const metadata = await handle.stat();
-      const named = await lstat(this.journalPath);
-      if (!metadata.isFile()
-        || metadata.nlink !== 1
-        || metadata.size !== expectedSize
-        || !named.isFile()
-        || named.isSymbolicLink()
-        || named.nlink !== 1
-        || named.dev !== metadata.dev
-        || named.ino !== metadata.ino) {
-        throw workflowError("workflow journal changed before append", "unsafe-workflow-state");
-      }
-      await handle.writeFile(bytes);
-      await handle.sync();
-      const settled = await handle.stat();
-      if (settled.size !== expectedSize + bytes.byteLength) {
-        throw workflowError("workflow journal append was incomplete", "invalid-workflow-journal");
-      }
-      await assertDirectoryIdentity(this.workflowDirectory, directory);
-    } finally {
-      await handle.close();
-    }
-    await flushDirectory(this.workflowDirectory);
+    await unsafeOnRefusal(appendDurable(
+      this.durableSession(directory),
+      path.basename(this.journalPath),
+      bytes,
+      { expectedSize },
+    ));
     await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
 
@@ -1800,148 +1790,39 @@ export class WorkflowStore {
     directory: WorkflowDirectoryIdentity,
     create: boolean,
   ): Promise<void> {
-    const temporaryPath = path.join(
-      this.workflowDirectory,
-      `.state.${randomUUID()}.tmp`,
-    );
-    const publicationPath = path.join(
-      this.workflowDirectory,
-      `.state.${randomUUID()}.publish`,
-    );
-    let handle: FileHandle | undefined;
-    let temporaryExists = false;
-    let publicationExists = false;
-    let temporaryIdentity: PreciseFileIdentity | undefined;
-    try {
-      handle = await open(
-        temporaryPath,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-        0o600,
-      );
-      temporaryExists = true;
-      await handle.writeFile(bytes);
-      await handle.sync();
-      const metadata = await handle.stat({ bigint: true });
-      const named = await lstat(temporaryPath, { bigint: true });
-      if (!metadata.isFile()
-        || metadata.nlink !== 1n
-        || metadata.size !== BigInt(bytes.byteLength)
-        || !named.isFile()
-        || named.isSymbolicLink()
-        || named.dev !== metadata.dev
-        || named.ino !== metadata.ino) {
-        throw workflowError("workflow state temporary file changed", "unsafe-workflow-state");
-      }
-      temporaryIdentity = { dev: metadata.dev, ino: metadata.ino };
-      await handle.close();
-      handle = undefined;
-      await assertDirectoryIdentity(this.workflowDirectory, directory);
-      if (create) {
-        try {
-          await lstat(this.statePath);
+    await assertDirectoryIdentity(this.workflowDirectory, directory);
+    const session = this.durableSession(directory);
+    const name = path.basename(this.statePath);
+    if (create) {
+      try {
+        await unsafeOnRefusal(publishExclusive(session, name, bytes));
+      } catch (error) {
+        if (errorCode(error) === "EEXIST") {
           throw workflowError("workflow state already exists", "workflow-state-conflict");
-        } catch (error) {
-          if (!isMissing(error)) throw error;
         }
+        throw error;
       }
-      await this.stageStatePublication(
-        temporaryPath,
-        publicationPath,
-        bytes,
-        temporaryIdentity,
-      );
-      publicationExists = true;
-      await this.assertStagedPublication(
-        temporaryPath,
-        publicationPath,
-        bytes,
-        temporaryIdentity,
-      );
-      await rm(temporaryPath);
-      temporaryExists = false;
-      await rename(publicationPath, this.statePath);
-      publicationExists = false;
-      await this.assertPublishedState(bytes, temporaryIdentity);
-      await flushDirectory(this.workflowDirectory);
-      await assertDirectoryIdentity(this.workflowDirectory, directory);
-    } finally {
-      await handle?.close();
-      if (temporaryExists) await rm(temporaryPath, { force: true });
-      if (publicationExists) await rm(publicationPath, { force: true });
+    } else {
+      await unsafeOnRefusal(writeAtomic(session, name, bytes, "replace"));
     }
+    await this.assertPublishedState(bytes);
+    await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
 
-  protected async stageStatePublication(
-    temporaryPath: string,
-    publicationPath: string,
-    expectedBytes: Buffer,
-    expectedIdentity: PreciseFileIdentity,
-  ): Promise<void> {
-    let linked = false;
-    try {
-      await link(temporaryPath, publicationPath);
-      linked = true;
-      const publication = await lstat(publicationPath, { bigint: true });
-      if (!publication.isFile()
-        || publication.isSymbolicLink()
-        || publication.nlink !== 2n
-        || publication.dev !== expectedIdentity.dev
-        || publication.ino !== expectedIdentity.ino
-        || publication.size !== BigInt(expectedBytes.byteLength)) {
-        throw workflowError("workflow state publication source changed", "unsafe-workflow-state");
-      }
-    } catch (error) {
-      if (linked) await rm(publicationPath, { force: true });
-      throw error;
-    }
+  /**
+   * A durable session over the workflow directory. It flushes with
+   * flushDirectory: workflow writes are a hot path, so they never spawn the
+   * Windows directory helper.
+   */
+  private durableSession(directory: WorkflowDirectoryIdentity): DurableDirectorySession {
+    return new DurableDirectorySession(
+      this.workflowDirectory,
+      { dev: directory.dev, ino: directory.ino, birthtimeNs: directory.birthtimeNs },
+      { syncDirectory: flushDirectory },
+    );
   }
 
-  private async assertStagedPublication(
-    temporaryPath: string,
-    publicationPath: string,
-    expectedBytes: Buffer,
-    expectedIdentity: PreciseFileIdentity,
-  ): Promise<void> {
-    const handle = await open(publicationPath, constants.O_RDONLY | NO_FOLLOW);
-    try {
-      const metadata = await handle.stat({ bigint: true });
-      const [publication, temporary] = await Promise.all([
-        lstat(publicationPath, { bigint: true }),
-        lstat(temporaryPath, { bigint: true }),
-      ]);
-      if (!metadata.isFile()
-        || metadata.nlink !== 2n
-        || metadata.size !== BigInt(expectedBytes.byteLength)
-        || metadata.dev !== expectedIdentity.dev
-        || metadata.ino !== expectedIdentity.ino
-        || !publication.isFile()
-        || publication.isSymbolicLink()
-        || publication.dev !== expectedIdentity.dev
-        || publication.ino !== expectedIdentity.ino
-        || !temporary.isFile()
-        || temporary.isSymbolicLink()
-        || temporary.dev !== expectedIdentity.dev
-        || temporary.ino !== expectedIdentity.ino) {
-        throw workflowError("workflow state publication changed before commit", "unsafe-workflow-state");
-      }
-      const published = await readHandleBytes(handle, Number(metadata.size));
-      const settled = await handle.stat({ bigint: true });
-      if (!published.equals(expectedBytes)
-        || settled.nlink !== metadata.nlink
-        || settled.size !== metadata.size
-        || settled.mtimeNs !== metadata.mtimeNs
-        || settled.ctimeNs !== metadata.ctimeNs) {
-        throw workflowError("workflow state publication changed before commit", "unsafe-workflow-state");
-      }
-    } finally {
-      await handle.close();
-    }
-  }
-
-  private async assertPublishedState(
-    expectedBytes: Buffer,
-    expectedIdentity: PreciseFileIdentity,
-  ): Promise<void> {
+  private async assertPublishedState(expectedBytes: Buffer): Promise<void> {
     const handle = await open(this.statePath, constants.O_RDONLY | NO_FOLLOW);
     try {
       const metadata = await handle.stat({ bigint: true });
@@ -1949,8 +1830,6 @@ export class WorkflowStore {
       if (!metadata.isFile()
         || metadata.nlink !== 1n
         || metadata.size !== BigInt(expectedBytes.byteLength)
-        || metadata.dev !== expectedIdentity.dev
-        || metadata.ino !== expectedIdentity.ino
         || !named.isFile()
         || named.isSymbolicLink()
         || named.nlink !== 1n
