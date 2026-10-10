@@ -11,7 +11,7 @@ import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { probeAll } from "../producers/capability-probe.js";
 import { detectEnvironmentType } from "../producers/producer-adapter.js";
 import type { ProducerRegistry } from "../producers/producer-registry.js";
-import { ProducerRuntime, producerRuntime } from "../producers/producer-runtime.js";
+import { ProducerRuntime } from "../producers/producer-runtime.js";
 import { route } from "../producers/routing-policy.js";
 import { type BuiltEnvironment } from "../runtime/environment-policy.js";
 import { redact } from "../runtime/redaction.js";
@@ -200,9 +200,7 @@ export async function runRole(args: RoleRunArgs): Promise<RoleRunResult> {
     let builtEnvironment: BuiltEnvironment | null = null;
     let primaryError: unknown;
     try {
-      const runtime = args.registry !== undefined
-        ? new ProducerRuntime(args.registry)
-        : producerRuntime;
+      const runtime = new ProducerRuntime(args.registry);
       const launchResult = await runtime.launch({
         producerId,
         spec: roleSpec,
