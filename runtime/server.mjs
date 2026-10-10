@@ -6,14 +6,6 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __esm = (fn, res, err) => function __init() {
-  if (err) throw err[0];
-  try {
-    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-  } catch (e) {
-    throw err = [e], e;
-  }
-};
 var __commonJS = (cb, mod) => function __require() {
   try {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
@@ -7725,92 +7717,6 @@ var require__ = __commonJS({
     Object.defineProperty(exports, "MissingRefError", { enumerable: true, get: function() {
       return ref_error_1.default;
     } });
-  }
-});
-
-// src/producers/host-store.ts
-import { existsSync as existsSync2, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-function isRecord3(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function stringProperty(value, name) {
-  if (!isRecord3(value)) return void 0;
-  const property = value[name];
-  return typeof property === "string" ? property : void 0;
-}
-function defaultHasOauthAccount(accountFile) {
-  if (!existsSync2(accountFile)) return false;
-  try {
-    const parsed = JSON.parse(readFileSync(accountFile, "utf8"));
-    return isRecord3(parsed) && isRecord3(parsed.oauthAccount);
-  } catch {
-    return false;
-  }
-}
-function resolveHostStoreRoot(descriptor, ctx) {
-  return descriptor.hostState ? descriptor.hostState.resolveStore(ctx) : null;
-}
-function isProducerAuthenticated(descriptor, ctx) {
-  const hostState = descriptor.hostState;
-  if (!hostState) return false;
-  if (hostState.apiKeyEnv !== void 0) {
-    for (const key of hostState.apiKeyEnv) {
-      const val = ctx.env[key];
-      if (val !== void 0 && val.length > 0) return true;
-    }
-  }
-  const store = hostState.resolveStore(ctx);
-  if (typeof hostState.authMarker === "function") {
-    return hostState.authMarker(store, ctx);
-  }
-  if (typeof hostState.authMarker === "string") {
-    const checker = ctx.hasAuthStore ?? ((dir) => existsSync2(join(dir, hostState.authMarker)));
-    return checker(store);
-  }
-  return false;
-}
-function resolveInheritedWritablePaths(descriptor, ctx) {
-  const hostState = descriptor.hostState;
-  if (!hostState?.inheritedWritablePaths) return [];
-  const store = hostState.resolveStore(ctx);
-  return hostState.inheritedWritablePaths(store, ctx);
-}
-function resolveDefaultEnv(descriptor, ctx) {
-  const hostState = descriptor.hostState;
-  if (!hostState?.defaultEnv) return {};
-  const store = hostState.resolveStore(ctx);
-  return hostState.defaultEnv(store, ctx);
-}
-function resolveConfigRevision(descriptor, ctx) {
-  const hostState = descriptor.hostState;
-  if (!hostState) return "";
-  try {
-    const store = hostState.resolveStore(ctx);
-    const parts = [];
-    if (existsSync2(store)) {
-      parts.push(`store:${statSync(store).mtimeMs}`);
-    }
-    if (typeof hostState.authMarker === "string") {
-      const markerPath = join(store, hostState.authMarker);
-      if (existsSync2(markerPath)) {
-        parts.push(`marker:${statSync(markerPath).mtimeMs}`);
-      }
-    }
-    if (hostState.apiKeyEnv) {
-      for (const envKey of hostState.apiKeyEnv) {
-        const val = ctx.env[envKey];
-        if (val !== void 0 && val.length > 0) parts.push(`${envKey}:${val}`);
-      }
-    }
-    return parts.join(";");
-  } catch {
-    return "";
-  }
-}
-var init_host_store = __esm({
-  "src/producers/host-store.ts"() {
-    "use strict";
   }
 });
 
@@ -37166,14 +37072,94 @@ function selectSandboxBackend(report) {
 }
 
 // src/producers/agy-adapter.ts
-import { homedir } from "node:os";
 import { join as join2 } from "node:path";
+
+// src/producers/host-store.ts
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+function isRecord3(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function stringProperty(value, name) {
+  if (!isRecord3(value)) return void 0;
+  const property = value[name];
+  return typeof property === "string" ? property : void 0;
+}
+function defaultHasOauthAccount(accountFile) {
+  if (!existsSync(accountFile)) return false;
+  try {
+    const parsed = JSON.parse(readFileSync(accountFile, "utf8"));
+    return isRecord3(parsed) && isRecord3(parsed.oauthAccount);
+  } catch {
+    return false;
+  }
+}
+function resolveHostStoreRoot(descriptor, ctx) {
+  return descriptor.hostState ? descriptor.hostState.resolveStore(ctx) : null;
+}
+function isProducerAuthenticated(descriptor, ctx) {
+  const hostState = descriptor.hostState;
+  if (!hostState) return false;
+  if (hostState.apiKeyEnv !== void 0) {
+    for (const key of hostState.apiKeyEnv) {
+      const val = ctx.env[key];
+      if (val !== void 0 && val.length > 0) return true;
+    }
+  }
+  const store = hostState.resolveStore(ctx);
+  if (typeof hostState.authMarker === "function") {
+    return hostState.authMarker(store, ctx);
+  }
+  if (typeof hostState.authMarker === "string") {
+    const checker = ctx.hasAuthStore ?? ((dir) => existsSync(join(dir, hostState.authMarker)));
+    return checker(store);
+  }
+  return false;
+}
+function resolveInheritedWritablePaths(descriptor, ctx) {
+  const hostState = descriptor.hostState;
+  if (!hostState?.inheritedWritablePaths) return [];
+  const store = hostState.resolveStore(ctx);
+  return hostState.inheritedWritablePaths(store, ctx);
+}
+function resolveDefaultEnv(descriptor, ctx) {
+  const hostState = descriptor.hostState;
+  if (!hostState?.defaultEnv) return {};
+  const store = hostState.resolveStore(ctx);
+  return hostState.defaultEnv(store, ctx);
+}
+function resolveConfigRevision(descriptor, ctx) {
+  const hostState = descriptor.hostState;
+  if (!hostState) return "";
+  try {
+    const store = hostState.resolveStore(ctx);
+    const parts = [];
+    if (existsSync(store)) {
+      parts.push(`store:${statSync(store).mtimeMs}`);
+    }
+    if (typeof hostState.authMarker === "string") {
+      const markerPath = join(store, hostState.authMarker);
+      if (existsSync(markerPath)) {
+        parts.push(`marker:${statSync(markerPath).mtimeMs}`);
+      }
+    }
+    if (hostState.apiKeyEnv) {
+      for (const envKey of hostState.apiKeyEnv) {
+        const val = ctx.env[envKey];
+        if (val !== void 0 && val.length > 0) parts.push(`${envKey}:${val}`);
+      }
+    }
+    return parts.join(";");
+  } catch {
+    return "";
+  }
+}
 
 // src/producers/plain-text.ts
 import { open as open7 } from "node:fs/promises";
 
 // src/producers/skill-bootstrap.ts
-import { existsSync } from "node:fs";
+import { existsSync as existsSync2 } from "node:fs";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 var OFFERED_SKILLS = [
   {
@@ -37228,7 +37214,7 @@ function renderSkillBootstrap() {
       ...skill,
       path: fileURLToPath3(new URL(`${skill.name}/SKILL.md`, root))
     }));
-    const missing = offered.filter((skill) => !existsSync(skill.path));
+    const missing = offered.filter((skill) => !existsSync2(skill.path));
     if (missing.length > 0) {
       missingPaths.push(...missing.map((skill) => skill.path));
       continue;
@@ -37372,6 +37358,10 @@ function selectOsWriteConfinementBackend(ctx) {
   return backend?.id ?? null;
 }
 
+// src/producers/producer-adapter.ts
+import { readFileSync as readFileSync2 } from "node:fs";
+import { homedir } from "node:os";
+
 // src/producers/cli-probe.ts
 var VERSION_TIMEOUT_MS = 1e4;
 var VERSION_OUTPUT_LIMIT = 64 * 1024;
@@ -37451,12 +37441,169 @@ async function probeOsConfinedCli(ctx, probe) {
   }
 }
 
+// src/producers/producer-adapter.ts
+function probeDescriptorCli(descriptor, ctx, deps, options = {}) {
+  return probeOsConfinedCli(ctx, {
+    ...options,
+    producerId: descriptor.id,
+    executableName: descriptor.executable.name,
+    structuredOutput: descriptor.structuredOutput,
+    isAuthenticated: () => isProducerAuthenticated(descriptor, deps)
+  });
+}
+var DescriptorAdapter = class {
+  constructor(descriptor, deps = {
+    env: process.env,
+    homeDirectory: homedir()
+  }) {
+    this.descriptor = descriptor;
+    this.deps = deps;
+    this.producerId = descriptor.id;
+    this.structuredOutput = descriptor.structuredOutput;
+    this.executionModes = descriptor.executionModes ? [...descriptor.executionModes] : ["edit"];
+  }
+  descriptor;
+  deps;
+  producerId;
+  structuredOutput;
+  executionModes;
+  async probe(ctx) {
+    if (this.descriptor.probe) {
+      return this.descriptor.probe(ctx, this.deps);
+    }
+    const resolved = await ctx.ps.resolveExecutable({ name: this.descriptor.executable.name }).catch(() => null);
+    const authState = isProducerAuthenticated(this.descriptor, this.deps) ? "authenticated" : "unauthenticated";
+    return {
+      producerId: this.producerId,
+      available: resolved !== null,
+      reason: resolved !== null ? null : "missing-executable",
+      os: ctx.os,
+      arch: ctx.arch,
+      environmentType: ctx.environmentType,
+      resolvedExecutable: resolved,
+      version: null,
+      authState,
+      executionModes: [...this.executionModes],
+      structuredOutput: this.structuredOutput,
+      writeConfinementBackend: null,
+      laneEligibility: { edit: resolved !== null }
+    };
+  }
+  buildInvocation(spec, ctx) {
+    if (this.descriptor.buildInvocation) {
+      return this.descriptor.buildInvocation(spec, ctx, this.deps);
+    }
+    return {
+      executable: ctx.executable,
+      args: [],
+      stdin: renderProducerPrompt(spec, {
+        readOnly: ctx.readOnly === true,
+        ...this.descriptor.prompt
+      }),
+      requiredEnv: [],
+      network: "allowed"
+    };
+  }
+  normalizeEvents(raw) {
+    if (this.descriptor.normalizeEvents) {
+      return this.descriptor.normalizeEvents(raw);
+    }
+    return { events: [], producerSummary: null, ok: raw.exit.exitCode === 0 };
+  }
+  configurationProfile() {
+    if (this.descriptor.configurationProfile) {
+      return structuredClone(this.descriptor.configurationProfile);
+    }
+    return {
+      isolationState: this.descriptor.isolation,
+      credentialSources: [],
+      behavioralConfigSources: [],
+      repositoryInstructionSources: [],
+      environmentDependencies: [],
+      temporaryHomeStrategy: this.descriptor.isolation === "inherited-config-only" ? "inherited-home" : "none"
+    };
+  }
+};
+function detectEnvironmentType(readProcVersion = () => readFileSync2("/proc/version", "utf8")) {
+  if (process.platform !== "linux") return "native";
+  try {
+    const version2 = readProcVersion().trim().toLowerCase();
+    if (version2.includes("microsoft")) return "wsl";
+    return /^linux version(?:\s|$)/.test(version2) ? "native" : "wsl";
+  } catch {
+    return "wsl";
+  }
+}
+
 // src/producers/agy-adapter.ts
-init_host_store();
 var AGY_REQUIRED_ENV = ["GEMINI_API_KEY"];
 var TEXT_LIMIT = 8e3;
 function formatPrintTimeout(timeoutMs) {
   return `${Math.ceil(timeoutMs / 1e3)}s`;
+}
+function buildAgyInvocation(spec, ctx, deps) {
+  const args = [
+    "-p",
+    renderProducerPrompt(spec, {
+      readOnly: ctx.readOnly === true,
+      ...agyDescriptor.prompt
+    }),
+    "--add-dir",
+    ctx.worktreePath,
+    "--new-project",
+    "--output-format",
+    "json",
+    "--dangerously-skip-permissions",
+    "--print-timeout",
+    formatPrintTimeout(spec.timeoutMs)
+  ];
+  if (spec.producerOverrides?.model !== void 0) {
+    args.push("--model", spec.producerOverrides.model);
+  }
+  if (spec.producerOverrides?.reasoningEffort !== void 0) {
+    args.push("--effort", spec.producerOverrides.reasoningEffort);
+  }
+  return {
+    executable: ctx.executable,
+    args,
+    requiredEnv: [...AGY_REQUIRED_ENV],
+    inheritedStateWritablePaths: resolveInheritedWritablePaths(agyDescriptor, deps),
+    network: "allowed"
+  };
+}
+function normalizeAgyEvents(raw) {
+  if (raw.exit.truncated.stdout) {
+    return { events: [], producerSummary: null, ok: false };
+  }
+  if (raw.exit.exitCode !== 0) {
+    return {
+      events: [{ kind: "error", text: raw.stderr.slice(-TEXT_LIMIT) }],
+      producerSummary: null,
+      ok: false
+    };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw.stdout.trim());
+  } catch {
+    return { events: [], producerSummary: null, ok: false };
+  }
+  if (!isRecord3(parsed) || typeof parsed.status !== "string") {
+    return { events: [], producerSummary: null, ok: false };
+  }
+  const response = stringProperty(parsed, "response");
+  const ok = parsed.status === "SUCCESS";
+  if (ok) {
+    if (response === void 0) return { events: [], producerSummary: null, ok: false };
+    const events2 = [{ kind: "final", text: response, raw: parsed }];
+    return { events: events2, producerSummary: response, ok: true };
+  }
+  const events = [{
+    kind: "error",
+    ...response === void 0 ? {} : { text: response },
+    raw: parsed
+  }];
+  return { events, producerSummary: null, ok: false };
 }
 var agyDescriptor = {
   id: "agy",
@@ -37476,111 +37623,31 @@ var agyDescriptor = {
     bootstrapPlacement: "before"
   },
   structuredOutput: true,
-  executionModes: ["edit"]
+  executionModes: ["edit"],
+  configurationProfile: {
+    isolationState: "inherited-config-only",
+    credentialSources: [
+      'macOS Keychain ("Antigravity IDE Safe Storage")',
+      "GEMINI_API_KEY (optional, unconfirmed CI semantics)"
+    ],
+    behavioralConfigSources: ["~/.gemini/antigravity-cli/settings.json", "explicit invocation argv"],
+    repositoryInstructionSources: ["worktree AGENTS.md"],
+    environmentDependencies: [...AGY_REQUIRED_ENV],
+    temporaryHomeStrategy: "real HOME inherited by declared policy (keyring auth is not HOME-redirectable); reduced reproducibility recorded in the Run Manifest"
+  },
+  probe: (ctx, deps) => probeDescriptorCli(agyDescriptor, ctx, deps),
+  buildInvocation: buildAgyInvocation,
+  normalizeEvents: normalizeAgyEvents
 };
-var AgyAdapter = class {
-  constructor(deps = {
-    env: process.env,
-    homeDirectory: homedir()
-  }) {
-    this.deps = deps;
-  }
-  deps;
-  producerId = agyDescriptor.id;
-  structuredOutput = agyDescriptor.structuredOutput;
-  executionModes = agyDescriptor.executionModes;
-  descriptor = agyDescriptor;
-  async probe(ctx) {
-    return probeOsConfinedCli(ctx, {
-      producerId: this.producerId,
-      executableName: "agy",
-      structuredOutput: this.structuredOutput,
-      isAuthenticated: () => isProducerAuthenticated(agyDescriptor, this.deps)
-    });
-  }
-  buildInvocation(spec, ctx) {
-    const args = [
-      "-p",
-      renderProducerPrompt(spec, {
-        readOnly: ctx.readOnly === true,
-        ...agyDescriptor.prompt
-      }),
-      "--add-dir",
-      ctx.worktreePath,
-      "--new-project",
-      "--output-format",
-      "json",
-      "--dangerously-skip-permissions",
-      "--print-timeout",
-      formatPrintTimeout(spec.timeoutMs)
-    ];
-    if (spec.producerOverrides?.model !== void 0) {
-      args.push("--model", spec.producerOverrides.model);
-    }
-    if (spec.producerOverrides?.reasoningEffort !== void 0) {
-      args.push("--effort", spec.producerOverrides.reasoningEffort);
-    }
-    return {
-      executable: ctx.executable,
-      args,
-      requiredEnv: [...AGY_REQUIRED_ENV],
-      inheritedStateWritablePaths: resolveInheritedWritablePaths(agyDescriptor, this.deps),
-      network: "allowed"
-    };
-  }
-  normalizeEvents(raw) {
-    if (raw.exit.truncated.stdout) {
-      return { events: [], producerSummary: null, ok: false };
-    }
-    if (raw.exit.exitCode !== 0) {
-      return {
-        events: [{ kind: "error", text: raw.stderr.slice(-TEXT_LIMIT) }],
-        producerSummary: null,
-        ok: false
-      };
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(raw.stdout.trim());
-    } catch {
-      return { events: [], producerSummary: null, ok: false };
-    }
-    if (!isRecord3(parsed) || typeof parsed.status !== "string") {
-      return { events: [], producerSummary: null, ok: false };
-    }
-    const response = stringProperty(parsed, "response");
-    const ok = parsed.status === "SUCCESS";
-    if (ok) {
-      if (response === void 0) return { events: [], producerSummary: null, ok: false };
-      const events2 = [{ kind: "final", text: response, raw: parsed }];
-      return { events: events2, producerSummary: response, ok: true };
-    }
-    const events = [{
-      kind: "error",
-      ...response === void 0 ? {} : { text: response },
-      raw: parsed
-    }];
-    return { events, producerSummary: null, ok: false };
-  }
-  configurationProfile() {
-    return {
-      isolationState: "inherited-config-only",
-      credentialSources: [
-        'macOS Keychain ("Antigravity IDE Safe Storage")',
-        "GEMINI_API_KEY (optional, unconfirmed CI semantics)"
-      ],
-      behavioralConfigSources: ["~/.gemini/antigravity-cli/settings.json", "explicit invocation argv"],
-      repositoryInstructionSources: ["worktree AGENTS.md"],
-      environmentDependencies: [...AGY_REQUIRED_ENV],
-      temporaryHomeStrategy: "real HOME inherited by declared policy (keyring auth is not HOME-redirectable); reduced reproducibility recorded in the Run Manifest"
-    };
+var AgyAdapter = class extends DescriptorAdapter {
+  constructor(deps) {
+    super(agyDescriptor, deps);
   }
 };
 
 // src/producers/claude-adapter.ts
 import { homedir as homedir2 } from "node:os";
 import { join as join3 } from "node:path";
-init_host_store();
 var CLAUDE_REQUIRED_ENV = ["USER", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY"];
 var EDIT_TOOLS = "Read,Edit,Write,Bash,Grep,Glob";
 var READ_ONLY_TOOLS = "Read,Grep,Glob";
@@ -37767,7 +37834,6 @@ import { execFileSync } from "node:child_process";
 import { existsSync as existsSync3, realpathSync } from "node:fs";
 import { homedir as homedir3, tmpdir as tmpdir4 } from "node:os";
 import { join as join4 } from "node:path";
-init_host_store();
 var CODEX_REQUIRED_ENV = [
   "CODEX_HOME",
   "CODEX_API_KEY",
@@ -38019,10 +38085,35 @@ var CodexAdapter = class {
 
 // src/producers/opencode-adapter.ts
 import { existsSync as existsSync4 } from "node:fs";
-import { homedir as homedir4 } from "node:os";
 import { join as join5 } from "node:path";
-init_host_store();
 var OPENCODE_REQUIRED_ENV = ["OPENCODE_CONFIG_DIR", "XDG_DATA_HOME"];
+function buildOpenCodeInvocation(spec, ctx, deps) {
+  const args = [
+    "run",
+    "--dir",
+    ctx.worktreePath,
+    "--agent",
+    "build",
+    "--auto",
+    "--log-level",
+    "ERROR"
+  ];
+  if (spec.producerOverrides?.model !== void 0) {
+    args.push("--model", spec.producerOverrides.model);
+  }
+  return {
+    executable: ctx.executable,
+    args,
+    stdin: renderProducerPrompt(spec, {
+      readOnly: ctx.readOnly === true,
+      ...openCodeDescriptor.prompt
+    }),
+    requiredEnv: [...OPENCODE_REQUIRED_ENV],
+    inheritedStateWritablePaths: resolveInheritedWritablePaths(openCodeDescriptor, deps),
+    env: resolveDefaultEnv(openCodeDescriptor, deps),
+    network: "allowed"
+  };
+}
 var openCodeDescriptor = {
   id: "opencode",
   executable: { name: "opencode" },
@@ -38050,76 +38141,58 @@ var openCodeDescriptor = {
     bootstrapPlacement: "before"
   },
   structuredOutput: false,
-  executionModes: ["edit"]
+  executionModes: ["edit"],
+  configurationProfile: {
+    isolationState: "controlled-config-with-copied-credentials",
+    credentialSources: ["~/.local/share/opencode/auth.json"],
+    behavioralConfigSources: ["explicit invocation argv"],
+    repositoryInstructionSources: ["worktree AGENTS.md"],
+    environmentDependencies: [...OPENCODE_REQUIRED_ENV],
+    temporaryHomeStrategy: "temp HOME with XDG_DATA_HOME passthrough for the auth store"
+  },
+  probe: (ctx, deps) => probeDescriptorCli(openCodeDescriptor, ctx, deps),
+  buildInvocation: buildOpenCodeInvocation,
+  normalizeEvents: normalizePlainText
 };
-var OpenCodeAdapter = class {
-  constructor(deps = {
-    env: process.env,
-    homeDirectory: homedir4()
-  }) {
-    this.deps = deps;
-  }
-  deps;
-  producerId = openCodeDescriptor.id;
-  structuredOutput = openCodeDescriptor.structuredOutput;
-  executionModes = openCodeDescriptor.executionModes;
-  descriptor = openCodeDescriptor;
-  async probe(ctx) {
-    return probeOsConfinedCli(ctx, {
-      producerId: this.producerId,
-      executableName: "opencode",
-      structuredOutput: this.structuredOutput,
-      isAuthenticated: () => isProducerAuthenticated(openCodeDescriptor, this.deps)
-    });
-  }
-  buildInvocation(spec, ctx) {
-    const args = [
-      "run",
-      "--dir",
-      ctx.worktreePath,
-      "--agent",
-      "build",
-      "--auto",
-      "--log-level",
-      "ERROR"
-    ];
-    if (spec.producerOverrides?.model !== void 0) {
-      args.push("--model", spec.producerOverrides.model);
-    }
-    return {
-      executable: ctx.executable,
-      args,
-      stdin: renderProducerPrompt(spec, {
-        readOnly: ctx.readOnly === true,
-        ...openCodeDescriptor.prompt
-      }),
-      requiredEnv: [...OPENCODE_REQUIRED_ENV],
-      inheritedStateWritablePaths: resolveInheritedWritablePaths(openCodeDescriptor, this.deps),
-      env: resolveDefaultEnv(openCodeDescriptor, this.deps),
-      network: "allowed"
-    };
-  }
-  normalizeEvents(raw) {
-    return normalizePlainText(raw);
-  }
-  configurationProfile() {
-    return {
-      isolationState: "controlled-config-with-copied-credentials",
-      credentialSources: ["~/.local/share/opencode/auth.json"],
-      behavioralConfigSources: ["explicit invocation argv"],
-      repositoryInstructionSources: ["worktree AGENTS.md"],
-      environmentDependencies: [...OPENCODE_REQUIRED_ENV],
-      temporaryHomeStrategy: "temp HOME with XDG_DATA_HOME passthrough for the auth store"
-    };
+var OpenCodeAdapter = class extends DescriptorAdapter {
+  constructor(deps) {
+    super(openCodeDescriptor, deps);
   }
 };
 
 // src/producers/pi-adapter.ts
 import { existsSync as existsSync5 } from "node:fs";
-import { homedir as homedir5 } from "node:os";
 import { join as join6 } from "node:path";
-init_host_store();
 var PI_REQUIRED_ENV = ["PI_API_KEY"];
+function buildPiInvocation(spec, ctx, deps) {
+  if (spec.producerOverrides?.model !== void 0) {
+    throw new Error(
+      "Pi model override is unsupported: the pi lane always uses the model configured in Pi."
+    );
+  }
+  const args = [
+    "-p",
+    "--no-session",
+    "--no-skills",
+    "--tools",
+    "read,bash,edit,write,grep,find,ls"
+  ];
+  if (spec.producerOverrides?.reasoningEffort !== void 0) {
+    args.push("--thinking", spec.producerOverrides.reasoningEffort);
+  }
+  return {
+    executable: ctx.executable,
+    args,
+    stdin: renderProducerPrompt(spec, {
+      readOnly: ctx.readOnly === true,
+      ...piDescriptor.prompt
+    }),
+    requiredEnv: [...PI_REQUIRED_ENV],
+    inheritedStateWritablePaths: resolveInheritedWritablePaths(piDescriptor, deps),
+    env: resolveDefaultEnv(piDescriptor, deps),
+    network: "allowed"
+  };
+}
 var piDescriptor = {
   id: "pi",
   executable: { name: "pi" },
@@ -38143,77 +38216,28 @@ var piDescriptor = {
     bootstrapPlacement: "before"
   },
   structuredOutput: false,
-  executionModes: ["edit"]
+  executionModes: ["edit"],
+  configurationProfile: {
+    isolationState: "inherited-config-only",
+    credentialSources: ["~/.pi/agent/auth.json"],
+    behavioralConfigSources: ["~/.pi/agent/settings.json", "~/.pi/agent/models.json"],
+    repositoryInstructionSources: ["worktree AGENTS.md"],
+    environmentDependencies: [...PI_REQUIRED_ENV],
+    temporaryHomeStrategy: "real HOME inherited by declared policy; reduced reproducibility recorded in the Run Manifest"
+  },
+  probe: (ctx, deps) => probeDescriptorCli(piDescriptor, ctx, deps),
+  buildInvocation: buildPiInvocation,
+  normalizeEvents: normalizePlainText
 };
-var PiAdapter = class {
-  constructor(deps = {
-    env: process.env,
-    homeDirectory: homedir5()
-  }) {
-    this.deps = deps;
-  }
-  deps;
-  producerId = piDescriptor.id;
-  structuredOutput = piDescriptor.structuredOutput;
-  executionModes = piDescriptor.executionModes;
-  descriptor = piDescriptor;
-  async probe(ctx) {
-    return probeOsConfinedCli(ctx, {
-      producerId: this.producerId,
-      executableName: "pi",
-      structuredOutput: this.structuredOutput,
-      isAuthenticated: () => isProducerAuthenticated(piDescriptor, this.deps)
-    });
-  }
-  buildInvocation(spec, ctx) {
-    if (spec.producerOverrides?.model !== void 0) {
-      throw new Error(
-        "Pi model override is unsupported: the pi lane always uses the model configured in Pi."
-      );
-    }
-    const args = [
-      "-p",
-      "--no-session",
-      "--no-skills",
-      "--tools",
-      "read,bash,edit,write,grep,find,ls"
-    ];
-    if (spec.producerOverrides?.reasoningEffort !== void 0) {
-      args.push("--thinking", spec.producerOverrides.reasoningEffort);
-    }
-    return {
-      executable: ctx.executable,
-      args,
-      stdin: renderProducerPrompt(spec, {
-        readOnly: ctx.readOnly === true,
-        ...piDescriptor.prompt
-      }),
-      requiredEnv: [...PI_REQUIRED_ENV],
-      inheritedStateWritablePaths: resolveInheritedWritablePaths(piDescriptor, this.deps),
-      env: resolveDefaultEnv(piDescriptor, this.deps),
-      network: "allowed"
-    };
-  }
-  normalizeEvents(raw) {
-    return normalizePlainText(raw);
-  }
-  configurationProfile() {
-    return {
-      isolationState: "inherited-config-only",
-      credentialSources: ["~/.pi/agent/auth.json"],
-      behavioralConfigSources: ["~/.pi/agent/settings.json", "~/.pi/agent/models.json"],
-      repositoryInstructionSources: ["worktree AGENTS.md"],
-      environmentDependencies: [...PI_REQUIRED_ENV],
-      temporaryHomeStrategy: "real HOME inherited by declared policy; reduced reproducibility recorded in the Run Manifest"
-    };
+var PiAdapter = class extends DescriptorAdapter {
+  constructor(deps) {
+    super(piDescriptor, deps);
   }
 };
 
 // src/producers/pythinker-adapter.ts
 import { existsSync as existsSync6 } from "node:fs";
-import { homedir as homedir6 } from "node:os";
 import { join as join7 } from "node:path";
-init_host_store();
 var REQUIRED_LONG_OPTIONS = ["--prompt", "--model"];
 function parseLongOptionTokens(helpText) {
   const options = /* @__PURE__ */ new Set();
@@ -38228,6 +38252,45 @@ var PYTHINKER_REQUIRED_ENV = ["PYTHINKER_SHARE_DIR", PYTHINKER_NO_AUTO_UPDATE_EN
 function resolvePythinkerHome(deps) {
   const configuredHome = deps.env.PYTHINKER_SHARE_DIR;
   return configuredHome !== void 0 && configuredHome.length > 0 ? configuredHome : join7(deps.env.HOME ?? deps.env.USERPROFILE ?? deps.homeDirectory, ".pythinker");
+}
+async function inspectPythinkerCliSurface(ctx, executable) {
+  let helpResult;
+  try {
+    helpResult = await runVersionProbe(ctx, executable, ["--help"]);
+  } catch {
+    return "unsupported-cli-surface";
+  }
+  const options = parseLongOptionTokens(`${helpResult.stdout}
+${helpResult.stderr}`);
+  if (helpResult.spawnError !== void 0 || helpResult.exitCode !== 0 || REQUIRED_LONG_OPTIONS.some((option) => !options.has(option))) {
+    return "unsupported-cli-surface";
+  }
+  return null;
+}
+function buildPythinkerInvocation(spec, ctx, deps) {
+  if (spec.producerOverrides?.reasoningEffort !== void 0) {
+    throw new Error(
+      "Pythinker reasoningEffort override is unsupported by the installed pythinker-code CLI."
+    );
+  }
+  const args = [
+    "--prompt",
+    renderProducerPrompt(spec, {
+      readOnly: ctx.readOnly === true,
+      ...pythinkerDescriptor.prompt
+    })
+  ];
+  if (spec.producerOverrides?.model !== void 0) {
+    args.push("--model", spec.producerOverrides.model);
+  }
+  return {
+    executable: ctx.executable,
+    args,
+    requiredEnv: [...PYTHINKER_REQUIRED_ENV],
+    inheritedStateWritablePaths: resolveInheritedWritablePaths(pythinkerDescriptor, deps),
+    env: resolveDefaultEnv(pythinkerDescriptor, deps),
+    network: "allowed"
+  };
 }
 var pythinkerDescriptor = {
   id: "pythinker",
@@ -38254,84 +38317,28 @@ var pythinkerDescriptor = {
     bootstrapPlacement: "before"
   },
   structuredOutput: false,
-  executionModes: ["edit"]
+  executionModes: ["edit"],
+  configurationProfile: {
+    isolationState: "inherited-config-only",
+    credentialSources: ["~/.pythinker/credentials/pythinker-code.json"],
+    behavioralConfigSources: [
+      "~/.pythinker/config.toml",
+      "~/.pythinker/tui.toml"
+    ],
+    repositoryInstructionSources: ["worktree AGENTS.md"],
+    environmentDependencies: [...PYTHINKER_REQUIRED_ENV],
+    temporaryHomeStrategy: "real HOME inherited by declared policy; reduced reproducibility recorded in the Run Manifest"
+  },
+  probe: (ctx, deps) => probeDescriptorCli(pythinkerDescriptor, ctx, deps, {
+    parseVersion: (stdout) => parseSemver(stdout) ?? /\d+\.\d+\.\d+(?:[-+][^\s]+)?/u.exec(stdout)?.[0] ?? null,
+    inspectSurface: inspectPythinkerCliSurface
+  }),
+  buildInvocation: buildPythinkerInvocation,
+  normalizeEvents: normalizePlainText
 };
-var PythinkerAdapter = class {
-  constructor(deps = {
-    env: process.env,
-    homeDirectory: homedir6()
-  }) {
-    this.deps = deps;
-  }
-  deps;
-  producerId = pythinkerDescriptor.id;
-  structuredOutput = pythinkerDescriptor.structuredOutput;
-  executionModes = pythinkerDescriptor.executionModes;
-  descriptor = pythinkerDescriptor;
-  async probe(ctx) {
-    return probeOsConfinedCli(ctx, {
-      producerId: this.producerId,
-      executableName: "pythinker",
-      structuredOutput: this.structuredOutput,
-      parseVersion: (stdout) => parseSemver(stdout) ?? /\d+\.\d+\.\d+(?:[-+][^\s]+)?/u.exec(stdout)?.[0] ?? null,
-      inspectSurface: (probeCtx, executable) => this.inspectCliSurface(probeCtx, executable),
-      isAuthenticated: () => isProducerAuthenticated(pythinkerDescriptor, this.deps)
-    });
-  }
-  async inspectCliSurface(ctx, executable) {
-    let helpResult;
-    try {
-      helpResult = await runVersionProbe(ctx, executable, ["--help"]);
-    } catch {
-      return "unsupported-cli-surface";
-    }
-    const options = parseLongOptionTokens(`${helpResult.stdout}
-${helpResult.stderr}`);
-    if (helpResult.spawnError !== void 0 || helpResult.exitCode !== 0 || REQUIRED_LONG_OPTIONS.some((option) => !options.has(option))) {
-      return "unsupported-cli-surface";
-    }
-    return null;
-  }
-  buildInvocation(spec, ctx) {
-    if (spec.producerOverrides?.reasoningEffort !== void 0) {
-      throw new Error(
-        "Pythinker reasoningEffort override is unsupported by the installed pythinker-code CLI."
-      );
-    }
-    const args = [
-      "--prompt",
-      renderProducerPrompt(spec, {
-        readOnly: ctx.readOnly === true,
-        ...pythinkerDescriptor.prompt
-      })
-    ];
-    if (spec.producerOverrides?.model !== void 0) {
-      args.push("--model", spec.producerOverrides.model);
-    }
-    return {
-      executable: ctx.executable,
-      args,
-      requiredEnv: [...PYTHINKER_REQUIRED_ENV],
-      inheritedStateWritablePaths: resolveInheritedWritablePaths(pythinkerDescriptor, this.deps),
-      env: resolveDefaultEnv(pythinkerDescriptor, this.deps),
-      network: "allowed"
-    };
-  }
-  normalizeEvents(raw) {
-    return normalizePlainText(raw);
-  }
-  configurationProfile() {
-    return {
-      isolationState: "inherited-config-only",
-      credentialSources: ["~/.pythinker/credentials/pythinker-code.json"],
-      behavioralConfigSources: [
-        "~/.pythinker/config.toml",
-        "~/.pythinker/tui.toml"
-      ],
-      repositoryInstructionSources: ["worktree AGENTS.md"],
-      environmentDependencies: [...PYTHINKER_REQUIRED_ENV],
-      temporaryHomeStrategy: "real HOME inherited by declared policy; reduced reproducibility recorded in the Run Manifest"
-    };
+var PythinkerAdapter = class extends DescriptorAdapter {
+  constructor(deps) {
+    super(pythinkerDescriptor, deps);
   }
 };
 
@@ -38352,7 +38359,7 @@ var registry2 = new ProducerRegistry([new CodexAdapter(), new OpenCodeAdapter(),
 
 // src/producers/producer-runtime.ts
 import { existsSync as existsSync7, statSync as statSync2 } from "node:fs";
-import { homedir as homedir8 } from "node:os";
+import { homedir as homedir5 } from "node:os";
 import path14 from "node:path";
 
 // src/runtime/environment-policy.ts
@@ -38666,7 +38673,7 @@ function buildEnvironment(args) {
 
 // src/platform/sandbox/seatbelt.ts
 import { realpathSync as realpathSync2 } from "node:fs";
-import { homedir as homedir7 } from "node:os";
+import { homedir as homedir4 } from "node:os";
 import { isAbsolute, normalize, parse as parse3, relative, resolve } from "node:path";
 function buildReadOnlySeatbeltPolicy(args) {
   return {
@@ -38705,7 +38712,7 @@ function isDeclaredStateRoot(normalized, invocation, policy) {
     process.env.USERPROFILE
   ];
   try {
-    homeCandidates.push(homedir7());
+    homeCandidates.push(homedir4());
   } catch {
   }
   for (const candidate of homeCandidates) {
@@ -38779,7 +38786,7 @@ var CREDENTIAL_PATHS = [
   ".config/gcloud"
 ];
 function credentialReadDenials() {
-  const home = process.env.HOME ?? homedir7();
+  const home = process.env.HOME ?? homedir4();
   if (!isAbsolute(home) || resolve(home) === "/") return [];
   return [...new Set(CREDENTIAL_PATHS.flatMap((entry) => {
     const candidate = resolve(home, entry);
@@ -38999,21 +39006,7 @@ function withRunStartPidRecording(ps, context) {
   };
 }
 
-// src/producers/producer-adapter.ts
-import { readFileSync as readFileSync2 } from "node:fs";
-function detectEnvironmentType(readProcVersion = () => readFileSync2("/proc/version", "utf8")) {
-  if (process.platform !== "linux") return "native";
-  try {
-    const version2 = readProcVersion().trim().toLowerCase();
-    if (version2.includes("microsoft")) return "wsl";
-    return /^linux version(?:\s|$)/.test(version2) ? "native" : "wsl";
-  } catch {
-    return "wsl";
-  }
-}
-
 // src/producers/producer-runtime.ts
-init_host_store();
 var MAX_PRODUCER_OUTPUT_BYTES = 1e6;
 function preCancelledExit() {
   return {
@@ -39059,7 +39052,7 @@ var ProducerRuntime = class {
     }
     const hostStoreContext = {
       env: process.env,
-      homeDirectory: homedir8()
+      homeDirectory: homedir5()
     };
     const hostStoreRoot = descriptor ? resolveHostStoreRoot(descriptor, hostStoreContext) ?? "" : "";
     const configRevision = descriptor ? resolveConfigRevision(descriptor, hostStoreContext) : "";
