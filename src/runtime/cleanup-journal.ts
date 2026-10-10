@@ -53,11 +53,26 @@ let journalTail: Promise<unknown> = Promise.resolve();
 function withJournal<T>(work: () => Promise<T>): Promise<T> {
   const result = journalTail.then(async () => {
     const journalLock = await getPlatformServices().acquireCleanupJournalLock();
+    let outcome: { value: T } | { error: unknown };
     try {
-      return await work();
-    } finally {
-      await journalLock.release();
+      outcome = { value: await work() };
+    } catch (error) {
+      outcome = { error };
     }
+    try {
+      await journalLock.release();
+    } catch (releaseError) {
+      // A release failure stays visible without erasing the operation's own failure.
+      if ("error" in outcome) {
+        throw new AggregateError(
+          [outcome.error, releaseError],
+          "cleanup journal operation failed and its lock could not be released",
+        );
+      }
+      throw releaseError;
+    }
+    if ("error" in outcome) throw outcome.error;
+    return outcome.value;
   });
   journalTail = result.catch(() => {});
   return result;
