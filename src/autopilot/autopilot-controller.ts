@@ -29,6 +29,7 @@ import {
   type FinalBranchReviewer,
 } from "./final-branch-reviewer.js";
 import type { AutopilotWorkflowState } from "./types.js";
+import { REQUIRED_TASK_EVIDENCE_REFS } from "./run-evidence.js";
 import type {
   WorkflowIntentJournal,
   WorkflowJournalJson,
@@ -150,15 +151,6 @@ interface RecordedWorkflow {
   spec: unknown;
   branch: WorkflowBranchIdentity | null;
 }
-
-const REQUIRED_TASK_EVIDENCE_REFS = [
-  "decision.json",
-  "manifest.json",
-  "pipeline/pipeline-result.json",
-  "pipeline/post-pipeline-autopilot.json",
-  "result.json",
-  "review-snapshot.json",
-] as const;
 
 function classificationOf(error: unknown, fallback: string): string {
   if (typeof error !== "object" || error === null) return fallback;

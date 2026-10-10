@@ -19,7 +19,14 @@ import {
   type FinalBranchReport,
   type FinalBranchTaskEvidence,
 } from "../../../src/autopilot/final-branch-reviewer.js";
-import { canonicalArtifactHash } from "../../../src/autopilot/autopilot-eligibility.js";
+import {
+  advisorReportHash,
+  autopilotEligibilityRecordHash,
+  canonicalArtifactHash,
+  pipelineResultHash,
+} from "../../../src/autopilot/autopilot-eligibility.js";
+import { manifestHashOf } from "../../../src/git/changed-path-manifest.js";
+import { reviewSnapshotHash } from "../../../src/runtime/review-snapshot.js";
 import {
   WorkflowBranchManager,
   workflowWorktreeOwnershipClaim,
@@ -231,7 +238,14 @@ async function cumulativeFixture(): Promise<CumulativeFixture> {
   };
 }
 
-async function fixture(): Promise<Fixture> {
+interface TaskIdentity {
+  candidateManifestHash: string;
+  eligibilityHash: string;
+}
+
+async function fixture(options: {
+  task?: (ids: { repo: string; baseOid: string; headOid: string }) => Promise<TaskIdentity>;
+} = {}): Promise<Fixture> {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "final-branch-reviewer-")));
   temporaryDirectories.push(root);
   const repo = path.join(root, "repository");
@@ -249,6 +263,8 @@ async function fixture(): Promise<Fixture> {
   await runGit(repo, ["add", "contract.txt", "added.txt"]);
   await runGit(repo, ["commit", "-q", "-m", "task promotion"]);
   const headOid = await runGit(repo, ["rev-parse", "HEAD"]);
+  const task = await options.task?.({ repo, baseOid, headOid })
+    ?? { candidateManifestHash: "a".repeat(64), eligibilityHash: "c".repeat(64) };
 
   const workflowId = "final-branch-fixture";
   const store = new WorkflowStore(workflowId, {
@@ -266,8 +282,8 @@ async function fixture(): Promise<Fixture> {
       draft.tasks[0] = {
         id: "task-1",
         runId: "run-task-1",
-        candidateManifestHash: "a".repeat(64),
-        eligibilityHash: "c".repeat(64),
+        candidateManifestHash: task.candidateManifestHash,
+        eligibilityHash: task.eligibilityHash,
         promotionCommitOid: headOid,
         status: "promoted",
       };
@@ -284,7 +300,7 @@ async function fixture(): Promise<Fixture> {
     evidence: {
       taskId: "task-1",
       runId: "run-task-1",
-      candidateManifestHash: "a".repeat(64),
+      candidateManifestHash: task.candidateManifestHash,
       promotionCommitOid: headOid,
       evidenceRefs: [
         "pipeline/verification.json",
@@ -374,6 +390,84 @@ function inMemoryEvidenceStore(
       return overrides.has(key) ? overrides.get(key)! : evidenceBytes(runId, reference);
     },
   });
+}
+
+/** A coherent archived run whose eligibility and decision bind every artifact. */
+function coherentRunEvidence(ids: {
+  runId: string;
+  repo: string;
+  baseOid: string;
+  treeOid: string;
+}) {
+  const changedPaths = [{
+    path: "contract.txt",
+    changeType: "modified" as const,
+    mode: "100644",
+    contentHash: "e".repeat(64),
+  }];
+  const manifestHash = manifestHashOf(changedPaths);
+  const candidateCommitOid = "b".repeat(40);
+  const candidate = {
+    baseCommitOid: ids.baseOid,
+    candidateCommitOid,
+    candidateTreeOid: ids.treeOid,
+    anchorRef: `refs/claude-architect/candidates/${ids.runId}`,
+    manifestHash,
+    changedPaths,
+    patch: "patch",
+  };
+  const pipelineResult = {
+    runId: ids.runId, status: "decision-ready", finalCandidateCommit: candidateCommitOid,
+  };
+  const reviewSnapshot = {
+    runId: ids.runId,
+    baseCommitOid: ids.baseOid,
+    candidateCommitOid,
+    candidateTreeOid: ids.treeOid,
+    manifestHash,
+    patch: "patch",
+    changedPaths,
+    evidence: {},
+    executedVerification: [],
+  };
+  const advisor = { verdict: "approve", marker: "advisor" };
+  const eligibility = {
+    recordVersion: "1" as const,
+    policyVersion: "1" as const,
+    runId: ids.runId,
+    eligible: true,
+    reasons: [],
+    baseCommitOid: ids.baseOid,
+    candidateCommitOid,
+    candidateTreeOid: ids.treeOid,
+    candidateManifestHash: manifestHash,
+    reviewSnapshotHash: reviewSnapshotHash(reviewSnapshot),
+    pipelineResultHash: pipelineResultHash(pipelineResult as never),
+    advisorReportHash: advisorReportHash(advisor as never),
+    evaluatedAt: "2026-07-20T12:00:00.000Z",
+  };
+  const eligibilityHash = autopilotEligibilityRecordHash(eligibility);
+  const store = {
+    readResult: vi.fn(async () => ({ runId: ids.runId, status: "verified-candidate", candidate })),
+    readManifest: vi.fn(async () => ({
+      runId: ids.runId, repoRoot: ids.repo, baseCommitOid: ids.baseOid,
+      candidateManifestHash: manifestHash,
+    })),
+    readReviewSnapshot: vi.fn(async () => reviewSnapshot),
+    readCandidateDecision: vi.fn(async () => ({
+      decisionVersion: "2",
+      decision: "accepted",
+      authority: "autopilot-policy",
+      candidateManifestHash: manifestHash,
+      evidenceHash: eligibilityHash,
+      policyVersion: "1",
+      recordedAt: "2026-07-20T12:01:00.000Z",
+    })),
+    readPipelineArtifact: vi.fn(async () => pipelineResult),
+    readAdvisorReport: vi.fn(async () => advisor),
+    readAutopilotEligibility: vi.fn(async () => eligibility),
+  };
+  return { store, advisor, manifestHash, eligibilityHash };
 }
 
 function finalSpec(): AutopilotSpec {
@@ -1053,6 +1147,43 @@ describe("FinalBranchReviewer cumulative artifact", () => {
       await expect(freezeForFinalReview(f, reviewer)).rejects.toMatchObject({
         classification: "missing-task-evidence",
       });
+    } finally {
+      if (previousPluginData === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
+      else process.env.CLAUDE_PLUGIN_DATA = previousPluginData;
+    }
+  });
+
+  // A real archive re-derives eligibility on read, so a tampered advisor report
+  // never reaches the reviewer through it; this proves the reviewer's own check.
+  it("refuses archived evidence whose advisor report no longer matches its recorded hash", async () => {
+    const previousPluginData = process.env.CLAUDE_PLUGIN_DATA;
+    const runs: ReturnType<typeof coherentRunEvidence>[] = [];
+    const reviewerFor = (f: Fixture, run: ReturnType<typeof coherentRunEvidence>) =>
+      new FinalBranchReviewer({
+        branchManager: localBranchManager(f),
+        workflowStore: () => f.store,
+        evidenceStore: inMemoryEvidenceStore(new Map(), archivedRefsForFixture(f)),
+        runEvidenceStore: () => run.store,
+      });
+    const fixtureFor = async () => await fixture({
+      task: async ({ repo, baseOid }) => {
+        const treeOid = await runGit(repo, ["rev-parse", "HEAD^{tree}"]);
+        const run = coherentRunEvidence({ runId: "run-task-1", repo, baseOid, treeOid });
+        runs.push(run);
+        return { candidateManifestHash: run.manifestHash, eligibilityHash: run.eligibilityHash };
+      },
+    });
+    try {
+      const coherent = await fixtureFor();
+      process.env.CLAUDE_PLUGIN_DATA = path.join(coherent.root, "production-evidence-state");
+      await expect(freezeForFinalReview(coherent, reviewerFor(coherent, runs[0]!)))
+        .resolves.toMatchObject({ headCommitOid: coherent.headOid });
+
+      const tampered = await fixtureFor();
+      runs[1]!.advisor.marker = "substituted after the eligibility record";
+      await expect(freezeForFinalReview(tampered, reviewerFor(tampered, runs[1]!)))
+        .rejects.toMatchObject({ classification: "missing-task-evidence" });
+      expect(runs[1]!.store.readAdvisorReport).toHaveBeenCalled();
     } finally {
       if (previousPluginData === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
       else process.env.CLAUDE_PLUGIN_DATA = previousPluginData;

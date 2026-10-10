@@ -44427,36 +44427,20 @@ var AcceptanceVerifier = class {
   }
 };
 
-// src/verify/verification-inputs.ts
-var TEST_PATH_PATTERNS = [
-  /(?:^|\/)(?:tests?|__tests__|spec|specs|testdata|fixtures)\//u,
-  /\.(?:test|spec)\.[^/]+$/u,
-  /(?:^|\/)(?:test_[^/]+|[^/]+_test)\.(?:py|go|rb|rs|exs?)$/u,
-  /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift|scala)$/u,
-  /(?:^|\/)conftest\.py$/u
-];
-function isTestPath(candidate) {
-  return TEST_PATH_PATTERNS.some((pattern) => pattern.test(candidate));
-}
-var VERIFICATION_INPUT_PATTERNS = [
-  ...TEST_PATH_PATTERNS,
-  // Test runner, compiler, and task configuration.
-  /(?:^|\/)(?:vitest|vite|jest|mocha|karma|playwright|cypress|ava|babel|webpack|rollup|esbuild)\.config\.[^/]+$/u,
-  /(?:^|\/)\.(?:mocharc|babelrc|nycrc|c8rc)(?:\.[^/]+)?$/u,
-  /(?:^|\/)tsconfig(?:\.[^/]+)?\.json$/u,
-  /(?:^|\/)(?:pytest|tox|setup)\.(?:ini|cfg)$/u,
-  /(?:^|\/)(?:Makefile|GNUmakefile|justfile|Taskfile\.ya?ml|Rakefile|build\.gradle(?:\.kts)?|pom\.xml)$/u,
-  // Dependency manifests and lockfiles.
-  /(?:^|\/)package\.json$/u,
-  /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?)$/u,
-  /(?:^|\/)(?:pyproject\.toml|requirements[^/]*\.txt|Pipfile(?:\.lock)?|poetry\.lock|uv\.lock)$/u,
-  /(?:^|\/)(?:Cargo\.(?:toml|lock)|go\.(?:mod|sum)|Gemfile(?:\.lock)?|mix\.(?:exs|lock))$/u,
-  // Attribute and ignore rules change which bytes Git and tools see.
-  /(?:^|\/)\.git(?:attributes|ignore|modules)$/u
-];
-function verificationInputPaths(changedPaths) {
-  return changedPaths.filter((changed) => VERIFICATION_INPUT_PATTERNS.some((pattern) => pattern.test(changed)));
-}
+// src/runtime/artifact-store.ts
+import { randomUUID as randomUUID6 } from "node:crypto";
+import { constants as constants14 } from "node:fs";
+import {
+  lstat as lstat17,
+  mkdir as mkdir8,
+  open as open15,
+  opendir,
+  readdir as readdir8,
+  realpath as realpath11,
+  rename as rename4,
+  rm as rm8
+} from "node:fs/promises";
+import path27 from "node:path";
 
 // src/protocol/pipeline-gate-cleared.ts
 var GIT_OID2 = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
@@ -44485,21 +44469,6 @@ function parsePipelineGateCleared(value) {
     ...clearedAt === void 0 ? {} : { clearedAt }
   };
 }
-
-// src/runtime/artifact-store.ts
-import { randomUUID as randomUUID6 } from "node:crypto";
-import { constants as constants14 } from "node:fs";
-import {
-  lstat as lstat17,
-  mkdir as mkdir8,
-  open as open15,
-  opendir,
-  readdir as readdir8,
-  realpath as realpath11,
-  rename as rename4,
-  rm as rm8
-} from "node:fs/promises";
-import path27 from "node:path";
 
 // src/runtime/cleanup-journal.ts
 import { constants as constants13 } from "node:fs";
@@ -46418,212 +46387,6 @@ async function pruneRuns(policy = DEFAULT_PRUNE_POLICY, dependencies = {}) {
   return new ArtifactStore("prune-sweep").prune(policy, dependencies);
 }
 
-// src/runtime/run-decision.ts
-function isRecord7(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-var RunDecision = class {
-  async readSnapshot(runId, options) {
-    validateComponent(runId, "run id");
-    const store = options?.store ?? (options?.storeFactory ? options.storeFactory(runId) : new ArtifactStore(runId));
-    let result = null;
-    let manifest = null;
-    let reviewSnapshot = null;
-    let gateRecord = null;
-    let gateRecordError = null;
-    let decision = null;
-    const coherenceErrors = [];
-    try {
-      const readResult = typeof store.readResult === "function" ? store.readResult().catch((err) => {
-        coherenceErrors.push(`failed to read result: ${err instanceof Error ? err.message : String(err)}`);
-        return null;
-      }) : Promise.resolve(null);
-      const readManifest = typeof store.readManifest === "function" ? store.readManifest().catch((err) => {
-        coherenceErrors.push(`failed to read manifest: ${err instanceof Error ? err.message : String(err)}`);
-        return null;
-      }) : Promise.resolve(null);
-      const readSnapshot = typeof store.readReviewSnapshot === "function" ? store.readReviewSnapshot().catch((err) => {
-        coherenceErrors.push(`failed to read review snapshot: ${err instanceof Error ? err.message : String(err)}`);
-        return null;
-      }) : Promise.resolve(null);
-      const readGateRecord = typeof store.readPipelineGateCleared === "function" ? store.readPipelineGateCleared().catch((err) => {
-        gateRecordError = `the pipeline gate clearance record is malformed: ${err instanceof Error ? err.message : String(err)}`;
-        return null;
-      }) : Promise.resolve(null);
-      const readDecision = typeof store.readCandidateDecision === "function" ? store.readCandidateDecision().catch((err) => {
-        coherenceErrors.push(`failed to read decision: ${err instanceof Error ? err.message : String(err)}`);
-        return null;
-      }) : Promise.resolve(null);
-      const [r, m, s, g, d] = await Promise.all([
-        readResult,
-        readManifest,
-        readSnapshot,
-        readGateRecord,
-        readDecision
-      ]);
-      result = r;
-      manifest = m;
-      reviewSnapshot = s;
-      gateRecord = g;
-      decision = d;
-    } catch (err) {
-      coherenceErrors.push(`failed to load decision snapshot: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    if (gateRecord === null && result?.evidence?.pipelineGateCleared !== void 0) {
-      try {
-        gateRecord = parsePipelineGateCleared(result.evidence.pipelineGateCleared);
-      } catch {
-        gateRecordError = "the pipeline gate clearance record is malformed";
-      }
-    }
-    if (result !== null && manifest !== null) {
-      if (result.runId !== runId || manifest.runId !== runId) {
-        coherenceErrors.push("archived run identity does not match runId");
-      }
-      if (result.candidate !== null) {
-        if (manifest.baseCommitOid !== result.candidate.baseCommitOid) {
-          coherenceErrors.push("archived candidate base commit does not match run manifest");
-        }
-        if (manifest.candidateManifestHash !== result.candidate.manifestHash) {
-          coherenceErrors.push("archived candidate manifest hash does not match run manifest");
-        }
-        let expectedHash;
-        try {
-          expectedHash = manifestHashOf(result.candidate.changedPaths);
-        } catch {
-          expectedHash = null;
-        }
-        if (result.candidate.manifestHash !== expectedHash) {
-          coherenceErrors.push("archived candidate changed paths hash mismatch");
-        }
-      }
-    }
-    if (gateRecord !== null && result?.candidate !== null && result?.candidate !== void 0) {
-      if (gateRecord.candidateCommitOid !== result.candidate.candidateCommitOid) {
-        gateRecordError = "the pipeline gate clearance record does not match the archived candidate commit";
-      }
-    }
-    if (decision !== null && result?.candidate !== null && result?.candidate !== void 0) {
-      if (decision.candidateManifestHash !== void 0 && decision.candidateManifestHash !== null) {
-        if (decision.candidateManifestHash !== result.candidate.manifestHash) {
-          coherenceErrors.push("recorded candidate decision does not match candidate manifest hash");
-        }
-      }
-      if (decision.decisionVersion === "2" && reviewSnapshot !== null) {
-        if (decision.evidenceHash !== reviewSnapshotHash(reviewSnapshot)) {
-          coherenceErrors.push("recorded candidate decision does not match review snapshot evidence hash");
-        }
-      }
-    }
-    return {
-      runId,
-      result,
-      manifest,
-      reviewSnapshot,
-      gateRecord,
-      gateRecordError,
-      decision,
-      coherenceErrors
-    };
-  }
-  async evaluate(runId, options) {
-    const snapshot = options?.snapshot ?? await this.readSnapshot(runId, options);
-    const authority = options?.authority ?? (options?.decisionAuthority ? options.decisionAuthority() : decisionAuthority());
-    return this.verdictFor(snapshot, authority);
-  }
-  /**
-   * The whole acceptance rule, over an archive already read. Pure: every caller
-   * that once re-derived "may this be accepted without a person" from the same
-   * files now asks this one function.
-   */
-  verdictFor(snapshot, authority) {
-    if (snapshot.coherenceErrors.length > 0) {
-      return { state: "invalid", reasons: snapshot.coherenceErrors };
-    }
-    if (snapshot.result === null || snapshot.manifest === null) {
-      return { state: "invalid", reasons: ["archived run was not found"] };
-    }
-    const incompleteEvidence = snapshot.result.evidence?.pipelineReviewIncomplete;
-    if (incompleteEvidence !== void 0) {
-      const reason = isRecord7(incompleteEvidence) && typeof incompleteEvidence.reason === "string" ? incompleteEvidence.reason : "pipeline review is incomplete";
-      return { state: "incomplete", reasons: [reason] };
-    }
-    if (snapshot.decision !== null) {
-      if (snapshot.decision.decision === "rejected") {
-        return { state: "rejected", reasons: ["candidate decision is rejected"] };
-      }
-      if (snapshot.decision.decision === "revision-requested") {
-        return { state: "rejected", reasons: ["candidate decision is revision-requested"] };
-      }
-    }
-    const refusedEvidence = snapshot.result.evidence?.pipelineGateRefused;
-    if (refusedEvidence !== void 0) {
-      const reasons = isRecord7(refusedEvidence) && Array.isArray(refusedEvidence.reasons) ? refusedEvidence.reasons.filter((r) => typeof r === "string") : ["the pipeline gate did NOT clear this candidate"];
-      return {
-        state: "rejected",
-        reasons: reasons.length > 0 ? reasons : ["the pipeline gate did NOT clear this candidate"]
-      };
-    }
-    if (snapshot.result.status !== "verified-candidate" || snapshot.result.failure !== null) {
-      const reasons = [];
-      if (snapshot.result.failure !== null) {
-        reasons.push(snapshot.result.failure);
-      } else {
-        reasons.push(`attempt status is ${snapshot.result.status}`);
-      }
-      return { state: "rejected", reasons };
-    }
-    if (snapshot.result.candidate === null) {
-      return { state: "rejected", reasons: ["no candidate artifact was produced"] };
-    }
-    const candidateCommit = snapshot.result.candidate.candidateCommitOid;
-    const humanReasons = [];
-    if (authority !== "autonomous") {
-      humanReasons.push(`decision authority is "${authority}"`);
-    }
-    const isPlainDelegate = snapshot.result.evidence?.plainDelegate === true && refusedEvidence === void 0 && incompleteEvidence === void 0 && snapshot.result.evidence?.pipelineGateCleared === void 0 && snapshot.gateRecord === null;
-    if (verificationRanUnconfined(snapshot.manifest)) {
-      humanReasons.push("project verification ran without OS confinement on this platform");
-    }
-    if (snapshot.gateRecordError) {
-      humanReasons.push(snapshot.gateRecordError);
-    } else if (isPlainDelegate) {
-      const touched = verificationInputPaths(
-        snapshot.result.candidate.changedPaths.map((change) => change.path)
-      );
-      if (touched.length > 0) {
-        humanReasons.push(
-          `the candidate changes verification inputs: ${touched.slice(0, 10).join(", ")}`
-        );
-      }
-    } else if (snapshot.gateRecord === null) {
-      humanReasons.push("the pipeline gate clearance record is missing");
-    } else if (snapshot.gateRecord.requiresHumanDecision === true) {
-      humanReasons.push("the pipeline gate clearance record requires a human decision");
-    }
-    if (humanReasons.length > 0) {
-      return { state: "human-required", candidateCommit, reasons: humanReasons };
-    }
-    return { state: "accepted", autonomous: true, candidateCommit };
-  }
-  async verify(args) {
-    const verifier = new AcceptanceVerifier({ mode: args.mode });
-    return verifier.verify(args);
-  }
-};
-var OS_CONFINEMENT = new Set(
-  SANDBOX_BACKENDS.filter((backend) => backend.kind === "os").map((backend) => backend.id)
-);
-function verificationRanUnconfined(manifest) {
-  const policy = isRecord7(manifest.effectivePolicy) ? manifest.effectivePolicy.verificationPolicy : void 0;
-  if (!Array.isArray(policy)) return true;
-  return policy.some((command) => !isRecord7(command) || command.skipped !== true && !(typeof command.confinement === "string" && OS_CONFINEMENT.has(command.confinement)));
-}
-var runDecision = new RunDecision();
-async function readRunDecisionSnapshot(runId, options) {
-  return runDecision.readSnapshot(runId, options);
-}
-
 // src/pipeline/role-runner.ts
 import { rm as rm9 } from "node:fs/promises";
 
@@ -47188,6 +46951,314 @@ async function parseStructuredReport(raw, validate, repair) {
   const second = validateRaw(repairedRaw, validate);
   if (second.ok) return { ok: true, value: second.value, repaired: true };
   return { ok: false, error: `invalid structured output after repair: ${second.error}` };
+}
+
+// src/verify/verification-inputs.ts
+var TEST_PATH_PATTERNS = [
+  /(?:^|\/)(?:tests?|__tests__|spec|specs|testdata|fixtures)\//u,
+  /\.(?:test|spec)\.[^/]+$/u,
+  /(?:^|\/)(?:test_[^/]+|[^/]+_test)\.(?:py|go|rb|rs|exs?)$/u,
+  /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift|scala)$/u,
+  /(?:^|\/)conftest\.py$/u
+];
+function isTestPath(candidate) {
+  return TEST_PATH_PATTERNS.some((pattern) => pattern.test(candidate));
+}
+var VERIFICATION_INPUT_PATTERNS = [
+  ...TEST_PATH_PATTERNS,
+  // Test runner, compiler, and task configuration.
+  /(?:^|\/)(?:vitest|vite|jest|mocha|karma|playwright|cypress|ava|babel|webpack|rollup|esbuild)\.config\.[^/]+$/u,
+  /(?:^|\/)\.(?:mocharc|babelrc|nycrc|c8rc)(?:\.[^/]+)?$/u,
+  /(?:^|\/)tsconfig(?:\.[^/]+)?\.json$/u,
+  /(?:^|\/)(?:pytest|tox|setup)\.(?:ini|cfg)$/u,
+  /(?:^|\/)(?:Makefile|GNUmakefile|justfile|Taskfile\.ya?ml|Rakefile|build\.gradle(?:\.kts)?|pom\.xml)$/u,
+  // Dependency manifests and lockfiles.
+  /(?:^|\/)package\.json$/u,
+  /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?)$/u,
+  /(?:^|\/)(?:pyproject\.toml|requirements[^/]*\.txt|Pipfile(?:\.lock)?|poetry\.lock|uv\.lock)$/u,
+  /(?:^|\/)(?:Cargo\.(?:toml|lock)|go\.(?:mod|sum)|Gemfile(?:\.lock)?|mix\.(?:exs|lock))$/u,
+  // Attribute and ignore rules change which bytes Git and tools see.
+  /(?:^|\/)\.git(?:attributes|ignore|modules)$/u
+];
+function verificationInputPaths(changedPaths) {
+  return changedPaths.filter((changed) => VERIFICATION_INPUT_PATTERNS.some((pattern) => pattern.test(changed)));
+}
+
+// src/runtime/run-decision.ts
+function isRecord7(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+var RunDecision = class {
+  async readSnapshot(runId, options) {
+    validateComponent(runId, "run id");
+    const store = options?.store ?? (options?.storeFactory ? options.storeFactory(runId) : new ArtifactStore(runId));
+    let result = null;
+    let manifest = null;
+    let reviewSnapshot = null;
+    let gateRecord = null;
+    let gateRecordError = null;
+    let decision = null;
+    const coherenceErrors = [];
+    try {
+      const readResult = typeof store.readResult === "function" ? store.readResult().catch((err) => {
+        coherenceErrors.push(`failed to read result: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      }) : Promise.resolve(null);
+      const readManifest = typeof store.readManifest === "function" ? store.readManifest().catch((err) => {
+        coherenceErrors.push(`failed to read manifest: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      }) : Promise.resolve(null);
+      const readSnapshot = typeof store.readReviewSnapshot === "function" ? store.readReviewSnapshot().catch((err) => {
+        coherenceErrors.push(`failed to read review snapshot: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      }) : Promise.resolve(null);
+      const readGateRecord = typeof store.readPipelineGateCleared === "function" ? store.readPipelineGateCleared().catch((err) => {
+        gateRecordError = `the pipeline gate clearance record is malformed: ${err instanceof Error ? err.message : String(err)}`;
+        return null;
+      }) : Promise.resolve(null);
+      const readDecision = typeof store.readCandidateDecision === "function" ? store.readCandidateDecision().catch((err) => {
+        coherenceErrors.push(`failed to read decision: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      }) : Promise.resolve(null);
+      const [r, m, s, g, d] = await Promise.all([
+        readResult,
+        readManifest,
+        readSnapshot,
+        readGateRecord,
+        readDecision
+      ]);
+      result = r;
+      manifest = m;
+      reviewSnapshot = s;
+      gateRecord = g;
+      decision = d;
+    } catch (err) {
+      coherenceErrors.push(`failed to load decision snapshot: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (gateRecord === null && result?.evidence?.pipelineGateCleared !== void 0) {
+      try {
+        gateRecord = parsePipelineGateCleared(result.evidence.pipelineGateCleared);
+      } catch {
+        gateRecordError = "the pipeline gate clearance record is malformed";
+      }
+    }
+    if (result !== null && manifest !== null) {
+      if (result.runId !== runId || manifest.runId !== runId) {
+        coherenceErrors.push("archived run identity does not match runId");
+      }
+      if (result.candidate !== null) {
+        if (manifest.baseCommitOid !== result.candidate.baseCommitOid) {
+          coherenceErrors.push("archived candidate base commit does not match run manifest");
+        }
+        if (manifest.candidateManifestHash !== result.candidate.manifestHash) {
+          coherenceErrors.push("archived candidate manifest hash does not match run manifest");
+        }
+        let expectedHash;
+        try {
+          expectedHash = manifestHashOf(result.candidate.changedPaths);
+        } catch {
+          expectedHash = null;
+        }
+        if (result.candidate.manifestHash !== expectedHash) {
+          coherenceErrors.push("archived candidate changed paths hash mismatch");
+        }
+      }
+    }
+    if (gateRecord !== null && result?.candidate !== null && result?.candidate !== void 0) {
+      if (gateRecord.candidateCommitOid !== result.candidate.candidateCommitOid) {
+        gateRecordError = "the pipeline gate clearance record does not match the archived candidate commit";
+      }
+    }
+    if (decision !== null && result?.candidate !== null && result?.candidate !== void 0) {
+      if (decision.candidateManifestHash !== void 0 && decision.candidateManifestHash !== null) {
+        if (decision.candidateManifestHash !== result.candidate.manifestHash) {
+          coherenceErrors.push("recorded candidate decision does not match candidate manifest hash");
+        }
+      }
+      if (decision.decisionVersion === "2" && reviewSnapshot !== null) {
+        if (decision.evidenceHash !== reviewSnapshotHash(reviewSnapshot)) {
+          coherenceErrors.push("recorded candidate decision does not match review snapshot evidence hash");
+        }
+      }
+    }
+    return {
+      runId,
+      result,
+      manifest,
+      reviewSnapshot,
+      gateRecord,
+      gateRecordError,
+      decision,
+      coherenceErrors
+    };
+  }
+  async evaluate(runId, options) {
+    const snapshot = options?.snapshot ?? await this.readSnapshot(runId, options);
+    const authority = options?.authority ?? (options?.decisionAuthority ? options.decisionAuthority() : decisionAuthority());
+    return this.verdictFor(snapshot, authority);
+  }
+  /**
+   * The whole acceptance rule, over an archive already read. Pure: every caller
+   * that once re-derived "may this be accepted without a person" from the same
+   * files now asks this one function.
+   */
+  verdictFor(snapshot, authority) {
+    if (snapshot.coherenceErrors.length > 0) {
+      return { state: "invalid", reasons: snapshot.coherenceErrors };
+    }
+    if (snapshot.result === null || snapshot.manifest === null) {
+      return { state: "invalid", reasons: ["archived run was not found"] };
+    }
+    const incompleteEvidence = snapshot.result.evidence?.pipelineReviewIncomplete;
+    if (incompleteEvidence !== void 0) {
+      const reason = isRecord7(incompleteEvidence) && typeof incompleteEvidence.reason === "string" ? incompleteEvidence.reason : "pipeline review is incomplete";
+      return { state: "incomplete", reasons: [reason] };
+    }
+    if (snapshot.decision !== null) {
+      if (snapshot.decision.decision === "rejected") {
+        return { state: "rejected", reasons: ["candidate decision is rejected"] };
+      }
+      if (snapshot.decision.decision === "revision-requested") {
+        return { state: "rejected", reasons: ["candidate decision is revision-requested"] };
+      }
+    }
+    const refusedEvidence = snapshot.result.evidence?.pipelineGateRefused;
+    if (refusedEvidence !== void 0) {
+      const reasons = isRecord7(refusedEvidence) && Array.isArray(refusedEvidence.reasons) ? refusedEvidence.reasons.filter((r) => typeof r === "string") : ["the pipeline gate did NOT clear this candidate"];
+      return {
+        state: "rejected",
+        reasons: reasons.length > 0 ? reasons : ["the pipeline gate did NOT clear this candidate"]
+      };
+    }
+    if (snapshot.result.status !== "verified-candidate" || snapshot.result.failure !== null) {
+      const reasons = [];
+      if (snapshot.result.failure !== null) {
+        reasons.push(snapshot.result.failure);
+      } else {
+        reasons.push(`attempt status is ${snapshot.result.status}`);
+      }
+      return { state: "rejected", reasons };
+    }
+    if (snapshot.result.candidate === null) {
+      return { state: "rejected", reasons: ["no candidate artifact was produced"] };
+    }
+    const candidateCommit = snapshot.result.candidate.candidateCommitOid;
+    const humanReasons = [];
+    if (authority !== "autonomous") {
+      humanReasons.push(`decision authority is "${authority}"`);
+    }
+    const isPlainDelegate = snapshot.result.evidence?.plainDelegate === true && refusedEvidence === void 0 && incompleteEvidence === void 0 && snapshot.result.evidence?.pipelineGateCleared === void 0 && snapshot.gateRecord === null;
+    if (verificationRanUnconfined(snapshot.manifest)) {
+      humanReasons.push("project verification ran without OS confinement on this platform");
+    }
+    if (snapshot.gateRecordError) {
+      humanReasons.push(snapshot.gateRecordError);
+    } else if (isPlainDelegate) {
+      const touched = verificationInputPaths(
+        snapshot.result.candidate.changedPaths.map((change) => change.path)
+      );
+      if (touched.length > 0) {
+        humanReasons.push(
+          `the candidate changes verification inputs: ${touched.slice(0, 10).join(", ")}`
+        );
+      }
+    } else if (snapshot.gateRecord === null) {
+      humanReasons.push("the pipeline gate clearance record is missing");
+    } else if (snapshot.gateRecord.requiresHumanDecision === true) {
+      humanReasons.push("the pipeline gate clearance record requires a human decision");
+    }
+    if (humanReasons.length > 0) {
+      return { state: "human-required", candidateCommit, reasons: humanReasons };
+    }
+    return { state: "accepted", autonomous: true, candidateCommit };
+  }
+  async verify(args) {
+    const verifier = new AcceptanceVerifier({ mode: args.mode });
+    return verifier.verify(args);
+  }
+};
+var OS_CONFINEMENT = new Set(
+  SANDBOX_BACKENDS.filter((backend) => backend.kind === "os").map((backend) => backend.id)
+);
+function verificationRanUnconfined(manifest) {
+  const policy = isRecord7(manifest.effectivePolicy) ? manifest.effectivePolicy.verificationPolicy : void 0;
+  if (!Array.isArray(policy)) return true;
+  return policy.some((command) => !isRecord7(command) || command.skipped !== true && !(typeof command.confinement === "string" && OS_CONFINEMENT.has(command.confinement)));
+}
+var runDecision = new RunDecision();
+async function readRunDecisionSnapshot(runId, options) {
+  return runDecision.readSnapshot(runId, options);
+}
+
+// src/autopilot/run-evidence.ts
+var REQUIRED_TASK_EVIDENCE_REFS = [
+  "decision.json",
+  "manifest.json",
+  "pipeline/pipeline-result.json",
+  "pipeline/post-pipeline-autopilot.json",
+  "result.json",
+  "review-snapshot.json"
+];
+function refused(classification) {
+  return { ok: false, classification };
+}
+async function loadRunEvidence(runId, expected, store = new ArtifactStore(runId)) {
+  let result;
+  let manifest;
+  let reviewSnapshot;
+  let decision;
+  let pipelineResult;
+  let advisor;
+  let eligibility;
+  try {
+    const snapshot = await readRunDecisionSnapshot(runId, { store });
+    ({ result, manifest, reviewSnapshot, decision } = snapshot);
+    [pipelineResult, advisor, eligibility] = await Promise.all([
+      store.readPipelineArtifact("pipeline-result"),
+      store.readAdvisorReport(),
+      store.readAutopilotEligibility()
+    ]);
+  } catch {
+    return refused("evidence-mismatch");
+  }
+  if (eligibility === null) return refused("eligibility-missing");
+  if (!eligibility.eligible || eligibility.reasons.length !== 0) return refused("eligibility-red");
+  let eligibilityHash;
+  try {
+    eligibilityHash = autopilotEligibilityRecordHash(eligibility);
+  } catch {
+    return refused("evidence-mismatch");
+  }
+  if (expected.eligibilityHash === null || eligibilityHash !== expected.eligibilityHash) {
+    return refused("eligibility-stale");
+  }
+  const candidate = result?.candidate ?? null;
+  if (result === null || manifest === null || pipelineResult === null || reviewSnapshot === null || advisor === null || candidate === null) {
+    return refused("run-evidence-missing");
+  }
+  let hashesMatch;
+  try {
+    hashesMatch = eligibility.pipelineResultHash === pipelineResultHash(pipelineResult) && eligibility.reviewSnapshotHash === reviewSnapshotHash(reviewSnapshot) && eligibility.advisorReportHash === advisorReportHash(advisor);
+  } catch {
+    return refused("evidence-mismatch");
+  }
+  if (!hashesMatch || result.status !== "verified-candidate" || result.runId !== runId || manifest.runId !== runId || pipelineResult.runId !== runId || eligibility.runId !== runId || manifest.repoRoot !== expected.repoRoot || manifest.baseCommitOid !== expected.baseCommitOid || candidate.baseCommitOid !== expected.baseCommitOid || eligibility.baseCommitOid !== expected.baseCommitOid || manifest.candidateManifestHash !== expected.candidateManifestHash || candidate.manifestHash !== expected.candidateManifestHash || eligibility.candidateManifestHash !== expected.candidateManifestHash || pipelineResult.finalCandidateCommit !== candidate.candidateCommitOid || eligibility.candidateCommitOid !== candidate.candidateCommitOid || eligibility.candidateTreeOid !== candidate.candidateTreeOid) {
+    return refused("evidence-mismatch");
+  }
+  return {
+    ok: true,
+    evidence: {
+      result,
+      manifest,
+      candidate,
+      pipelineResult,
+      reviewSnapshot,
+      advisor,
+      eligibility,
+      eligibilityHash,
+      decision
+    }
+  };
 }
 
 // src/autopilot/branch-manager.ts
@@ -48349,14 +48420,6 @@ var SHA2562 = /^[0-9a-f]{64}$/u;
 var MAX_FINAL_BRANCH_ARTIFACT_BYTES = 64 * 1024 * 1024;
 var MAX_TASK_EVIDENCE_REFS = 4096;
 var MAX_TASK_EVIDENCE_BYTES = 8 * 1024 * 1024;
-var REQUIRED_TASK_EVIDENCE_REFS = [
-  "decision.json",
-  "manifest.json",
-  "pipeline/pipeline-result.json",
-  "pipeline/post-pipeline-autopilot.json",
-  "result.json",
-  "review-snapshot.json"
-];
 var FINAL_BRANCH_ARTIFACT_REF = "final-branch-artifact.json";
 var FINAL_BRANCH_REPORT_REF = "final-branch-report.json";
 var FINAL_VERIFICATION_REF = "final-verification.json";
@@ -48396,30 +48459,17 @@ function normalizedEvidenceRefs(references, allowEmpty = false, maximum = 128) {
   }
   return [...unique].sort();
 }
-async function validateArchivedTaskEvidence(task, evidence, context) {
-  const store = new ArtifactStore(evidence.runId);
-  let result;
-  let manifest;
-  let pipelineResult;
-  let snapshot;
-  let advisor;
-  let eligibility;
-  let decision;
-  try {
-    const decisionSnapshot = await readRunDecisionSnapshot(evidence.runId, { store });
-    result = decisionSnapshot.result;
-    manifest = decisionSnapshot.manifest;
-    snapshot = decisionSnapshot.reviewSnapshot;
-    decision = decisionSnapshot.decision;
-    [pipelineResult, advisor, eligibility] = await Promise.all([
-      store.readPipelineArtifact("pipeline-result"),
-      store.readAdvisorReport(),
-      store.readAutopilotEligibility()
-    ]);
-  } catch {
-    fail2("missing-task-evidence", `task evidence archive is invalid: ${task.id}`);
+async function validateArchivedTaskEvidence(task, evidence, context, store) {
+  const loaded = await loadRunEvidence(evidence.runId, {
+    repoRoot: context.checkoutPath,
+    baseCommitOid: context.expectedParentCommitOid,
+    candidateManifestHash: evidence.candidateManifestHash,
+    eligibilityHash: task.eligibilityHash
+  }, store);
+  if (!loaded.ok) {
+    fail2("missing-task-evidence", `task evidence is not coherent (${loaded.classification}): ${task.id}`);
   }
-  const candidate = result?.candidate ?? null;
+  const { candidate, decision, eligibilityHash } = loaded.evidence;
   const [promotionParent, promotionTree] = await Promise.all([
     context.git(context.checkoutPath, [
       "rev-parse",
@@ -48432,7 +48482,7 @@ async function validateArchivedTaskEvidence(task, evidence, context) {
       `${evidence.promotionCommitOid}^{tree}`
     ])
   ]);
-  if (result === null || manifest === null || pipelineResult === null || snapshot === null || advisor === null || eligibility === null || decision === null || candidate === null || result.status !== "verified-candidate" || result.runId !== evidence.runId || manifest.runId !== evidence.runId || manifest.baseCommitOid !== context.expectedParentCommitOid || pipelineResult.runId !== evidence.runId || candidate.baseCommitOid !== context.expectedParentCommitOid || candidate.manifestHash !== evidence.candidateManifestHash || manifest.candidateManifestHash !== evidence.candidateManifestHash || pipelineResult.finalCandidateCommit !== candidate.candidateCommitOid || eligibility.runId !== evidence.runId || eligibility.baseCommitOid !== context.expectedParentCommitOid || eligibility.candidateCommitOid !== candidate.candidateCommitOid || eligibility.candidateTreeOid !== candidate.candidateTreeOid || eligibility.candidateManifestHash !== evidence.candidateManifestHash || !eligibility.eligible || eligibility.reasons.length !== 0 || task.eligibilityHash === null || autopilotEligibilityRecordHash(eligibility) !== task.eligibilityHash || !isAutopilotAcceptance(decision, evidence.candidateManifestHash, task.eligibilityHash) || !gitSucceeded(promotionParent) || promotionParent.stdout.trim() !== context.expectedParentCommitOid || !gitSucceeded(promotionTree) || promotionTree.stdout.trim() !== candidate.candidateTreeOid) {
+  if (!isAutopilotAcceptance(decision, evidence.candidateManifestHash, eligibilityHash) || !gitSucceeded(promotionParent) || promotionParent.stdout.trim() !== context.expectedParentCommitOid || !gitSucceeded(promotionTree) || promotionTree.stdout.trim() !== candidate.candidateTreeOid) {
     fail2("missing-task-evidence", `task evidence identities do not match: ${task.id}`);
   }
 }
@@ -48880,7 +48930,13 @@ var FinalBranchReviewer = class {
     this.producerRegistry = dependencies.producerRegistry ?? registry2;
     this.artifactStore = dependencies.artifactStore ?? ((workflowId) => new ArtifactStore(`final-${canonicalArtifactHash(workflowId).slice(0, 24)}`));
     this.evidenceStore = dependencies.evidenceStore ?? ((runId) => new ArtifactStore(runId));
-    this.taskEvidenceValidator = dependencies.taskEvidenceValidator ?? validateArchivedTaskEvidence;
+    const runEvidenceStore = dependencies.runEvidenceStore ?? ((runId) => new ArtifactStore(runId));
+    this.taskEvidenceValidator = dependencies.taskEvidenceValidator ?? (async (task, evidence, context) => await validateArchivedTaskEvidence(
+      task,
+      evidence,
+      context,
+      runEvidenceStore(evidence.runId)
+    ));
     this.materialize = dependencies.materialize ?? (async (request) => {
       const workflowHash = createHash11("sha256").update(request.workflowId).digest("hex");
       const manager = new WorktreeManager(
@@ -49324,14 +49380,6 @@ var AutopilotControllerError = class extends RuntimeError {
   }
   classification;
 };
-var REQUIRED_TASK_EVIDENCE_REFS2 = [
-  "decision.json",
-  "manifest.json",
-  "pipeline/pipeline-result.json",
-  "pipeline/post-pipeline-autopilot.json",
-  "result.json",
-  "review-snapshot.json"
-];
 function classificationOf(error51, fallback) {
   if (typeof error51 !== "object" || error51 === null) return fallback;
   const direct = error51.classification;
@@ -49839,7 +49887,7 @@ var AutopilotController = class {
           runId: task.runId,
           candidateManifestHash: task.candidateManifestHash,
           promotionCommitOid: task.promotionCommitOid,
-          evidenceRefs: [...REQUIRED_TASK_EVIDENCE_REFS2]
+          evidenceRefs: [...REQUIRED_TASK_EVIDENCE_REFS]
         })),
         autopilotSpec: spec,
         checkoutPath: branch.worktreePath
@@ -50332,42 +50380,14 @@ var CandidatePromoter = class {
       }
       return rejected(classification);
     };
-    let result;
-    let manifest;
-    let pipelineResult;
-    let snapshot;
-    let advisor;
-    let eligibility;
-    try {
-      const decisionSnapshot = await readRunDecisionSnapshot(request.runId, { store: artifactStore });
-      result = decisionSnapshot.result;
-      manifest = decisionSnapshot.manifest;
-      snapshot = decisionSnapshot.reviewSnapshot;
-      [pipelineResult, advisor, eligibility] = await Promise.all([
-        artifactStore.readPipelineArtifact("pipeline-result"),
-        artifactStore.readAdvisorReport(),
-        artifactStore.readAutopilotEligibility()
-      ]);
-    } catch {
-      return finishFailure("evidence-mismatch");
-    }
-    if (eligibility === null) return finishFailure("eligibility-missing");
-    if (!eligibility.eligible || eligibility.reasons.length !== 0) {
-      return finishFailure("eligibility-red");
-    }
-    const eligibilityHash = autopilotEligibilityRecordHash(eligibility);
-    if (task.eligibilityHash !== eligibilityHash) return finishFailure("eligibility-stale");
-    const artifact = result?.candidate ?? null;
-    if (result === null || manifest === null || pipelineResult === null || snapshot === null || advisor === null || artifact === null) return finishFailure("run-evidence-missing");
-    let evidenceHashesMatch = false;
-    try {
-      evidenceHashesMatch = eligibility.pipelineResultHash === pipelineResultHash(pipelineResult) && eligibility.reviewSnapshotHash === reviewSnapshotHash(snapshot) && eligibility.advisorReportHash === advisorReportHash(advisor);
-    } catch {
-      return finishFailure("evidence-mismatch");
-    }
-    if (result.status !== "verified-candidate" || result.runId !== request.runId || manifest.runId !== request.runId || manifest.repoRoot !== request.workflowCheckoutPath || manifest.baseCommitOid !== request.expectedHead || manifest.candidateManifestHash !== request.expectedArtifactHash || artifact.baseCommitOid !== request.expectedHead || artifact.manifestHash !== request.expectedArtifactHash || eligibility.baseCommitOid !== request.expectedHead || eligibility.candidateCommitOid !== artifact.candidateCommitOid || eligibility.candidateTreeOid !== artifact.candidateTreeOid || eligibility.candidateManifestHash !== artifact.manifestHash || !evidenceHashesMatch) {
-      return finishFailure("evidence-mismatch");
-    }
+    const loaded = await loadRunEvidence(request.runId, {
+      repoRoot: request.workflowCheckoutPath,
+      baseCommitOid: request.expectedHead,
+      candidateManifestHash: request.expectedArtifactHash,
+      eligibilityHash: task.eligibilityHash
+    }, artifactStore);
+    if (!loaded.ok) return finishFailure(loaded.classification);
+    const { candidate: artifact, eligibility, eligibilityHash } = loaded.evidence;
     const identity = await this.branchManager.load(request.workflowId);
     if (identity === null || identity.worktreePath !== request.workflowCheckoutPath || identity.branchRef !== workflow.workflowRef || identity.repositoryIdentity !== workflow.repositoryIdentity) {
       return finishFailure("branch-identity-changed");

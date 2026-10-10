@@ -52,6 +52,7 @@ function fixture(options: {
   pipelineMismatch?: boolean;
   reviewMismatch?: boolean;
   advisorMismatch?: boolean;
+  pipelineFinalCandidateCommit?: string;
   untrackedDrift?: boolean;
   workflowDrift?: boolean;
   repositoryIdentityDrift?: boolean;
@@ -72,7 +73,12 @@ function fixture(options: {
     changedPaths,
     patch: "patch",
   };
-  const pipelineResult = { status: "decision-ready", marker: "pipeline" };
+  const pipelineResult = {
+    runId,
+    status: "decision-ready",
+    finalCandidateCommit: options.pipelineFinalCandidateCommit ?? candidateOid,
+    marker: "pipeline",
+  };
   const reviewSnapshot = {
     runId,
     baseCommitOid: baseOid,
@@ -568,6 +574,19 @@ describe("CandidatePromoter", () => {
       status: "rejected", classification,
     });
     expect(f.stageCandidate).not.toHaveBeenCalled();
+  });
+
+  // The eligibility record's hash covers this pipeline result, so only the
+  // identity check -- not the re-hash -- can tell that it describes a different
+  // final candidate than the one about to be committed.
+  it("rejects a pipeline result naming a different final candidate commit", async () => {
+    const f = fixture({ pipelineFinalCandidateCommit: "f".repeat(40) });
+
+    await expect(f.promoter.promote(f.request)).resolves.toEqual({
+      status: "rejected", classification: "evidence-mismatch",
+    });
+    expect(f.stageCandidate).not.toHaveBeenCalled();
+    expect(f.artifactStore.writeAutopilotDecision).not.toHaveBeenCalled();
   });
 
   it("requires a human decision for staged recovery with untracked bytes", async () => {

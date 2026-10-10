@@ -97,7 +97,12 @@ describe("CandidatePromoter real repository", () => {
     if (!frozen.ok) throw new Error(frozen.reason);
     const artifact = frozen.artifact;
 
-    const pipelineResult = { status: "decision-ready", marker: "real-pipeline" };
+    const pipelineResult = {
+      runId,
+      status: "decision-ready",
+      finalCandidateCommit: artifact.candidateCommitOid,
+      marker: "real-pipeline",
+    };
     const snapshot = {
       runId,
       baseCommitOid: artifact.baseCommitOid,
