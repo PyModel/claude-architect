@@ -22,6 +22,7 @@ import { start } from "../../src/mcp/server.js";
 import { CLEANUP_JOURNAL_LOCK_KEY } from "../../src/platform/checkout-lock.js";
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
 import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
+import { RunDecision } from "../../src/runtime/run-decision.js";
 import { buildRunManifest } from "../../src/runtime/run-manifest.js";
 import { logger } from "../../src/util/logger.js";
 import { platformServicesDouble } from "../helpers/platform-services-double.js";
@@ -2310,7 +2311,9 @@ describe("recoverStaleRuns", () => {
     await expectMissing(path.join(store.runDirectory, "pipeline-active.json"));
   });
 
-  it("preserves a verified candidate while clearing a dead non-sliced pipeline marker", async () => {
+  it("archives an interrupted unsliced pipeline like a sliced one before clearing its marker", async () => {
+    // A dead unsliced pipeline never reached its terminal recorder, so its
+    // archive still advertised verified-candidate and stayed acceptable.
     const repo = await initRepo();
     const runId = "run-interrupted-non-sliced-pipeline";
     const store = await createUnfinishedRun(runId, repo.commonDir, null);
@@ -2332,9 +2335,16 @@ describe("recoverStaleRuns", () => {
     })).resolves.toEqual({ recovered: [], quarantined: [] });
 
     await expect(store.readResult()).resolves.toMatchObject({
-      status: "verified-candidate",
-      failure: null,
+      status: "failed",
+      failure: "verification-failure",
+      candidate: expect.any(Object),
+      unresolvedIssues: ["pipeline-interrupted-before-terminal-cleanup"],
+      evidence: {
+        pipelineRecovery: "interrupted-before-terminal-cleanup",
+      },
     });
+    await expect(new RunDecision().evaluate(runId, { authority: "autonomous" }))
+      .resolves.toMatchObject({ state: "rejected" });
     await expectMissing(path.join(store.runDirectory, "pipeline-active.json"));
   });
 

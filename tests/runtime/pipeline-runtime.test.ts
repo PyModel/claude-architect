@@ -59,6 +59,7 @@ import {
   registerSecretValue,
 } from "../../src/runtime/redaction.js";
 import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
+import { RunDecision } from "../../src/runtime/run-decision.js";
 import { specSha256 } from "../../src/protocol/spec-hash.js";
 import { initializeRunStart } from "../../src/runtime/run-start.js";
 import { AcceptanceVerifier } from "../../src/verify/acceptance-verifier.js";
@@ -2043,6 +2044,50 @@ describe("runPipeline", () => {
     )).resolves.toEqual({ recorded: true });
   }, 120_000);
 
+  it("demotes the promoted salvage candidate when its re-verification throws", async () => {
+    // Bug t07-1: salvage promoted the composed candidate (moving the anchor),
+    // then the fallback demoted the pre-promotion attempt, whose exact-OID
+    // anchor delete could no longer match.
+    const repo = await initSlicedRepo();
+    const runId = "pipeline-slices-salvage-verification-error";
+    const deps = dependencies({
+      runId,
+      roleRunner: async args => {
+        if (args.role === "implementer") {
+          return success(fenced({
+            reportVersion: "1",
+            candidateCommit: await commitRoleFile(args, "slice-two.txt", "slice two candidate\n"),
+            status: "complete",
+            summary: "slice complete",
+          }));
+        }
+        return { ok: false, rawOutput: "", failure: "timeout", producerId: "stub" };
+      },
+    });
+    deps.runAttempt = fakeAttempt(runId, async checkout => {
+      await writeFile(path.join(checkout, "slice-one.txt"), "slice one candidate\n");
+    });
+    const originalVerify = AcceptanceVerifier.prototype.verify;
+    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(function (args) {
+      if (String(args.logNamePrefix).includes("salvage")) {
+        return Promise.reject(new Error("salvage verification infrastructure failed"));
+      }
+      return originalVerify.call(this, args);
+    });
+
+    const result = await runPipeline(repo, slicedSpec(), deps);
+
+    expect(result).toMatchObject({ status: "failed", failure: "producer-failure" });
+    const store = new ArtifactStore(runId);
+    await expect(store.readResult()).resolves.toMatchObject({
+      status: "failed",
+      failure: "producer-failure",
+      candidate: null,
+    });
+    await expectRefMissing(repo, `refs/claude-architect/candidates/${runId}`);
+    await expect(store.readPipelineActiveMarker()).resolves.toBeNull();
+  }, 120_000);
+
   it("archives an unexpected final-verification error before clearing lifecycle authority", async () => {
     const repo = await initSlicedRepo();
     const runId = "pipeline-slices-final-verification-error";
@@ -2376,6 +2421,175 @@ describe("runPipeline", () => {
     expect(roles).toEqual([]);
   }, 120_000);
 
+  it("archives an unsliced pipeline that fails after verification as rejected", async () => {
+    // Bug o-1: an unsliced pipeline whose review never ran left the archive at
+    // verified-candidate with no failure and its anchor in place, so the
+    // decision advisory offered a candidate the pipeline had not reviewed.
+    const repo = await initRepo();
+    const runId = "pipeline-unsliced-review-cancelled";
+    const controller = new AbortController();
+    const deps = dependencies({
+      runId,
+      roleRunner: async args => { throw new Error(`unexpected role ${args.role}`); },
+      edit: async repoPath => {
+        await writeFile(path.join(repoPath, "a.txt"), "candidate\n");
+        controller.abort();
+      },
+    });
+    deps.abortSignal = controller.signal;
+
+    const result = await runPipeline(repo, validSpec(), deps);
+
+    expect(result.status).toBe("failed");
+    expect(result.failure).toBe("cancelled");
+    const store = new ArtifactStore(runId);
+    const archived = await store.readResult();
+    expect(archived?.status).not.toBe("verified-candidate");
+    expect(archived).toMatchObject({
+      status: "cancelled",
+      failure: "cancelled",
+      candidate: null,
+      evidence: {
+        pipelineFailure: { failure: "cancelled", reason: "cancelled before review round 1" },
+      },
+    });
+    await expectRefMissing(repo, `refs/claude-architect/candidates/${runId}`);
+    await expect(store.readPipelineActiveMarker()).resolves.toBeNull();
+    await expect(store.readPipelineArtifact("pipeline-result"))
+      .resolves.toMatchObject({ status: "failed", failure: "cancelled" });
+    await expect(new RunDecision().evaluate(runId, { authority: "autonomous" }))
+      .resolves.toMatchObject({ state: "rejected", reasons: ["cancelled"] });
+  }, 120_000);
+
+  it.each<{
+    exit: string;
+    status: "decision-ready" | "human-decision-required" | "failed" | "thrown";
+    spec: () => DelegationSpec;
+    deps: (runId: string) => PipelineDependencies;
+    sliced?: true;
+  }>([
+    {
+      exit: "implement phase failure",
+      status: "failed",
+      spec: () => validSpec(),
+      deps: runId => ({
+        ...dependencies({ runId, roleRunner: async () => success("") }),
+        runAttempt: async () => failedAttemptResult(runId),
+      }),
+    },
+    {
+      exit: "cancellation before review",
+      status: "failed",
+      spec: () => validSpec(),
+      deps: runId => {
+        const controller = new AbortController();
+        return {
+          ...dependencies({
+            runId,
+            roleRunner: async () => success(""),
+            edit: async repo => {
+              await writeFile(path.join(repo, "a.txt"), "candidate\n");
+              controller.abort();
+            },
+          }),
+          abortSignal: controller.signal,
+        };
+      },
+    },
+    {
+      exit: "increment role failure",
+      status: "failed",
+      spec: () => implementationSpec(2),
+      deps: runId => dependencies({
+        runId,
+        roleRunner: incrementRoleRunner(async () => ({
+          ok: false,
+          rawOutput: "",
+          failure: "timeout",
+          producerId: "stub",
+        })),
+      }),
+    },
+    {
+      exit: "salvage of a candidate that re-verifies",
+      status: "human-decision-required",
+      spec: () => validSpec({ reviewers: ["correctness"], maxRounds: 1 }),
+      deps: runId => dependencies({ runId, roleRunner: async () => success("not json") }),
+    },
+    {
+      exit: "salvage of a candidate that fails re-verification",
+      status: "failed",
+      spec: () => validSpec({ reviewers: ["correctness"], maxRounds: 1 }),
+      deps: runId => {
+        vi.spyOn(AcceptanceVerifier.prototype, "verify").mockResolvedValue({
+          ok: false,
+          failures: ["salvage clean room is red"],
+          evidence: {},
+          commandOutcomes: [],
+        });
+        return dependencies({ runId, roleRunner: async () => success("not json") });
+      },
+    },
+    {
+      exit: "a completed gate",
+      status: "decision-ready",
+      spec: () => validSpec({ reviewers: ["correctness"], maxRounds: 1 }),
+      deps: runId => dependencies({ runId, roleRunner: async () => success(fenced(approve)) }),
+    },
+    {
+      exit: "a slice halt with nothing past the baseline",
+      status: "failed",
+      sliced: true,
+      spec: () => {
+        const halting = slicedSpec();
+        halting.writeAllowlist.push("a.txt");
+        return halting;
+      },
+      deps: runId => ({
+        ...dependencies({
+          runId,
+          roleRunner: async args => success(fenced({
+            reportVersion: "1",
+            candidateCommit: await commitRoleFile(args, "a.txt", "still out of scope\n"),
+            status: "complete",
+            summary: "repair stayed outside the slice",
+          })),
+        }),
+        runAttempt: fakeAttempt(runId, async checkout => {
+          await writeFile(path.join(checkout, "a.txt"), "out of slice one scope\n");
+        }),
+      }),
+    },
+    {
+      exit: "an unexpected error",
+      status: "thrown",
+      spec: () => validSpec({ reviewers: ["correctness"], maxRounds: 1 }),
+      deps: runId => {
+        vi.spyOn(AcceptanceVerifier.prototype, "verify")
+          .mockRejectedValue(new Error("final verification infrastructure failed"));
+        return dependencies({ runId, roleRunner: async () => success(fenced(approve)) });
+      },
+    },
+  ])("records pipeline/pipeline-result.json on $exit", async ({ exit, status, spec, deps, sliced }) => {
+    const repo = sliced ? await initSlicedRepo() : await initRepo();
+    const runId = `pipeline-terminal-${exit.replace(/[^a-z]+/gu, "-")}`;
+
+    let returned: string;
+    try {
+      returned = (await runPipeline(repo, spec(), deps(runId))).status;
+    } catch {
+      returned = "thrown";
+    }
+
+    expect(returned).toBe(status);
+    const recorded = await new ArtifactStore(runId)
+      .readPipelineArtifact<{ status: string; runId: string }>("pipeline-result");
+    expect(recorded).toMatchObject({
+      runId,
+      status: status === "thrown" ? "failed" : status,
+    });
+  }, 120_000);
+
   it("fails invalid increment output after one archived repair", async () => {
     const repo = await initRepo();
     const roleRunner = incrementRoleRunner(async (_args, call) =>
@@ -2454,7 +2668,10 @@ describe("runPipeline", () => {
       "fix phase reported a candidate commit that does not match its worktree HEAD",
     );
     expect(result.increments).toEqual([]);
-    expect(result.finalCandidateCommit).toBe(result.attempt.candidate?.candidateCommitOid);
+    // The failed exit demotes the archive (bug o-1): the candidate is withdrawn
+    // and the result names the last adopted commit, the initial candidate.
+    expect(result.attempt.candidate).toBeNull();
+    expect(result.finalCandidateCommit).toBe(await runGit(repo, ["rev-parse", "HEAD"]));
     expect(reviewerCalls).toBe(0);
   }, 120_000);
 
@@ -2485,7 +2702,10 @@ describe("runPipeline", () => {
     expect(result.failure).toBe("producer-failure");
     expect(result.gate.reasons).toContain("fix phase reported a missing candidate commit");
     expect(result.increments).toEqual([]);
-    expect(result.finalCandidateCommit).toBe(result.attempt.candidate?.candidateCommitOid);
+    // The failed exit demotes the archive (bug o-1): the candidate is withdrawn
+    // and the result names the last adopted commit, the initial candidate.
+    expect(result.attempt.candidate).toBeNull();
+    expect(result.finalCandidateCommit).toBe(await runGit(repo, ["rev-parse", "HEAD"]));
     expect(reviewerCalls).toBe(0);
   }, 120_000);
 
@@ -2546,7 +2766,10 @@ describe("runPipeline", () => {
       "fix phase candidate commit is not descended from the reviewed candidate",
     );
     expect(result.increments).toEqual([]);
-    expect(result.finalCandidateCommit).toBe(result.attempt.candidate?.candidateCommitOid);
+    // The failed exit demotes the archive (bug o-1): the candidate is withdrawn
+    // and the result names the last adopted commit, the initial candidate.
+    expect(result.attempt.candidate).toBeNull();
+    expect(result.finalCandidateCommit).toBe(await runGit(repo, ["rev-parse", "HEAD"]));
     expect(reviewerCalls).toBe(0);
   }, 120_000);
 
@@ -2833,7 +3056,14 @@ describe("runPipeline", () => {
       thrown = error;
     }
 
-    expect(thrown).toMatchObject({
+    // The catch path also tries to demote the still-verified archive (bug
+    // o-1); with the manifest gone that fails too, so both errors surface.
+    expect(thrown).toBeInstanceOf(AggregateError);
+    expect((thrown as AggregateError).errors[1]).toMatchObject({
+      name: "TerminalArchiveError",
+      message: "run manifest is missing while archiving pipeline failure",
+    });
+    expect((thrown as AggregateError).errors[0]).toMatchObject({
       name: "RuntimeError",
       message: "pipeline gate cleared the candidate and the clearance could not be archived",
       detail: {
@@ -3172,7 +3402,10 @@ describe("runPipeline", () => {
     expect(result.gate.reasons).toContain(
       "fix phase reported a candidate commit that does not match its worktree HEAD",
     );
-    expect(result.finalCandidateCommit).toBe(result.attempt.candidate?.candidateCommitOid);
+    // The failed exit demotes the archive (bug o-1): the candidate is withdrawn
+    // and the result names the last adopted commit, the initial candidate.
+    expect(result.attempt.candidate).toBeNull();
+    expect(result.finalCandidateCommit).toBe(await runGit(repo, ["rev-parse", "HEAD"]));
   });
 
   it("rejects a fixer HEAD that is not descended from the reviewed candidate", async () => {
@@ -3229,7 +3462,10 @@ describe("runPipeline", () => {
     expect(result.gate.reasons).toContain(
       "fix phase candidate commit is not descended from the reviewed candidate",
     );
-    expect(result.finalCandidateCommit).toBe(result.attempt.candidate?.candidateCommitOid);
+    // The failed exit demotes the archive (bug o-1): the candidate is withdrawn
+    // and the result names the last adopted commit, the initial candidate.
+    expect(result.attempt.candidate).toBeNull();
+    expect(result.finalCandidateCommit).toBe(await runGit(repo, ["rev-parse", "HEAD"]));
   });
 
   it("rejects a fixer disposition that cites a nonexistent commit", async () => {
