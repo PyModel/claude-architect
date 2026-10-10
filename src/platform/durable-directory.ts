@@ -8,6 +8,47 @@ import { resolveWindowsFilesystemHelper } from "./windows-filesystem-helper.js";
 import { windowsEssentialEnvironment } from "./windows-env.js";
 import { RuntimeError, errorCode } from "../util/errors.js";
 
+/** The one no-follow open flag; 0 where the platform has none (Windows). */
+export const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
+
+/**
+ * The canonical directory identity: exact 64-bit device and inode plus birth
+ * time (0n where the filesystem records none).
+ */
+export interface DirectoryIdentity {
+  dev: bigint;
+  ino: bigint;
+  birthtimeNs: bigint;
+}
+
+/** Exact identity: same device, inode and birth time (two zero birth times are equal). */
+export function sameDirectoryIdentity(left: DirectoryIdentity, right: DirectoryIdentity): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
+}
+
+/**
+ * Capture an identity that guards a destructive operation. Without a birth
+ * time a directory removed and recreated with a reused inode is
+ * indistinguishable, so a zero birth time fails closed.
+ */
+export function requireBirthtimeIdentity(
+  metadata: DirectoryIdentity,
+  description: string,
+): DirectoryIdentity {
+  if (metadata.birthtimeNs <= 0n) {
+    throw new RuntimeError(`${description} lacks stable birth-time identity`);
+  }
+  return { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
+}
+
+/** Exact 64-bit device-and-inode equality for stores that do not compare birth time. */
+export function sameDevIno(
+  left: Pick<DirectoryIdentity, "dev" | "ino">,
+  right: Pick<DirectoryIdentity, "dev" | "ino">,
+): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
 const WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS = 30_000;
 const WINDOWS_UNSUPPORTED_DIRECTORY_CODES = new Set(["EISDIR", "EINVAL", "ENOTSUP", "EPERM"]);
 
@@ -100,11 +141,6 @@ export async function assertWindowsDirectoryWriteIntegrity(
   );
 }
 
-export interface DirectoryIdentity {
-  dev: bigint;
-  ino: bigint;
-  birthtimeNs: bigint;
-}
 
 export interface PrivateDirectoryOptions {
   description: string;
@@ -134,14 +170,7 @@ export async function ensurePrivateDirectory(
   if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
     throw new RuntimeError(`${options.description} must be a plain directory`);
   }
-  if (metadata.birthtimeNs <= 0n) {
-    throw new RuntimeError(`${options.description} lacks stable identity`);
-  }
-  const identity = {
-    dev: metadata.dev,
-    ino: metadata.ino,
-    birthtimeNs: metadata.birthtimeNs,
-  };
+  const identity = requireBirthtimeIdentity(metadata, options.description);
   if (platformServices.os === "win32") {
     await assertWindowsPrivateDirectory(directory, identity, platformServices);
   } else {
@@ -158,15 +187,12 @@ export async function ensurePrivateDirectory(
       }
       const handle = await open(
         directory,
-        constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+        constants.O_RDONLY | NO_FOLLOW,
       );
       let primaryError: unknown;
       try {
         const opened = await handle.stat({ bigint: true });
-        if (!opened.isDirectory()
-          || opened.dev !== identity.dev
-          || opened.ino !== identity.ino
-          || opened.birthtimeNs !== identity.birthtimeNs) {
+        if (!opened.isDirectory() || !sameDirectoryIdentity(opened, identity)) {
           throw new RuntimeError(
             `${options.description} identity changed before tightening permissions`,
           );
@@ -199,9 +225,7 @@ export async function ensurePrivateDirectory(
   const settled = await lstat(directory, { bigint: true });
   if (!settled.isDirectory()
     || settled.isSymbolicLink()
-    || settled.dev !== identity.dev
-    || settled.ino !== identity.ino
-    || settled.birthtimeNs !== identity.birthtimeNs) {
+    || !sameDirectoryIdentity(settled, identity)) {
     throw new RuntimeError(`${options.description} identity changed during privacy validation`);
   }
   return identity;
@@ -274,7 +298,7 @@ async function syncWindowsDirectoryMetadata(
 export async function flushDirectory(directory: string): Promise<void> {
   let handle: FileHandle | undefined;
   try {
-    handle = await open(directory, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    handle = await open(directory, constants.O_RDONLY | NO_FOLLOW);
     await handle.sync();
   } catch (error) {
     const unsupportedOnWindows = process.platform === "win32"
@@ -285,11 +309,6 @@ export async function flushDirectory(directory: string): Promise<void> {
   }
 }
 
-/** Exact identity: same device, inode and birth time. */
-export function sameDirectoryIdentity(left: DirectoryIdentity, right: DirectoryIdentity): boolean {
-  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
-}
-
 export async function syncDirectoryMetadata(
   directory: string,
   dependencies: DirectorySyncDependencies = {},
@@ -298,24 +317,17 @@ export async function syncDirectoryMetadata(
   const openDirectory = dependencies.open ?? open;
   const inspectPath = dependencies.lstat ?? lstat;
   const initial = await inspectPath(directory, { bigint: true });
-  if (!initial.isDirectory() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
+  if (!initial.isDirectory() || initial.isSymbolicLink()) {
     throw new RuntimeError("directory sync target lacks stable plain-directory identity");
   }
-  const expectedIdentity = {
-    dev: initial.dev,
-    ino: initial.ino,
-    birthtimeNs: initial.birthtimeNs,
-  };
+  const expectedIdentity = requireBirthtimeIdentity(initial, "directory sync target");
   let handle: FileHandle | undefined;
   let primaryError: unknown;
   let windowsFallbackRequired = false;
   try {
-    handle = await openDirectory(directory, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    handle = await openDirectory(directory, constants.O_RDONLY | NO_FOLLOW);
     const opened = await handle.stat({ bigint: true });
-    if (!opened.isDirectory()
-      || opened.dev !== expectedIdentity.dev
-      || opened.ino !== expectedIdentity.ino
-      || opened.birthtimeNs !== expectedIdentity.birthtimeNs) {
+    if (!opened.isDirectory() || !sameDirectoryIdentity(opened, expectedIdentity)) {
       throw new RuntimeError("directory sync target identity changed before flush");
     }
     await handle.sync();
@@ -339,9 +351,7 @@ export async function syncDirectoryMetadata(
   const settled = await inspectPath(directory, { bigint: true });
   if (!settled.isDirectory()
     || settled.isSymbolicLink()
-    || settled.dev !== expectedIdentity.dev
-    || settled.ino !== expectedIdentity.ino
-    || settled.birthtimeNs !== expectedIdentity.birthtimeNs) {
+    || !sameDirectoryIdentity(settled, expectedIdentity)) {
     throw new RuntimeError("directory sync target identity changed during flush");
   }
 }
@@ -369,7 +379,7 @@ export async function syncDirectoryTreeMetadata(
     }
     const handle = await open(
       filename,
-      constants.O_RDWR | (constants.O_NOFOLLOW ?? 0),
+      constants.O_RDWR | NO_FOLLOW,
     );
     let primaryError: unknown;
     try {
@@ -441,9 +451,7 @@ export async function syncDirectoryTreeMetadata(
     const settled = await lstat(current, { bigint: true });
     if (!settled.isDirectory()
       || settled.isSymbolicLink()
-      || settled.dev !== initial.dev
-      || settled.ino !== initial.ino
-      || settled.birthtimeNs !== initial.birthtimeNs) {
+      || !sameDirectoryIdentity(settled, initial)) {
       throw new RuntimeError("durable directory identity changed during tree flush");
     }
   };

@@ -5,12 +5,13 @@ import path from "node:path";
 import nodeProcess from "node:process";
 import { RuntimeError } from "../util/errors.js";
 import {
+  NO_FOLLOW,
   ensurePrivateDirectory,
+  sameDirectoryIdentity,
   syncDirectoryMetadata,
   type DirectoryIdentity,
 } from "./durable-directory.js";
 
-const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const SAFE_COMPONENT = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
 
 export type DurableWriteMode = "immutable" | "replace";
@@ -24,15 +25,6 @@ export interface DurableDirectoryPolicy {
 function isAlreadyPresent(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error
     && (error as { code?: unknown }).code === "EEXIST";
-}
-
-function sameIdentity(
-  left: { dev: bigint; ino: bigint; birthtimeNs: bigint },
-  right: { dev: bigint; ino: bigint; birthtimeNs: bigint },
-): boolean {
-  if (left.dev !== right.dev || left.ino !== right.ino) return false;
-  if (left.birthtimeNs <= 0n || right.birthtimeNs <= 0n) return true;
-  return left.birthtimeNs === right.birthtimeNs;
 }
 
 export class DurableDirectorySession {
@@ -61,7 +53,7 @@ export class DurableDirectorySession {
     const current = await lstat(this.directory, { bigint: true });
     if (!current.isDirectory()
       || current.isSymbolicLink()
-      || !sameIdentity(current, this.identity)) {
+      || !sameDirectoryIdentity(current, this.identity)) {
       throw new RuntimeError("durable directory session identity changed");
     }
   }
