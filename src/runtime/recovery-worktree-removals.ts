@@ -720,11 +720,11 @@ export async function recoverPendingWorktreeRemovals(
         throw new RuntimeError("physical worktree exists at two paths during removal recovery");
       }
       if (registrationIdentity !== null
-        && (!sameDirectoryIdentity(registrationIdentity, expectedRegistrationIdentity))) {
+        && !sameDirectoryIdentity(registrationIdentity, expectedRegistrationIdentity)) {
         throw new RuntimeError("worktree removal registration identity changed");
       }
       if (quarantineIdentity !== null
-        && (!sameDirectoryIdentity(quarantineIdentity, expectedRegistrationIdentity))) {
+        && !sameDirectoryIdentity(quarantineIdentity, expectedRegistrationIdentity)) {
         throw new RuntimeError("worktree removal quarantine identity changed");
       }
       if (expectedPhysicalIdentity === null) {
@@ -733,11 +733,11 @@ export async function recoverPendingWorktreeRemovals(
         }
       } else {
         if (physicalIdentity !== null
-          && (!sameDirectoryIdentity(physicalIdentity, expectedPhysicalIdentity))) {
+          && !sameDirectoryIdentity(physicalIdentity, expectedPhysicalIdentity)) {
           throw new RuntimeError("physical worktree identity changed during removal recovery");
         }
         if (physicalQuarantineIdentity !== null
-          && (!sameDirectoryIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity))) {
+          && !sameDirectoryIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity)) {
           throw new RuntimeError("physical worktree quarantine identity changed");
         }
         if (physicalIdentity === null && physicalQuarantineIdentity === null) {
