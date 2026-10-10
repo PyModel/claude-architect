@@ -120,6 +120,9 @@ describe("PlatformSafety durable-write", () => {
       await expect(writeAtomic(session, "../escape", "text", "replace")).rejects.toThrow("safe leaf name");
       await expect(writeAtomic(session, "sub/dir", "text", "replace")).rejects.toThrow("safe leaf name");
       await expect(writeAtomic(session, "/root", "text", "replace")).rejects.toThrow("safe leaf name");
+      // A dot-leading record would share the namespace of the write temporaries.
+      await expect(writeAtomic(session, ".hidden", "text", "replace")).rejects.toThrow("safe leaf name");
+      await expect(publishExclusive(session, ".hidden", "text")).rejects.toThrow("safe leaf name");
     } finally {
       await session.close();
     }

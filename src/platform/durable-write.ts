@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { constants } from "node:fs";
+import { constants, type BigIntStats } from "node:fs";
 import { link, lstat, mkdir, open, readFile, rename, rm, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import nodeProcess from "node:process";
@@ -12,16 +12,18 @@ import {
   type DirectoryIdentity,
 } from "./durable-directory.js";
 
-// A leaf name inside a session directory: an optional leading dot (hidden
-// records such as lock owners and quarantines) then a plain component. "." and
-// ".." never match.
-const SAFE_COMPONENT = /^\.?[a-z0-9][a-z0-9._-]{0,253}$/i;
+// A published record name. It never starts with a dot, so it cannot collide
+// with the `.<name>.<uuid>.tmp` temporaries the primitives create.
+const SAFE_COMPONENT = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
+// A leaf that link and move primitives may also address: hidden entries such
+// as lock owners and quarantined runs. "." and ".." never match.
+const SAFE_HIDDEN_COMPONENT = /^\.?[a-z0-9][a-z0-9._-]{0,253}$/i;
 
-function assertSafeLeaf(name: string): void {
+function assertSafeLeaf(name: string, operation: string, pattern = SAFE_COMPONENT): void {
   if (path.isAbsolute(name)
     || path.basename(name) !== name
-    || !SAFE_COMPONENT.test(name)) {
-    throw new RuntimeError(`atomic write target must be a safe leaf name: ${name}`);
+    || !pattern.test(name)) {
+    throw new RuntimeError(`${operation} target must be a safe leaf name: ${name}`);
   }
 }
 
@@ -209,7 +211,7 @@ export async function writeAtomic(
   bytes: Buffer | string,
   mode: DurableWriteMode,
 ): Promise<void> {
-  assertSafeLeaf(name);
+  assertSafeLeaf(name, "atomic write");
 
   const destination = path.join(session.directory, name);
   const temporaryPath = path.join(session.directory, `.${name}.${randomUUID()}.tmp`);
@@ -298,7 +300,7 @@ export async function appendDurable(
   bytes: Buffer | string,
   options: { expectedSize?: number } = {},
 ): Promise<void> {
-  assertSafeLeaf(name);
+  assertSafeLeaf(name, "durable append");
   const payload = typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes;
   const filename = path.join(session.directory, name);
   await session.assertIdentity();
@@ -356,8 +358,8 @@ export async function linkExclusive(
   sourceName: string,
   destinationName: string,
 ): Promise<PublishedFileIdentity> {
-  assertSafeLeaf(sourceName);
-  assertSafeLeaf(destinationName);
+  assertSafeLeaf(sourceName, "exclusive link", SAFE_HIDDEN_COMPONENT);
+  assertSafeLeaf(destinationName, "exclusive link", SAFE_HIDDEN_COMPONENT);
   const source = path.join(session.directory, sourceName);
   const destination = path.join(session.directory, destinationName);
   await session.assertIdentity();
@@ -415,7 +417,7 @@ export async function publishExclusive(
   name: string,
   bytes: Buffer | string,
 ): Promise<PublishedFileIdentity> {
-  assertSafeLeaf(name);
+  assertSafeLeaf(name, "exclusive publish");
   const temporaryName = `.${name}.${randomUUID()}.tmp`;
   const temporaryPath = path.join(session.directory, temporaryName);
   const destination = path.join(session.directory, name);
@@ -429,7 +431,7 @@ export async function publishExclusive(
       0o600,
     );
     temporaryCreated = true;
-    let written;
+    let written: BigIntStats;
     try {
       await handle.writeFile(typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes);
       await handle.sync();
@@ -461,8 +463,8 @@ export async function moveDirectory(
   sourceName: string,
   destinationName: string,
 ): Promise<DirectoryIdentity> {
-  assertSafeLeaf(sourceName);
-  assertSafeLeaf(destinationName);
+  assertSafeLeaf(sourceName, "directory move", SAFE_HIDDEN_COMPONENT);
+  assertSafeLeaf(destinationName, "directory move", SAFE_HIDDEN_COMPONENT);
   const source = path.join(session.directory, sourceName);
   const destination = path.join(session.directory, destinationName);
   await session.assertIdentity();

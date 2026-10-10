@@ -304,7 +304,6 @@ export async function quarantineRun(
   if (runsIdentity === null) throw new RuntimeError("recovery runs root disappeared");
   const runsSession = new DurableDirectorySession(runsRoot, runsIdentity);
   let runIdentity: DirectoryIdentity | null = null;
-  let renamed = false;
   let journaled = false;
   try {
     runIdentity = await plainDirectoryIdentity(runDirectory);
@@ -313,7 +312,6 @@ export async function quarantineRun(
       throw new RuntimeError("poisoned recovery quarantine already exists");
     }
     await moveDirectory(runsSession, runId, path.basename(quarantinePath));
-    renamed = true;
     const quarantineIdentity = await plainDirectoryIdentity(quarantinePath);
     const currentRoot = await lstat(runsRoot, { bigint: true });
     if (quarantineIdentity === null
@@ -336,34 +334,40 @@ export async function quarantineRun(
     });
   } catch (quarantineError) {
     const errors = [error, quarantineError];
-    if (renamed && !journaled && runIdentity !== null) {
+    // Whether the move happened is observed, not flagged: moveDirectory can
+    // fail after its rename (identity re-check, parent flush), and such a run
+    // must still be restored rather than stranded unjournaled in quarantine.
+    if (!journaled && runIdentity !== null) {
       try {
-        const quarantineMetadata = await lstat(quarantinePath, { bigint: true });
-        const currentRoot = await lstat(runsRoot, { bigint: true });
-        if (!isPlainDirectory(quarantineMetadata)
-          || !sameDirectoryIdentity(quarantineMetadata, runIdentity)
-          || await plainDirectoryIdentity(runDirectory) !== null
-          || !isPlainDirectory(currentRoot)
-          || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
-        }
-        await moveDirectory(runsSession, path.basename(quarantinePath), runId);
-        const restoredMetadata = await lstat(runDirectory, { bigint: true });
-        const restoredRoot = await lstat(runsRoot, { bigint: true });
-        if (!isPlainDirectory(restoredMetadata)
-          || !sameDirectoryIdentity(restoredMetadata, runIdentity)
-          || !isPlainDirectory(restoredRoot)
-          || !sameDirectoryIdentity(restoredRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback identity changed");
-        }
-        await syncRecoveryDirectory(runsRoot);
-        const settledMetadata = await lstat(runDirectory, { bigint: true });
-        const settledRoot = await lstat(runsRoot, { bigint: true });
-        if (!isPlainDirectory(settledMetadata)
-          || !sameDirectoryIdentity(settledMetadata, runIdentity)
-          || !isPlainDirectory(settledRoot)
-          || !sameDirectoryIdentity(settledRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback changed after directory sync");
+        if (await plainDirectoryIdentity(runDirectory) === null
+          && await plainDirectoryIdentity(quarantinePath) !== null) {
+          const quarantineMetadata = await lstat(quarantinePath, { bigint: true });
+          const currentRoot = await lstat(runsRoot, { bigint: true });
+          if (!isPlainDirectory(quarantineMetadata)
+            || !sameDirectoryIdentity(quarantineMetadata, runIdentity)
+            || await plainDirectoryIdentity(runDirectory) !== null
+            || !isPlainDirectory(currentRoot)
+            || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
+          }
+          await moveDirectory(runsSession, path.basename(quarantinePath), runId);
+          const restoredMetadata = await lstat(runDirectory, { bigint: true });
+          const restoredRoot = await lstat(runsRoot, { bigint: true });
+          if (!isPlainDirectory(restoredMetadata)
+            || !sameDirectoryIdentity(restoredMetadata, runIdentity)
+            || !isPlainDirectory(restoredRoot)
+            || !sameDirectoryIdentity(restoredRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback identity changed");
+          }
+          await syncRecoveryDirectory(runsRoot);
+          const settledMetadata = await lstat(runDirectory, { bigint: true });
+          const settledRoot = await lstat(runsRoot, { bigint: true });
+          if (!isPlainDirectory(settledMetadata)
+            || !sameDirectoryIdentity(settledMetadata, runIdentity)
+            || !isPlainDirectory(settledRoot)
+            || !sameDirectoryIdentity(settledRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback changed after directory sync");
+          }
         }
       } catch (rollbackError) {
         errors.push(rollbackError);
