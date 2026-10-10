@@ -31875,13 +31875,14 @@ var logger = {
 };
 
 // src/platform/checkout-lock.ts
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { constants as constants2 } from "node:fs";
 import { link, lstat as lstat2, mkdir, open as open2 } from "node:fs/promises";
 import path2 from "node:path";
 import nodeProcess3 from "node:process";
 
 // src/platform/lock-ownership.ts
+import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
@@ -31993,6 +31994,9 @@ async function removeLockIfUnchanged(lockPath, handle, expectedIdentity, expecte
   return afterMetadata.nlink === BigInt(expectedLinks - 1);
 }
 var TEMPORARY_LOCK_NAME = /^\.recovery-lock-[0-9a-f-]{36}\.tmp$/;
+function temporaryLockFileName() {
+  return `.recovery-lock-${randomUUID()}.tmp`;
+}
 async function removeCrashedTemporarySibling(lockPath, identity, contents) {
   const parentPath = path.dirname(lockPath);
   for (const name of await readdir(parentPath)) {
@@ -32010,7 +32014,7 @@ async function removeCrashedTemporarySibling(lockPath, identity, contents) {
     try {
       handle = await open(temporaryPath, constants.O_RDONLY | NO_FOLLOW);
     } catch (error51) {
-      if (isMissing(error51)) return false;
+      if (isMissing(error51)) continue;
       throw error51;
     }
     try {
@@ -32352,7 +32356,7 @@ async function tryAcquireLock(lockPath, contents) {
   if (parentIdentity === null) {
     throw new RuntimeError("lock parent must remain a plain directory");
   }
-  const temporaryPath = path2.join(parentPath, `.recovery-lock-${randomUUID()}.tmp`);
+  const temporaryPath = path2.join(parentPath, temporaryLockFileName());
   let handle;
   let temporaryIdentity;
   let temporaryCreated = false;
