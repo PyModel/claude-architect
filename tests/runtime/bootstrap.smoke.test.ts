@@ -41,10 +41,23 @@ async function waitForFile(filePath: string, timeoutMs = 10_000): Promise<string
 }
 
 // Reads the pid the server wrote. The server's writeFileSync truncates before it
-// writes, so an early read can see an empty file; Number("") is 0, and
-// kill(0, 0) "succeeds" against the caller's own process group.
+// writes, so an early read can see an empty or partial file; Number("") is 0, and
+// kill(0, 0) "succeeds" against the caller's own process group. Keep polling
+// until the file holds a complete pid.
 async function waitForPid(filePath: string, timeoutMs = 10_000): Promise<number> {
-  return Number(await waitForFile(filePath, timeoutMs));
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const text = await readFile(filePath, "utf8").catch(error => {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") return "";
+      throw error;
+    });
+    if (/^\d+$/.test(text)) {
+      const pid = Number(text);
+      if (Number.isSafeInteger(pid) && pid > 1) return pid;
+    }
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  throw new Error(`timed out waiting for a pid in ${filePath}`);
 }
 
 async function waitForExit(child: ChildProcess, timeoutMs = 10_000): Promise<{
