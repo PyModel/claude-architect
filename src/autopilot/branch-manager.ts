@@ -1,14 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { gitSucceeded as succeeded } from "../git/checked-git.js";
-import { constants } from "node:fs";
-import { chmod, link, lstat, mkdir, mkdtemp, open, realpath, rm } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { resolveStateDir } from "../runtime/state-dir.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
-import { NO_FOLLOW, syncDirectoryMetadata, type DirectoryIdentity } from "../platform/durable-directory.js";
-import { RuntimeError } from "../util/errors.js";
+import { type DirectoryIdentity } from "../platform/durable-directory.js";
+import { openDurableDirectorySession, publishExclusive } from "../platform/durable-write.js";
+import { RuntimeError, errorCode } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { readStableRegularFile } from "../util/stable-file.js";
 import { boundedRedactedDiagnostic, redact } from "../runtime/redaction.js";
@@ -615,39 +615,15 @@ export class WorkflowBranchManager {
     const ownershipPath = this.ownershipPath(identity.workflowId);
     const directory = path.dirname(ownershipPath);
     await mkdir(directory, { recursive: true });
-    const temporaryPath = path.join(directory, `.${path.basename(ownershipPath)}.${randomUUID()}.tmp`);
     const bytes = Buffer.from(`${JSON.stringify({ ...identity, bootstrapOwner })}\n`);
-    let temporaryExists = false;
-    let ownershipLinked = false;
+    const session = await openDurableDirectorySession(directory, { create: false });
     try {
-      const handle = await open(
-        temporaryPath,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-        0o600,
-      );
-      temporaryExists = true;
-      try {
-        await handle.writeFile(bytes);
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
-      try {
-        await link(temporaryPath, ownershipPath);
-        ownershipLinked = true;
-      } catch (error) {
-        if (typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") {
-          fail("workflow-already-owned");
-        }
-        throw error;
-      }
-      await rm(temporaryPath);
-      temporaryExists = false;
-      await syncDirectoryMetadata(directory);
-      ownershipLinked = false;
+      await publishExclusive(session, path.basename(ownershipPath), bytes);
+    } catch (error) {
+      if (errorCode(error) === "EEXIST") fail("workflow-already-owned");
+      throw error;
     } finally {
-      if (temporaryExists) await rm(temporaryPath, { force: true });
-      if (ownershipLinked) await rm(ownershipPath, { force: true });
+      await session.close();
     }
   }
 
