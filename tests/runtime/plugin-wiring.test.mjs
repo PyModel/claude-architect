@@ -391,7 +391,7 @@ test("codex skill ships the direct CLI lane without obscuring its trust boundary
     "codex skill must use its plugin-qualified command");
   assert.doesNotMatch(skill, /(^|[^:])\/codex\b/mu,
     "codex skill must never present a bare command");
-  assert.match(skill, /default to `gpt-5\.6-sol` at `high`/u,
+  assert.match(skill, /default to `gpt-6\.1-sol` at `high`/u,
     "codex skill must retain the current default model and effort");
   assert.match(skill, /Always use --skip-git-repo-check\./u,
     "codex skill must require the repository-check override");

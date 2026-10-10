@@ -10,15 +10,17 @@ for (const lane of ["codex-implementer", "opencode-implementer", "pi-implementer
   assert.ok(skill.includes(`\`${lane}\``), `delegate question must offer ${lane}`);
 }
 
-assert.match(skill, /GPT-5\.6 Sol at `low` reasoning by default \(supported overrides: `medium`, `high`, `xhigh`, `max`, `ultra`\)/);
+assert.match(skill, /GPT-6\.1 Sol at `low` reasoning by default \(supported overrides: `medium`, `high`, `xhigh`, `max`, `ultra`\)/);
 assert.match(skill, /model-specific `--variant`/);
 assert.match(skill, /`--thinking off\|minimal\|low\|medium\|high\|xhigh\|max`/);
 assert.match(skill, /`pi-implementer`; always uses the model configured in Pi/);
+assert.match(skill, /e\.g\. `xai\/grok-4\.7`/);
 assert.match(skill, /The Pi lane accepts no model override: it always runs the model configured in Pi/);
 assert.doesNotMatch(skill, /--thinking-effort/);
 assert.match(skill, /the installed pythinker-code CLI exposes no reasoning override, so the Pythinker configured default always applies/);
 assert.match(skill, /`--effort low\|medium\|high`/);
 assert.match(skill, /`--model opus\|sonnet\|fable\|haiku`/);
+assert.match(skill, /\(opus = Opus 5\.5, sonnet = Sonnet 5\.5, fable = Fable 5\.1\)/);
 assert.match(skill, /`--effort low\|medium\|high\|xhigh\|max`/);
 assert.match(skill, /include it in the delegation spec/);
 
