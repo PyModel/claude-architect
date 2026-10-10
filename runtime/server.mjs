@@ -419,11 +419,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants18) {
+      optimizeNames(names, constants17) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants18);
+          this.rhs = optimizeExpr(this.rhs, names, constants17);
         return this;
       }
       get names() {
@@ -440,10 +440,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants18) {
+      optimizeNames(names, constants17) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants18);
+        this.rhs = optimizeExpr(this.rhs, names, constants17);
         return this;
       }
       get names() {
@@ -504,8 +504,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants18) {
-        this.code = optimizeExpr(this.code, names, constants18);
+      optimizeNames(names, constants17) {
+        this.code = optimizeExpr(this.code, names, constants17);
         return this;
       }
       get names() {
@@ -534,12 +534,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants18) {
+      optimizeNames(names, constants17) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants18))
+          if (n.optimizeNames(names, constants17))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -592,12 +592,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants18) {
+      optimizeNames(names, constants17) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants18);
-        if (!(super.optimizeNames(names, constants18) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants17);
+        if (!(super.optimizeNames(names, constants17) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants18);
+        this.condition = optimizeExpr(this.condition, names, constants17);
         return this;
       }
       get names() {
@@ -620,10 +620,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants18) {
-        if (!super.optimizeNames(names, constants18))
+      optimizeNames(names, constants17) {
+        if (!super.optimizeNames(names, constants17))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants18);
+        this.iteration = optimizeExpr(this.iteration, names, constants17);
         return this;
       }
       get names() {
@@ -659,10 +659,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants18) {
-        if (!super.optimizeNames(names, constants18))
+      optimizeNames(names, constants17) {
+        if (!super.optimizeNames(names, constants17))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants18);
+        this.iterable = optimizeExpr(this.iterable, names, constants17);
         return this;
       }
       get names() {
@@ -704,11 +704,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants18) {
+      optimizeNames(names, constants17) {
         var _a3, _b;
-        super.optimizeNames(names, constants18);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants18);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants18);
+        super.optimizeNames(names, constants17);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants17);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants17);
         return this;
       }
       get names() {
@@ -1009,7 +1009,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants18) {
+    function optimizeExpr(expr, names, constants17) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1024,14 +1024,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants18[n.str];
+        const c = constants17[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants18[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants17[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -31988,7 +31988,6 @@ function resolveStateDir() {
 }
 
 // src/platform/lock-ownership.ts
-var NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 var MAX_STATE_FILE_BYTES = 1e6;
 var MAX_STATE_FILE_BYTES_BIGINT = BigInt(MAX_STATE_FILE_BYTES);
 var CHECKOUT_LOCK_NAME_PATTERN = /^([0-9a-f]{64})\.lock$/;
@@ -32772,7 +32771,7 @@ var PosixPlatformServices = class {
   async assertDirectoryWriteIntegrity(directory, expectedIdentity) {
     const metadata = await fs.lstat(directory, { bigint: true });
     const uid = nodeProcess3.getuid?.();
-    if (!metadata.isDirectory() || metadata.isSymbolicLink() || metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino || metadata.birthtimeNs <= 0n || metadata.birthtimeNs !== expectedIdentity.birthtimeNs || uid === void 0 || metadata.uid !== BigInt(uid) || (metadata.mode & 0o022n) !== 0n) {
+    if (!metadata.isDirectory() || metadata.isSymbolicLink() || metadata.birthtimeNs <= 0n || !sameDirectoryIdentity(metadata, expectedIdentity) || uid === void 0 || metadata.uid !== BigInt(uid) || (metadata.mode & 0o022n) !== 0n) {
       throw new RuntimeError("directory lacks stable write integrity");
     }
   }
@@ -33217,6 +33216,19 @@ async function resolveWindowsFilesystemHelper(arch = process.arch) {
 }
 
 // src/platform/durable-directory.ts
+var NO_FOLLOW = constants3.O_NOFOLLOW ?? 0;
+function sameDirectoryIdentity(left, right) {
+  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
+}
+function requireBirthtimeIdentity(metadata, description) {
+  if (metadata.birthtimeNs <= 0n) {
+    throw new RuntimeError(`${description} lacks stable birth-time identity`);
+  }
+  return { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
+}
+function sameDevIno(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
+}
 var WINDOWS_DIRECTORY_SYNC_TIMEOUT_MS = 3e4;
 var WINDOWS_UNSUPPORTED_DIRECTORY_CODES = /* @__PURE__ */ new Set(["EISDIR", "EINVAL", "ENOTSUP", "EPERM"]);
 function windowsHelperFailure(result) {
@@ -33285,14 +33297,7 @@ async function ensurePrivateDirectory(directory, options) {
   if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
     throw new RuntimeError(`${options.description} must be a plain directory`);
   }
-  if (metadata.birthtimeNs <= 0n) {
-    throw new RuntimeError(`${options.description} lacks stable identity`);
-  }
-  const identity = {
-    dev: metadata.dev,
-    ino: metadata.ino,
-    birthtimeNs: metadata.birthtimeNs
-  };
+  const identity = requireBirthtimeIdentity(metadata, options.description);
   if (platformServices.os === "win32") {
     await assertWindowsPrivateDirectory(directory, identity, platformServices);
   } else {
@@ -33309,12 +33314,12 @@ async function ensurePrivateDirectory(directory, options) {
       }
       const handle = await open2(
         directory,
-        constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0)
+        constants3.O_RDONLY | NO_FOLLOW
       );
       let primaryError;
       try {
         const opened = await handle.stat({ bigint: true });
-        if (!opened.isDirectory() || opened.dev !== identity.dev || opened.ino !== identity.ino || opened.birthtimeNs !== identity.birthtimeNs) {
+        if (!opened.isDirectory() || !sameDirectoryIdentity(opened, identity)) {
           throw new RuntimeError(
             `${options.description} identity changed before tightening permissions`
           );
@@ -33345,7 +33350,7 @@ async function ensurePrivateDirectory(directory, options) {
   }
   if (created) await syncDirectory(path5.dirname(directory));
   const settled = await lstat3(directory, { bigint: true });
-  if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== identity.dev || settled.ino !== identity.ino || settled.birthtimeNs !== identity.birthtimeNs) {
+  if (!settled.isDirectory() || settled.isSymbolicLink() || !sameDirectoryIdentity(settled, identity)) {
     throw new RuntimeError(`${options.description} identity changed during privacy validation`);
   }
   return identity;
@@ -33388,7 +33393,7 @@ async function syncWindowsDirectoryMetadata(directory, expectedIdentity, platfor
 async function flushDirectory(directory) {
   let handle;
   try {
-    handle = await open2(directory, constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0));
+    handle = await open2(directory, constants3.O_RDONLY | NO_FOLLOW);
     await handle.sync();
   } catch (error51) {
     const unsupportedOnWindows = process.platform === "win32" && ["EISDIR", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode(error51) ?? "");
@@ -33397,29 +33402,22 @@ async function flushDirectory(directory) {
     await handle?.close();
   }
 }
-function sameDirectoryIdentity(left, right) {
-  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
-}
 async function syncDirectoryMetadata(directory, dependencies = {}) {
   const platform = dependencies.platform ?? process.platform;
   const openDirectory = dependencies.open ?? open2;
   const inspectPath = dependencies.lstat ?? lstat3;
   const initial = await inspectPath(directory, { bigint: true });
-  if (!initial.isDirectory() || initial.isSymbolicLink() || initial.birthtimeNs <= 0n) {
+  if (!initial.isDirectory() || initial.isSymbolicLink()) {
     throw new RuntimeError("directory sync target lacks stable plain-directory identity");
   }
-  const expectedIdentity = {
-    dev: initial.dev,
-    ino: initial.ino,
-    birthtimeNs: initial.birthtimeNs
-  };
+  const expectedIdentity = requireBirthtimeIdentity(initial, "directory sync target");
   let handle;
   let primaryError;
   let windowsFallbackRequired = false;
   try {
-    handle = await openDirectory(directory, constants3.O_RDONLY | (constants3.O_NOFOLLOW ?? 0));
+    handle = await openDirectory(directory, constants3.O_RDONLY | NO_FOLLOW);
     const opened = await handle.stat({ bigint: true });
-    if (!opened.isDirectory() || opened.dev !== expectedIdentity.dev || opened.ino !== expectedIdentity.ino || opened.birthtimeNs !== expectedIdentity.birthtimeNs) {
+    if (!opened.isDirectory() || !sameDirectoryIdentity(opened, expectedIdentity)) {
       throw new RuntimeError("directory sync target identity changed before flush");
     }
     await handle.sync();
@@ -33439,7 +33437,7 @@ async function syncDirectoryMetadata(directory, dependencies = {}) {
     );
   }
   const settled = await inspectPath(directory, { bigint: true });
-  if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== expectedIdentity.dev || settled.ino !== expectedIdentity.ino || settled.birthtimeNs !== expectedIdentity.birthtimeNs) {
+  if (!settled.isDirectory() || settled.isSymbolicLink() || !sameDirectoryIdentity(settled, expectedIdentity)) {
     throw new RuntimeError("directory sync target identity changed during flush");
   }
 }
@@ -33455,7 +33453,7 @@ async function syncDirectoryTreeMetadata(directory, options = {}) {
     }
     const handle = await open2(
       filename,
-      constants3.O_RDWR | (constants3.O_NOFOLLOW ?? 0)
+      constants3.O_RDWR | NO_FOLLOW
     );
     let primaryError;
     try {
@@ -33511,7 +33509,7 @@ async function syncDirectoryTreeMetadata(directory, options = {}) {
     }
     await syncDirectory(current);
     const settled = await lstat3(current, { bigint: true });
-    if (!settled.isDirectory() || settled.isSymbolicLink() || settled.dev !== initial.dev || settled.ino !== initial.ino || settled.birthtimeNs !== initial.birthtimeNs) {
+    if (!settled.isDirectory() || settled.isSymbolicLink() || !sameDirectoryIdentity(settled, initial)) {
       throw new RuntimeError("durable directory identity changed during tree flush");
     }
   };
@@ -33524,15 +33522,9 @@ import { constants as constants4 } from "node:fs";
 import { link as link2, lstat as lstat4, mkdir as mkdir2, open as open3, readFile as readFile2, rename, rm as rm2 } from "node:fs/promises";
 import path6 from "node:path";
 import nodeProcess5 from "node:process";
-var NO_FOLLOW2 = constants4.O_NOFOLLOW ?? 0;
 var SAFE_COMPONENT = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
 function isAlreadyPresent(error51) {
   return typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "EEXIST";
-}
-function sameIdentity(left, right) {
-  if (left.dev !== right.dev || left.ino !== right.ino) return false;
-  if (left.birthtimeNs <= 0n || right.birthtimeNs <= 0n) return true;
-  return left.birthtimeNs === right.birthtimeNs;
 }
 var DurableDirectorySession = class {
   directory;
@@ -33551,7 +33543,7 @@ var DurableDirectorySession = class {
       throw new RuntimeError("durable directory session is closed");
     }
     const current = await lstat4(this.directory, { bigint: true });
-    if (!current.isDirectory() || current.isSymbolicLink() || !sameIdentity(current, this.identity)) {
+    if (!current.isDirectory() || current.isSymbolicLink() || !sameDirectoryIdentity(current, this.identity)) {
       throw new RuntimeError("durable directory session identity changed");
     }
   }
@@ -33613,7 +33605,7 @@ async function openDurableDirectorySession(directory, options = {}) {
   let handle;
   if (options.policy?.platform !== "win32" && nodeProcess5.platform !== "win32") {
     try {
-      handle = await open3(directory, constants4.O_RDONLY | NO_FOLLOW2);
+      handle = await open3(directory, constants4.O_RDONLY | NO_FOLLOW);
     } catch {
     }
   }
@@ -33647,7 +33639,7 @@ async function writeAtomic(session, name, bytes, mode) {
     await session.assertIdentity();
     handle = await open3(
       temporaryPath,
-      constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW2,
+      constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW,
       384
     );
     temporaryCreated = true;
@@ -33718,7 +33710,7 @@ import { lstat as lstat5, open as open4 } from "node:fs/promises";
 async function readStableRegularFile(filename, maxBytes, dependencies = {}) {
   const handle = await (dependencies.open ?? open4)(
     filename,
-    constants5.O_RDONLY | (constants5.O_NOFOLLOW ?? 0) | (constants5.O_NONBLOCK ?? 0)
+    constants5.O_RDONLY | NO_FOLLOW | (constants5.O_NONBLOCK ?? 0)
   );
   let primaryError;
   try {
@@ -33825,7 +33817,7 @@ async function ensureNamespaceIgnored(root, syncDirectory) {
   try {
     const handle = await open5(
       ignorePath,
-      constants6.O_WRONLY | constants6.O_CREAT | constants6.O_EXCL | (constants6.O_NOFOLLOW ?? 0),
+      constants6.O_WRONLY | constants6.O_CREAT | constants6.O_EXCL | NO_FOLLOW,
       384
     );
     try {
@@ -35462,7 +35454,6 @@ function checkVersionCompat(skillProtocolVersion) {
 }
 
 // src/autopilot/workflow-store.ts
-var NO_FOLLOW3 = constants7.O_NOFOLLOW ?? 0;
 var MAX_WRITER_LOCK_BYTES = 512;
 var MAX_WORKFLOW_OWNER_BYTES = 1024;
 var MAX_WORKFLOW_STATE_BYTES = 1e6;
@@ -35541,11 +35532,8 @@ async function workflowOwnerStatus(record2, processAlive, getProcessStartToken) 
   if (currentToken === null) return "unverifiable";
   return currentToken === record2.processToken ? "live" : "dead";
 }
-function sameIdentity2(metadata, identity) {
-  return metadata.dev === identity.dev && metadata.ino === identity.ino;
-}
 async function inspectPlainDirectory(directory) {
-  const metadata = await lstat7(directory);
+  const metadata = await lstat7(directory, { bigint: true });
   if (!isPlainDirectory2(metadata)) {
     throw workflowError(
       "workflow state directory must be a plain directory",
@@ -35560,10 +35548,10 @@ async function inspectPlainDirectory(directory) {
 }
 async function assertDirectoryIdentity(directory, expected) {
   const [metadata, canonicalPath] = await Promise.all([
-    lstat7(directory),
+    lstat7(directory, { bigint: true }),
     realpath3(directory)
   ]);
-  if (!isPlainDirectory2(metadata) || !sameIdentity2(metadata, expected) || canonicalPath !== expected.canonicalPath) {
+  if (!isPlainDirectory2(metadata) || !sameDevIno(metadata, expected) || canonicalPath !== expected.canonicalPath) {
     throw workflowError("workflow state directory identity changed", "unsafe-workflow-state");
   }
 }
@@ -36189,7 +36177,7 @@ var WorkflowStore = class {
     try {
       handle = await open6(
         this.ownerPath,
-        constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW3,
+        constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW,
         384
       );
     } catch (error51) {
@@ -36230,7 +36218,7 @@ var WorkflowStore = class {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     let handle;
     try {
-      handle = await open6(this.ownerPath, constants7.O_RDONLY | NO_FOLLOW3);
+      handle = await open6(this.ownerPath, constants7.O_RDONLY | NO_FOLLOW);
     } catch (error51) {
       if (isMissing(error51)) {
         throw workflowError("workflow owner does not exist", "workflow-lease-not-found");
@@ -36265,7 +36253,7 @@ var WorkflowStore = class {
   async removeWorkflowOwner(identity, directory) {
     let handle;
     try {
-      handle = await open6(this.ownerPath, constants7.O_RDONLY | NO_FOLLOW3);
+      handle = await open6(this.ownerPath, constants7.O_RDONLY | NO_FOLLOW);
     } catch (error51) {
       if (isMissing(error51)) return false;
       throw error51;
@@ -36300,7 +36288,7 @@ var WorkflowStore = class {
         const ownerPath = path9.join(this.workflowDirectory, `.state.lock.${token}.owner`);
         ownerHandle = await open6(
           ownerPath,
-          constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW3,
+          constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW,
           384
         );
         const record2 = {
@@ -36377,7 +36365,7 @@ var WorkflowStore = class {
   }
   async readWriterLock(directory) {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open6(this.lockPath, constants7.O_RDONLY | NO_FOLLOW3);
+    const handle = await open6(this.lockPath, constants7.O_RDONLY | NO_FOLLOW);
     try {
       const metadata = await handle.stat();
       const named = await lstat7(this.lockPath);
@@ -36404,7 +36392,7 @@ var WorkflowStore = class {
   async retireWriterLock(identity, directory) {
     let handle;
     try {
-      handle = await open6(this.lockPath, constants7.O_RDONLY | NO_FOLLOW3);
+      handle = await open6(this.lockPath, constants7.O_RDONLY | NO_FOLLOW);
     } catch (error51) {
       if (isMissing(error51)) return false;
       throw error51;
@@ -36433,7 +36421,7 @@ var WorkflowStore = class {
   async retireWriterOwner(identity, directory) {
     let handle;
     try {
-      handle = await open6(identity.ownerPath, constants7.O_RDONLY | NO_FOLLOW3);
+      handle = await open6(identity.ownerPath, constants7.O_RDONLY | NO_FOLLOW);
     } catch (error51) {
       if (isMissing(error51)) return false;
       throw error51;
@@ -36466,7 +36454,7 @@ var WorkflowStore = class {
     const artifacts = [];
     for (const name of names) {
       const filePath = path9.join(this.workflowDirectory, name);
-      const handle = await open6(filePath, constants7.O_RDONLY | NO_FOLLOW3);
+      const handle = await open6(filePath, constants7.O_RDONLY | NO_FOLLOW);
       try {
         const metadata = await handle.stat();
         const named = await lstat7(filePath);
@@ -36512,7 +36500,7 @@ var WorkflowStore = class {
     let handle;
     try {
       try {
-        handle = await open6(this.statePath, constants7.O_RDONLY | NO_FOLLOW3);
+        handle = await open6(this.statePath, constants7.O_RDONLY | NO_FOLLOW);
       } catch (error51) {
         if (isMissing(error51)) return null;
         throw error51;
@@ -36594,7 +36582,7 @@ var WorkflowStore = class {
     let handle;
     try {
       try {
-        handle = await open6(this.journalPath, constants7.O_RDONLY | NO_FOLLOW3);
+        handle = await open6(this.journalPath, constants7.O_RDONLY | NO_FOLLOW);
       } catch (error51) {
         if (isMissing(error51)) {
           await assertDirectoryIdentity(this.workflowDirectory, directory);
@@ -36653,7 +36641,7 @@ var WorkflowStore = class {
   async truncateTornJournalTail(directory, snapshot) {
     if (!snapshot.tornTail || snapshot.identity === null) return;
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open6(this.journalPath, constants7.O_RDWR | NO_FOLLOW3);
+    const handle = await open6(this.journalPath, constants7.O_RDWR | NO_FOLLOW);
     try {
       const metadata = await handle.stat();
       const named = await lstat7(this.journalPath);
@@ -36675,7 +36663,7 @@ var WorkflowStore = class {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     const handle = await open6(
       this.journalPath,
-      constants7.O_WRONLY | constants7.O_CREAT | constants7.O_APPEND | NO_FOLLOW3,
+      constants7.O_WRONLY | constants7.O_CREAT | constants7.O_APPEND | NO_FOLLOW,
       384
     );
     try {
@@ -36719,7 +36707,7 @@ var WorkflowStore = class {
     try {
       handle = await open6(
         temporaryPath,
-        constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW3,
+        constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW,
         384
       );
       temporaryExists = true;
@@ -36783,7 +36771,7 @@ var WorkflowStore = class {
     }
   }
   async assertStagedPublication(temporaryPath, publicationPath, expectedBytes, expectedIdentity) {
-    const handle = await open6(publicationPath, constants7.O_RDONLY | NO_FOLLOW3);
+    const handle = await open6(publicationPath, constants7.O_RDONLY | NO_FOLLOW);
     try {
       const metadata = await handle.stat({ bigint: true });
       const [publication, temporary] = await Promise.all([
@@ -36803,7 +36791,7 @@ var WorkflowStore = class {
     }
   }
   async assertPublishedState(expectedBytes, expectedIdentity) {
-    const handle = await open6(this.statePath, constants7.O_RDONLY | NO_FOLLOW3);
+    const handle = await open6(this.statePath, constants7.O_RDONLY | NO_FOLLOW);
     try {
       const metadata = await handle.stat({ bigint: true });
       const named = await lstat7(this.statePath, { bigint: true });
@@ -38857,7 +38845,6 @@ import {
 } from "node:fs/promises";
 import path13 from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
-var NO_FOLLOW4 = constants8.O_NOFOLLOW ?? 0;
 async function resolveWatchdogPath() {
   const candidates = [
     new URL("../../runtime/watchdog.mjs", import.meta.url),
@@ -38910,7 +38897,7 @@ async function writeRunStart(target, record2, create) {
   if (create) {
     const handle2 = await open8(
       destination,
-      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | NO_FOLLOW4,
+      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | NO_FOLLOW,
       384
     );
     try {
@@ -38932,7 +38919,7 @@ async function writeRunStart(target, record2, create) {
   try {
     handle = await open8(
       temporaryPath,
-      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | NO_FOLLOW4,
+      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | NO_FOLLOW,
       384
     );
     created = true;
@@ -39389,7 +39376,6 @@ var MAX_CHECKOUT_LOCK_BYTES = 4096;
 var MAX_AUTOPILOT_OWNER_BYTES = 1024;
 var MAX_AUTOPILOT_REGISTRATION_BYTES = 32768;
 var MAX_AUTOPILOT_SCAN_ENTRIES = 1024;
-var NO_FOLLOW5 = constants9.O_NOFOLLOW ?? 0;
 var WORKFLOW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 var OID = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
 var AUTOPILOT_ISSUE_ORDER = [
@@ -39488,7 +39474,7 @@ async function checkoutLockIssues(stateDir, ps, isProcessAlive2) {
     }
     let handle;
     try {
-      handle = await open9(path17.join(locksRoot, entry.name), constants9.O_RDONLY | NO_FOLLOW5);
+      handle = await open9(path17.join(locksRoot, entry.name), constants9.O_RDONLY | NO_FOLLOW);
       const metadataBeforeRead = await handle.stat();
       if (!metadataBeforeRead.isFile() || metadataBeforeRead.size > MAX_CHECKOUT_LOCK_BYTES) {
         issues.add("checkout-lock-malformed");
@@ -39532,7 +39518,7 @@ async function readBoundedRegularFile(filename, maxBytes) {
   let handle;
   let outcome = { status: "malformed" };
   try {
-    handle = await open9(filename, constants9.O_RDONLY | NO_FOLLOW5);
+    handle = await open9(filename, constants9.O_RDONLY | NO_FOLLOW);
     const before = await handle.stat();
     const named = await lstat9(filename);
     if (!before.isFile() || before.nlink !== 1 || before.size > maxBytes || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== before.dev || named.ino !== before.ino || named.size !== before.size) return outcome;
@@ -40989,6 +40975,11 @@ function resolveEmptyDirectoryTimeoutMs(env = process.env, warn = (message) => c
   );
   return DEFAULT_EMPTY_DIRECTORY_TIMEOUT_MS;
 }
+var CHILD_SAME_IDENTITY_SOURCE = String.raw`(left, right) => left.dev === right.dev
+  && left.ino === right.ino
+  && left.birthtimeNs === right.birthtimeNs
+  && left.isDirectory() === right.isDirectory()
+  && left.isSymbolicLink() === right.isSymbolicLink()`;
 var EMPTY_DIRECTORY_SCRIPT = String.raw`
 const { execFileSync } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
@@ -41024,12 +41015,7 @@ const isMountPoint = entry => {
     process.exit(40);
   }
 };
-const sameIdentity = (left, right) => left.dev === right.dev
-  && left.ino === right.ino
-  && left.birthtimeNs > 0n
-  && left.birthtimeNs === right.birthtimeNs
-  && left.isDirectory() === right.isDirectory()
-  && left.isSymbolicLink() === right.isSymbolicLink();
+const sameIdentity = ${CHILD_SAME_IDENTITY_SOURCE};
 // One lsof spawn resolves a whole batch of handles; per-directory spawns made
 // large trees (node_modules) blow the cleanup budget.
 const darwinHandlePaths = fds => {
@@ -41231,6 +41217,7 @@ const emptyBoundDirectory = async expected => {
     isDirectory: () => true,
     isSymbolicLink: () => false,
   };
+  if (expected.birthtimeNs <= 0n) process.exit(41);
   await emptyBoundDirectory(expected);
 })().catch(error => {
   // Codes only, never paths: this lands in bounded redacted diagnostics.
@@ -41240,9 +41227,6 @@ const emptyBoundDirectory = async expected => {
   process.exit(49);
 });
 `;
-function sameBoundIdentity(metadata, expected) {
-  return metadata.dev === expected.dev && metadata.ino === expected.ino && metadata.birthtimeNs > 0n && metadata.birthtimeNs === expected.birthtimeNs;
-}
 async function closeBoundHandle(handle, primaryError) {
   try {
     await handle?.close();
@@ -41345,7 +41329,8 @@ async function verifyBoundDirectoryCleanupSupport(platformServices) {
     );
   }
 }
-async function removeBoundEmptyDirectory(directory, expectedIdentity, platformServices, remove) {
+async function removeBoundEmptyDirectory(directory, boundIdentity, platformServices, remove) {
+  const expectedIdentity = requireBirthtimeIdentity(boundIdentity, "bound directory");
   await verifyBoundDirectoryCleanupSupport(platformServices);
   if (platformServices.os === "win32") {
     if (remove !== void 0) {
@@ -41358,26 +41343,26 @@ async function removeBoundEmptyDirectory(directory, expectedIdentity, platformSe
   let primaryError;
   try {
     const named = await lstat11(directory, { bigint: true });
-    if (!named.isDirectory() || named.isSymbolicLink() || !sameBoundIdentity(named, expectedIdentity)) {
+    if (!named.isDirectory() || named.isSymbolicLink() || !sameDirectoryIdentity(named, expectedIdentity)) {
       throw new RuntimeError("directory identity changed before bound removal");
     }
-    handle = await open10(directory, constants10.O_RDONLY | (constants10.O_NOFOLLOW ?? 0));
+    handle = await open10(directory, constants10.O_RDONLY | NO_FOLLOW);
     const opened = await handle.stat({ bigint: true });
-    if (!opened.isDirectory() || !sameBoundIdentity(opened, expectedIdentity)) {
+    if (!opened.isDirectory() || !sameDirectoryIdentity(opened, expectedIdentity)) {
       throw new RuntimeError("opened directory identity changed before bound removal");
     }
     const settledNamed = await lstat11(directory, { bigint: true });
-    if (!settledNamed.isDirectory() || settledNamed.isSymbolicLink() || !sameBoundIdentity(settledNamed, expectedIdentity)) {
+    if (!settledNamed.isDirectory() || settledNamed.isSymbolicLink() || !sameDirectoryIdentity(settledNamed, expectedIdentity)) {
       throw new RuntimeError("directory identity changed before final bound removal");
     }
     const darwinPath = platformServices.os === "darwin" ? await darwinHandlePath(directory, handle, platformServices) : void 0;
     const removalTarget = await lstat11(directory, { bigint: true });
-    if (!removalTarget.isDirectory() || removalTarget.isSymbolicLink() || !sameBoundIdentity(removalTarget, expectedIdentity)) {
+    if (!removalTarget.isDirectory() || removalTarget.isSymbolicLink() || !sameDirectoryIdentity(removalTarget, expectedIdentity)) {
       throw new RuntimeError("directory identity changed at the final removal boundary");
     }
     await (remove ?? rmdir)(directory);
     const removed = await handle.stat({ bigint: true });
-    if (!sameBoundIdentity(removed, expectedIdentity)) {
+    if (!sameDirectoryIdentity(removed, expectedIdentity)) {
       throw new RuntimeError("directory handle identity changed during removal");
     }
     if (platformServices.os === "linux") {
@@ -41398,7 +41383,8 @@ async function removeBoundEmptyDirectory(directory, expectedIdentity, platformSe
   await closeBoundHandle(handle, primaryError);
   if (primaryError !== void 0) throw primaryError;
 }
-async function emptyBoundDirectory(directory, expectedIdentity, platformServices) {
+async function emptyBoundDirectory(directory, boundIdentity, platformServices) {
+  const expectedIdentity = requireBirthtimeIdentity(boundIdentity, "bound directory");
   await verifyBoundDirectoryCleanupSupport(platformServices);
   const helper = platformServices.os === "win32" ? await resolveWindowsFilesystemHelper() : null;
   const result = await supervise(platformServices, {
@@ -41452,7 +41438,7 @@ var HARDLINK_PROBE_NAME = /^\.hardlink-probe-([0-9a-f-]{36})\.(source|linked)$/i
 var MANIFEST_REMOVAL_GUARD = /^\.remove-manifest-([a-z0-9][a-z0-9-]{0,127})\.[0-9a-f-]{36}\.guard$/i;
 var MANIFEST_VERSION = "1";
 var MAX_MANIFEST_BYTES = 32768n;
-function sameIdentity3(metadata, expected) {
+function sameFileIdentity(metadata, expected) {
   return metadata.dev === expected.dev && metadata.ino === expected.ino && metadata.birthtimeNs > 0n && metadata.birthtimeNs === expected.birthtimeNs;
 }
 function manifestRoot() {
@@ -41465,7 +41451,7 @@ async function ensurePrivateDirectory2(directory) {
 }
 async function assertDirectoryIdentity3(directory, expected) {
   const metadata = await lstat12(directory, { bigint: true });
-  if (!metadata.isDirectory() || metadata.isSymbolicLink() || !sameIdentity3(metadata, expected)) {
+  if (!metadata.isDirectory() || metadata.isSymbolicLink() || !sameDirectoryIdentity(metadata, expected)) {
     throw new RuntimeError("worktree removal manifest directory identity changed");
   }
 }
@@ -41480,7 +41466,7 @@ async function assertMissing(filename, description) {
 }
 async function assertManifestIdentity(manifestPath, expected, expectedLinks) {
   const metadata = await lstat12(manifestPath, { bigint: true });
-  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== expectedLinks || !sameIdentity3(metadata, expected)) {
+  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== expectedLinks || !sameFileIdentity(metadata, expected)) {
     throw new RuntimeError("worktree removal manifest publication identity changed");
   }
 }
@@ -41603,7 +41589,7 @@ async function verifyWorktreeRemovalManifestStorage() {
   try {
     const handle = await open11(
       sourcePath,
-      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | (constants11.O_NOFOLLOW ?? 0),
+      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | NO_FOLLOW,
       384
     );
     sourceExists = true;
@@ -41675,7 +41661,7 @@ async function persistWorktreeRemovalManifest(manifest) {
   try {
     const handle = await open11(
       temporaryPath,
-      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | (constants11.O_NOFOLLOW ?? 0),
+      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | NO_FOLLOW,
       384
     );
     temporaryExists = true;
@@ -41742,7 +41728,7 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
   try {
     const handle = await open11(
       temporaryPath,
-      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | (constants11.O_NOFOLLOW ?? 0),
+      constants11.O_WRONLY | constants11.O_CREAT | constants11.O_EXCL | NO_FOLLOW,
       384
     );
     temporaryExists = true;
@@ -41811,7 +41797,7 @@ async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
 async function readLinkedManifest(temporaryPath, manifestPath) {
   const handle = await open11(
     manifestPath,
-    constants11.O_RDONLY | (constants11.O_NOFOLLOW ?? 0)
+    constants11.O_RDONLY | NO_FOLLOW
   );
   let primaryError;
   try {
@@ -41820,7 +41806,7 @@ async function readLinkedManifest(temporaryPath, manifestPath) {
       lstat12(temporaryPath, { bigint: true }),
       lstat12(manifestPath, { bigint: true })
     ]);
-    if (!opened.isFile() || opened.nlink !== 2n || opened.size > MAX_MANIFEST_BYTES || !temporary.isFile() || temporary.isSymbolicLink() || temporary.nlink !== 2n || !published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity3(temporary, opened) || !sameIdentity3(published, opened) || temporary.size !== opened.size || published.size !== opened.size) {
+    if (!opened.isFile() || opened.nlink !== 2n || opened.size > MAX_MANIFEST_BYTES || !temporary.isFile() || temporary.isSymbolicLink() || temporary.nlink !== 2n || !published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameFileIdentity(temporary, opened) || !sameFileIdentity(published, opened) || temporary.size !== opened.size || published.size !== opened.size) {
       throw new RuntimeError("linked worktree removal manifest residue is ambiguous");
     }
     const size = Number(opened.size);
@@ -41836,7 +41822,7 @@ async function readLinkedManifest(temporaryPath, manifestPath) {
       lstat12(temporaryPath, { bigint: true }),
       lstat12(manifestPath, { bigint: true })
     ]);
-    if (offset !== size || !sameIdentity3(settled, opened) || settled.nlink !== 2n || settled.size !== opened.size || settled.mtimeNs !== opened.mtimeNs || settled.ctimeNs !== opened.ctimeNs || !sameIdentity3(settledTemporary, opened) || settledTemporary.nlink !== 2n || !sameIdentity3(settledPublished, opened) || settledPublished.nlink !== 2n) {
+    if (offset !== size || !sameFileIdentity(settled, opened) || settled.nlink !== 2n || settled.size !== opened.size || settled.mtimeNs !== opened.mtimeNs || settled.ctimeNs !== opened.ctimeNs || !sameFileIdentity(settledTemporary, opened) || settledTemporary.nlink !== 2n || !sameFileIdentity(settledPublished, opened) || settledPublished.nlink !== 2n) {
       throw new RuntimeError("linked worktree removal manifest residue changed while reading");
     }
     return contents;
@@ -41876,7 +41862,7 @@ async function settleLinkedWorktreeRemovalManifest(manifestPath, temporaryPath, 
     }
     throw error51;
   }
-  if (!temporary.isFile() || temporary.isSymbolicLink() || temporary.nlink !== 2n || !published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity3(temporary, published)) {
+  if (!temporary.isFile() || temporary.isSymbolicLink() || temporary.nlink !== 2n || !published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameFileIdentity(temporary, published)) {
     throw new RuntimeError("linked worktree removal manifest residue is ambiguous");
   }
   const publishedIdentity = {
@@ -41993,7 +41979,7 @@ async function readPendingWorktreeRemovalManifests() {
       }
       if (guard.nlink === 2n) {
         const published = await lstat12(publishedPath, { bigint: true });
-        if (!published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameIdentity3(published, guard)) {
+        if (!published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || !sameFileIdentity(published, guard)) {
           throw new RuntimeError("worktree removal manifest guard pair is inconsistent");
         }
       } else {
@@ -42029,7 +42015,7 @@ async function readPendingWorktreeRemovalManifests() {
         if (metadata[0].metadata.nlink !== 1n) {
           throw new RuntimeError("manifest hard-link probe residue has an external alias");
         }
-      } else if (metadata.length !== 2 || metadata.some(({ metadata: value }) => value.nlink !== 2n) || !sameIdentity3(metadata[0].metadata, metadata[1].metadata)) {
+      } else if (metadata.length !== 2 || metadata.some(({ metadata: value }) => value.nlink !== 2n) || !sameFileIdentity(metadata[0].metadata, metadata[1].metadata)) {
         throw new RuntimeError("manifest hard-link probe pair is inconsistent");
       }
       for (const { path: probePath } of metadata.reverse()) {
@@ -42288,15 +42274,12 @@ function failure(action, result) {
   const diagnostic = output === "" ? "" : boundedRedactedDiagnostic(output, MAX_DIAGNOSTIC_LENGTH3);
   return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
 }
-function sameDirectoryIdentity2(left, right) {
-  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
-}
 async function quarantinedIdentityRemainsNamed(quarantineRoot, expectedIdentity) {
   const entries = await readdir7(quarantineRoot, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     const observed = await managedWorktreeDirectoryIdentity(path22.join(quarantineRoot, entry.name));
-    if (observed !== null && sameDirectoryIdentity2(observed, expectedIdentity)) return true;
+    if (observed !== null && sameDirectoryIdentity(observed, expectedIdentity)) return true;
   }
   return false;
 }
@@ -42306,14 +42289,7 @@ async function managedWorktreeDirectoryIdentity(directory) {
     if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
       throw new RuntimeError("managed worktree must be a plain directory");
     }
-    if (metadata.birthtimeNs <= 0n) {
-      throw new RuntimeError("managed worktree filesystem lacks stable birth-time identity");
-    }
-    return {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs
-    };
+    return requireBirthtimeIdentity(metadata, "managed worktree filesystem");
   } catch (error51) {
     if (errorCode(error51) === "ENOENT") return null;
     throw error51;
@@ -42326,14 +42302,14 @@ async function requiredDirectoryIdentity(directory, description) {
 }
 async function assertDirectoryIdentity4(directory, expected, description) {
   const observed = await managedWorktreeDirectoryIdentity(directory);
-  if (observed === null || !sameDirectoryIdentity2(observed, expected)) {
+  if (observed === null || !sameDirectoryIdentity(observed, expected)) {
     throw new RuntimeError(`${description} identity changed`);
   }
 }
 async function removeQuarantinedDirectory(quarantineRoot, quarantinePath, expectedIdentity, options) {
   const rootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
   const initialIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
-  if (rootIdentity === null || initialIdentity === null || !sameDirectoryIdentity2(initialIdentity, expectedIdentity)) {
+  if (rootIdentity === null || initialIdentity === null || !sameDirectoryIdentity(initialIdentity, expectedIdentity)) {
     throw new RuntimeError("managed worktree identity changed before removal");
   }
   await emptyBoundDirectory(
@@ -42343,7 +42319,7 @@ async function removeQuarantinedDirectory(quarantineRoot, quarantinePath, expect
   );
   const emptiedIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
   const emptiedRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (emptiedIdentity === null || !sameDirectoryIdentity2(emptiedIdentity, expectedIdentity) || emptiedRootIdentity === null || !sameDirectoryIdentity2(emptiedRootIdentity, rootIdentity)) {
+  if (emptiedIdentity === null || !sameDirectoryIdentity(emptiedIdentity, expectedIdentity) || emptiedRootIdentity === null || !sameDirectoryIdentity(emptiedRootIdentity, rootIdentity)) {
     throw new RuntimeError("managed worktree identity changed after emptying");
   }
   await removeBoundEmptyDirectory(
@@ -42355,7 +42331,7 @@ async function removeQuarantinedDirectory(quarantineRoot, quarantinePath, expect
   await syncChangedDirectories(options, quarantineRoot);
   const removedIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
   const remainingRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (removedIdentity !== null || remainingRootIdentity === null || !sameDirectoryIdentity2(remainingRootIdentity, rootIdentity) || await quarantinedIdentityRemainsNamed(quarantineRoot, expectedIdentity)) {
+  if (removedIdentity !== null || remainingRootIdentity === null || !sameDirectoryIdentity(remainingRootIdentity, rootIdentity) || await quarantinedIdentityRemainsNamed(quarantineRoot, expectedIdentity)) {
     throw new RuntimeError("managed worktree removal did not settle safely");
   }
 }
@@ -42390,7 +42366,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   const observedIdentity = await managedWorktreeDirectoryIdentity(target);
   if (observedIdentity === null) return false;
   const expectedIdentity = options.expectedIdentity ?? observedIdentity;
-  if (!sameDirectoryIdentity2(observedIdentity, expectedIdentity)) {
+  if (!sameDirectoryIdentity(observedIdentity, expectedIdentity)) {
     throw new RuntimeError("managed worktree directory identity changed before quarantine");
   }
   const quarantineToken = (options.uuid ?? randomUUID6)();
@@ -42427,7 +42403,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   const quarantinedIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
   const settledRootIdentity = await managedWorktreeDirectoryIdentity(root);
   const settledQuarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (quarantinedIdentity === null || !sameDirectoryIdentity2(quarantinedIdentity, expectedIdentity) || settledRootIdentity === null || !sameDirectoryIdentity2(settledRootIdentity, rootIdentity) || settledQuarantineRootIdentity === null || !sameDirectoryIdentity2(settledQuarantineRootIdentity, quarantineRootIdentity)) {
+  if (quarantinedIdentity === null || !sameDirectoryIdentity(quarantinedIdentity, expectedIdentity) || settledRootIdentity === null || !sameDirectoryIdentity(settledRootIdentity, rootIdentity) || settledQuarantineRootIdentity === null || !sameDirectoryIdentity(settledQuarantineRootIdentity, quarantineRootIdentity)) {
     throw new RuntimeError("managed worktree identity changed during quarantine");
   }
   const rollbackQuarantine = async (operationError, message) => {
@@ -42435,7 +42411,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
       const rollbackIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
       const rollbackRootIdentity = await managedWorktreeDirectoryIdentity(root);
       const rollbackQuarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-      if (rollbackIdentity === null || !sameDirectoryIdentity2(rollbackIdentity, expectedIdentity) || rollbackRootIdentity === null || !sameDirectoryIdentity2(rollbackRootIdentity, rootIdentity) || rollbackQuarantineRootIdentity === null || !sameDirectoryIdentity2(rollbackQuarantineRootIdentity, quarantineRootIdentity) || await managedWorktreeDirectoryIdentity(target) !== null) {
+      if (rollbackIdentity === null || !sameDirectoryIdentity(rollbackIdentity, expectedIdentity) || rollbackRootIdentity === null || !sameDirectoryIdentity(rollbackRootIdentity, rootIdentity) || rollbackQuarantineRootIdentity === null || !sameDirectoryIdentity(rollbackQuarantineRootIdentity, quarantineRootIdentity) || await managedWorktreeDirectoryIdentity(target) !== null) {
         throw new RuntimeError("managed worktree quarantine rollback is unsafe");
       }
       await move(quarantinePath, target);
@@ -42443,7 +42419,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
       const restoredIdentity = await managedWorktreeDirectoryIdentity(target);
       const restoredRootIdentity = await managedWorktreeDirectoryIdentity(root);
       const restoredQuarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-      if (restoredIdentity === null || !sameDirectoryIdentity2(restoredIdentity, expectedIdentity) || restoredRootIdentity === null || !sameDirectoryIdentity2(restoredRootIdentity, rootIdentity) || restoredQuarantineRootIdentity === null || !sameDirectoryIdentity2(restoredQuarantineRootIdentity, quarantineRootIdentity)) {
+      if (restoredIdentity === null || !sameDirectoryIdentity(restoredIdentity, expectedIdentity) || restoredRootIdentity === null || !sameDirectoryIdentity(restoredRootIdentity, rootIdentity) || restoredQuarantineRootIdentity === null || !sameDirectoryIdentity(restoredQuarantineRootIdentity, quarantineRootIdentity)) {
         throw new RuntimeError("managed worktree quarantine rollback changed identity");
       }
     } catch (rollbackError) {
@@ -42471,7 +42447,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   if (options.preserveQuarantine === true) return true;
   const finalRootIdentity = await managedWorktreeDirectoryIdentity(root);
   const finalQuarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (finalRootIdentity === null || !sameDirectoryIdentity2(finalRootIdentity, rootIdentity) || finalQuarantineRootIdentity === null || !sameDirectoryIdentity2(finalQuarantineRootIdentity, quarantineRootIdentity)) {
+  if (finalRootIdentity === null || !sameDirectoryIdentity(finalRootIdentity, rootIdentity) || finalQuarantineRootIdentity === null || !sameDirectoryIdentity(finalQuarantineRootIdentity, quarantineRootIdentity)) {
     throw new RuntimeError("managed worktree root identity changed before removal");
   }
   await removeQuarantinedDirectory(
@@ -42484,7 +42460,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
     managedWorktreeDirectoryIdentity(root),
     managedWorktreeDirectoryIdentity(target)
   ]);
-  if (remainingRootIdentity === null || !sameDirectoryIdentity2(remainingRootIdentity, rootIdentity) || replacementIdentity !== null) {
+  if (remainingRootIdentity === null || !sameDirectoryIdentity(remainingRootIdentity, rootIdentity) || replacementIdentity !== null) {
     throw new RuntimeError("managed worktree root or target changed after removal");
   }
   return true;
@@ -42649,7 +42625,7 @@ async function restoreStagedRegistration(registrationRoot, registrationPath, qua
   const quarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
   const sourceIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
   const destinationIdentity = await managedWorktreeDirectoryIdentity(registrationPath);
-  if (registrationRootIdentity === null || !sameDirectoryIdentity2(registrationRootIdentity, expectedRegistrationRootIdentity) || quarantineRootIdentity === null || !sameDirectoryIdentity2(quarantineRootIdentity, expectedQuarantineRootIdentity) || sourceIdentity === null || !sameDirectoryIdentity2(sourceIdentity, expectedIdentity) || destinationIdentity !== null) {
+  if (registrationRootIdentity === null || !sameDirectoryIdentity(registrationRootIdentity, expectedRegistrationRootIdentity) || quarantineRootIdentity === null || !sameDirectoryIdentity(quarantineRootIdentity, expectedQuarantineRootIdentity) || sourceIdentity === null || !sameDirectoryIdentity(sourceIdentity, expectedIdentity) || destinationIdentity !== null) {
     throw new RuntimeError("staged worktree registration rollback is unsafe");
   }
   const move = dependencies.rename ?? rename5;
@@ -42675,7 +42651,7 @@ async function restoreStagedRegistration(registrationRoot, registrationPath, qua
   const restoredIdentity = await managedWorktreeDirectoryIdentity(registrationPath);
   const settledRegistrationRoot = await managedWorktreeDirectoryIdentity(registrationRoot);
   const settledQuarantineRoot = await managedWorktreeDirectoryIdentity(quarantineRoot);
-  if (restoredIdentity === null || !sameDirectoryIdentity2(restoredIdentity, expectedIdentity) || await managedWorktreeDirectoryIdentity(quarantinePath) !== null || settledRegistrationRoot === null || !sameDirectoryIdentity2(settledRegistrationRoot, expectedRegistrationRootIdentity) || settledQuarantineRoot === null || !sameDirectoryIdentity2(settledQuarantineRoot, expectedQuarantineRootIdentity)) {
+  if (restoredIdentity === null || !sameDirectoryIdentity(restoredIdentity, expectedIdentity) || await managedWorktreeDirectoryIdentity(quarantinePath) !== null || settledRegistrationRoot === null || !sameDirectoryIdentity(settledRegistrationRoot, expectedRegistrationRootIdentity) || settledQuarantineRoot === null || !sameDirectoryIdentity(settledQuarantineRoot, expectedQuarantineRootIdentity)) {
     throw new RuntimeError("staged worktree registration rollback changed identity");
   }
 }
@@ -42712,7 +42688,7 @@ async function stageRegistrationDirectory(repoRoot, registration, worktreePath, 
   } catch (stageError) {
     const originalIdentity = await managedWorktreeDirectoryIdentity(registration.path);
     const quarantineIdentity = await managedWorktreeDirectoryIdentity(quarantinePath);
-    if (originalIdentity === null && quarantineIdentity !== null && sameDirectoryIdentity2(quarantineIdentity, registration.identity)) {
+    if (originalIdentity === null && quarantineIdentity !== null && sameDirectoryIdentity(quarantineIdentity, registration.identity)) {
       try {
         await restoreStagedRegistration(
           registration.root,
@@ -43011,7 +42987,7 @@ async function removeStaleWorktreeRegistration(repoRoot, worktreePath, worktreeG
       await assertRemovalRoots();
       await syncChangedDirectories(dependencies, registration.root, quarantineRoot);
       const restored = await managedWorktreeDirectoryIdentity(registration.path);
-      return restored !== null && sameDirectoryIdentity2(restored, registration.identity) && await managedWorktreeDirectoryIdentity(quarantinePath) === null;
+      return restored !== null && sameDirectoryIdentity(restored, registration.identity) && await managedWorktreeDirectoryIdentity(quarantinePath) === null;
     },
     removePhysical: async (markRemovalStarted) => {
       await assertRemovalRoots();
@@ -43029,7 +43005,7 @@ async function removeStaleWorktreeRegistration(repoRoot, worktreePath, worktreeG
 async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {}, expectedIdentity) {
   const runGit = dependencies.git ?? git;
   const observedIdentity = await managedWorktreeDirectoryIdentity(worktreePath);
-  if (expectedIdentity !== void 0 && (observedIdentity === null || !sameDirectoryIdentity2(observedIdentity, expectedIdentity))) {
+  if (expectedIdentity !== void 0 && (observedIdentity === null || !sameDirectoryIdentity(observedIdentity, expectedIdentity))) {
     throw new RuntimeError("managed worktree identity changed before registration removal");
   }
   const identity = expectedIdentity ?? observedIdentity;
@@ -43049,7 +43025,7 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
   }
   const registration = await worktreeRegistrationDirectory(repoRoot, worktreePath, runGit);
   const settledIdentity = await managedWorktreeDirectoryIdentity(worktreePath);
-  if (settledIdentity === null || !sameDirectoryIdentity2(settledIdentity, identity)) {
+  if (settledIdentity === null || !sameDirectoryIdentity(settledIdentity, identity)) {
     throw new RuntimeError("managed worktree identity changed before removal transaction");
   }
   const { root, target } = await managedPath(worktreePath);
@@ -43137,7 +43113,7 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
       await assertRemovalRoots();
       await syncChangedDirectories(dependencies, registration.root, quarantineRoot);
       const restored = await managedWorktreeDirectoryIdentity(registration.path);
-      return restored !== null && sameDirectoryIdentity2(restored, registration.identity) && await managedWorktreeDirectoryIdentity(quarantinePath) === null;
+      return restored !== null && sameDirectoryIdentity(restored, registration.identity) && await managedWorktreeDirectoryIdentity(quarantinePath) === null;
     },
     removePhysical: async (markRemovalStarted) => {
       await assertRemovalRoots();
@@ -43157,7 +43133,7 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
     physicalIsUnchanged: async () => {
       await assertRemovalRoots();
       const physical = await managedWorktreeDirectoryIdentity(target);
-      return physical !== null && sameDirectoryIdentity2(physical, identity) && await managedWorktreeDirectoryIdentity(physicalQuarantinePath) === null;
+      return physical !== null && sameDirectoryIdentity(physical, identity) && await managedWorktreeDirectoryIdentity(physicalQuarantinePath) === null;
     }
   });
 }
@@ -43361,7 +43337,7 @@ var WorktreeManager = class {
   }
   async captureCreatedIdentity(worktreePath, worktreesRoot, expectedRootIdentity) {
     const settledRootIdentity = await managedWorktreeDirectoryIdentity(worktreesRoot);
-    if (settledRootIdentity === null || !sameDirectoryIdentity2(settledRootIdentity, expectedRootIdentity)) {
+    if (settledRootIdentity === null || !sameDirectoryIdentity(settledRootIdentity, expectedRootIdentity)) {
       throw new WorktreeRootChangedError(
         "managed worktree root identity changed during creation"
       );
@@ -43472,7 +43448,7 @@ var WorktreeManager = class {
       worktreesRoot,
       rootIdentity
     );
-    if (!sameDirectoryIdentity2(settled, identity)) {
+    if (!sameDirectoryIdentity(settled, identity)) {
       return await this.failCreatedWorktree(
         worktreePath,
         identity,
@@ -43512,7 +43488,7 @@ var WorktreeManager = class {
       );
     }
     const identity = await this.captureCreatedIdentity(worktreePath, worktreesRoot, rootIdentity);
-    if (!sameDirectoryIdentity2(identity, creation.physicalIdentity)) {
+    if (!sameDirectoryIdentity(identity, creation.physicalIdentity)) {
       return await this.failCreatedWorktree(
         worktreePath,
         creation.physicalIdentity,
@@ -43585,7 +43561,7 @@ var WorktreeManager = class {
       );
     }
     const identity = await this.captureCreatedIdentity(worktreePath, worktreesRoot, rootIdentity);
-    if (!sameDirectoryIdentity2(identity, creation.physicalIdentity)) {
+    if (!sameDirectoryIdentity(identity, creation.physicalIdentity)) {
       return await this.failCreatedWorktree(
         worktreePath,
         creation.physicalIdentity,
@@ -44610,7 +44586,6 @@ var WINDOWS_RESERVED_COMPONENT = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
 var CANDIDATE_REF_PREFIX = "refs/claude-architect/candidates/";
 var PRUNE_BACKUP_REF_PREFIX = "refs/claude-architect/prune-backups/";
 var CLEANUP_JOURNAL = "cleanup.ndjson";
-var NO_FOLLOW6 = constants12.O_NOFOLLOW ?? 0;
 var MAX_ARCHIVE_FILE_BYTES = 8e6;
 var MAX_EVIDENCE_REFERENCES = 4096;
 var MAX_EVIDENCE_DEPTH = 16;
@@ -44667,7 +44642,7 @@ async function ensurePlainDirectory(directory) {
   } catch (error51) {
     if (!isAlreadyPresent2(error51)) throw error51;
   }
-  const metadata = await lstat14(directory);
+  const metadata = await lstat14(directory, { bigint: true });
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
   }
@@ -44686,8 +44661,8 @@ async function ensurePlainDirectoryTree(directory) {
   }
 }
 async function assertDirectoryIdentity5(directory, expected) {
-  const metadata = await lstat14(directory);
-  if (metadata.isSymbolicLink() || !metadata.isDirectory() || metadata.dev !== expected.dev || metadata.ino !== expected.ino) {
+  const metadata = await lstat14(directory, { bigint: true });
+  if (metadata.isSymbolicLink() || !metadata.isDirectory() || !sameDevIno(metadata, expected)) {
     throw new RuntimeError("archive directory identity changed during operation");
   }
 }
@@ -44696,7 +44671,7 @@ async function readRegularFile(filename, parentIdentity) {
   if (linkMetadata.isSymbolicLink()) {
     throw new RuntimeError(`archive entry must not be a symbolic link: ${redact(filename)}`);
   }
-  const handle = await open12(filename, constants12.O_RDONLY | NO_FOLLOW6);
+  const handle = await open12(filename, constants12.O_RDONLY | NO_FOLLOW);
   try {
     if (parentIdentity !== void 0) {
       await assertDirectoryIdentity5(path24.dirname(filename), parentIdentity);
@@ -44734,11 +44709,11 @@ async function readRegularFile(filename, parentIdentity) {
   }
 }
 async function directoryBytes(directory, expectedIdentity) {
-  const metadata = await lstat14(directory);
+  const metadata = await lstat14(directory, { bigint: true });
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError("archive size accounting requires a plain directory");
   }
-  if (expectedIdentity !== void 0 && (metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino)) {
+  if (expectedIdentity !== void 0 && !sameDevIno(metadata, expectedIdentity)) {
     throw new RuntimeError("archive directory identity changed during size accounting");
   }
   const identity = { dev: metadata.dev, ino: metadata.ino };
@@ -45295,7 +45270,7 @@ var ArtifactStore = class _ArtifactStore {
       for (const component of components.slice(0, -1)) {
         await assertDirectoryIdentity5(directory.path, directory.identity);
         const child = path24.join(directory.path, component);
-        const metadata = await lstat14(child);
+        const metadata = await lstat14(child, { bigint: true });
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
           throw new RuntimeError("archived evidence directory is not a plain directory");
         }
@@ -45339,7 +45314,7 @@ var ArtifactStore = class _ArtifactStore {
         if (STORE_TEMPORARY_RESIDUE.test(name)) continue;
         validateComponent(name, "log name");
         const child = path24.join(directory.path, name);
-        const metadata = await lstat14(child);
+        const metadata = await lstat14(child, { bigint: true });
         if (metadata.isSymbolicLink()) {
           throw new RuntimeError("archived evidence must not contain symbolic links");
         }
@@ -45403,7 +45378,7 @@ var ArtifactStore = class _ArtifactStore {
   async ensureExistingRunDirectory(directory) {
     const canonicalRunsRoot = await this.ensureRunsRoot();
     try {
-      const metadata = await lstat14(directory);
+      const metadata = await lstat14(directory, { bigint: true });
       if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
         throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
       }
@@ -45608,12 +45583,12 @@ var ArtifactStore = class _ArtifactStore {
     const entries = await Promise.all((await this.list()).map(async (runId) => {
       const directory = path24.join(this.runsRoot, runId);
       try {
-        const metadata = await lstat14(directory);
+        const metadata = await lstat14(directory, { bigint: true });
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) return null;
         return {
           runId,
           directory,
-          modifiedAtMs: metadata.mtimeMs,
+          modifiedAtMs: Number(metadata.mtimeMs) + Number(metadata.mtimeNs % 1000000n) / 1e6,
           bytes: await directoryBytes(directory, { dev: metadata.dev, ino: metadata.ino }),
           identity: { dev: metadata.dev, ino: metadata.ino }
         };
@@ -45771,7 +45746,7 @@ var ArtifactStore = class _ArtifactStore {
         const filename = path24.join(this.runsRoot, CLEANUP_JOURNAL);
         const handle = await open12(
           filename,
-          constants12.O_WRONLY | constants12.O_CREAT | constants12.O_APPEND | NO_FOLLOW6,
+          constants12.O_WRONLY | constants12.O_CREAT | constants12.O_APPEND | NO_FOLLOW,
           384
         );
         try {
@@ -46532,14 +46507,14 @@ function isContainedBy(parent, candidate) {
   const relative2 = path25.relative(parent, candidate);
   return relative2 !== "" && relative2 !== ".." && !relative2.startsWith(`..${path25.sep}`) && !path25.isAbsolute(relative2);
 }
-function sameFileIdentity(before, after) {
+function sameFileIdentity2(before, after) {
   return before.dev === after.dev && before.ino === after.ino;
 }
 async function readStablePlainFile(filename, label) {
   const before = await requirePlainFile(filename, label);
   const value = await readFile5(filename, "utf8");
   const after = await requirePlainFile(filename, label);
-  if (!sameFileIdentity(before, after)) {
+  if (!sameFileIdentity2(before, after)) {
     throw invalidWritableRoots(`${label} changed while being read`);
   }
   return value;
@@ -47436,7 +47411,7 @@ var WorkflowBranchManager = class {
     try {
       const handle = await open13(
         temporaryPath,
-        constants13.O_WRONLY | constants13.O_CREAT | constants13.O_EXCL | (constants13.O_NOFOLLOW ?? 0),
+        constants13.O_WRONLY | constants13.O_CREAT | constants13.O_EXCL | NO_FOLLOW,
         384
       );
       temporaryExists = true;
@@ -47990,7 +47965,6 @@ var WorkflowBranchManager = class {
 // src/autopilot/final-branch-reviewer.ts
 var OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 var SHA2562 = /^[0-9a-f]{64}$/u;
-var NO_FOLLOW7 = constants14.O_NOFOLLOW ?? 0;
 var MAX_FINAL_BRANCH_ARTIFACT_BYTES = 64 * 1024 * 1024;
 var MAX_TASK_EVIDENCE_REFS = 4096;
 var MAX_TASK_EVIDENCE_BYTES = 8 * 1024 * 1024;
@@ -48454,7 +48428,7 @@ async function persistFrozenArtifact(workflowDirectory, artifact) {
 async function readPublishedReport(workflowDirectory, artifact) {
   let handle;
   try {
-    handle = await open14(path28.join(workflowDirectory, FINAL_BRANCH_REPORT_REF), constants14.O_RDONLY | NO_FOLLOW7);
+    handle = await open14(path28.join(workflowDirectory, FINAL_BRANCH_REPORT_REF), constants14.O_RDONLY | NO_FOLLOW);
   } catch (error51) {
     if (isMissing(error51)) return null;
     fail2("artifact-persistence-failed", "final branch report is unavailable");
@@ -48483,7 +48457,7 @@ async function assertPersistedArtifact(workflowDirectory, artifact) {
   let handle;
   try {
     const destination = path28.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
-    handle = await open14(destination, constants14.O_RDONLY | NO_FOLLOW7);
+    handle = await open14(destination, constants14.O_RDONLY | NO_FOLLOW);
     const metadata = await handle.stat();
     if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size > MAX_FINAL_BRANCH_ARTIFACT_BYTES) {
       fail2("artifact-persistence-failed", "final branch artifact is not a safe regular file");
@@ -54816,11 +54790,9 @@ import nodeProcess8 from "node:process";
 
 // src/runtime/recovery-shared.ts
 import { createHash as createHash15 } from "node:crypto";
-import { constants as constants15 } from "node:fs";
 import { lstat as lstat18, realpath as realpath14 } from "node:fs/promises";
 import path34 from "node:path";
 import nodeProcess7 from "node:process";
-var NO_FOLLOW8 = constants15.O_NOFOLLOW ?? 0;
 var MAX_STATE_FILE_BYTES2 = 8e6;
 var MAX_STATE_FILE_BYTES_BIGINT2 = BigInt(MAX_STATE_FILE_BYTES2);
 var SAFE_RUN_ID2 = /^[a-z0-9][a-z0-9._-]*$/;
@@ -54835,9 +54807,6 @@ var MAX_QUARANTINE_RECORD_BYTES = 4096;
 var MAX_WORKTREE_SWEEP_ISSUES = 100;
 function isPlainDirectory3(metadata) {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
-}
-function sameManagedIdentity(left, right) {
-  return left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs;
 }
 function validateRunId(runId) {
   if (typeof runId !== "string" || !SAFE_RUN_ID2.test(runId)) {
@@ -54855,15 +54824,11 @@ async function stateRoot() {
     }
     const canonicalRoot = await realpath14(root);
     const settled = await lstat18(canonicalRoot, { bigint: true });
-    if (!isPlainDirectory3(settled) || settled.dev !== metadata.dev || settled.ino !== metadata.ino || settled.birthtimeNs !== metadata.birthtimeNs) {
+    if (!isPlainDirectory3(settled) || !sameDirectoryIdentity(settled, metadata)) {
       throw new RuntimeError("plugin data directory identity changed during canonicalization");
     }
     const privateIdentity = await assertPrivateRecoveryDirectory(canonicalRoot);
-    if (!sameDirectoryIdentity(privateIdentity, {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs
-    })) {
+    if (!sameDirectoryIdentity(privateIdentity, metadata)) {
       throw new RuntimeError("plugin data directory identity changed during privacy validation");
     }
     return canonicalRoot;
@@ -55025,13 +54990,13 @@ function boundedWorktreeSweepIssues(issues, worktreesRoot) {
 }
 
 // src/runtime/recovery-prune-journal.ts
-import { constants as constants16 } from "node:fs";
+import { constants as constants15 } from "node:fs";
 import { lstat as lstat19, open as open16, realpath as realpath15 } from "node:fs/promises";
 import path35 from "node:path";
 async function readCleanupJournal(filename) {
   let handle;
   try {
-    handle = await open16(filename, constants16.O_RDONLY | NO_FOLLOW8);
+    handle = await open16(filename, constants15.O_RDONLY | NO_FOLLOW);
   } catch (error51) {
     if (isMissing(error51)) return { text: null, tornTail: false };
     throw error51;
@@ -55141,7 +55106,7 @@ async function appendCleanupRecord(runsRoot, record2) {
     const filename = path35.join(runsRoot, "cleanup.ndjson");
     const handle = await open16(
       filename,
-      constants16.O_WRONLY | constants16.O_CREAT | constants16.O_APPEND | NO_FOLLOW8,
+      constants15.O_WRONLY | constants15.O_CREAT | constants15.O_APPEND | NO_FOLLOW,
       384
     );
     try {
@@ -55232,7 +55197,7 @@ async function readPendingCleanupRecords(runsRoot) {
 async function truncateCleanupTornTail(filename) {
   let handle;
   try {
-    handle = await open16(filename, constants16.O_RDWR | NO_FOLLOW8);
+    handle = await open16(filename, constants15.O_RDWR | NO_FOLLOW);
   } catch (error51) {
     if (isMissing(error51)) return;
     throw error51;
@@ -55348,7 +55313,7 @@ async function replayInterruptedPrunes(runsRoot, ps) {
 
 // src/runtime/recovery-quarantine.ts
 import { randomUUID as randomUUID12 } from "node:crypto";
-import { constants as constants17 } from "node:fs";
+import { constants as constants16 } from "node:fs";
 import { lstat as lstat20, link as link6, open as open17, rename as rename7 } from "node:fs/promises";
 import path36 from "node:path";
 function boundedQuarantineReason(error51) {
@@ -55419,7 +55384,7 @@ async function readRecoveryQuarantineJournal(runsRoot) {
   }
   let handle;
   try {
-    handle = await open17(filename, constants17.O_RDONLY | NO_FOLLOW8);
+    handle = await open17(filename, constants16.O_RDONLY | NO_FOLLOW);
   } catch (error51) {
     if (!isMissing(error51)) throw error51;
     try {
@@ -55503,7 +55468,7 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
   try {
     handle = await open17(
       temporaryPath,
-      constants17.O_RDWR | constants17.O_CREAT | constants17.O_EXCL | NO_FOLLOW8,
+      constants16.O_RDWR | constants16.O_CREAT | constants16.O_EXCL | NO_FOLLOW,
       384
     );
     temporaryCreated = true;
@@ -55560,7 +55525,7 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
       );
       const currentSnapshot = await readRecoveryQuarantineJournal(runsRoot);
       const sameJournalIdentity = snapshot.journalIdentity === null ? currentSnapshot.journalIdentity === null : currentSnapshot.journalIdentity !== null && currentSnapshot.journalIdentity.dev === snapshot.journalIdentity.dev && currentSnapshot.journalIdentity.ino === snapshot.journalIdentity.ino && currentSnapshot.journalIdentity.birthtimeNs === snapshot.journalIdentity.birthtimeNs;
-      if (currentSnapshot.rootIdentity.dev !== snapshot.rootIdentity.dev || currentSnapshot.rootIdentity.ino !== snapshot.rootIdentity.ino || currentSnapshot.rootIdentity.birthtimeNs !== snapshot.rootIdentity.birthtimeNs || !sameJournalIdentity || !currentSnapshot.bytes.equals(snapshot.bytes)) {
+      if (!sameDirectoryIdentity(currentSnapshot.rootIdentity, snapshot.rootIdentity) || !sameJournalIdentity || !currentSnapshot.bytes.equals(snapshot.bytes)) {
         throw new RuntimeError("recovery quarantine journal changed before publication");
       }
       if (snapshot.journalIdentity === null) {
@@ -55623,7 +55588,7 @@ async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, ne
     throw new AggregateError(cleanupErrors, "recovery quarantine journal temp cleanup failed");
   }
   const publishedSnapshot = await readRecoveryQuarantineJournal(runsRoot);
-  if (temporaryIdentity === void 0 || publishedSnapshot.journalIdentity === null || publishedSnapshot.journalIdentity.dev !== temporaryIdentity.dev || publishedSnapshot.journalIdentity.ino !== temporaryIdentity.ino || publishedSnapshot.journalIdentity.birthtimeNs !== temporaryIdentity.birthtimeNs || publishedSnapshot.rootIdentity.dev !== snapshot.rootIdentity.dev || publishedSnapshot.rootIdentity.ino !== snapshot.rootIdentity.ino || publishedSnapshot.rootIdentity.birthtimeNs !== snapshot.rootIdentity.birthtimeNs || !publishedSnapshot.bytes.equals(nextBytes)) {
+  if (temporaryIdentity === void 0 || publishedSnapshot.journalIdentity === null || publishedSnapshot.journalIdentity.dev !== temporaryIdentity.dev || publishedSnapshot.journalIdentity.ino !== temporaryIdentity.ino || publishedSnapshot.journalIdentity.birthtimeNs !== temporaryIdentity.birthtimeNs || !sameDirectoryIdentity(publishedSnapshot.rootIdentity, snapshot.rootIdentity) || !publishedSnapshot.bytes.equals(nextBytes)) {
     throw new RuntimeError("recovery quarantine journal changed after publication");
   }
   await syncRecoveryDirectory(runsRoot);
@@ -55640,7 +55605,7 @@ async function appendRecoveryQuarantineRecord(runsRoot, record2) {
   if (snapshot.runIds.has(record2.runId)) {
     await syncRecoveryDirectory(runsRoot);
     const settledSnapshot = await readRecoveryQuarantineJournal(runsRoot);
-    if (settledSnapshot.rootIdentity.dev !== snapshot.rootIdentity.dev || settledSnapshot.rootIdentity.ino !== snapshot.rootIdentity.ino || settledSnapshot.rootIdentity.birthtimeNs !== snapshot.rootIdentity.birthtimeNs || settledSnapshot.journalIdentity === null || snapshot.journalIdentity === null || settledSnapshot.journalIdentity.dev !== snapshot.journalIdentity.dev || settledSnapshot.journalIdentity.ino !== snapshot.journalIdentity.ino || settledSnapshot.journalIdentity.birthtimeNs !== snapshot.journalIdentity.birthtimeNs || !settledSnapshot.bytes.equals(snapshot.bytes)) {
+    if (!sameDirectoryIdentity(settledSnapshot.rootIdentity, snapshot.rootIdentity) || settledSnapshot.journalIdentity === null || snapshot.journalIdentity === null || settledSnapshot.journalIdentity.dev !== snapshot.journalIdentity.dev || settledSnapshot.journalIdentity.ino !== snapshot.journalIdentity.ino || settledSnapshot.journalIdentity.birthtimeNs !== snapshot.journalIdentity.birthtimeNs || !settledSnapshot.bytes.equals(snapshot.bytes)) {
       throw new RuntimeError("recovery quarantine journal changed after retry sync");
     }
     return;
@@ -55669,7 +55634,7 @@ async function quarantineRun(runsRoot, runId, error51) {
     renamed = true;
     const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
     const currentRoot = await lstat20(runsRoot, { bigint: true });
-    if (quarantineIdentity === null || quarantineIdentity.dev !== runIdentity.dev || quarantineIdentity.ino !== runIdentity.ino || quarantineIdentity.birthtimeNs !== runIdentity.birthtimeNs || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
+    if (quarantineIdentity === null || !sameDirectoryIdentity(quarantineIdentity, runIdentity) || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
       throw new RuntimeError("poisoned recovery run identity changed during quarantine");
     }
     const record2 = {
@@ -55804,7 +55769,7 @@ async function managedWorktreeMarkerIsPresent(worktreePath) {
 async function removeManagedWorktreeUnderLease(commonDir, worktreePath, expectedIdentity, runGit) {
   const currentIdentity = await managedWorktreeDirectoryIdentity(worktreePath);
   if (currentIdentity === null) return;
-  if (currentIdentity.dev !== expectedIdentity.dev || currentIdentity.ino !== expectedIdentity.ino || currentIdentity.birthtimeNs !== expectedIdentity.birthtimeNs) {
+  if (!sameDirectoryIdentity(currentIdentity, expectedIdentity)) {
     throw new RuntimeError("worktree directory identity changed under checkout lease");
   }
   if (await managedWorktreeMarkerIsPresent(worktreePath)) {
@@ -55999,14 +55964,14 @@ async function findCreationRegistration(registrationRoot, physicalPath) {
 }
 async function findCreationPhysicalRoot(expectedRoot, expected) {
   const identity = await managedWorktreeDirectoryIdentity(expectedRoot);
-  if (identity !== null && sameManagedIdentity(identity, expected)) return expectedRoot;
+  if (identity !== null && sameDirectoryIdentity(identity, expected)) return expectedRoot;
   const stateDirectory = path38.dirname(expectedRoot);
   const matches = [];
   for (const entry of await readdir10(stateDirectory, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     const candidate = path38.join(stateDirectory, entry.name);
     const candidateIdentity = await managedWorktreeDirectoryIdentity(candidate);
-    if (candidateIdentity !== null && sameManagedIdentity(candidateIdentity, expected)) {
+    if (candidateIdentity !== null && sameDirectoryIdentity(candidateIdentity, expected)) {
       matches.push(candidate);
     }
   }
@@ -56021,7 +55986,7 @@ async function findManagedChildByIdentity(root, expected) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     const candidate = path38.join(root, entry.name);
     const identity = await managedWorktreeDirectoryIdentity(candidate);
-    if (identity !== null && sameManagedIdentity(identity, expected)) matches.push(candidate);
+    if (identity !== null && sameDirectoryIdentity(identity, expected)) matches.push(candidate);
   }
   if (matches.length > 1) {
     throw new RuntimeError("managed directory identity appears at multiple paths");
@@ -56072,7 +56037,7 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
     managedWorktreeDirectoryIdentity(registrationRoot),
     managedWorktreeDirectoryIdentity(quarantineRoot)
   ]);
-  if (!platformPathsEqual(commonDir, manifest.commonDir) || !platformPathsEqual(registrationRoot, manifest.registrationRoot) || !platformPathsEqual(quarantineRoot, manifest.quarantineRoot) || commonIdentity === null || !sameManagedIdentity(commonIdentity, expectedCommonDir) || registrationRootIdentity === null || !sameManagedIdentity(registrationRootIdentity, expectedRegistrationRoot) || quarantineRootIdentity === null || !sameManagedIdentity(quarantineRootIdentity, expectedQuarantineRoot)) {
+  if (!platformPathsEqual(commonDir, manifest.commonDir) || !platformPathsEqual(registrationRoot, manifest.registrationRoot) || !platformPathsEqual(quarantineRoot, manifest.quarantineRoot) || commonIdentity === null || !sameDirectoryIdentity(commonIdentity, expectedCommonDir) || registrationRootIdentity === null || !sameDirectoryIdentity(registrationRootIdentity, expectedRegistrationRoot) || quarantineRootIdentity === null || !sameDirectoryIdentity(quarantineRootIdentity, expectedQuarantineRoot)) {
     throw new RuntimeError("worktree creation intent repository identity changed");
   }
   await platformSafety.withRecoveryLease(commonDir, async (lease) => {
@@ -56120,7 +56085,7 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
       if (finalPhysicalIdentity !== null) {
         throw new RuntimeError("unbound final worktree creation path appeared");
       }
-    } else if (physicalIdentity !== null && !sameManagedIdentity(physicalIdentity, expectedPhysical)) {
+    } else if (physicalIdentity !== null && !sameDirectoryIdentity(physicalIdentity, expectedPhysical)) {
       throw new RuntimeError("worktree creation physical identity changed");
     }
     const activeRegistration = await findCreationRegistration(
@@ -56146,7 +56111,7 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
         throw new RuntimeError("worktree creation registration reappeared after staging");
       }
       quarantineIdentity = await managedWorktreeDirectoryIdentity(manifest.quarantinePath);
-      if (quarantineIdentity === null || !sameManagedIdentity(quarantineIdentity, registrationIdentity)) {
+      if (quarantineIdentity === null || !sameDirectoryIdentity(quarantineIdentity, registrationIdentity)) {
         throw new RuntimeError("worktree creation registration changed during staging");
       }
     }
@@ -56161,7 +56126,7 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
       await removeBoundEmptyDirectory(physicalPath, removalIdentity, platformServices);
       await syncDirectory(physicalRoot);
       const settledRoot = await managedWorktreeDirectoryIdentity(physicalRoot);
-      if (settledRoot === null || !sameManagedIdentity(settledRoot, expectedPhysicalRoot)) {
+      if (settledRoot === null || !sameDirectoryIdentity(settledRoot, expectedPhysicalRoot)) {
         throw new RuntimeError("worktree creation root changed during recovery");
       }
     }
@@ -56259,7 +56224,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
         const currentRegistrationRoot = await managedWorktreeDirectoryIdentity(registrationRoot);
         const currentQuarantineRoot = await managedWorktreeDirectoryIdentity(quarantineRoot);
         const currentPhysicalRoot = await managedWorktreeDirectoryIdentity(physicalRoot);
-        if (commonDirIdentity === null || currentCommonDir === null || !sameManagedIdentity(currentCommonDir, commonDirIdentity) || registrationRootIdentity === null || quarantineRootIdentity === null || physicalRootIdentity === null || currentRegistrationRoot === null || currentQuarantineRoot === null || currentPhysicalRoot === null || !sameManagedIdentity(currentRegistrationRoot, registrationRootIdentity) || !sameManagedIdentity(currentQuarantineRoot, quarantineRootIdentity) || !sameManagedIdentity(currentPhysicalRoot, physicalRootIdentity)) {
+        if (commonDirIdentity === null || currentCommonDir === null || !sameDirectoryIdentity(currentCommonDir, commonDirIdentity) || registrationRootIdentity === null || quarantineRootIdentity === null || physicalRootIdentity === null || currentRegistrationRoot === null || currentQuarantineRoot === null || currentPhysicalRoot === null || !sameDirectoryIdentity(currentRegistrationRoot, registrationRootIdentity) || !sameDirectoryIdentity(currentQuarantineRoot, quarantineRootIdentity) || !sameDirectoryIdentity(currentPhysicalRoot, physicalRootIdentity)) {
           throw new RuntimeError("worktree removal root identity changed");
         }
       };
@@ -56314,7 +56279,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "commonDir identity mismatch",
-        sameManagedIdentity(commonDirIdentity, expectedCommonDirIdentity),
+        sameDirectoryIdentity(commonDirIdentity, expectedCommonDirIdentity),
         commonDirIdentity,
         expectedCommonDirIdentity
       );
@@ -56325,7 +56290,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "registrationRoot identity mismatch",
-        sameManagedIdentity(registrationRootIdentity, expectedRegistrationRootIdentity),
+        sameDirectoryIdentity(registrationRootIdentity, expectedRegistrationRootIdentity),
         registrationRootIdentity,
         expectedRegistrationRootIdentity
       );
@@ -56336,7 +56301,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "quarantineRoot identity mismatch",
-        sameManagedIdentity(quarantineRootIdentity, expectedQuarantineRootIdentity),
+        sameDirectoryIdentity(quarantineRootIdentity, expectedQuarantineRootIdentity),
         quarantineRootIdentity,
         expectedQuarantineRootIdentity
       );
@@ -56347,7 +56312,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
       );
       checkManifestConsistency(
         "physicalRoot identity mismatch",
-        sameManagedIdentity(physicalRootIdentity, expectedPhysicalRootIdentity),
+        sameDirectoryIdentity(physicalRootIdentity, expectedPhysicalRootIdentity),
         physicalRootIdentity,
         expectedPhysicalRootIdentity
       );
@@ -56532,10 +56497,10 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
         if (physicalIdentity !== null && physicalQuarantineIdentity !== null) {
           throw new RuntimeError("physical worktree exists at two paths during removal recovery");
         }
-        if (registrationIdentity !== null && (registrationIdentity.dev !== expectedRegistrationIdentity.dev || registrationIdentity.ino !== expectedRegistrationIdentity.ino || registrationIdentity.birthtimeNs !== expectedRegistrationIdentity.birthtimeNs)) {
+        if (registrationIdentity !== null && !sameDirectoryIdentity(registrationIdentity, expectedRegistrationIdentity)) {
           throw new RuntimeError("worktree removal registration identity changed");
         }
-        if (quarantineIdentity !== null && (quarantineIdentity.dev !== expectedRegistrationIdentity.dev || quarantineIdentity.ino !== expectedRegistrationIdentity.ino || quarantineIdentity.birthtimeNs !== expectedRegistrationIdentity.birthtimeNs)) {
+        if (quarantineIdentity !== null && !sameDirectoryIdentity(quarantineIdentity, expectedRegistrationIdentity)) {
           throw new RuntimeError("worktree removal quarantine identity changed");
         }
         if (expectedPhysicalIdentity === null) {
@@ -56543,10 +56508,10 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
             throw new RuntimeError("stale worktree physical path reappeared during removal recovery");
           }
         } else {
-          if (physicalIdentity !== null && (physicalIdentity.dev !== expectedPhysicalIdentity.dev || physicalIdentity.ino !== expectedPhysicalIdentity.ino || physicalIdentity.birthtimeNs !== expectedPhysicalIdentity.birthtimeNs)) {
+          if (physicalIdentity !== null && !sameDirectoryIdentity(physicalIdentity, expectedPhysicalIdentity)) {
             throw new RuntimeError("physical worktree identity changed during removal recovery");
           }
-          if (physicalQuarantineIdentity !== null && (physicalQuarantineIdentity.dev !== expectedPhysicalIdentity.dev || physicalQuarantineIdentity.ino !== expectedPhysicalIdentity.ino || physicalQuarantineIdentity.birthtimeNs !== expectedPhysicalIdentity.birthtimeNs)) {
+          if (physicalQuarantineIdentity !== null && !sameDirectoryIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity)) {
             throw new RuntimeError("physical worktree quarantine identity changed");
           }
           if (physicalIdentity === null && physicalQuarantineIdentity === null) {
@@ -56588,7 +56553,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
             const settledPhysicalQuarantine = await managedWorktreeDirectoryIdentity(
               manifest.physicalQuarantinePath
             );
-            if (restoredPhysical === null || !sameManagedIdentity(restoredPhysical, expectedPhysicalIdentity) || settledPhysicalQuarantine !== null) {
+            if (restoredPhysical === null || !sameDirectoryIdentity(restoredPhysical, expectedPhysicalIdentity) || settledPhysicalQuarantine !== null) {
               throw new RuntimeError("physical worktree rollback identity changed");
             }
             await syncDirectory(physicalRoot);
@@ -56624,7 +56589,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
             physicalQuarantineIdentity = await managedWorktreeDirectoryIdentity(
               manifest.physicalQuarantinePath
             );
-            if (physicalIdentity !== null || physicalQuarantineIdentity === null || !sameManagedIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity)) {
+            if (physicalIdentity !== null || physicalQuarantineIdentity === null || !sameDirectoryIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity)) {
               throw new RuntimeError("started worktree removal quarantine identity changed");
             }
             await syncDirectory(physicalRoot);
@@ -57239,7 +57204,7 @@ async function sweepOrphanWorktreeRoot(args, worktreesRoot, legacy) {
     try {
       const currentIdentity = await managedWorktreeDirectoryIdentity(worktreePath);
       if (currentIdentity !== null) {
-        if (currentIdentity.dev !== expectedIdentity.dev || currentIdentity.ino !== expectedIdentity.ino || currentIdentity.birthtimeNs !== expectedIdentity.birthtimeNs) {
+        if (!sameDirectoryIdentity(currentIdentity, expectedIdentity)) {
           throw new RuntimeError("worktree directory identity changed after lease acquisition");
         }
         let workflowClaimed = false;
