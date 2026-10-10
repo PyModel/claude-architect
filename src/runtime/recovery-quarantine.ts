@@ -1,15 +1,15 @@
-import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, link, open, rename } from "node:fs/promises";
+import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import {
-  validateOwnedLockState,
-  validatePublishedLock,
-  removeExpectedLockPath,
-  cleanupOwnedLockPaths,
-} from "../platform/lock-ownership.js";
+  DurableDirectorySession,
+  moveDirectory,
+  publishExclusive,
+  writeAtomic,
+} from "../platform/durable-write.js";
 import {
   NO_FOLLOW,
+  sameDevIno,
   sameDirectoryIdentity,
   syncDirectoryMetadata,
   type DirectoryIdentity,
@@ -27,6 +27,8 @@ import {
   plainDirectoryIdentity,
   readHandleBytes,
 } from "./recovery-shared.js";
+
+const QUARANTINE_JOURNAL_NAME = "recovery-quarantine.ndjson";
 
 interface RecoveryQuarantineRecord {
   event: "recovery-quarantine";
@@ -97,7 +99,7 @@ export async function readRecoveryQuarantineJournal(
   if (rootIdentity === null) {
     throw new RuntimeError("recovery quarantine journal root disappeared");
   }
-  const filename = path.join(runsRoot, "recovery-quarantine.ndjson");
+  const filename = path.join(runsRoot, QUARANTINE_JOURNAL_NAME);
   let expectedMetadata;
   try {
     expectedMetadata = await lstat(filename, { bigint: true });
@@ -229,171 +231,35 @@ async function syncRecoveryDirectory(directory: string): Promise<void> {
 
 async function publishRecoveryQuarantineJournal(
   runsRoot: string,
-  filename: string,
   snapshot: RecoveryQuarantineSnapshot,
   nextBytes: Buffer,
 ): Promise<void> {
-  const temporaryPath = path.join(
-    runsRoot,
-    `.recovery-quarantine-journal-${randomUUID()}.tmp`,
-  );
-  let handle;
-  let temporaryCreated = false;
-  let temporaryConsumed = false;
-  let linkedPublication = false;
-  let temporaryIdentity: DirectoryIdentity | undefined;
-  let primaryError: unknown;
-  try {
-    handle = await open(
-      temporaryPath,
-      constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-      0o600,
-    );
-    temporaryCreated = true;
-    const metadata = await handle.stat({ bigint: true });
-    temporaryIdentity = {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs,
-    };
-    const namedMetadata = await lstat(temporaryPath, { bigint: true });
-    const currentRoot = await lstat(runsRoot, { bigint: true });
-    if (!metadata.isFile()
-      || metadata.nlink !== 1n
-      || !namedMetadata.isFile()
-      || namedMetadata.isSymbolicLink()
-      || namedMetadata.nlink !== 1n
-      || namedMetadata.dev !== metadata.dev
-      || namedMetadata.ino !== metadata.ino
-      || namedMetadata.birthtimeNs !== metadata.birthtimeNs
-      || metadata.size > MAX_STATE_FILE_BYTES_BIGINT
-      || !isPlainDirectory(currentRoot)
-      || !sameDirectoryIdentity(currentRoot, snapshot.rootIdentity)) {
-      throw new RuntimeError("recovery quarantine journal temp changed during creation");
-    }
-    await handle.writeFile(nextBytes);
-    await handle.sync();
-    await validateOwnedLockState(
-      handle,
-      [temporaryPath],
-      temporaryIdentity,
-      nextBytes,
-      1,
-      runsRoot,
-      snapshot.rootIdentity,
-    );
-  } catch (error) {
-    primaryError = error;
+  const currentSnapshot = await readRecoveryQuarantineJournal(runsRoot);
+  const sameJournalIdentity = snapshot.journalIdentity === null
+    ? currentSnapshot.journalIdentity === null
+    : currentSnapshot.journalIdentity !== null
+      && sameDirectoryIdentity(currentSnapshot.journalIdentity, snapshot.journalIdentity);
+  if (!sameDirectoryIdentity(currentSnapshot.rootIdentity, snapshot.rootIdentity)
+    || !sameJournalIdentity
+    || !currentSnapshot.bytes.equals(snapshot.bytes)) {
+    throw new RuntimeError("recovery quarantine journal changed before publication");
   }
-  if (handle !== undefined) {
-    try {
-      await handle.close();
-    } catch (closeError) {
-      if (primaryError !== undefined) {
-        primaryError = new AggregateError(
-          [primaryError, closeError],
-          "recovery quarantine journal temp failed and its handle could not be closed",
-        );
-      } else {
-        primaryError = closeError;
-      }
-    }
+  // No handle and no policy: the session flushes through syncDirectoryMetadata,
+  // which proves the runs root identity, as recovery always has.
+  const session = new DurableDirectorySession(runsRoot, snapshot.rootIdentity);
+  let created: { dev: bigint; ino: bigint } | undefined;
+  if (snapshot.journalIdentity === null) {
+    created = await publishExclusive(session, QUARANTINE_JOURNAL_NAME, nextBytes);
+  } else {
+    await writeAtomic(session, QUARANTINE_JOURNAL_NAME, nextBytes, "replace");
   }
-  if (primaryError === undefined) {
-    try {
-      if (temporaryIdentity === undefined) {
-        throw new RuntimeError("recovery quarantine journal temp identity is unavailable");
-      }
-      await validatePublishedLock(
-        temporaryPath,
-        temporaryIdentity,
-        nextBytes,
-        runsRoot,
-        snapshot.rootIdentity,
-      );
-      const currentSnapshot = await readRecoveryQuarantineJournal(runsRoot);
-      const sameJournalIdentity = snapshot.journalIdentity === null
-        ? currentSnapshot.journalIdentity === null
-        : currentSnapshot.journalIdentity !== null
-          && currentSnapshot.journalIdentity.dev === snapshot.journalIdentity.dev
-          && currentSnapshot.journalIdentity.ino === snapshot.journalIdentity.ino
-          && currentSnapshot.journalIdentity.birthtimeNs === snapshot.journalIdentity.birthtimeNs;
-      if (!sameDirectoryIdentity(currentSnapshot.rootIdentity, snapshot.rootIdentity)
-        || !sameJournalIdentity
-        || !currentSnapshot.bytes.equals(snapshot.bytes)) {
-        throw new RuntimeError("recovery quarantine journal changed before publication");
-      }
-      if (snapshot.journalIdentity === null) {
-        await link(temporaryPath, filename);
-        linkedPublication = true;
-        await validatePublishedLock(
-          temporaryPath,
-          temporaryIdentity,
-          nextBytes,
-          runsRoot,
-          snapshot.rootIdentity,
-          2,
-          [temporaryPath, filename],
-        );
-        const removal = await removeExpectedLockPath(
-          temporaryPath,
-          temporaryIdentity,
-          nextBytes,
-          2,
-        );
-        if (removal === "changed") {
-          throw new RuntimeError("recovery quarantine journal temp changed before unlink");
-        }
-        temporaryConsumed = true;
-      } else {
-        await rename(temporaryPath, filename);
-        temporaryConsumed = true;
-      }
-    } catch (error) {
-      primaryError = error;
-    }
-  }
-  const cleanupErrors: unknown[] = [];
-  if (temporaryCreated && !temporaryConsumed) {
-    if (temporaryIdentity === undefined) {
-      cleanupErrors.push(new RuntimeError(
-        "recovery quarantine journal temp identity is unavailable for cleanup",
-      ));
-    } else {
-      cleanupErrors.push(...await cleanupOwnedLockPaths(
-        runsRoot,
-        snapshot.rootIdentity,
-        temporaryPath,
-        filename,
-        temporaryIdentity,
-        nextBytes,
-        linkedPublication,
-      ));
-    }
-  }
-  if (primaryError !== undefined && cleanupErrors.length > 0) {
-    throw new AggregateError(
-      [primaryError, ...cleanupErrors],
-      "recovery quarantine journal publication and temp cleanup failed",
-    );
-  }
-  if (primaryError !== undefined) throw primaryError;
-  if (cleanupErrors.length === 1) throw cleanupErrors[0];
-  if (cleanupErrors.length > 1) {
-    throw new AggregateError(cleanupErrors, "recovery quarantine journal temp cleanup failed");
-  }
-
   const publishedSnapshot = await readRecoveryQuarantineJournal(runsRoot);
-  if (temporaryIdentity === undefined
-    || publishedSnapshot.journalIdentity === null
-    || publishedSnapshot.journalIdentity.dev !== temporaryIdentity.dev
-    || publishedSnapshot.journalIdentity.ino !== temporaryIdentity.ino
-    || publishedSnapshot.journalIdentity.birthtimeNs !== temporaryIdentity.birthtimeNs
+  if (publishedSnapshot.journalIdentity === null
+    || (created !== undefined && !sameDevIno(publishedSnapshot.journalIdentity, created))
     || !sameDirectoryIdentity(publishedSnapshot.rootIdentity, snapshot.rootIdentity)
     || !publishedSnapshot.bytes.equals(nextBytes)) {
     throw new RuntimeError("recovery quarantine journal changed after publication");
   }
-  await syncRecoveryDirectory(runsRoot);
 }
 
 async function appendRecoveryQuarantineRecord(
@@ -405,7 +271,6 @@ async function appendRecoveryQuarantineRecord(
   if (lineBytes > MAX_QUARANTINE_RECORD_BYTES) {
     throw new RuntimeError("recovery quarantine record exceeds its size limit");
   }
-  const filename = path.join(runsRoot, "recovery-quarantine.ndjson");
   const snapshot = await readRecoveryQuarantineJournal(runsRoot);
   if (snapshot.runIds.has(record.runId)) {
     await syncRecoveryDirectory(runsRoot);
@@ -425,7 +290,7 @@ async function appendRecoveryQuarantineRecord(
   if (nextBytes.byteLength > MAX_STATE_FILE_BYTES) {
     throw new RuntimeError("recovery quarantine journal exceeds its size limit");
   }
-  await publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, nextBytes);
+  await publishRecoveryQuarantineJournal(runsRoot, snapshot, nextBytes);
 }
 
 export async function quarantineRun(
@@ -437,8 +302,8 @@ export async function quarantineRun(
   const quarantinePath = path.join(runsRoot, `.poisoned-${runId}`);
   const runsIdentity = await plainDirectoryIdentity(runsRoot);
   if (runsIdentity === null) throw new RuntimeError("recovery runs root disappeared");
+  const runsSession = new DurableDirectorySession(runsRoot, runsIdentity);
   let runIdentity: DirectoryIdentity | null = null;
-  let renamed = false;
   let journaled = false;
   try {
     runIdentity = await plainDirectoryIdentity(runDirectory);
@@ -446,8 +311,7 @@ export async function quarantineRun(
     if (await plainDirectoryIdentity(quarantinePath) !== null) {
       throw new RuntimeError("poisoned recovery quarantine already exists");
     }
-    await rename(runDirectory, quarantinePath);
-    renamed = true;
+    await moveDirectory(runsSession, runId, path.basename(quarantinePath));
     const quarantineIdentity = await plainDirectoryIdentity(quarantinePath);
     const currentRoot = await lstat(runsRoot, { bigint: true });
     if (quarantineIdentity === null
@@ -470,34 +334,40 @@ export async function quarantineRun(
     });
   } catch (quarantineError) {
     const errors = [error, quarantineError];
-    if (renamed && !journaled && runIdentity !== null) {
+    // Whether the move happened is observed, not flagged: moveDirectory can
+    // fail after its rename (identity re-check, parent flush), and such a run
+    // must still be restored rather than stranded unjournaled in quarantine.
+    if (!journaled && runIdentity !== null) {
       try {
-        const quarantineMetadata = await lstat(quarantinePath, { bigint: true });
-        const currentRoot = await lstat(runsRoot, { bigint: true });
-        if (!isPlainDirectory(quarantineMetadata)
-          || !sameDirectoryIdentity(quarantineMetadata, runIdentity)
-          || await plainDirectoryIdentity(runDirectory) !== null
-          || !isPlainDirectory(currentRoot)
-          || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
-        }
-        await rename(quarantinePath, runDirectory);
-        const restoredMetadata = await lstat(runDirectory, { bigint: true });
-        const restoredRoot = await lstat(runsRoot, { bigint: true });
-        if (!isPlainDirectory(restoredMetadata)
-          || !sameDirectoryIdentity(restoredMetadata, runIdentity)
-          || !isPlainDirectory(restoredRoot)
-          || !sameDirectoryIdentity(restoredRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback identity changed");
-        }
-        await syncRecoveryDirectory(runsRoot);
-        const settledMetadata = await lstat(runDirectory, { bigint: true });
-        const settledRoot = await lstat(runsRoot, { bigint: true });
-        if (!isPlainDirectory(settledMetadata)
-          || !sameDirectoryIdentity(settledMetadata, runIdentity)
-          || !isPlainDirectory(settledRoot)
-          || !sameDirectoryIdentity(settledRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback changed after directory sync");
+        if (await plainDirectoryIdentity(runDirectory) === null
+          && await plainDirectoryIdentity(quarantinePath) !== null) {
+          const quarantineMetadata = await lstat(quarantinePath, { bigint: true });
+          const currentRoot = await lstat(runsRoot, { bigint: true });
+          if (!isPlainDirectory(quarantineMetadata)
+            || !sameDirectoryIdentity(quarantineMetadata, runIdentity)
+            || await plainDirectoryIdentity(runDirectory) !== null
+            || !isPlainDirectory(currentRoot)
+            || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
+          }
+          await moveDirectory(runsSession, path.basename(quarantinePath), runId);
+          const restoredMetadata = await lstat(runDirectory, { bigint: true });
+          const restoredRoot = await lstat(runsRoot, { bigint: true });
+          if (!isPlainDirectory(restoredMetadata)
+            || !sameDirectoryIdentity(restoredMetadata, runIdentity)
+            || !isPlainDirectory(restoredRoot)
+            || !sameDirectoryIdentity(restoredRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback identity changed");
+          }
+          await syncRecoveryDirectory(runsRoot);
+          const settledMetadata = await lstat(runDirectory, { bigint: true });
+          const settledRoot = await lstat(runsRoot, { bigint: true });
+          if (!isPlainDirectory(settledMetadata)
+            || !sameDirectoryIdentity(settledMetadata, runIdentity)
+            || !isPlainDirectory(settledRoot)
+            || !sameDirectoryIdentity(settledRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback changed after directory sync");
+          }
         }
       } catch (rollbackError) {
         errors.push(rollbackError);

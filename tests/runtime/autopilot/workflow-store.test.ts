@@ -434,92 +434,16 @@ describe("WorkflowStore", () => {
     await expect(readFile(store.statePath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("rejects temporary-file substitution before atomic publication", async () => {
-    class SubstitutingStore extends WorkflowStore {
-      substitute = false;
-
-      protected override async stageStatePublication(
-        temporaryPath: string,
-        publicationPath: string,
-        expectedBytes: Buffer,
-        expectedIdentity: { dev: bigint; ino: bigint },
-      ): Promise<void> {
-        expect(typeof expectedIdentity.dev).toBe("bigint");
-        expect(typeof expectedIdentity.ino).toBe("bigint");
-        if (!this.substitute) {
-          return await super.stageStatePublication(
-            temporaryPath,
-            publicationPath,
-            expectedBytes,
-            expectedIdentity,
-          );
-        }
-        const displacedPath = `${temporaryPath}.displaced`;
-        await rename(temporaryPath, displacedPath);
-        await writeFile(temporaryPath, expectedBytes);
-        try {
-          await super.stageStatePublication(
-            temporaryPath,
-            publicationPath,
-            expectedBytes,
-            expectedIdentity,
-          );
-        } finally {
-          await rm(displacedPath, { force: true });
-        }
-      }
-    }
-
-    const stateDirectory = await temporaryDirectory();
-    const store = new SubstitutingStore("publication-substitution", { stateDirectory });
-    await store.create(initialState("publication-substitution"));
-    store.substitute = true;
-
-    await expect(store.transition({ expectedRevision: 0, to: "running-task" }))
-      .rejects.toMatchObject({ detail: { toolError: "unsafe-workflow-state" } });
-    expect(await store.read()).toMatchObject({ revision: 0, phase: "preflighting" });
-  });
-
-  it("preserves the previous state when the staged publication is substituted", async () => {
-    class PostStageSubstitutingStore extends WorkflowStore {
-      substitute = false;
-
-      protected override async stageStatePublication(
-        temporaryPath: string,
-        publicationPath: string,
-        expectedBytes: Buffer,
-        expectedIdentity: { dev: bigint; ino: bigint },
-      ): Promise<void> {
-        await super.stageStatePublication(
-          temporaryPath,
-          publicationPath,
-          expectedBytes,
-          expectedIdentity,
-        );
-        if (this.substitute) {
-          await rm(publicationPath);
-          await writeFile(publicationPath, "substituted", "utf8");
-        }
-      }
-    }
-
-    const stateDirectory = await temporaryDirectory();
-    const store = new PostStageSubstitutingStore("post-stage-substitution", { stateDirectory });
-    await store.create(initialState("post-stage-substitution"));
-    store.substitute = true;
-
-    await expect(store.transition({ expectedRevision: 0, to: "running-task" }))
-      .rejects.toMatchObject({ detail: { toolError: "unsafe-workflow-state" } });
-    expect(await store.read()).toMatchObject({ revision: 0, phase: "preflighting" });
-  });
-
   it("removes verified abandoned state publication files before writing", async () => {
     const store = await createStore("abandoned-publication-files");
     const token = "00000000-0000-4000-8000-000000000001";
     const temporaryPath = path.join(store.workflowDirectory, `.state.${token}.tmp`);
     const publicationPath = path.join(store.workflowDirectory, `.state.${token}.publish`);
+    // The shared atomic write names its temp after the record it replaces.
+    const atomicTemporaryPath = path.join(store.workflowDirectory, `.state.json.${token}.tmp`);
     await writeFile(temporaryPath, "partial state", "utf8");
     await link(temporaryPath, publicationPath);
+    await writeFile(atomicTemporaryPath, "partial state", "utf8");
 
     await store.update({
       expectedRevision: 0,
@@ -527,7 +451,9 @@ describe("WorkflowStore", () => {
     });
 
     expect((await readdir(store.workflowDirectory)).filter(name =>
-      name === path.basename(temporaryPath) || name === path.basename(publicationPath)))
+      name === path.basename(temporaryPath)
+      || name === path.basename(publicationPath)
+      || name === path.basename(atomicTemporaryPath)))
       .toEqual([]);
   });
 

@@ -1,12 +1,55 @@
-import { lstat, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+  type FileHandle,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DurableDirectorySession,
+  appendDurable,
+  linkExclusive,
+  moveDirectory,
   openDurableDirectorySession,
+  publishExclusive,
   writeAtomic,
 } from "../../src/platform/durable-write.js";
+
+// Pass-through: one test swaps the temp file the moment its handle closes,
+// standing in for a same-user writer racing the publish.
+vi.mock("node:fs/promises", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...actual, open: vi.fn(actual.open) };
+});
+
+const actualFs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+
+function substituteTemporaryOnClose(): { displaced: string[] } {
+  const displaced: string[] = [];
+  vi.mocked(open).mockImplementationOnce(async (...args: Parameters<typeof open>) => {
+    const handle: FileHandle = await actualFs.open(...args);
+    const close = handle.close.bind(handle);
+    handle.close = async () => {
+      await close();
+      const temporaryPath = String(args[0]);
+      const aside = `${temporaryPath}.displaced`;
+      await actualFs.rename(temporaryPath, aside);
+      displaced.push(aside);
+      await actualFs.copyFile(aside, temporaryPath);
+    };
+    return handle;
+  });
+  return { displaced };
+}
 
 describe("PlatformSafety durable-write", () => {
   let testDir: string;
@@ -77,6 +120,9 @@ describe("PlatformSafety durable-write", () => {
       await expect(writeAtomic(session, "../escape", "text", "replace")).rejects.toThrow("safe leaf name");
       await expect(writeAtomic(session, "sub/dir", "text", "replace")).rejects.toThrow("safe leaf name");
       await expect(writeAtomic(session, "/root", "text", "replace")).rejects.toThrow("safe leaf name");
+      // A dot-leading record would share the namespace of the write temporaries.
+      await expect(writeAtomic(session, ".hidden", "text", "replace")).rejects.toThrow("safe leaf name");
+      await expect(publishExclusive(session, ".hidden", "text")).rejects.toThrow("safe leaf name");
     } finally {
       await session.close();
     }
@@ -117,9 +163,10 @@ describe("PlatformSafety durable-write", () => {
     );
   });
 
-  it("refuses a directory with a real birth time when the recorded birth time is zero (o-5)", async () => {
+  it("refuses a directory with a real birth time when the recorded birth time is zero (o-5)", async (context) => {
     const metadata = await lstat(testDir, { bigint: true });
-    if (metadata.birthtimeNs <= 0n) return; // filesystem records no birth time: nothing to mismatch
+    // A filesystem without birth times has nothing to mismatch: report a skip, not a pass.
+    context.skip(metadata.birthtimeNs <= 0n, "filesystem records no birth time");
     const session = new DurableDirectorySession(testDir, {
       dev: metadata.dev,
       ino: metadata.ino,
@@ -140,5 +187,174 @@ describe("PlatformSafety durable-write", () => {
 
     await expect(session.assertIdentity()).rejects.toThrow("durable directory session is closed");
     await expect(session.sync()).rejects.toThrow("durable directory session is closed");
+  });
+
+  it.each(["replace", "immutable"] as const)(
+    "refuses a temp substituted before %s publish and keeps the previous record",
+    async (mode) => {
+      await writeFile(path.join(testDir, "state.json"), "previous");
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        const { displaced } = substituteTemporaryOnClose();
+        await expect(writeAtomic(session, "state.json", "next", mode))
+          .rejects.toThrow("atomic write temporary file changed before publish");
+        expect(displaced).toHaveLength(1);
+        await rm(displaced[0]!);
+      } finally {
+        await session.close();
+      }
+      expect(await readFile(path.join(testDir, "state.json"), "utf8")).toBe("previous");
+      expect(await readdir(testDir)).toEqual(["state.json"]);
+    },
+  );
+
+  describe("appendDurable", () => {
+    it("appends the bytes and flushes the directory after the write", async () => {
+      const journal = path.join(testDir, "journal.ndjson");
+      const seenAtSync: string[] = [];
+      const session = await openDurableDirectorySession(testDir, {
+        policy: {
+          syncDirectory: async () => {
+            seenAtSync.push(await readFile(journal, "utf8"));
+          },
+        },
+      });
+      try {
+        await appendDurable(session, "journal.ndjson", "one\n");
+        await appendDurable(session, "journal.ndjson", Buffer.from("two\n"), { expectedSize: 4 });
+      } finally {
+        await session.close();
+      }
+      expect(seenAtSync).toEqual(["one\n", "one\ntwo\n"]);
+      expect(await readFile(journal, "utf8")).toBe("one\ntwo\n");
+    });
+
+    it("refuses to append when the directory was replaced at the same path", async () => {
+      const directory = path.join(testDir, "journal-dir");
+      await mkdir(directory);
+      const session = await openDurableDirectorySession(directory);
+      try {
+        await rename(directory, path.join(testDir, "displaced"));
+        await mkdir(directory);
+        await expect(appendDurable(session, "journal.ndjson", "line\n"))
+          .rejects.toThrow("durable directory session identity changed");
+        expect(await readdir(directory)).toEqual([]);
+      } finally {
+        await session.close();
+      }
+    });
+
+    it("refuses to append when the file size is not the expected size", async () => {
+      await writeFile(path.join(testDir, "journal.ndjson"), "abc");
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        await expect(appendDurable(session, "journal.ndjson", "x", { expectedSize: 2 }))
+          .rejects.toThrow("durable append target changed");
+        expect(await readFile(path.join(testDir, "journal.ndjson"), "utf8")).toBe("abc");
+      } finally {
+        await session.close();
+      }
+    });
+
+    it.skipIf(process.platform === "win32")("refuses to append through a symlink", async () => {
+      const outside = path.join(testDir, "outside.ndjson");
+      await writeFile(outside, "");
+      const directory = path.join(testDir, "journal-dir");
+      await mkdir(directory);
+      await symlink(outside, path.join(directory, "journal.ndjson"));
+      const session = await openDurableDirectorySession(directory);
+      try {
+        await expect(appendDurable(session, "journal.ndjson", "line\n")).rejects.toBeDefined();
+        expect(await readFile(outside, "utf8")).toBe("");
+      } finally {
+        await session.close();
+      }
+    });
+  });
+
+  describe("publishExclusive", () => {
+    it("publishes a new record durably and leaves no temporary file", async () => {
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        await publishExclusive(session, "owner.json", '{"owner":1}');
+      } finally {
+        await session.close();
+      }
+      expect(await readFile(path.join(testDir, "owner.json"), "utf8")).toBe('{"owner":1}');
+      expect((await lstat(path.join(testDir, "owner.json"))).nlink).toBe(1);
+      expect(await readdir(testDir)).toEqual(["owner.json"]);
+    });
+
+    it("refuses to overwrite an existing destination and leaves no temporary file behind", async () => {
+      await writeFile(path.join(testDir, "owner.json"), '{"owner":"first"}');
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        await expect(publishExclusive(session, "owner.json", '{"owner":"second"}'))
+          .rejects.toMatchObject({ code: "EEXIST" });
+      } finally {
+        await session.close();
+      }
+      expect(await readFile(path.join(testDir, "owner.json"), "utf8")).toBe('{"owner":"first"}');
+      expect(await readdir(testDir)).toEqual(["owner.json"]);
+    });
+
+    it("refuses a temp substituted before the link and publishes nothing", async () => {
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        const { displaced } = substituteTemporaryOnClose();
+        await expect(publishExclusive(session, "owner.json", "owner"))
+          .rejects.toThrow("atomic write temporary file changed before publish");
+        await rm(displaced[0]!);
+      } finally {
+        await session.close();
+      }
+      expect(await readdir(testDir)).toEqual([]);
+    });
+
+    it("links a retained source exclusively and refuses an existing destination", async () => {
+      await writeFile(path.join(testDir, ".lock.a.owner"), "a");
+      await writeFile(path.join(testDir, ".lock.b.owner"), "b");
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        const identity = await linkExclusive(session, ".lock.a.owner", "state.lock");
+        const named = await lstat(path.join(testDir, "state.lock"), { bigint: true });
+        expect(named.nlink).toBe(2n);
+        expect(identity).toEqual({ dev: named.dev, ino: named.ino });
+        await expect(linkExclusive(session, ".lock.b.owner", "state.lock"))
+          .rejects.toMatchObject({ code: "EEXIST" });
+      } finally {
+        await session.close();
+      }
+      expect(await readFile(path.join(testDir, "state.lock"), "utf8")).toBe("a");
+    });
+  });
+
+  describe("moveDirectory", () => {
+    it("moves a directory to an absent leaf and keeps its identity", async () => {
+      await mkdir(path.join(testDir, "run-1"));
+      const before = await lstat(path.join(testDir, "run-1"), { bigint: true });
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        await moveDirectory(session, "run-1", ".poisoned-run-1");
+      } finally {
+        await session.close();
+      }
+      const after = await lstat(path.join(testDir, ".poisoned-run-1"), { bigint: true });
+      expect([after.dev, after.ino]).toEqual([before.dev, before.ino]);
+      expect(await readdir(testDir)).toEqual([".poisoned-run-1"]);
+    });
+
+    it("refuses to move onto an existing entry", async () => {
+      await mkdir(path.join(testDir, "run-1"));
+      await mkdir(path.join(testDir, ".poisoned-run-1"));
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        await expect(moveDirectory(session, "run-1", ".poisoned-run-1"))
+          .rejects.toThrow("directory move destination already exists");
+      } finally {
+        await session.close();
+      }
+      expect((await readdir(testDir)).sort()).toEqual([".poisoned-run-1", "run-1"]);
+    });
   });
 });

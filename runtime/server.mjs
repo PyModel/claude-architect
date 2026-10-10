@@ -411,11 +411,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants17) {
+      optimizeNames(names, constants16) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants17);
+          this.rhs = optimizeExpr(this.rhs, names, constants16);
         return this;
       }
       get names() {
@@ -432,10 +432,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants17) {
+      optimizeNames(names, constants16) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants17);
+        this.rhs = optimizeExpr(this.rhs, names, constants16);
         return this;
       }
       get names() {
@@ -496,8 +496,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants17) {
-        this.code = optimizeExpr(this.code, names, constants17);
+      optimizeNames(names, constants16) {
+        this.code = optimizeExpr(this.code, names, constants16);
         return this;
       }
       get names() {
@@ -526,12 +526,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants17) {
+      optimizeNames(names, constants16) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants17))
+          if (n.optimizeNames(names, constants16))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -584,12 +584,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants17) {
+      optimizeNames(names, constants16) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants17);
-        if (!(super.optimizeNames(names, constants17) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants16);
+        if (!(super.optimizeNames(names, constants16) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants17);
+        this.condition = optimizeExpr(this.condition, names, constants16);
         return this;
       }
       get names() {
@@ -612,10 +612,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants17) {
-        if (!super.optimizeNames(names, constants17))
+      optimizeNames(names, constants16) {
+        if (!super.optimizeNames(names, constants16))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants17);
+        this.iteration = optimizeExpr(this.iteration, names, constants16);
         return this;
       }
       get names() {
@@ -651,10 +651,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants17) {
-        if (!super.optimizeNames(names, constants17))
+      optimizeNames(names, constants16) {
+        if (!super.optimizeNames(names, constants16))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants17);
+        this.iterable = optimizeExpr(this.iterable, names, constants16);
         return this;
       }
       get names() {
@@ -696,11 +696,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants17) {
+      optimizeNames(names, constants16) {
         var _a3, _b;
-        super.optimizeNames(names, constants17);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants17);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants17);
+        super.optimizeNames(names, constants16);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants16);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants16);
         return this;
       }
       get names() {
@@ -1001,7 +1001,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants17) {
+    function optimizeExpr(expr, names, constants16) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1016,14 +1016,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants17[n.str];
+        const c = constants16[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants17[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants16[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -33429,6 +33429,12 @@ import { link as link2, lstat as lstat4, mkdir as mkdir2, open as open3, readFil
 import path6 from "node:path";
 import nodeProcess5 from "node:process";
 var SAFE_COMPONENT = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
+var SAFE_HIDDEN_COMPONENT = /^\.?[a-z0-9][a-z0-9._-]{0,253}$/i;
+function assertSafeLeaf(name, operation, pattern = SAFE_COMPONENT) {
+  if (path6.isAbsolute(name) || path6.basename(name) !== name || !pattern.test(name)) {
+    throw new RuntimeError(`${operation} target must be a safe leaf name: ${name}`);
+  }
+}
 function isAlreadyPresent(error51) {
   return typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "EEXIST";
 }
@@ -33443,6 +33449,9 @@ var DurableDirectorySession = class {
     this.identity = identity;
     this.policy = policy;
     this.handle = handle;
+  }
+  get platform() {
+    return this.policy.platform ?? nodeProcess5.platform;
   }
   async assertIdentity() {
     if (this.closed) {
@@ -33533,10 +33542,14 @@ async function renameWithRetry(source, destination, platform = nodeProcess5.plat
     }
   }
 }
-async function writeAtomic(session, name, bytes, mode) {
-  if (path6.isAbsolute(name) || path6.basename(name) !== name || !SAFE_COMPONENT.test(name)) {
-    throw new RuntimeError(`atomic write target must be a safe leaf name: ${name}`);
+async function assertStagedTemporary(temporaryPath, written, name) {
+  const staged = await lstat4(temporaryPath, { bigint: true });
+  if (!staged.isFile() || staged.isSymbolicLink() || staged.nlink !== 1n || staged.dev !== written.dev || staged.ino !== written.ino || staged.size !== written.size) {
+    throw new RuntimeError(`atomic write temporary file changed before publish: ${name}`);
   }
+}
+async function writeAtomic(session, name, bytes, mode) {
+  assertSafeLeaf(name, "atomic write");
   const destination = path6.join(session.directory, name);
   const temporaryPath = path6.join(session.directory, `.${name}.${randomUUID2()}.tmp`);
   let handle;
@@ -33556,9 +33569,11 @@ async function writeAtomic(session, name, bytes, mode) {
       await handle.writeFile(bytes);
     }
     await handle.sync();
+    const written = await handle.stat({ bigint: true });
     await handle.close();
     handle = void 0;
     await session.assertIdentity();
+    await assertStagedTemporary(temporaryPath, written, name);
     if (mode === "immutable") {
       try {
         await link2(temporaryPath, destination);
@@ -33597,6 +33612,148 @@ async function writeAtomic(session, name, bytes, mode) {
       }
     }
   }
+}
+async function appendDurable(session, name, bytes, options = {}) {
+  assertSafeLeaf(name, "durable append");
+  const payload = typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes;
+  const filename = path6.join(session.directory, name);
+  await session.assertIdentity();
+  const handle = await open3(
+    filename,
+    constants4.O_WRONLY | constants4.O_CREAT | constants4.O_APPEND | NO_FOLLOW,
+    384
+  );
+  let primaryError;
+  try {
+    const metadata = await handle.stat({ bigint: true });
+    const named = await lstat4(filename, { bigint: true });
+    if (!metadata.isFile() || metadata.nlink !== 1n || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1n || named.dev !== metadata.dev || named.ino !== metadata.ino || options.expectedSize !== void 0 && metadata.size !== BigInt(options.expectedSize)) {
+      throw new RuntimeError(`durable append target changed before append: ${name}`);
+    }
+    await session.assertIdentity();
+    await handle.writeFile(payload);
+    await handle.sync();
+    const settled = await handle.stat({ bigint: true });
+    if (options.expectedSize !== void 0 && settled.size !== BigInt(options.expectedSize + payload.byteLength)) {
+      throw new RuntimeError(`durable append was incomplete: ${name}`);
+    }
+  } catch (error51) {
+    primaryError = error51;
+  }
+  try {
+    await handle.close();
+  } catch (closeError) {
+    if (primaryError !== void 0) {
+      throw new AggregateError([primaryError, closeError], "durable append failed and its handle could not be closed");
+    }
+    throw closeError;
+  }
+  if (primaryError !== void 0) throw primaryError;
+  await session.sync();
+  await session.assertIdentity();
+}
+async function linkExclusive(session, sourceName, destinationName) {
+  assertSafeLeaf(sourceName, "exclusive link", SAFE_HIDDEN_COMPONENT);
+  assertSafeLeaf(destinationName, "exclusive link", SAFE_HIDDEN_COMPONENT);
+  const source = path6.join(session.directory, sourceName);
+  const destination = path6.join(session.directory, destinationName);
+  await session.assertIdentity();
+  const before = await lstat4(source, { bigint: true });
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n) {
+    throw new RuntimeError(`exclusive publish source is not a single-link file: ${sourceName}`);
+  }
+  await link2(source, destination);
+  try {
+    const [published, retained] = await Promise.all([
+      lstat4(destination, { bigint: true }),
+      lstat4(source, { bigint: true })
+    ]);
+    if (!published.isFile() || published.isSymbolicLink() || published.nlink !== 2n || published.dev !== before.dev || published.ino !== before.ino || retained.dev !== before.dev || retained.ino !== before.ino) {
+      throw new RuntimeError(`exclusive publish source changed: ${destinationName}`);
+    }
+    await session.assertIdentity();
+  } catch (error51) {
+    await removeIfSameFile(destination, before);
+    throw error51;
+  }
+  return { dev: before.dev, ino: before.ino };
+}
+async function removeIfSameFile(filename, identity) {
+  try {
+    const current = await lstat4(filename, { bigint: true });
+    if (current.isFile() && current.dev === identity.dev && current.ino === identity.ino) {
+      await rm2(filename);
+    }
+  } catch (error51) {
+    if (!isMissingEntry(error51)) throw error51;
+  }
+}
+function isMissingEntry(error51) {
+  return typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "ENOENT";
+}
+async function publishExclusive(session, name, bytes) {
+  assertSafeLeaf(name, "exclusive publish");
+  const temporaryName = `.${name}.${randomUUID2()}.tmp`;
+  const temporaryPath = path6.join(session.directory, temporaryName);
+  const destination = path6.join(session.directory, name);
+  let temporaryCreated = false;
+  let published;
+  try {
+    await session.assertIdentity();
+    const handle = await open3(
+      temporaryPath,
+      constants4.O_WRONLY | constants4.O_CREAT | constants4.O_EXCL | NO_FOLLOW,
+      384
+    );
+    temporaryCreated = true;
+    let written;
+    try {
+      await handle.writeFile(typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes);
+      await handle.sync();
+      written = await handle.stat({ bigint: true });
+    } finally {
+      await handle.close();
+    }
+    await assertStagedTemporary(temporaryPath, written, name);
+    published = await linkExclusive(session, temporaryName, name);
+    await rm2(temporaryPath);
+    temporaryCreated = false;
+    await session.sync();
+    await session.assertIdentity();
+    return published;
+  } catch (error51) {
+    if (published !== void 0) await removeIfSameFile(destination, published);
+    throw error51;
+  } finally {
+    if (temporaryCreated) await rm2(temporaryPath, { force: true });
+  }
+}
+async function moveDirectory(session, sourceName, destinationName) {
+  assertSafeLeaf(sourceName, "directory move", SAFE_HIDDEN_COMPONENT);
+  assertSafeLeaf(destinationName, "directory move", SAFE_HIDDEN_COMPONENT);
+  const source = path6.join(session.directory, sourceName);
+  const destination = path6.join(session.directory, destinationName);
+  await session.assertIdentity();
+  const before = await lstat4(source, { bigint: true });
+  if (!before.isDirectory() || before.isSymbolicLink()) {
+    throw new RuntimeError(`directory move source is not a plain directory: ${sourceName}`);
+  }
+  const identity = { dev: before.dev, ino: before.ino, birthtimeNs: before.birthtimeNs };
+  try {
+    await lstat4(destination);
+    throw new RuntimeError(`directory move destination already exists: ${destinationName}`);
+  } catch (error51) {
+    if (!isMissingEntry(error51)) throw error51;
+  }
+  await renameWithRetry(source, destination, session.platform);
+  const moved = await lstat4(destination, { bigint: true });
+  if (!moved.isDirectory() || moved.isSymbolicLink() || !sameDirectoryIdentity(moved, identity)) {
+    throw new RuntimeError(`moved directory identity changed: ${destinationName}`);
+  }
+  await session.assertIdentity();
+  await session.sync();
+  await session.assertIdentity();
+  return identity;
 }
 
 // src/util/platform-path.ts
@@ -33942,12 +34099,10 @@ import { createHash as createHash4, randomUUID as randomUUID3 } from "node:crypt
 import { constants as constants7 } from "node:fs";
 import {
   lstat as lstat7,
-  link as link3,
   mkdir as mkdir4,
   open as open6,
   readdir as readdir4,
   realpath as realpath3,
-  rename as rename2,
   rm as rm3
 } from "node:fs/promises";
 import path9 from "node:path";
@@ -35390,6 +35545,16 @@ var LEGAL_WORKFLOW_PHASE_EDGES = Object.freeze({
 function workflowError(message, toolError) {
   return new RuntimeError(message, { toolError });
 }
+async function unsafeOnRefusal(operation) {
+  try {
+    return await operation;
+  } catch (error51) {
+    if (error51 instanceof RuntimeError && error51.detail?.toolError === void 0) {
+      throw workflowError(error51.message, "unsafe-workflow-state");
+    }
+    throw error51;
+  }
+}
 function isPlainDirectory2(metadata) {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
 }
@@ -35449,6 +35614,7 @@ async function inspectPlainDirectory(directory) {
   return {
     dev: metadata.dev,
     ino: metadata.ino,
+    birthtimeNs: metadata.birthtimeNs,
     canonicalPath: await realpath3(directory)
   };
 }
@@ -36212,7 +36378,11 @@ var WorkflowStore = class {
           throw workflowError("workflow state lock owner was substituted", "unsafe-workflow-state");
         }
         try {
-          await link3(ownerPath, this.lockPath);
+          await unsafeOnRefusal(linkExclusive(
+            this.durableSession(directory),
+            path9.basename(ownerPath),
+            path9.basename(this.lockPath)
+          ));
         } catch (error51) {
           await ownerHandle.close();
           ownerHandle = void 0;
@@ -36229,10 +36399,6 @@ var WorkflowStore = class {
             await this.retireWriterOwner(existing, directory);
           }
           continue;
-        }
-        const namedLock = await lstat7(this.lockPath);
-        if (!namedLock.isFile() || namedLock.isSymbolicLink() || namedLock.dev !== ownerMetadata.dev || namedLock.ino !== ownerMetadata.ino) {
-          throw workflowError("workflow state lock was substituted", "unsafe-workflow-state");
         }
         lockIdentity = {
           dev: ownerMetadata.dev,
@@ -36355,7 +36521,7 @@ var WorkflowStore = class {
   }
   async recoverAbandonedStateFiles(directory) {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const names = (await readdir4(this.workflowDirectory)).filter((name) => /^\.state\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:tmp|publish)$/u.test(name));
+    const names = (await readdir4(this.workflowDirectory)).filter((name) => /^\.state\.(?:json\.)?[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:tmp|publish)$/u.test(name));
     if (names.length === 0) return;
     const artifacts = [];
     for (const name of names) {
@@ -36567,28 +36733,12 @@ var WorkflowStore = class {
       throw workflowError("workflow journal exceeds its size limit", "workflow-journal-too-large");
     }
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    const handle = await open6(
-      this.journalPath,
-      constants7.O_WRONLY | constants7.O_CREAT | constants7.O_APPEND | NO_FOLLOW,
-      384
-    );
-    try {
-      const metadata = await handle.stat();
-      const named = await lstat7(this.journalPath);
-      if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size !== expectedSize || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.dev !== metadata.dev || named.ino !== metadata.ino) {
-        throw workflowError("workflow journal changed before append", "unsafe-workflow-state");
-      }
-      await handle.writeFile(bytes);
-      await handle.sync();
-      const settled = await handle.stat();
-      if (settled.size !== expectedSize + bytes.byteLength) {
-        throw workflowError("workflow journal append was incomplete", "invalid-workflow-journal");
-      }
-      await assertDirectoryIdentity(this.workflowDirectory, directory);
-    } finally {
-      await handle.close();
-    }
-    await flushDirectory(this.workflowDirectory);
+    await unsafeOnRefusal(appendDurable(
+      this.durableSession(directory),
+      path9.basename(this.journalPath),
+      bytes,
+      { expectedSize }
+    ));
     await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
   async assertCurrentRevision(directory, expectedRevision) {
@@ -36598,110 +36748,42 @@ var WorkflowStore = class {
     }
   }
   async publish(bytes, directory, create) {
-    const temporaryPath = path9.join(
-      this.workflowDirectory,
-      `.state.${randomUUID3()}.tmp`
-    );
-    const publicationPath = path9.join(
-      this.workflowDirectory,
-      `.state.${randomUUID3()}.publish`
-    );
-    let handle;
-    let temporaryExists = false;
-    let publicationExists = false;
-    let temporaryIdentity;
-    try {
-      handle = await open6(
-        temporaryPath,
-        constants7.O_WRONLY | constants7.O_CREAT | constants7.O_EXCL | NO_FOLLOW,
-        384
-      );
-      temporaryExists = true;
-      await handle.writeFile(bytes);
-      await handle.sync();
-      const metadata = await handle.stat({ bigint: true });
-      const named = await lstat7(temporaryPath, { bigint: true });
-      if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size !== BigInt(bytes.byteLength) || !named.isFile() || named.isSymbolicLink() || named.dev !== metadata.dev || named.ino !== metadata.ino) {
-        throw workflowError("workflow state temporary file changed", "unsafe-workflow-state");
-      }
-      temporaryIdentity = { dev: metadata.dev, ino: metadata.ino };
-      await handle.close();
-      handle = void 0;
-      await assertDirectoryIdentity(this.workflowDirectory, directory);
-      if (create) {
-        try {
-          await lstat7(this.statePath);
+    await assertDirectoryIdentity(this.workflowDirectory, directory);
+    const session = this.durableSession(directory);
+    const name = path9.basename(this.statePath);
+    if (create) {
+      try {
+        await unsafeOnRefusal(publishExclusive(session, name, bytes));
+      } catch (error51) {
+        if (errorCode(error51) === "EEXIST") {
           throw workflowError("workflow state already exists", "workflow-state-conflict");
-        } catch (error51) {
-          if (!isMissing(error51)) throw error51;
         }
+        throw error51;
       }
-      await this.stageStatePublication(
-        temporaryPath,
-        publicationPath,
-        bytes,
-        temporaryIdentity
-      );
-      publicationExists = true;
-      await this.assertStagedPublication(
-        temporaryPath,
-        publicationPath,
-        bytes,
-        temporaryIdentity
-      );
-      await rm3(temporaryPath);
-      temporaryExists = false;
-      await rename2(publicationPath, this.statePath);
-      publicationExists = false;
-      await this.assertPublishedState(bytes, temporaryIdentity);
-      await flushDirectory(this.workflowDirectory);
-      await assertDirectoryIdentity(this.workflowDirectory, directory);
-    } finally {
-      await handle?.close();
-      if (temporaryExists) await rm3(temporaryPath, { force: true });
-      if (publicationExists) await rm3(publicationPath, { force: true });
+    } else {
+      await unsafeOnRefusal(writeAtomic(session, name, bytes, "replace"));
     }
+    await this.assertPublishedState(bytes);
+    await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
-  async stageStatePublication(temporaryPath, publicationPath, expectedBytes, expectedIdentity) {
-    let linked = false;
-    try {
-      await link3(temporaryPath, publicationPath);
-      linked = true;
-      const publication = await lstat7(publicationPath, { bigint: true });
-      if (!publication.isFile() || publication.isSymbolicLink() || publication.nlink !== 2n || publication.dev !== expectedIdentity.dev || publication.ino !== expectedIdentity.ino || publication.size !== BigInt(expectedBytes.byteLength)) {
-        throw workflowError("workflow state publication source changed", "unsafe-workflow-state");
-      }
-    } catch (error51) {
-      if (linked) await rm3(publicationPath, { force: true });
-      throw error51;
-    }
+  /**
+   * A durable session over the workflow directory. It flushes with
+   * flushDirectory: workflow writes are a hot path, so they never spawn the
+   * Windows directory helper.
+   */
+  durableSession(directory) {
+    return new DurableDirectorySession(
+      this.workflowDirectory,
+      { dev: directory.dev, ino: directory.ino, birthtimeNs: directory.birthtimeNs },
+      { syncDirectory: flushDirectory }
+    );
   }
-  async assertStagedPublication(temporaryPath, publicationPath, expectedBytes, expectedIdentity) {
-    const handle = await open6(publicationPath, constants7.O_RDONLY | NO_FOLLOW);
-    try {
-      const metadata = await handle.stat({ bigint: true });
-      const [publication, temporary] = await Promise.all([
-        lstat7(publicationPath, { bigint: true }),
-        lstat7(temporaryPath, { bigint: true })
-      ]);
-      if (!metadata.isFile() || metadata.nlink !== 2n || metadata.size !== BigInt(expectedBytes.byteLength) || metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino || !publication.isFile() || publication.isSymbolicLink() || publication.dev !== expectedIdentity.dev || publication.ino !== expectedIdentity.ino || !temporary.isFile() || temporary.isSymbolicLink() || temporary.dev !== expectedIdentity.dev || temporary.ino !== expectedIdentity.ino) {
-        throw workflowError("workflow state publication changed before commit", "unsafe-workflow-state");
-      }
-      const published = await readHandleBytes2(handle, Number(metadata.size));
-      const settled = await handle.stat({ bigint: true });
-      if (!published.equals(expectedBytes) || settled.nlink !== metadata.nlink || settled.size !== metadata.size || settled.mtimeNs !== metadata.mtimeNs || settled.ctimeNs !== metadata.ctimeNs) {
-        throw workflowError("workflow state publication changed before commit", "unsafe-workflow-state");
-      }
-    } finally {
-      await handle.close();
-    }
-  }
-  async assertPublishedState(expectedBytes, expectedIdentity) {
+  async assertPublishedState(expectedBytes) {
     const handle = await open6(this.statePath, constants7.O_RDONLY | NO_FOLLOW);
     try {
       const metadata = await handle.stat({ bigint: true });
       const named = await lstat7(this.statePath, { bigint: true });
-      if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size !== BigInt(expectedBytes.byteLength) || metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1n || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
+      if (!metadata.isFile() || metadata.nlink !== 1n || metadata.size !== BigInt(expectedBytes.byteLength) || !named.isFile() || named.isSymbolicLink() || named.nlink !== 1n || named.dev !== metadata.dev || named.ino !== metadata.ino || named.size !== metadata.size) {
         throw workflowError("published workflow state identity changed", "unsafe-workflow-state");
       }
       const published = await readHandleBytes2(handle, Number(metadata.size));
@@ -38811,15 +38893,12 @@ function seatbeltArgv(policy, argv) {
 }
 
 // src/runtime/run-start.ts
-import { randomUUID as randomUUID4 } from "node:crypto";
 import { constants as constants8 } from "node:fs";
 import {
   access as access2,
   lstat as lstat8,
   open as open8,
-  realpath as realpath5,
-  rename as rename3,
-  rm as rm4
+  realpath as realpath5
 } from "node:fs/promises";
 import path13 from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
@@ -38859,10 +38938,10 @@ async function parentDeathWatchdogInvocation(executable, args) {
 }
 function assertDirectoryIdentity2(target) {
   return Promise.all([
-    lstat8(target.publicDirectory),
+    lstat8(target.publicDirectory, { bigint: true }),
     realpath5(target.publicDirectory)
   ]).then(([metadata, canonical]) => {
-    if (!metadata.isDirectory() || metadata.isSymbolicLink() || metadata.dev !== target.identity.dev || metadata.ino !== target.identity.ino || canonical !== target.canonicalDirectory) {
+    if (!metadata.isDirectory() || metadata.isSymbolicLink() || !sameDevIno(metadata, target.identity) || canonical !== target.canonicalDirectory) {
       throw new RuntimeError("run archive directory identity changed");
     }
   });
@@ -38873,59 +38952,40 @@ async function writeRunStart(target, record2, create) {
   const serialized = `${JSON.stringify(record2, null, 2)}
 `;
   if (create) {
-    const handle2 = await open8(
+    const handle = await open8(
       destination,
       constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | NO_FOLLOW,
       384
     );
     try {
-      await handle2.writeFile(serialized, "utf8");
-      await handle2.sync();
+      await handle.writeFile(serialized, "utf8");
+      await handle.sync();
     } finally {
-      await handle2.close();
+      await handle.close();
     }
     await flushDirectory(target.canonicalDirectory);
     await assertDirectoryIdentity2(target);
     return;
   }
-  const temporaryPath = path13.join(
+  const session = new DurableDirectorySession(
     target.canonicalDirectory,
-    `.run-start.${randomUUID4()}.tmp`
+    target.identity,
+    { syncDirectory: flushDirectory }
   );
-  let created = false;
-  let handle;
-  try {
-    handle = await open8(
-      temporaryPath,
-      constants8.O_WRONLY | constants8.O_CREAT | constants8.O_EXCL | NO_FOLLOW,
-      384
-    );
-    created = true;
-    await handle.writeFile(serialized, "utf8");
-    await handle.sync();
-    await handle.close();
-    handle = void 0;
-    await assertDirectoryIdentity2(target);
-    await rename3(temporaryPath, destination);
-    created = false;
-    await flushDirectory(target.canonicalDirectory);
-    await assertDirectoryIdentity2(target);
-  } finally {
-    await handle?.close();
-    if (created) await rm4(temporaryPath, { force: true });
-  }
+  await writeAtomic(session, "run-start.json", serialized, "replace");
+  await assertDirectoryIdentity2(target);
 }
 async function initializeRunStart(store, record2) {
   await store.writeLog("lifecycle", "attempt lock acquired\n");
   const canonicalDirectory = await realpath5(store.runDirectory);
-  const metadata = await lstat8(store.runDirectory);
+  const metadata = await lstat8(store.runDirectory, { bigint: true });
   if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
     throw new RuntimeError("run archive directory is not a plain directory");
   }
   const target = {
     publicDirectory: store.runDirectory,
     canonicalDirectory,
-    identity: { dev: metadata.dev, ino: metadata.ino }
+    identity: { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs }
   };
   await writeRunStart(target, record2, true);
   return { target, record: record2 };
@@ -39174,7 +39234,7 @@ async function probeAll(ctx, producerRegistry = registry2, options) {
 
 // src/verify/dependency-link.ts
 import { execFile as execFile3 } from "node:child_process";
-import { access as access3, mkdir as mkdir5, mkdtemp, readFile as readFile3, rm as rm5, stat, writeFile } from "node:fs/promises";
+import { access as access3, mkdir as mkdir5, mkdtemp, readFile as readFile3, rm as rm4, stat, writeFile } from "node:fs/promises";
 import { tmpdir as tmpdir5 } from "node:os";
 import path15 from "node:path";
 import { promisify } from "node:util";
@@ -39228,7 +39288,7 @@ async function probeCowSupport(dependencies = {}) {
       return { cowSupported: false, strategy: clone2.strategy };
     }
   } finally {
-    await rm5(probeRoot, { recursive: true, force: true });
+    await rm4(probeRoot, { recursive: true, force: true });
   }
 }
 async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies = {}) {
@@ -39270,7 +39330,7 @@ async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies =
     });
     return "inherited";
   } catch {
-    await rm5(targetModules, { recursive: true, force: true });
+    await rm4(targetModules, { recursive: true, force: true });
     return "skipped-cow-unsupported";
   }
 }
@@ -39938,7 +39998,7 @@ function gitChangedFiles(checkoutPath, deps = {}) {
 }
 
 // src/autopilot/autopilot-controller.ts
-import { randomUUID as randomUUID9 } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 
 // src/mcp/decision-authority.ts
 var DECISION_AUTHORITY_ENV = "CLAUDE_ARCHITECT_DECISION_AUTHORITY";
@@ -40307,7 +40367,7 @@ function computeChangedPathManifest(inputs) {
 import { createHash as createHash8 } from "node:crypto";
 
 // src/git/candidate-tree.ts
-import { lstat as lstat10, mkdtemp as mkdtemp2, rm as rm6 } from "node:fs/promises";
+import { lstat as lstat10, mkdtemp as mkdtemp2, rm as rm5 } from "node:fs/promises";
 import { tmpdir as tmpdir6 } from "node:os";
 import path19 from "node:path";
 
@@ -40556,7 +40616,7 @@ async function freezeCandidate(args) {
       }
     };
   } finally {
-    await rm6(indexDirectory, { recursive: true, force: true });
+    await rm5(indexDirectory, { recursive: true, force: true });
   }
 }
 
@@ -40914,13 +40974,13 @@ function evaluateAutopilotEligibility(evidence) {
 
 // src/autopilot/final-branch-reviewer.ts
 import { createHash as createHash12 } from "node:crypto";
-import { constants as constants14 } from "node:fs";
-import { open as open14 } from "node:fs/promises";
+import { constants as constants13 } from "node:fs";
+import { open as open13 } from "node:fs/promises";
 import path28 from "node:path";
 
 // src/runtime/worktree-manager.ts
-import { randomUUID as randomUUID6 } from "node:crypto";
-import { lstat as lstat13, mkdir as mkdir6, readdir as readdir7, realpath as realpath8, rename as rename5 } from "node:fs/promises";
+import { randomUUID as randomUUID5 } from "node:crypto";
+import { lstat as lstat13, mkdir as mkdir6, readdir as readdir7, realpath as realpath8, rename as rename3 } from "node:fs/promises";
 import path22 from "node:path";
 
 // src/platform/bound-directory-cleanup.ts
@@ -41383,16 +41443,16 @@ async function emptyBoundDirectory(directory, boundIdentity, platformServices) {
 }
 
 // src/runtime/worktree-removal-manifest.ts
-import { randomUUID as randomUUID5 } from "node:crypto";
+import { randomUUID as randomUUID4 } from "node:crypto";
 import { constants as constants11 } from "node:fs";
 import {
-  link as link4,
+  link as link3,
   lstat as lstat12,
   open as open11,
   readdir as readdir6,
   realpath as realpath7,
-  rename as rename4,
-  rm as rm7
+  rename as rename2,
+  rm as rm6
 } from "node:fs/promises";
 import path21 from "node:path";
 var MANIFEST_DIRECTORY = "worktree-removals";
@@ -41544,7 +41604,7 @@ function parseManifest(contents, transactionId) {
 async function verifyWorktreeRemovalManifestStorage() {
   const root = manifestRoot();
   const rootIdentity = await ensurePrivateDirectory2(root);
-  const token = randomUUID5();
+  const token = randomUUID4();
   const sourcePath = path21.join(root, `.hardlink-probe-${token}.source`);
   const linkedPath = path21.join(root, `.hardlink-probe-${token}.linked`);
   let sourceExists = false;
@@ -41574,7 +41634,7 @@ async function verifyWorktreeRemovalManifestStorage() {
       await handle.close();
     }
     await assertDirectoryIdentity3(root, rootIdentity);
-    await link4(sourcePath, linkedPath);
+    await link3(sourcePath, linkedPath);
     linkedExists = true;
     await Promise.all([
       assertManifestIdentity(sourcePath, identity, 2n),
@@ -41586,8 +41646,8 @@ async function verifyWorktreeRemovalManifestStorage() {
   const cleanupErrors = [];
   try {
     await assertDirectoryIdentity3(root, rootIdentity);
-    if (linkedExists) await rm7(linkedPath, { force: false });
-    if (sourceExists) await rm7(sourcePath, { force: false });
+    if (linkedExists) await rm6(linkedPath, { force: false });
+    if (sourceExists) await rm6(sourcePath, { force: false });
     await syncDirectoryMetadata(root);
     await assertDirectoryIdentity3(root, rootIdentity);
   } catch (error51) {
@@ -41618,7 +41678,7 @@ async function persistWorktreeRemovalManifest(manifest) {
   const manifestPath = path21.join(root, `${manifest.transactionId}.json`);
   const temporaryPath = path21.join(
     root,
-    `.${manifest.transactionId}.${randomUUID5()}.tmp`
+    `.${manifest.transactionId}.${randomUUID4()}.tmp`
   );
   let temporaryExists = false;
   let manifestExists = false;
@@ -41632,14 +41692,14 @@ async function persistWorktreeRemovalManifest(manifest) {
     const temporaryIdentity = await writeSyncedManifest(handle, manifest);
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(temporaryPath, temporaryIdentity, 1n);
-    await link4(temporaryPath, manifestPath);
+    await link3(temporaryPath, manifestPath);
     manifestExists = true;
     await assertDirectoryIdentity3(root, rootIdentity);
     await Promise.all([
       assertManifestIdentity(temporaryPath, temporaryIdentity, 2n),
       assertManifestIdentity(manifestPath, temporaryIdentity, 2n)
     ]);
-    await rm7(temporaryPath);
+    await rm6(temporaryPath);
     temporaryExists = false;
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(manifestPath, temporaryIdentity, 1n);
@@ -41658,14 +41718,14 @@ async function persistWorktreeRemovalManifest(manifest) {
     }
     if (temporaryExists) {
       try {
-        await rm7(temporaryPath, { force: true });
+        await rm6(temporaryPath, { force: true });
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }
     }
     if (manifestExists) {
       try {
-        await rm7(manifestPath, { force: true });
+        await rm6(manifestPath, { force: true });
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }
@@ -41685,7 +41745,7 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
   const rootIdentity = await ensurePrivateDirectory2(root);
   const temporaryPath = path21.join(
     root,
-    `.${manifest.transactionId}.${randomUUID5()}.tmp`
+    `.${manifest.transactionId}.${randomUUID4()}.tmp`
   );
   let temporaryExists = false;
   let primaryError;
@@ -41699,7 +41759,7 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
     const temporaryIdentity = await writeSyncedManifest(handle, manifest);
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(temporaryPath, temporaryIdentity, 1n);
-    await rename4(temporaryPath, manifestPath);
+    await rename2(temporaryPath, manifestPath);
     temporaryExists = false;
     await assertDirectoryIdentity3(root, rootIdentity);
     await assertManifestIdentity(manifestPath, temporaryIdentity, 1n);
@@ -41713,7 +41773,7 @@ async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
     if (temporaryExists) {
       try {
         await assertDirectoryIdentity3(root, rootIdentity);
-        await rm7(temporaryPath, { force: true });
+        await rm6(temporaryPath, { force: true });
       } catch (cleanupError) {
         if (primaryError === void 0) throw cleanupError;
         throw new AggregateError(
@@ -41738,19 +41798,19 @@ async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
   };
   const guardPath = path21.join(
     root,
-    `.remove-manifest-${transactionId}.${randomUUID5()}.guard`
+    `.remove-manifest-${transactionId}.${randomUUID4()}.guard`
   );
   await assertDirectoryIdentity3(root, rootIdentity);
-  await link4(manifestPath, guardPath);
+  await link3(manifestPath, guardPath);
   await Promise.all([
     assertManifestIdentity(manifestPath, identity, 2n),
     assertManifestIdentity(guardPath, identity, 2n)
   ]);
-  await rm7(manifestPath, { force: false });
+  await rm6(manifestPath, { force: false });
   await assertDirectoryIdentity3(root, rootIdentity);
   await assertMissing(manifestPath, "worktree removal manifest");
   await assertManifestIdentity(guardPath, identity, 1n);
-  await rm7(guardPath, { force: false });
+  await rm6(guardPath, { force: false });
   await syncDirectoryMetadata(root);
   await assertDirectoryIdentity3(root, rootIdentity);
   await Promise.all([
@@ -41835,7 +41895,7 @@ async function settleLinkedWorktreeRemovalManifest(manifestPath, temporaryPath, 
     birthtimeNs: published.birthtimeNs
   };
   await assertDirectoryIdentity3(root, rootIdentity);
-  await rm7(temporaryPath, { force: false });
+  await rm6(temporaryPath, { force: false });
   await assertDirectoryIdentity3(root, rootIdentity);
   await assertManifestIdentity(manifestPath, publishedIdentity, 1n);
   await syncDirectoryMetadata(root);
@@ -41949,7 +42009,7 @@ async function readPendingWorktreeRemovalManifests() {
       } else {
         await assertMissing(publishedPath, "removed worktree manifest");
       }
-      await rm7(guardPath, { force: false });
+      await rm6(guardPath, { force: false });
       await syncDirectoryMetadata(root);
       await assertDirectoryIdentity3(root, rootIdentity);
     } catch (error51) {
@@ -41983,7 +42043,7 @@ async function readPendingWorktreeRemovalManifests() {
         throw new RuntimeError("manifest hard-link probe pair is inconsistent");
       }
       for (const { path: probePath } of metadata.reverse()) {
-        await rm7(probePath, { force: false });
+        await rm6(probePath, { force: false });
       }
       await syncDirectoryMetadata(root);
       await assertDirectoryIdentity3(root, rootIdentity);
@@ -42012,7 +42072,7 @@ async function readPendingWorktreeRemovalManifests() {
         if (contents === null) {
           throw new RuntimeError("unpublished worktree removal manifest is not stable");
         }
-        await rm7(temporaryPath, { force: false });
+        await rm6(temporaryPath, { force: false });
         await syncDirectoryMetadata(root);
         await assertDirectoryIdentity3(root, rootIdentity);
       } else {
@@ -42333,7 +42393,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   if (!sameDirectoryIdentity(observedIdentity, expectedIdentity)) {
     throw new RuntimeError("managed worktree directory identity changed before quarantine");
   }
-  const quarantineToken = (options.uuid ?? randomUUID6)();
+  const quarantineToken = (options.uuid ?? randomUUID5)();
   if (!SAFE_QUARANTINE_TOKEN.test(quarantineToken)) {
     throw new RuntimeError("invalid managed worktree quarantine token");
   }
@@ -42344,7 +42404,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   if (path22.dirname(quarantinePath) !== quarantineRoot) {
     throw new RuntimeError("managed worktree quarantine path escaped its root");
   }
-  const move = options.rename ?? rename5;
+  const move = options.rename ?? rename3;
   const wait = options.delay ?? delay2;
   let moveError;
   let moved = false;
@@ -42592,7 +42652,7 @@ async function restoreStagedRegistration(registrationRoot, registrationPath, qua
   if (registrationRootIdentity === null || !sameDirectoryIdentity(registrationRootIdentity, expectedRegistrationRootIdentity) || quarantineRootIdentity === null || !sameDirectoryIdentity(quarantineRootIdentity, expectedQuarantineRootIdentity) || sourceIdentity === null || !sameDirectoryIdentity(sourceIdentity, expectedIdentity) || destinationIdentity !== null) {
     throw new RuntimeError("staged worktree registration rollback is unsafe");
   }
-  const move = dependencies.rename ?? rename5;
+  const move = dependencies.rename ?? rename3;
   const wait = dependencies.delay ?? delay2;
   let moveError;
   let restored = false;
@@ -42866,7 +42926,7 @@ async function removeStaleWorktreeRegistration(repoRoot, worktreePath, worktreeG
     expectedBranchRef,
     runGit
   );
-  const transactionId = (dependencies.uuid ?? randomUUID6)();
+  const transactionId = (dependencies.uuid ?? randomUUID5)();
   if (!SAFE_QUARANTINE_TOKEN.test(transactionId)) {
     throw new RuntimeError("invalid stale worktree quarantine token");
   }
@@ -42993,7 +43053,7 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
     throw new RuntimeError("managed worktree identity changed before removal transaction");
   }
   const { root, target } = await managedPath(worktreePath);
-  const transactionId = (dependencies.uuid ?? randomUUID6)();
+  const transactionId = (dependencies.uuid ?? randomUUID5)();
   if (!SAFE_QUARANTINE_TOKEN.test(transactionId)) {
     throw new RuntimeError("invalid physical worktree quarantine token");
   }
@@ -43226,7 +43286,7 @@ var WorktreeManager = class {
       registrationRoot,
       registrationRootIdentity
     );
-    const transactionId = (this.dependencies.uuid ?? randomUUID6)();
+    const transactionId = (this.dependencies.uuid ?? randomUUID5)();
     if (!SAFE_QUARANTINE_TOKEN.test(transactionId)) {
       throw new RuntimeError("invalid worktree creation transaction token");
     }
@@ -43291,7 +43351,7 @@ var WorktreeManager = class {
     };
     await replaceWorktreeRemovalManifest(manifestPath, manifest);
     await assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root");
-    await (this.dependencies.rename ?? rename5)(stagingPath, worktreePath);
+    await (this.dependencies.rename ?? rename3)(stagingPath, worktreePath);
     await syncChangedDirectories(this.dependencies, worktreesRoot);
     await Promise.all([
       assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root"),
@@ -43638,7 +43698,7 @@ async function withManagedWorktree(args) {
 }
 
 // src/verify/project-verifier.ts
-import { mkdtemp as mkdtemp3, realpath as realpath9, rm as rm8 } from "node:fs/promises";
+import { mkdtemp as mkdtemp3, realpath as realpath9, rm as rm7 } from "node:fs/promises";
 import { tmpdir as tmpdir7 } from "node:os";
 import path23 from "node:path";
 var MAX_COMMAND_OUTPUT_BYTES = 1e6;
@@ -43945,7 +44005,7 @@ async function projectVerify(args) {
     primaryError = error51;
     throw error51;
   } finally {
-    if (scratchDir !== null) await rm8(scratchDir, { recursive: true, force: true });
+    if (scratchDir !== null) await rm7(scratchDir, { recursive: true, force: true });
     try {
       await materialized.cleanup();
     } catch (cleanupError) {
@@ -44354,7 +44414,7 @@ function parsePipelineGateCleared(value) {
 }
 
 // src/runtime/artifact-store.ts
-import { randomUUID as randomUUID7 } from "node:crypto";
+import { randomUUID as randomUUID6 } from "node:crypto";
 import { constants as constants12 } from "node:fs";
 import {
   lstat as lstat14,
@@ -44363,8 +44423,8 @@ import {
   opendir,
   readdir as readdir8,
   realpath as realpath10,
-  rename as rename6,
-  rm as rm9
+  rename as rename4,
+  rm as rm8
 } from "node:fs/promises";
 import path24 from "node:path";
 
@@ -45536,7 +45596,7 @@ var ArtifactStore = class _ArtifactStore {
   async clearPipelineActiveMarker() {
     const directory = await this.ensureRunDirectory(false);
     if (directory === null) return;
-    await rm9(path24.join(directory, PIPELINE_ACTIVE_MARKER.relativePath), { force: true });
+    await rm8(path24.join(directory, PIPELINE_ACTIVE_MARKER.relativePath), { force: true });
   }
   async list() {
     await this.ensureRunsRoot();
@@ -45755,11 +45815,11 @@ var ArtifactStore = class _ArtifactStore {
     const runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
     await assertDirectoryIdentity5(entry.directory, entry.identity);
     await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
-    await rename6(entry.directory, quarantinePath);
+    await rename4(entry.directory, quarantinePath);
     await flushDirectory(this.runsRoot);
     await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
     await assertDirectoryIdentity5(quarantinePath, entry.identity);
-    await rm9(quarantinePath, { recursive: true, force: false });
+    await rm8(quarantinePath, { recursive: true, force: false });
     await flushDirectory(this.runsRoot);
     await this.appendCleanupRecord({
       event: "prune-cleanup-complete",
@@ -45786,7 +45846,7 @@ var ArtifactStore = class _ArtifactStore {
     const removeEntry = async (entry, reason) => {
       if (attempted.has(entry.runId)) return;
       attempted.add(entry.runId);
-      const quarantineName = `.prune-${entry.runId}-${randomUUID7()}`;
+      const quarantineName = `.prune-${entry.runId}-${randomUUID6()}`;
       const quarantinePath = path24.join(this.runsRoot, quarantineName);
       const runStore = new _ArtifactStore(entry.runId);
       let prepared = null;
@@ -45869,12 +45929,12 @@ var ArtifactStore = class _ArtifactStore {
           runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
           await assertDirectoryIdentity5(entry.directory, entry.identity);
           await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
-          await rename6(entry.directory, quarantinePath);
+          await rename4(entry.directory, quarantinePath);
           await flushDirectory(this.runsRoot);
           await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
           await assertDirectoryIdentity5(quarantinePath, entry.identity);
           archiveRemovalCommitted = true;
-          await rm9(quarantinePath, { recursive: true, force: false });
+          await rm8(quarantinePath, { recursive: true, force: false });
           await flushDirectory(this.runsRoot);
           await transaction.commit();
           await this.appendCleanupRecord({
@@ -45915,7 +45975,7 @@ var ArtifactStore = class _ArtifactStore {
               const expectedRunsRoot = runsRootIdentity ?? await ensurePlainDirectory(this.runsRoot);
               await assertDirectoryIdentity5(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity5(quarantinePath, entry.identity);
-              await rename6(quarantinePath, entry.directory);
+              await rename4(quarantinePath, entry.directory);
               await flushDirectory(this.runsRoot);
               await assertDirectoryIdentity5(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity5(entry.directory, entry.identity);
@@ -46183,7 +46243,7 @@ async function readRunDecisionSnapshot(runId, options) {
 }
 
 // src/pipeline/role-runner.ts
-import { rm as rm10 } from "node:fs/promises";
+import { rm as rm9 } from "node:fs/promises";
 
 // src/producers/routing-policy.ts
 function route(preferences, reports) {
@@ -46568,7 +46628,7 @@ async function cleanupProcessAttempt(tempHome, builtEnvironment) {
   }
   if (tempHome !== null) {
     try {
-      await rm10(tempHome, { recursive: true, force: true });
+      await rm9(tempHome, { recursive: true, force: true });
     } catch (error51) {
       failures.push(error51);
     }
@@ -46749,9 +46809,8 @@ async function parseStructuredReport(raw, validate, repair) {
 }
 
 // src/autopilot/branch-manager.ts
-import { createHash as createHash11, randomUUID as randomUUID8 } from "node:crypto";
-import { constants as constants13 } from "node:fs";
-import { chmod, link as link5, lstat as lstat17, mkdir as mkdir9, mkdtemp as mkdtemp4, open as open13, realpath as realpath13, rm as rm11 } from "node:fs/promises";
+import { createHash as createHash11, randomUUID as randomUUID7 } from "node:crypto";
+import { chmod, lstat as lstat17, mkdir as mkdir9, mkdtemp as mkdtemp4, realpath as realpath13, rm as rm10 } from "node:fs/promises";
 import path27 from "node:path";
 
 // src/git/repo-preconditions.ts
@@ -47042,7 +47101,7 @@ function createIsolatedRemoteTransport(runGit = git) {
     await chmod(repository, 448);
     const initialized = await runIsolatedGit(repository, ["init", "--bare", "--quiet", "."]);
     if (!gitSucceeded(initialized)) {
-      await rm11(repository, { recursive: true, force: true });
+      await rm10(repository, { recursive: true, force: true });
       throw new RuntimeError("isolated remote repository initialization failed");
     }
     return repository;
@@ -47059,7 +47118,7 @@ function createIsolatedRemoteTransport(runGit = git) {
       }
       if (repository !== void 0) {
         try {
-          await rm11(repository, { recursive: true });
+          await rm10(repository, { recursive: true });
         } catch {
           return transportFailure("isolated remote repository cleanup");
         }
@@ -47106,7 +47165,7 @@ function createIsolatedRemoteTransport(runGit = git) {
       } finally {
         if (repository !== void 0) {
           try {
-            await rm11(repository, { recursive: true });
+            await rm10(repository, { recursive: true });
           } catch {
             result = transportFailure("isolated remote repository cleanup");
             fetchedOid = void 0;
@@ -47313,7 +47372,7 @@ var WorkflowBranchManager = class {
   constructor(dependencies = {}) {
     this.runGit = dependencies.git ?? git;
     this.remoteTransport = dependencies.remoteTransport ?? createIsolatedRemoteTransport(this.runGit);
-    this.removeOwnership = dependencies.removeOwnership ?? ((ownershipPath) => rm11(ownershipPath));
+    this.removeOwnership = dependencies.removeOwnership ?? ((ownershipPath) => rm10(ownershipPath));
     const platformServices = dependencies.platformServices ?? getPlatformServices();
     this.platformServices = platformServices;
     this.getProcessStartToken = platformServices.getProcessStartToken?.bind(platformServices) ?? getPlatformServices().getProcessStartToken.bind(getPlatformServices());
@@ -47367,40 +47426,16 @@ var WorkflowBranchManager = class {
     const ownershipPath = this.ownershipPath(identity.workflowId);
     const directory = path27.dirname(ownershipPath);
     await mkdir9(directory, { recursive: true });
-    const temporaryPath = path27.join(directory, `.${path27.basename(ownershipPath)}.${randomUUID8()}.tmp`);
     const bytes = Buffer.from(`${JSON.stringify({ ...identity, bootstrapOwner })}
 `);
-    let temporaryExists = false;
-    let ownershipLinked = false;
+    const session = await openDurableDirectorySession(directory, { create: false });
     try {
-      const handle = await open13(
-        temporaryPath,
-        constants13.O_WRONLY | constants13.O_CREAT | constants13.O_EXCL | NO_FOLLOW,
-        384
-      );
-      temporaryExists = true;
-      try {
-        await handle.writeFile(bytes);
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
-      try {
-        await link5(temporaryPath, ownershipPath);
-        ownershipLinked = true;
-      } catch (error51) {
-        if (typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === "EEXIST") {
-          fail("workflow-already-owned");
-        }
-        throw error51;
-      }
-      await rm11(temporaryPath);
-      temporaryExists = false;
-      await syncDirectoryMetadata(directory);
-      ownershipLinked = false;
+      await publishExclusive(session, path27.basename(ownershipPath), bytes);
+    } catch (error51) {
+      if (errorCode(error51) === "EEXIST") fail("workflow-already-owned");
+      throw error51;
     } finally {
-      if (temporaryExists) await rm11(temporaryPath, { force: true });
-      if (ownershipLinked) await rm11(ownershipPath, { force: true });
+      await session.close();
     }
   }
   async resolveRemote(checkoutPath) {
@@ -47439,7 +47474,7 @@ var WorkflowBranchManager = class {
     const branch = `feat/${request.topic}-${request.workflowId.slice(0, 8)}`;
     const branchRef = `refs/heads/${branch}`;
     const baseRef = `refs/claude-architect/autopilot/${request.workflowId}/base`;
-    const fetchedRef = `refs/claude-architect/autopilot/${request.workflowId}/fetch-${randomUUID8()}`;
+    const fetchedRef = `refs/claude-architect/autopilot/${request.workflowId}/fetch-${randomUUID7()}`;
     const initial = await this.platformServices.canonicalizePath(request.checkoutPath);
     if (initial.gitCommonDir === null) fail("not-a-repository");
     let attached;
@@ -48392,7 +48427,7 @@ async function persistFrozenArtifact(workflowDirectory, artifact) {
 async function readPublishedReport(workflowDirectory, artifact) {
   let handle;
   try {
-    handle = await open14(path28.join(workflowDirectory, FINAL_BRANCH_REPORT_REF), constants14.O_RDONLY | NO_FOLLOW);
+    handle = await open13(path28.join(workflowDirectory, FINAL_BRANCH_REPORT_REF), constants13.O_RDONLY | NO_FOLLOW);
   } catch (error51) {
     if (isMissing(error51)) return null;
     fail2("artifact-persistence-failed", "final branch report is unavailable");
@@ -48421,7 +48456,7 @@ async function assertPersistedArtifact(workflowDirectory, artifact) {
   let handle;
   try {
     const destination = path28.join(workflowDirectory, FINAL_BRANCH_ARTIFACT_REF);
-    handle = await open14(destination, constants14.O_RDONLY | NO_FOLLOW);
+    handle = await open13(destination, constants13.O_RDONLY | NO_FOLLOW);
     const metadata = await handle.stat();
     if (!metadata.isFile() || metadata.nlink !== 1 || metadata.size > MAX_FINAL_BRANCH_ARTIFACT_BYTES) {
       fail2("artifact-persistence-failed", "final branch artifact is not a safe regular file");
@@ -49028,7 +49063,7 @@ var AutopilotController = class {
   constructor(dependencies) {
     this.dependencies = dependencies;
     this.validator = dependencies.validator ?? validateAutopilotSpec;
-    this.createWorkflowId = dependencies.workflowId ?? randomUUID9;
+    this.createWorkflowId = dependencies.workflowId ?? randomUUID8;
     this.now = dependencies.now ?? (() => (/* @__PURE__ */ new Date()).toISOString());
     this.decisionAuthority = dependencies.decisionAuthority ?? (() => decisionAuthority());
   }
@@ -50247,11 +50282,11 @@ function specSha256(spec) {
 }
 
 // src/runtime/attempt-runtime.ts
-import { randomUUID as randomUUID11 } from "node:crypto";
-import { rm as rm12 } from "node:fs/promises";
+import { randomUUID as randomUUID10 } from "node:crypto";
+import { rm as rm11 } from "node:fs/promises";
 
 // src/verify/baseline-verifier.ts
-import { randomUUID as randomUUID10 } from "node:crypto";
+import { randomUUID as randomUUID9 } from "node:crypto";
 import { readFile as readFile6 } from "node:fs/promises";
 import { basename } from "node:path";
 import path29 from "node:path";
@@ -50404,7 +50439,7 @@ async function verifyBaseline(args) {
     // A runId gives recovery a deterministic, reclaimable name; without one
     // (only unit callers), fall back to a unique id so repeated same-commit
     // fixtures cannot collide on a shared worktrees root.
-    `baseline-${args.runId ?? args.verificationId?.() ?? randomUUID10()}`,
+    `baseline-${args.runId ?? args.verificationId?.() ?? randomUUID9()}`,
     ps,
     args.borrowedCheckoutLease === void 0 ? {} : { borrowedCheckoutLease: args.borrowedCheckoutLease }
   );
@@ -50950,7 +50985,7 @@ async function cleanupAttemptResources(args) {
   }
   if (args.tempHome !== null) {
     try {
-      await rm12(args.tempHome, { recursive: true, force: true });
+      await rm11(args.tempHome, { recursive: true, force: true });
     } catch (error51) {
       failures.push(error51);
     }
@@ -50971,7 +51006,7 @@ async function runAttempt(checkoutPath, spec, deps) {
   const producerRegistry = deps.producerRegistry ?? registry2;
   const now = deps.now ?? Date.now;
   const startedAtMs = now();
-  const runId = (deps.runId ?? randomUUID11)();
+  const runId = (deps.runId ?? randomUUID10)();
   const store = new ArtifactStore(runId);
   const inferredSlices = Array.isArray(spec.slices) ? spec.slices.length : 0;
   const statusContext = deps.runStatus ?? {
@@ -51650,7 +51685,7 @@ function routeSlice(input) {
 }
 
 // src/pipeline/slice-composer.ts
-import { mkdtemp as mkdtemp5, rm as rm13 } from "node:fs/promises";
+import { mkdtemp as mkdtemp5, rm as rm12 } from "node:fs/promises";
 import { tmpdir as tmpdir8 } from "node:os";
 import path31 from "node:path";
 var NULL_OID = "0000000000000000000000000000000000000000";
@@ -51727,7 +51762,7 @@ async function composeSliceOntoHead(args) {
       runGit
     )).trim();
   } finally {
-    await rm13(indexRoot, { recursive: true, force: true });
+    await rm12(indexRoot, { recursive: true, force: true });
   }
 }
 
@@ -54954,13 +54989,13 @@ function boundedWorktreeSweepIssues(issues, worktreesRoot) {
 }
 
 // src/runtime/recovery-prune-journal.ts
-import { constants as constants15 } from "node:fs";
-import { lstat as lstat19, open as open16, realpath as realpath15 } from "node:fs/promises";
+import { constants as constants14 } from "node:fs";
+import { lstat as lstat19, open as open15, realpath as realpath15 } from "node:fs/promises";
 import path35 from "node:path";
 async function readCleanupJournal(filename) {
   let handle;
   try {
-    handle = await open16(filename, constants15.O_RDONLY | NO_FOLLOW);
+    handle = await open15(filename, constants14.O_RDONLY | NO_FOLLOW);
   } catch (error51) {
     if (isMissing(error51)) return { text: null, tornTail: false };
     throw error51;
@@ -55068,9 +55103,9 @@ async function appendCleanupRecord(runsRoot, record2) {
     const identity = await plainDirectoryIdentity2(runsRoot);
     if (identity === null) throw new RuntimeError("cleanup journal root disappeared");
     const filename = path35.join(runsRoot, "cleanup.ndjson");
-    const handle = await open16(
+    const handle = await open15(
       filename,
-      constants15.O_WRONLY | constants15.O_CREAT | constants15.O_APPEND | NO_FOLLOW,
+      constants14.O_WRONLY | constants14.O_CREAT | constants14.O_APPEND | NO_FOLLOW,
       384
     );
     try {
@@ -55161,7 +55196,7 @@ async function readPendingCleanupRecords(runsRoot) {
 async function truncateCleanupTornTail(filename) {
   let handle;
   try {
-    handle = await open16(filename, constants15.O_RDWR | NO_FOLLOW);
+    handle = await open15(filename, constants14.O_RDWR | NO_FOLLOW);
   } catch (error51) {
     if (isMissing(error51)) return;
     throw error51;
@@ -55276,10 +55311,10 @@ async function replayInterruptedPrunes(runsRoot, ps) {
 }
 
 // src/runtime/recovery-quarantine.ts
-import { randomUUID as randomUUID12 } from "node:crypto";
-import { constants as constants16 } from "node:fs";
-import { lstat as lstat20, link as link6, open as open17, rename as rename7 } from "node:fs/promises";
+import { constants as constants15 } from "node:fs";
+import { lstat as lstat20, open as open16 } from "node:fs/promises";
 import path36 from "node:path";
+var QUARANTINE_JOURNAL_NAME = "recovery-quarantine.ndjson";
 function boundedQuarantineReason(error51) {
   return boundedRedactedDiagnostic(error51, MAX_QUARANTINE_REASON_BYTES);
 }
@@ -55326,7 +55361,7 @@ async function readRecoveryQuarantineJournal(runsRoot) {
   if (rootIdentity === null) {
     throw new RuntimeError("recovery quarantine journal root disappeared");
   }
-  const filename = path36.join(runsRoot, "recovery-quarantine.ndjson");
+  const filename = path36.join(runsRoot, QUARANTINE_JOURNAL_NAME);
   let expectedMetadata;
   try {
     expectedMetadata = await lstat20(filename, { bigint: true });
@@ -55348,7 +55383,7 @@ async function readRecoveryQuarantineJournal(runsRoot) {
   }
   let handle;
   try {
-    handle = await open17(filename, constants16.O_RDONLY | NO_FOLLOW);
+    handle = await open16(filename, constants15.O_RDONLY | NO_FOLLOW);
   } catch (error51) {
     if (!isMissing(error51)) throw error51;
     try {
@@ -55418,144 +55453,23 @@ async function readRecoveryQuarantineJournal(runsRoot) {
 async function syncRecoveryDirectory(directory) {
   await syncDirectoryMetadata(directory);
 }
-async function publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, nextBytes) {
-  const temporaryPath = path36.join(
-    runsRoot,
-    `.recovery-quarantine-journal-${randomUUID12()}.tmp`
-  );
-  let handle;
-  let temporaryCreated = false;
-  let temporaryConsumed = false;
-  let linkedPublication = false;
-  let temporaryIdentity;
-  let primaryError;
-  try {
-    handle = await open17(
-      temporaryPath,
-      constants16.O_RDWR | constants16.O_CREAT | constants16.O_EXCL | NO_FOLLOW,
-      384
-    );
-    temporaryCreated = true;
-    const metadata = await handle.stat({ bigint: true });
-    temporaryIdentity = {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs
-    };
-    const namedMetadata = await lstat20(temporaryPath, { bigint: true });
-    const currentRoot = await lstat20(runsRoot, { bigint: true });
-    if (!metadata.isFile() || metadata.nlink !== 1n || !namedMetadata.isFile() || namedMetadata.isSymbolicLink() || namedMetadata.nlink !== 1n || namedMetadata.dev !== metadata.dev || namedMetadata.ino !== metadata.ino || namedMetadata.birthtimeNs !== metadata.birthtimeNs || metadata.size > MAX_STATE_FILE_BYTES_BIGINT2 || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, snapshot.rootIdentity)) {
-      throw new RuntimeError("recovery quarantine journal temp changed during creation");
-    }
-    await handle.writeFile(nextBytes);
-    await handle.sync();
-    await validateOwnedLockState(
-      handle,
-      [temporaryPath],
-      temporaryIdentity,
-      nextBytes,
-      1,
-      runsRoot,
-      snapshot.rootIdentity
-    );
-  } catch (error51) {
-    primaryError = error51;
+async function publishRecoveryQuarantineJournal(runsRoot, snapshot, nextBytes) {
+  const currentSnapshot = await readRecoveryQuarantineJournal(runsRoot);
+  const sameJournalIdentity = snapshot.journalIdentity === null ? currentSnapshot.journalIdentity === null : currentSnapshot.journalIdentity !== null && sameDirectoryIdentity(currentSnapshot.journalIdentity, snapshot.journalIdentity);
+  if (!sameDirectoryIdentity(currentSnapshot.rootIdentity, snapshot.rootIdentity) || !sameJournalIdentity || !currentSnapshot.bytes.equals(snapshot.bytes)) {
+    throw new RuntimeError("recovery quarantine journal changed before publication");
   }
-  if (handle !== void 0) {
-    try {
-      await handle.close();
-    } catch (closeError) {
-      if (primaryError !== void 0) {
-        primaryError = new AggregateError(
-          [primaryError, closeError],
-          "recovery quarantine journal temp failed and its handle could not be closed"
-        );
-      } else {
-        primaryError = closeError;
-      }
-    }
-  }
-  if (primaryError === void 0) {
-    try {
-      if (temporaryIdentity === void 0) {
-        throw new RuntimeError("recovery quarantine journal temp identity is unavailable");
-      }
-      await validatePublishedLock(
-        temporaryPath,
-        temporaryIdentity,
-        nextBytes,
-        runsRoot,
-        snapshot.rootIdentity
-      );
-      const currentSnapshot = await readRecoveryQuarantineJournal(runsRoot);
-      const sameJournalIdentity = snapshot.journalIdentity === null ? currentSnapshot.journalIdentity === null : currentSnapshot.journalIdentity !== null && currentSnapshot.journalIdentity.dev === snapshot.journalIdentity.dev && currentSnapshot.journalIdentity.ino === snapshot.journalIdentity.ino && currentSnapshot.journalIdentity.birthtimeNs === snapshot.journalIdentity.birthtimeNs;
-      if (!sameDirectoryIdentity(currentSnapshot.rootIdentity, snapshot.rootIdentity) || !sameJournalIdentity || !currentSnapshot.bytes.equals(snapshot.bytes)) {
-        throw new RuntimeError("recovery quarantine journal changed before publication");
-      }
-      if (snapshot.journalIdentity === null) {
-        await link6(temporaryPath, filename);
-        linkedPublication = true;
-        await validatePublishedLock(
-          temporaryPath,
-          temporaryIdentity,
-          nextBytes,
-          runsRoot,
-          snapshot.rootIdentity,
-          2,
-          [temporaryPath, filename]
-        );
-        const removal = await removeExpectedLockPath(
-          temporaryPath,
-          temporaryIdentity,
-          nextBytes,
-          2
-        );
-        if (removal === "changed") {
-          throw new RuntimeError("recovery quarantine journal temp changed before unlink");
-        }
-        temporaryConsumed = true;
-      } else {
-        await rename7(temporaryPath, filename);
-        temporaryConsumed = true;
-      }
-    } catch (error51) {
-      primaryError = error51;
-    }
-  }
-  const cleanupErrors = [];
-  if (temporaryCreated && !temporaryConsumed) {
-    if (temporaryIdentity === void 0) {
-      cleanupErrors.push(new RuntimeError(
-        "recovery quarantine journal temp identity is unavailable for cleanup"
-      ));
-    } else {
-      cleanupErrors.push(...await cleanupOwnedLockPaths(
-        runsRoot,
-        snapshot.rootIdentity,
-        temporaryPath,
-        filename,
-        temporaryIdentity,
-        nextBytes,
-        linkedPublication
-      ));
-    }
-  }
-  if (primaryError !== void 0 && cleanupErrors.length > 0) {
-    throw new AggregateError(
-      [primaryError, ...cleanupErrors],
-      "recovery quarantine journal publication and temp cleanup failed"
-    );
-  }
-  if (primaryError !== void 0) throw primaryError;
-  if (cleanupErrors.length === 1) throw cleanupErrors[0];
-  if (cleanupErrors.length > 1) {
-    throw new AggregateError(cleanupErrors, "recovery quarantine journal temp cleanup failed");
+  const session = new DurableDirectorySession(runsRoot, snapshot.rootIdentity);
+  let created;
+  if (snapshot.journalIdentity === null) {
+    created = await publishExclusive(session, QUARANTINE_JOURNAL_NAME, nextBytes);
+  } else {
+    await writeAtomic(session, QUARANTINE_JOURNAL_NAME, nextBytes, "replace");
   }
   const publishedSnapshot = await readRecoveryQuarantineJournal(runsRoot);
-  if (temporaryIdentity === void 0 || publishedSnapshot.journalIdentity === null || publishedSnapshot.journalIdentity.dev !== temporaryIdentity.dev || publishedSnapshot.journalIdentity.ino !== temporaryIdentity.ino || publishedSnapshot.journalIdentity.birthtimeNs !== temporaryIdentity.birthtimeNs || !sameDirectoryIdentity(publishedSnapshot.rootIdentity, snapshot.rootIdentity) || !publishedSnapshot.bytes.equals(nextBytes)) {
+  if (publishedSnapshot.journalIdentity === null || created !== void 0 && !sameDevIno(publishedSnapshot.journalIdentity, created) || !sameDirectoryIdentity(publishedSnapshot.rootIdentity, snapshot.rootIdentity) || !publishedSnapshot.bytes.equals(nextBytes)) {
     throw new RuntimeError("recovery quarantine journal changed after publication");
   }
-  await syncRecoveryDirectory(runsRoot);
 }
 async function appendRecoveryQuarantineRecord(runsRoot, record2) {
   const line = `${JSON.stringify(record2)}
@@ -55564,7 +55478,6 @@ async function appendRecoveryQuarantineRecord(runsRoot, record2) {
   if (lineBytes > MAX_QUARANTINE_RECORD_BYTES) {
     throw new RuntimeError("recovery quarantine record exceeds its size limit");
   }
-  const filename = path36.join(runsRoot, "recovery-quarantine.ndjson");
   const snapshot = await readRecoveryQuarantineJournal(runsRoot);
   if (snapshot.runIds.has(record2.runId)) {
     await syncRecoveryDirectory(runsRoot);
@@ -55578,15 +55491,15 @@ async function appendRecoveryQuarantineRecord(runsRoot, record2) {
   if (nextBytes.byteLength > MAX_STATE_FILE_BYTES2) {
     throw new RuntimeError("recovery quarantine journal exceeds its size limit");
   }
-  await publishRecoveryQuarantineJournal(runsRoot, filename, snapshot, nextBytes);
+  await publishRecoveryQuarantineJournal(runsRoot, snapshot, nextBytes);
 }
 async function quarantineRun(runsRoot, runId, error51) {
   const runDirectory = path36.join(runsRoot, runId);
   const quarantinePath = path36.join(runsRoot, `.poisoned-${runId}`);
   const runsIdentity = await plainDirectoryIdentity2(runsRoot);
   if (runsIdentity === null) throw new RuntimeError("recovery runs root disappeared");
+  const runsSession = new DurableDirectorySession(runsRoot, runsIdentity);
   let runIdentity = null;
-  let renamed = false;
   let journaled = false;
   try {
     runIdentity = await plainDirectoryIdentity2(runDirectory);
@@ -55594,8 +55507,7 @@ async function quarantineRun(runsRoot, runId, error51) {
     if (await plainDirectoryIdentity2(quarantinePath) !== null) {
       throw new RuntimeError("poisoned recovery quarantine already exists");
     }
-    await rename7(runDirectory, quarantinePath);
-    renamed = true;
+    await moveDirectory(runsSession, runId, path36.basename(quarantinePath));
     const quarantineIdentity = await plainDirectoryIdentity2(quarantinePath);
     const currentRoot = await lstat20(runsRoot, { bigint: true });
     if (quarantineIdentity === null || !sameDirectoryIdentity(quarantineIdentity, runIdentity) || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
@@ -55615,24 +55527,26 @@ async function quarantineRun(runsRoot, runId, error51) {
     });
   } catch (quarantineError) {
     const errors = [error51, quarantineError];
-    if (renamed && !journaled && runIdentity !== null) {
+    if (!journaled && runIdentity !== null) {
       try {
-        const quarantineMetadata = await lstat20(quarantinePath, { bigint: true });
-        const currentRoot = await lstat20(runsRoot, { bigint: true });
-        if (!isPlainDirectory3(quarantineMetadata) || !sameDirectoryIdentity(quarantineMetadata, runIdentity) || await plainDirectoryIdentity2(runDirectory) !== null || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
-        }
-        await rename7(quarantinePath, runDirectory);
-        const restoredMetadata = await lstat20(runDirectory, { bigint: true });
-        const restoredRoot = await lstat20(runsRoot, { bigint: true });
-        if (!isPlainDirectory3(restoredMetadata) || !sameDirectoryIdentity(restoredMetadata, runIdentity) || !isPlainDirectory3(restoredRoot) || !sameDirectoryIdentity(restoredRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback identity changed");
-        }
-        await syncRecoveryDirectory(runsRoot);
-        const settledMetadata = await lstat20(runDirectory, { bigint: true });
-        const settledRoot = await lstat20(runsRoot, { bigint: true });
-        if (!isPlainDirectory3(settledMetadata) || !sameDirectoryIdentity(settledMetadata, runIdentity) || !isPlainDirectory3(settledRoot) || !sameDirectoryIdentity(settledRoot, runsIdentity)) {
-          throw new RuntimeError("poisoned recovery rollback changed after directory sync");
+        if (await plainDirectoryIdentity2(runDirectory) === null && await plainDirectoryIdentity2(quarantinePath) !== null) {
+          const quarantineMetadata = await lstat20(quarantinePath, { bigint: true });
+          const currentRoot = await lstat20(runsRoot, { bigint: true });
+          if (!isPlainDirectory3(quarantineMetadata) || !sameDirectoryIdentity(quarantineMetadata, runIdentity) || await plainDirectoryIdentity2(runDirectory) !== null || !isPlainDirectory3(currentRoot) || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback identity or destination is unsafe");
+          }
+          await moveDirectory(runsSession, path36.basename(quarantinePath), runId);
+          const restoredMetadata = await lstat20(runDirectory, { bigint: true });
+          const restoredRoot = await lstat20(runsRoot, { bigint: true });
+          if (!isPlainDirectory3(restoredMetadata) || !sameDirectoryIdentity(restoredMetadata, runIdentity) || !isPlainDirectory3(restoredRoot) || !sameDirectoryIdentity(restoredRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback identity changed");
+          }
+          await syncRecoveryDirectory(runsRoot);
+          const settledMetadata = await lstat20(runDirectory, { bigint: true });
+          const settledRoot = await lstat20(runsRoot, { bigint: true });
+          if (!isPlainDirectory3(settledMetadata) || !sameDirectoryIdentity(settledMetadata, runIdentity) || !isPlainDirectory3(settledRoot) || !sameDirectoryIdentity(settledRoot, runsIdentity)) {
+            throw new RuntimeError("poisoned recovery rollback changed after directory sync");
+          }
         }
       } catch (rollbackError) {
         errors.push(rollbackError);
@@ -55879,7 +55793,7 @@ function runClaimsWorktree(runId, managedId) {
 }
 
 // src/runtime/recovery-worktree-removals.ts
-import { lstat as lstat22, readdir as readdir10, realpath as realpath17, rename as rename8 } from "node:fs/promises";
+import { lstat as lstat22, readdir as readdir10, realpath as realpath17, rename as rename5 } from "node:fs/promises";
 import path38 from "node:path";
 async function assertRegistrationBacklink(registrationPath, expectedPhysicalPath) {
   const backlink = await readStableRegularFile(path38.join(registrationPath, "gitdir"), 32768n);
@@ -56069,7 +55983,7 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
         throw new RuntimeError("worktree creation registration disappeared");
       }
       await assertRegistrationBacklink(activeRegistration, manifest.physicalPath);
-      await rename8(activeRegistration, manifest.quarantinePath);
+      await rename5(activeRegistration, manifest.quarantinePath);
       await Promise.all([syncDirectory(registrationRoot), syncDirectory(quarantineRoot)]);
       if (await managedWorktreeDirectoryIdentity(activeRegistration) !== null) {
         throw new RuntimeError("worktree creation registration reappeared after staging");
@@ -56512,7 +56426,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
               throw new RuntimeError("physical worktree rollback state is inconsistent");
             }
             await assertRemovalRootsUnchanged();
-            await rename8(manifest.physicalQuarantinePath, manifest.physicalPath);
+            await rename5(manifest.physicalQuarantinePath, manifest.physicalPath);
             const restoredPhysical = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
             const settledPhysicalQuarantine = await managedWorktreeDirectoryIdentity(
               manifest.physicalQuarantinePath
@@ -56548,7 +56462,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
               throw new RuntimeError("started worktree removal state is inconsistent");
             }
             await assertRemovalRootsUnchanged();
-            await rename8(manifest.physicalPath, manifest.physicalQuarantinePath);
+            await rename5(manifest.physicalPath, manifest.physicalQuarantinePath);
             physicalIdentity = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
             physicalQuarantineIdentity = await managedWorktreeDirectoryIdentity(
               manifest.physicalQuarantinePath
