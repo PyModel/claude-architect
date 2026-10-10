@@ -1,5 +1,6 @@
 import { constants } from "node:fs";
 import { lstat, open } from "node:fs/promises";
+import { NO_FOLLOW } from "../platform/durable-directory.js";
 
 export interface StableFileDependencies {
   open?: typeof open;
@@ -15,7 +16,7 @@ export async function readStableRegularFile(
   const handle = await (dependencies.open ?? open)(
     filename,
     constants.O_RDONLY
-      | (constants.O_NOFOLLOW ?? 0)
+      | NO_FOLLOW
       | (constants.O_NONBLOCK ?? 0),
   );
   let primaryError: unknown;

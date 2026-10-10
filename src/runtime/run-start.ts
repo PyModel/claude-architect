@@ -18,9 +18,8 @@ import type {
 } from "../platform/platform-services.js";
 import { RuntimeError } from "../util/errors.js";
 import type { ArtifactStore } from "./artifact-store.js";
-import { flushDirectory } from "../platform/durable-directory.js";
+import { NO_FOLLOW, flushDirectory } from "../platform/durable-directory.js";
 
-const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 
 export interface RunStartRecord {
   runId: string;

@@ -1,18 +1,19 @@
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import nodeProcess from "node:process";
 import { git, type GitResult } from "../git/git-exec.js";
 import { gitPathOutput } from "../git/git-output.js";
-import type { ManagedWorktreeDirectoryIdentity } from "./worktree-manager.js";
-import { ensurePrivateDirectory, sameDirectoryIdentity } from "../platform/durable-directory.js";
+import {
+  ensurePrivateDirectory,
+  sameDirectoryIdentity,
+  type DirectoryIdentity,
+} from "../platform/durable-directory.js";
 import { RuntimeError, isMissing } from "../util/errors.js";
 import { readStableRegularFile } from "../util/stable-file.js";
 import { boundedRedactedDiagnostic } from "./redaction.js";
 import { resolveStateDir } from "./state-dir.js";
 
-export const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 export const MAX_STATE_FILE_BYTES = 8_000_000;
 export const MAX_STATE_FILE_BYTES_BIGINT = BigInt(MAX_STATE_FILE_BYTES);
 export const SAFE_RUN_ID = /^[a-z0-9][a-z0-9._-]*$/;
@@ -35,12 +36,6 @@ export interface RunStartRecord {
   startedAt: string;
 }
 
-export interface DirectoryIdentity {
-  dev: bigint;
-  ino: bigint;
-  birthtimeNs: bigint;
-}
-
 export interface WorktreeSweepIssue {
   worktreePath: string;
   reason: string;
@@ -53,15 +48,6 @@ export function isPlainDirectory(metadata: {
   isSymbolicLink(): boolean;
 }): boolean {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
-}
-
-export function sameManagedIdentity(
-  left: ManagedWorktreeDirectoryIdentity,
-  right: ManagedWorktreeDirectoryIdentity,
-): boolean {
-  return left.dev === right.dev
-    && left.ino === right.ino
-    && left.birthtimeNs === right.birthtimeNs;
 }
 
 export function validateRunId(runId: unknown): asserts runId is string {
@@ -84,18 +70,11 @@ export async function stateRoot(): Promise<string | null> {
     }
     const canonicalRoot = await realpath(root);
     const settled = await lstat(canonicalRoot, { bigint: true });
-    if (!isPlainDirectory(settled)
-      || settled.dev !== metadata.dev
-      || settled.ino !== metadata.ino
-      || settled.birthtimeNs !== metadata.birthtimeNs) {
+    if (!isPlainDirectory(settled) || !sameDirectoryIdentity(settled, metadata)) {
       throw new RuntimeError("plugin data directory identity changed during canonicalization");
     }
     const privateIdentity = await assertPrivateRecoveryDirectory(canonicalRoot);
-    if (!sameDirectoryIdentity(privateIdentity, {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs,
-    })) {
+    if (!sameDirectoryIdentity(privateIdentity, metadata)) {
       throw new RuntimeError("plugin data directory identity changed during privacy validation");
     }
     return canonicalRoot;

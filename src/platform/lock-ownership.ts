@@ -6,11 +6,9 @@ import nodeProcess from "node:process";
 import { resolveStateDir } from "../runtime/state-dir.js";
 import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
 import { logger } from "../util/logger.js";
-import type { DirectoryIdentity } from "./durable-directory.js";
 import type { CheckoutLock, LockOwnerAnnotation } from "./platform-services.js";
-import { sameDirectoryIdentity } from "./durable-directory.js";
+import { NO_FOLLOW, sameDirectoryIdentity, type DirectoryIdentity } from "./durable-directory.js";
 
-const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const MAX_STATE_FILE_BYTES = 1_000_000;
 const MAX_STATE_FILE_BYTES_BIGINT = BigInt(MAX_STATE_FILE_BYTES);
 

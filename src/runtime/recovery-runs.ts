@@ -11,8 +11,8 @@ import {
   managedWorktreeDirectoryIdentity,
   removeMissingRegisteredWorktree,
   removeRegisteredWorktree,
-  type ManagedWorktreeDirectoryIdentity,
 } from "./worktree-manager.js";
+import { sameDirectoryIdentity, type DirectoryIdentity } from "../platform/durable-directory.js";
 import type { PlatformServices } from "../platform/platform-services.js";
 import type { AttemptResult } from "../protocol/attempt-result.js";
 import { RuntimeError, isMissing } from "../util/errors.js";
@@ -140,14 +140,12 @@ export async function managedWorktreeMarkerIsPresent(worktreePath: string): Prom
 export async function removeManagedWorktreeUnderLease(
   commonDir: string,
   worktreePath: string,
-  expectedIdentity: ManagedWorktreeDirectoryIdentity,
+  expectedIdentity: DirectoryIdentity,
   runGit: typeof git,
 ): Promise<void> {
   const currentIdentity = await managedWorktreeDirectoryIdentity(worktreePath);
   if (currentIdentity === null) return;
-  if (currentIdentity.dev !== expectedIdentity.dev
-    || currentIdentity.ino !== expectedIdentity.ino
-    || currentIdentity.birthtimeNs !== expectedIdentity.birthtimeNs) {
+  if (!sameDirectoryIdentity(currentIdentity, expectedIdentity)) {
     throw new RuntimeError("worktree directory identity changed under checkout lease");
   }
   if (await managedWorktreeMarkerIsPresent(worktreePath)) {

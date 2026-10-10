@@ -18,6 +18,7 @@ import {
   describeLockContention,
   withLockContentionDetail,
 } from "./lock-ownership.js";
+import { sameDirectoryIdentity, type DirectoryIdentity } from "./durable-directory.js";
 
 export {
   lockFilePath,
@@ -181,16 +182,14 @@ export class PosixPlatformServices implements PlatformServices {
 
   async assertDirectoryWriteIntegrity(
     directory: string,
-    expectedIdentity: { dev: bigint; ino: bigint; birthtimeNs: bigint },
+    expectedIdentity: DirectoryIdentity,
   ): Promise<void> {
     const metadata = await fs.lstat(directory, { bigint: true });
     const uid = nodeProcess.getuid?.();
     if (!metadata.isDirectory()
       || metadata.isSymbolicLink()
-      || metadata.dev !== expectedIdentity.dev
-      || metadata.ino !== expectedIdentity.ino
       || metadata.birthtimeNs <= 0n
-      || metadata.birthtimeNs !== expectedIdentity.birthtimeNs
+      || !sameDirectoryIdentity(metadata, expectedIdentity)
       || uid === undefined
       || metadata.uid !== BigInt(uid)
       || (metadata.mode & 0o022n) !== 0n) {

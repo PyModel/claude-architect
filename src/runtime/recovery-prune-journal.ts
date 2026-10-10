@@ -10,16 +10,18 @@ import {
   emptyBoundDirectory,
   removeBoundEmptyDirectory,
 } from "../platform/bound-directory-cleanup.js";
-import { sameDirectoryIdentity } from "../platform/durable-directory.js";
-import { RuntimeError, isMissing } from "../util/errors.js";
 import {
   NO_FOLLOW,
+  sameDirectoryIdentity,
+  type DirectoryIdentity,
+} from "../platform/durable-directory.js";
+import { RuntimeError, isMissing } from "../util/errors.js";
+import {
   MAX_STATE_FILE_BYTES,
   MAX_STATE_FILE_BYTES_BIGINT,
   OID,
   CANDIDATE_REF_PREFIX,
   BACKUP_REF_PREFIX,
-  type DirectoryIdentity,
   isPlainDirectory,
   validateRunId,
   plainDirectoryIdentity,

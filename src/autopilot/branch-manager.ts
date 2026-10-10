@@ -7,7 +7,7 @@ import type { CheckoutLock, PlatformServices } from "../platform/platform-servic
 import { getPlatformServices } from "../platform/select-platform.js";
 import { resolveStateDir } from "../runtime/state-dir.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
-import { syncDirectoryMetadata } from "../platform/durable-directory.js";
+import { NO_FOLLOW, syncDirectoryMetadata, type DirectoryIdentity } from "../platform/durable-directory.js";
 import { RuntimeError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { readStableRegularFile } from "../util/stable-file.js";
@@ -20,7 +20,6 @@ import {
   managedWorktreeDirectoryIdentity,
   removeStaleWorktreeRegistration,
   WorktreeManager,
-  type ManagedWorktreeDirectoryIdentity,
   type WorktreeManagerDependencies,
 } from "../runtime/worktree-manager.js";
 
@@ -623,7 +622,7 @@ export class WorkflowBranchManager {
     try {
       const handle = await open(
         temporaryPath,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0),
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
         0o600,
       );
       temporaryExists = true;
@@ -1050,7 +1049,7 @@ export class WorkflowBranchManager {
       registration => registration.worktree === identity.worktreePath,
     );
     const registrationPresent = expectedRegistration !== undefined;
-    let physicalWorktreeIdentity: ManagedWorktreeDirectoryIdentity | null;
+    let physicalWorktreeIdentity: DirectoryIdentity | null;
     try {
       physicalWorktreeIdentity = await managedWorktreeDirectoryIdentity(identity.worktreePath);
     } catch {

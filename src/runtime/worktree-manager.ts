@@ -30,8 +30,11 @@ import {
 } from "./worktree-removal-manifest.js";
 import {
   ensurePrivateDirectory,
+  requireBirthtimeIdentity,
+  sameDirectoryIdentity,
   syncDirectoryMetadata,
   syncDirectoryTreeMetadata,
+  type DirectoryIdentity,
 } from "../platform/durable-directory.js";
 import { RuntimeError, errorCode } from "../util/errors.js";
 import { logger } from "../util/logger.js";
@@ -73,12 +76,6 @@ export interface WorktreeManagerDependencies {
   borrowedCheckoutLease?: CheckoutLock;
 }
 
-export interface ManagedWorktreeDirectoryIdentity {
-  dev: bigint;
-  ino: bigint;
-  birthtimeNs: bigint;
-}
-
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -102,18 +99,9 @@ function failure(action: string, result: GitResult): RuntimeError {
   return new RuntimeError(`${action} failed${diagnostic ? `: ${diagnostic}` : ""}`);
 }
 
-function sameDirectoryIdentity(
-  left: ManagedWorktreeDirectoryIdentity,
-  right: ManagedWorktreeDirectoryIdentity,
-): boolean {
-  return left.dev === right.dev
-    && left.ino === right.ino
-    && left.birthtimeNs === right.birthtimeNs;
-}
-
 async function quarantinedIdentityRemainsNamed(
   quarantineRoot: string,
-  expectedIdentity: ManagedWorktreeDirectoryIdentity,
+  expectedIdentity: DirectoryIdentity,
 ): Promise<boolean> {
   const entries = await readdir(quarantineRoot, { withFileTypes: true });
   for (const entry of entries) {
@@ -126,20 +114,13 @@ async function quarantinedIdentityRemainsNamed(
 
 export async function managedWorktreeDirectoryIdentity(
   directory: string,
-): Promise<ManagedWorktreeDirectoryIdentity | null> {
+): Promise<DirectoryIdentity | null> {
   try {
     const metadata = await lstat(directory, { bigint: true });
     if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
       throw new RuntimeError("managed worktree must be a plain directory");
     }
-    if (metadata.birthtimeNs <= 0n) {
-      throw new RuntimeError("managed worktree filesystem lacks stable birth-time identity");
-    }
-    return {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs,
-    };
+    return requireBirthtimeIdentity(metadata, "managed worktree filesystem");
   } catch (error) {
     if (errorCode(error) === "ENOENT") return null;
     throw error;
@@ -149,7 +130,7 @@ export async function managedWorktreeDirectoryIdentity(
 async function requiredDirectoryIdentity(
   directory: string,
   description: string,
-): Promise<ManagedWorktreeDirectoryIdentity> {
+): Promise<DirectoryIdentity> {
   const identity = await managedWorktreeDirectoryIdentity(directory);
   if (identity === null) throw new RuntimeError(`${description} disappeared`);
   return identity;
@@ -157,7 +138,7 @@ async function requiredDirectoryIdentity(
 
 async function assertDirectoryIdentity(
   directory: string,
-  expected: ManagedWorktreeDirectoryIdentity,
+  expected: DirectoryIdentity,
   description: string,
 ): Promise<void> {
   const observed = await managedWorktreeDirectoryIdentity(directory);
@@ -169,7 +150,7 @@ async function assertDirectoryIdentity(
 export async function removeQuarantinedDirectory(
   quarantineRoot: string,
   quarantinePath: string,
-  expectedIdentity: ManagedWorktreeDirectoryIdentity,
+  expectedIdentity: DirectoryIdentity,
   options: WorktreeManagerDependencies,
 ): Promise<void> {
   const rootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
@@ -237,7 +218,7 @@ async function managedPath(worktreePath: string): Promise<{ root: string; target
 }
 
 type QuarantineRemovalOptions = WorktreeManagerDependencies & {
-  expectedIdentity?: ManagedWorktreeDirectoryIdentity;
+  expectedIdentity?: DirectoryIdentity;
   beforeRemoval?: () => Promise<void>;
   afterQuarantine?: () => Promise<void>;
 };
@@ -438,14 +419,14 @@ interface WorktreeRegistrationDirectory {
   commonDir: string;
   root: string;
   path: string;
-  identity: ManagedWorktreeDirectoryIdentity;
+  identity: DirectoryIdentity;
 }
 
 async function boundPlainChildDirectory(
   root: string,
   candidate: string,
   description: string,
-): Promise<{ path: string; identity: ManagedWorktreeDirectoryIdentity }> {
+): Promise<{ path: string; identity: DirectoryIdentity }> {
   const resolvedCandidate = path.resolve(candidate);
   if (!path.isAbsolute(candidate)
     || !platformPathsEqual(path.dirname(resolvedCandidate), root)) {
@@ -620,9 +601,9 @@ export async function restoreStagedRegistration(
   registrationPath: string,
   quarantineRoot: string,
   quarantinePath: string,
-  expectedIdentity: ManagedWorktreeDirectoryIdentity,
-  expectedRegistrationRootIdentity: ManagedWorktreeDirectoryIdentity,
-  expectedQuarantineRootIdentity: ManagedWorktreeDirectoryIdentity,
+  expectedIdentity: DirectoryIdentity,
+  expectedRegistrationRootIdentity: DirectoryIdentity,
+  expectedQuarantineRootIdentity: DirectoryIdentity,
   dependencies: WorktreeManagerDependencies,
 ): Promise<void> {
   const registrationRootIdentity = await managedWorktreeDirectoryIdentity(registrationRoot);
@@ -1072,7 +1053,7 @@ export async function removeRegisteredWorktree(
   repoRoot: string,
   worktreePath: string,
   dependencies: WorktreeManagerDependencies = {},
-  expectedIdentity?: ManagedWorktreeDirectoryIdentity,
+  expectedIdentity?: DirectoryIdentity,
 ): Promise<void> {
   const runGit = dependencies.git ?? git;
   const observedIdentity = await managedWorktreeDirectoryIdentity(worktreePath);
@@ -1220,7 +1201,7 @@ class WorktreeRootChangedError extends RuntimeError {}
 interface WorktreeCreationIntent {
   manifestPath: string;
   transactionId: string;
-  physicalIdentity: ManagedWorktreeDirectoryIdentity;
+  physicalIdentity: DirectoryIdentity;
 }
 
 export class WorktreeManager {
@@ -1315,7 +1296,7 @@ export class WorktreeManager {
   private async beginCreationIntent(
     worktreePath: string,
     worktreesRoot: string,
-    rootIdentity: ManagedWorktreeDirectoryIdentity,
+    rootIdentity: DirectoryIdentity,
     runGit: typeof git,
   ): Promise<WorktreeCreationIntent> {
     const commonResult = await runGit(this.repoRoot, [
@@ -1445,8 +1426,8 @@ export class WorktreeManager {
   private async captureCreatedIdentity(
     worktreePath: string,
     worktreesRoot: string,
-    expectedRootIdentity: ManagedWorktreeDirectoryIdentity,
-  ): Promise<ManagedWorktreeDirectoryIdentity> {
+    expectedRootIdentity: DirectoryIdentity,
+  ): Promise<DirectoryIdentity> {
     const settledRootIdentity = await managedWorktreeDirectoryIdentity(worktreesRoot);
     if (settledRootIdentity === null
       || !sameDirectoryIdentity(settledRootIdentity, expectedRootIdentity)) {
@@ -1472,7 +1453,7 @@ export class WorktreeManager {
 
   private async failCreatedWorktree(
     worktreePath: string,
-    identity: ManagedWorktreeDirectoryIdentity,
+    identity: DirectoryIdentity,
     primary: unknown,
   ): Promise<never> {
     try {
@@ -1544,8 +1525,8 @@ export class WorktreeManager {
   private async syncCreatedWorktree(
     worktreePath: string,
     worktreesRoot: string,
-    rootIdentity: ManagedWorktreeDirectoryIdentity,
-    identity: ManagedWorktreeDirectoryIdentity,
+    rootIdentity: DirectoryIdentity,
+    identity: DirectoryIdentity,
     runGit: typeof git,
   ): Promise<WorktreeRegistrationDirectory> {
     const registration = await worktreeRegistrationDirectory(
@@ -1577,8 +1558,8 @@ export class WorktreeManager {
   private async finishCreatedWorktree(
     worktreePath: string,
     worktreesRoot: string,
-    rootIdentity: ManagedWorktreeDirectoryIdentity,
-    identity: ManagedWorktreeDirectoryIdentity,
+    rootIdentity: DirectoryIdentity,
+    identity: DirectoryIdentity,
   ) {
     const settled = await this.captureCreatedIdentity(
       worktreePath,
@@ -1760,7 +1741,7 @@ export class WorktreeManager {
 
   private async removeUnderLease(
     worktreePath: string,
-    expectedIdentity?: ManagedWorktreeDirectoryIdentity,
+    expectedIdentity?: DirectoryIdentity,
   ): Promise<void> {
     const managedRoot = await this.managedRoot();
     const expectedWorktreePath = this.managedWorktreePath(managedRoot).worktreePath;
@@ -1801,7 +1782,7 @@ export class WorktreeManager {
 
   async remove(
     worktreePath: string,
-    expectedIdentity?: ManagedWorktreeDirectoryIdentity,
+    expectedIdentity?: DirectoryIdentity,
   ): Promise<void> {
     await this.withCheckoutLease(async () =>
       await this.removeUnderLease(worktreePath, expectedIdentity));

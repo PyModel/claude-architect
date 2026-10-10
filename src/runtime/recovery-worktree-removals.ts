@@ -7,7 +7,6 @@ import {
   removeQuarantinedDirectory,
   restoreStagedRegistration,
   WORKTREE_REGISTRATION_QUARANTINE_DIRECTORY,
-  type ManagedWorktreeDirectoryIdentity,
 } from "./worktree-manager.js";
 import { platformSafety } from "../platform/platform-safety.js";
 import type { PlatformServices } from "../platform/platform-services.js";
@@ -18,7 +17,9 @@ import {
 } from "../platform/bound-directory-cleanup.js";
 import {
   assertWindowsPrivateDirectory,
+  sameDirectoryIdentity,
   syncDirectoryMetadata,
+  type DirectoryIdentity,
 } from "../platform/durable-directory.js";
 import { RuntimeError } from "../util/errors.js";
 import { platformPathsEqual } from "../util/platform-path.js";
@@ -33,7 +34,7 @@ import {
   type WorktreeRemovalManifest,
   type WorktreeRemovalManifestIssue,
 } from "./worktree-removal-manifest.js";
-import { sameManagedIdentity, stateRoot } from "./recovery-shared.js";
+import { stateRoot } from "./recovery-shared.js";
 
 async function assertRegistrationBacklink(
   registrationPath: string,
@@ -92,10 +93,10 @@ async function findCreationRegistration(
 
 async function findCreationPhysicalRoot(
   expectedRoot: string,
-  expected: ManagedWorktreeDirectoryIdentity,
+  expected: DirectoryIdentity,
 ): Promise<string | null> {
   const identity = await managedWorktreeDirectoryIdentity(expectedRoot);
-  if (identity !== null && sameManagedIdentity(identity, expected)) return expectedRoot;
+  if (identity !== null && sameDirectoryIdentity(identity, expected)) return expectedRoot;
   // The root may have been renamed within its parent. Only the recorded
   // identity can select a sibling, so a same-named substitute never matches.
   const stateDirectory = path.dirname(expectedRoot);
@@ -104,7 +105,7 @@ async function findCreationPhysicalRoot(
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     const candidate = path.join(stateDirectory, entry.name);
     const candidateIdentity = await managedWorktreeDirectoryIdentity(candidate);
-    if (candidateIdentity !== null && sameManagedIdentity(candidateIdentity, expected)) {
+    if (candidateIdentity !== null && sameDirectoryIdentity(candidateIdentity, expected)) {
       matches.push(candidate);
     }
   }
@@ -116,14 +117,14 @@ async function findCreationPhysicalRoot(
 
 async function findManagedChildByIdentity(
   root: string,
-  expected: ManagedWorktreeDirectoryIdentity,
+  expected: DirectoryIdentity,
 ): Promise<string | null> {
   const matches: string[] = [];
   for (const entry of await readdir(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     const candidate = path.join(root, entry.name);
     const identity = await managedWorktreeDirectoryIdentity(candidate);
-    if (identity !== null && sameManagedIdentity(identity, expected)) matches.push(candidate);
+    if (identity !== null && sameDirectoryIdentity(identity, expected)) matches.push(candidate);
   }
   if (matches.length > 1) {
     throw new RuntimeError("managed directory identity appears at multiple paths");
@@ -203,11 +204,11 @@ async function recoverWorktreeCreationIntent(
     || !platformPathsEqual(registrationRoot, manifest.registrationRoot)
     || !platformPathsEqual(quarantineRoot, manifest.quarantineRoot)
     || commonIdentity === null
-    || !sameManagedIdentity(commonIdentity, expectedCommonDir)
+    || !sameDirectoryIdentity(commonIdentity, expectedCommonDir)
     || registrationRootIdentity === null
-    || !sameManagedIdentity(registrationRootIdentity, expectedRegistrationRoot)
+    || !sameDirectoryIdentity(registrationRootIdentity, expectedRegistrationRoot)
     || quarantineRootIdentity === null
-    || !sameManagedIdentity(quarantineRootIdentity, expectedQuarantineRoot)) {
+    || !sameDirectoryIdentity(quarantineRootIdentity, expectedQuarantineRoot)) {
     throw new RuntimeError("worktree creation intent repository identity changed");
   }
 
@@ -272,7 +273,7 @@ async function recoverWorktreeCreationIntent(
         throw new RuntimeError("unbound final worktree creation path appeared");
       }
     } else if (physicalIdentity !== null
-      && !sameManagedIdentity(physicalIdentity, expectedPhysical)) {
+      && !sameDirectoryIdentity(physicalIdentity, expectedPhysical)) {
       throw new RuntimeError("worktree creation physical identity changed");
     }
 
@@ -301,7 +302,7 @@ async function recoverWorktreeCreationIntent(
       }
       quarantineIdentity = await managedWorktreeDirectoryIdentity(manifest.quarantinePath);
       if (quarantineIdentity === null
-        || !sameManagedIdentity(quarantineIdentity, registrationIdentity)) {
+        || !sameDirectoryIdentity(quarantineIdentity, registrationIdentity)) {
         throw new RuntimeError("worktree creation registration changed during staging");
       }
     }
@@ -317,7 +318,7 @@ async function recoverWorktreeCreationIntent(
       await removeBoundEmptyDirectory(physicalPath, removalIdentity, platformServices);
       await syncDirectory(physicalRoot);
       const settledRoot = await managedWorktreeDirectoryIdentity(physicalRoot!);
-      if (settledRoot === null || !sameManagedIdentity(settledRoot, expectedPhysicalRoot)) {
+      if (settledRoot === null || !sameDirectoryIdentity(settledRoot, expectedPhysicalRoot)) {
         throw new RuntimeError("worktree creation root changed during recovery");
       }
     }
@@ -374,22 +375,22 @@ export async function recoverPendingWorktreeRemovals(
       const registrationRootIdentity = await managedWorktreeDirectoryIdentity(registrationRoot);
       const quarantineRootIdentity = await managedWorktreeDirectoryIdentity(quarantineRoot);
       const physicalRootIdentity = await managedWorktreeDirectoryIdentity(physicalRoot);
-      const expectedCommonDirIdentity: ManagedWorktreeDirectoryIdentity = {
+      const expectedCommonDirIdentity: DirectoryIdentity = {
         dev: BigInt(manifest.commonDirDev),
         ino: BigInt(manifest.commonDirIno),
         birthtimeNs: BigInt(manifest.commonDirBirthtimeNs),
       };
-      const expectedRegistrationRootIdentity: ManagedWorktreeDirectoryIdentity = {
+      const expectedRegistrationRootIdentity: DirectoryIdentity = {
         dev: BigInt(manifest.registrationRootDev),
         ino: BigInt(manifest.registrationRootIno),
         birthtimeNs: BigInt(manifest.registrationRootBirthtimeNs),
       };
-      const expectedQuarantineRootIdentity: ManagedWorktreeDirectoryIdentity = {
+      const expectedQuarantineRootIdentity: DirectoryIdentity = {
         dev: BigInt(manifest.quarantineRootDev),
         ino: BigInt(manifest.quarantineRootIno),
         birthtimeNs: BigInt(manifest.quarantineRootBirthtimeNs),
       };
-      const expectedPhysicalRootIdentity: ManagedWorktreeDirectoryIdentity = {
+      const expectedPhysicalRootIdentity: DirectoryIdentity = {
         dev: BigInt(manifest.physicalRootDev),
         ino: BigInt(manifest.physicalRootIno),
         birthtimeNs: BigInt(manifest.physicalRootBirthtimeNs),
@@ -424,16 +425,16 @@ export async function recoverPendingWorktreeRemovals(
         const currentPhysicalRoot = await managedWorktreeDirectoryIdentity(physicalRoot);
         if (commonDirIdentity === null
           || currentCommonDir === null
-          || !sameManagedIdentity(currentCommonDir, commonDirIdentity)
+          || !sameDirectoryIdentity(currentCommonDir, commonDirIdentity)
           || registrationRootIdentity === null
           || quarantineRootIdentity === null
           || physicalRootIdentity === null
           || currentRegistrationRoot === null
           || currentQuarantineRoot === null
           || currentPhysicalRoot === null
-          || !sameManagedIdentity(currentRegistrationRoot, registrationRootIdentity)
-          || !sameManagedIdentity(currentQuarantineRoot, quarantineRootIdentity)
-          || !sameManagedIdentity(currentPhysicalRoot, physicalRootIdentity)) {
+          || !sameDirectoryIdentity(currentRegistrationRoot, registrationRootIdentity)
+          || !sameDirectoryIdentity(currentQuarantineRoot, quarantineRootIdentity)
+          || !sameDirectoryIdentity(currentPhysicalRoot, physicalRootIdentity)) {
           throw new RuntimeError("worktree removal root identity changed");
         }
       };
@@ -495,7 +496,7 @@ export async function recoverPendingWorktreeRemovals(
       );
       checkManifestConsistency(
         "commonDir identity mismatch",
-        sameManagedIdentity(commonDirIdentity!, expectedCommonDirIdentity),
+        sameDirectoryIdentity(commonDirIdentity!, expectedCommonDirIdentity),
         commonDirIdentity,
         expectedCommonDirIdentity,
       );
@@ -506,7 +507,7 @@ export async function recoverPendingWorktreeRemovals(
       );
       checkManifestConsistency(
         "registrationRoot identity mismatch",
-        sameManagedIdentity(registrationRootIdentity!, expectedRegistrationRootIdentity),
+        sameDirectoryIdentity(registrationRootIdentity!, expectedRegistrationRootIdentity),
         registrationRootIdentity,
         expectedRegistrationRootIdentity,
       );
@@ -517,7 +518,7 @@ export async function recoverPendingWorktreeRemovals(
       );
       checkManifestConsistency(
         "quarantineRoot identity mismatch",
-        sameManagedIdentity(quarantineRootIdentity!, expectedQuarantineRootIdentity),
+        sameDirectoryIdentity(quarantineRootIdentity!, expectedQuarantineRootIdentity),
         quarantineRootIdentity,
         expectedQuarantineRootIdentity,
       );
@@ -528,7 +529,7 @@ export async function recoverPendingWorktreeRemovals(
       );
       checkManifestConsistency(
         "physicalRoot identity mismatch",
-        sameManagedIdentity(physicalRootIdentity!, expectedPhysicalRootIdentity),
+        sameDirectoryIdentity(physicalRootIdentity!, expectedPhysicalRootIdentity),
         physicalRootIdentity,
         expectedPhysicalRootIdentity,
       );
@@ -719,15 +720,11 @@ export async function recoverPendingWorktreeRemovals(
         throw new RuntimeError("physical worktree exists at two paths during removal recovery");
       }
       if (registrationIdentity !== null
-        && (registrationIdentity.dev !== expectedRegistrationIdentity.dev
-          || registrationIdentity.ino !== expectedRegistrationIdentity.ino
-          || registrationIdentity.birthtimeNs !== expectedRegistrationIdentity.birthtimeNs)) {
+        && (!sameDirectoryIdentity(registrationIdentity, expectedRegistrationIdentity))) {
         throw new RuntimeError("worktree removal registration identity changed");
       }
       if (quarantineIdentity !== null
-        && (quarantineIdentity.dev !== expectedRegistrationIdentity.dev
-          || quarantineIdentity.ino !== expectedRegistrationIdentity.ino
-          || quarantineIdentity.birthtimeNs !== expectedRegistrationIdentity.birthtimeNs)) {
+        && (!sameDirectoryIdentity(quarantineIdentity, expectedRegistrationIdentity))) {
         throw new RuntimeError("worktree removal quarantine identity changed");
       }
       if (expectedPhysicalIdentity === null) {
@@ -736,15 +733,11 @@ export async function recoverPendingWorktreeRemovals(
         }
       } else {
         if (physicalIdentity !== null
-          && (physicalIdentity.dev !== expectedPhysicalIdentity.dev
-            || physicalIdentity.ino !== expectedPhysicalIdentity.ino
-            || physicalIdentity.birthtimeNs !== expectedPhysicalIdentity.birthtimeNs)) {
+          && (!sameDirectoryIdentity(physicalIdentity, expectedPhysicalIdentity))) {
           throw new RuntimeError("physical worktree identity changed during removal recovery");
         }
         if (physicalQuarantineIdentity !== null
-          && (physicalQuarantineIdentity.dev !== expectedPhysicalIdentity.dev
-            || physicalQuarantineIdentity.ino !== expectedPhysicalIdentity.ino
-            || physicalQuarantineIdentity.birthtimeNs !== expectedPhysicalIdentity.birthtimeNs)) {
+          && (!sameDirectoryIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity))) {
           throw new RuntimeError("physical worktree quarantine identity changed");
         }
         if (physicalIdentity === null && physicalQuarantineIdentity === null) {
@@ -807,7 +800,7 @@ export async function recoverPendingWorktreeRemovals(
             manifest.physicalQuarantinePath,
           );
           if (restoredPhysical === null
-            || !sameManagedIdentity(restoredPhysical, expectedPhysicalIdentity)
+            || !sameDirectoryIdentity(restoredPhysical, expectedPhysicalIdentity)
             || settledPhysicalQuarantine !== null) {
             throw new RuntimeError("physical worktree rollback identity changed");
           }
@@ -849,7 +842,7 @@ export async function recoverPendingWorktreeRemovals(
           );
           if (physicalIdentity !== null
             || physicalQuarantineIdentity === null
-            || !sameManagedIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity)) {
+            || !sameDirectoryIdentity(physicalQuarantineIdentity, expectedPhysicalIdentity)) {
             throw new RuntimeError("started worktree removal quarantine identity changed");
           }
           await syncDirectory(physicalRoot);

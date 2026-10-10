@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHILD_SAME_IDENTITY_SOURCE,
   EMPTY_DIRECTORY_TIMEOUT_ENV,
   resolveEmptyDirectoryTimeoutMs,
 } from "../../src/platform/bound-directory-cleanup.js";
+import { sameDirectoryIdentity, type DirectoryIdentity } from "../../src/platform/durable-directory.js";
 
 describe("resolveEmptyDirectoryTimeoutMs", () => {
   it("defaults to 120000ms when unset or empty", () => {
@@ -37,5 +39,34 @@ describe("resolveEmptyDirectoryTimeoutMs", () => {
       message => warnings.push(message),
     )).toBe(120_000);
     expect(warnings).toHaveLength(1);
+  });
+});
+
+describe("cleanup child identity rule", () => {
+  it("agrees with the canonical comparator", () => {
+    // The child script cannot import modules; evaluate its shipped inline rule.
+    const childSameIdentity = new Function(`return ${CHILD_SAME_IDENTITY_SOURCE};`)() as (
+      left: unknown,
+      right: unknown,
+    ) => boolean;
+    const directory = (identity: DirectoryIdentity) => ({
+      ...identity,
+      isDirectory: () => true,
+      isSymbolicLink: () => false,
+    });
+    const base = { dev: 2n ** 60n, ino: 7n, birthtimeNs: 1_700_000_000_000_000_000n };
+    const cases: Array<[string, DirectoryIdentity, DirectoryIdentity, boolean]> = [
+      ["equal", base, { ...base }, true],
+      ["different inode", base, { ...base, ino: 8n }, false],
+      ["different device above 2^53", base, { ...base, dev: base.dev + 1n }, false],
+      ["different birth time", base, { ...base, birthtimeNs: base.birthtimeNs + 1n }, false],
+      ["zero birth time on one side", base, { ...base, birthtimeNs: 0n }, false],
+      ["zero birth time on the other side", { ...base, birthtimeNs: 0n }, base, false],
+      ["zero birth time on both sides", { ...base, birthtimeNs: 0n }, { ...base, birthtimeNs: 0n }, true],
+    ];
+    for (const [label, left, right, expected] of cases) {
+      expect(sameDirectoryIdentity(left, right), label).toBe(expected);
+      expect(childSameIdentity(directory(left), directory(right)), label).toBe(expected);
+    }
   });
 });
