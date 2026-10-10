@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DECISION_AUTHORITY_ENV,
   decisionAuthority,
-} from "../../src/mcp/decision-authority.js";
+} from "../../src/runtime/candidate-decisions.js";
 import { readDecisionAdvisory } from "../../src/mcp/tools.js";
 import { start } from "../../src/mcp/server.js";
 import type { PlatformServices } from "../../src/platform/platform-services.js";

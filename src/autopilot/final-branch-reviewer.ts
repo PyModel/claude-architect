@@ -28,6 +28,7 @@ import {
   type ProducerRegistry,
 } from "../producers/producer-registry.js";
 import { ArtifactStore } from "../runtime/artifact-store.js";
+import { isAutopilotAcceptance } from "../runtime/candidate-decisions.js";
 import { redact, redactRecord } from "../runtime/redaction.js";
 import type { AdvisorReport, ReviewReport } from "../pipeline/report-types.js";
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
@@ -310,11 +311,7 @@ async function validateArchivedTaskEvidence(
     || eligibility.reasons.length !== 0
     || task.eligibilityHash === null
     || autopilotEligibilityRecordHash(eligibility) !== task.eligibilityHash
-    || decision.decisionVersion !== "2"
-    || decision.authority !== "autopilot-policy"
-    || decision.decision !== "accepted"
-    || decision.candidateManifestHash !== evidence.candidateManifestHash
-    || decision.evidenceHash !== task.eligibilityHash
+    || !isAutopilotAcceptance(decision, evidence.candidateManifestHash, task.eligibilityHash)
     || !succeeded(promotionParent)
     || promotionParent.stdout.trim() !== context.expectedParentCommitOid
     || !succeeded(promotionTree)

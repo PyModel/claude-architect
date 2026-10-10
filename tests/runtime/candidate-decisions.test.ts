@@ -271,6 +271,26 @@ describe("recording a candidate decision", () => {
     }));
   });
 
+  // Moved from the store, whose writeHumanDecision this module replaced.
+  it("persists the first human decision as version 2 byte for byte and refuses every non-identical re-send", async () => {
+    const store = await archivedStore("run-human-v2");
+    await record(store);
+    await record(store, { recordedAt: "2026-07-14T12:01:00.000Z" });
+
+    for (const conflicting of [
+      { decision: "rejected" as const },
+      { candidateManifestHash: OTHER },
+      { evidenceHash: OTHER },
+    ]) {
+      await expect(record(store, conflicting)).rejects.toMatchObject({
+        detail: { toolError: "decision-conflict" },
+      });
+    }
+    await expect(store.readCandidateDecision()).resolves.toEqual(v2({}));
+    expect(JSON.parse(await readFile(join(store.runDirectory, "decision.json"), "utf8")))
+      .toEqual(v2({}));
+  });
+
   it("refuses any new decision against a version-1 legacy record", async () => {
     const store = await archivedStore("run-legacy-existing");
     const decisionPath = join(store.runDirectory, "decision.json");

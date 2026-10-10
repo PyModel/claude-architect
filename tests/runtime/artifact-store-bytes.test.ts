@@ -121,12 +121,16 @@ describe("artifact store archive bytes", () => {
       startedAt: "2026-07-14T12:00:00.000Z",
       sliced: false,
     });
-    await store.writeHumanDecision({
+    // Key order is part of the golden bytes; it matches the record the
+    // removed writeHumanDecision produced.
+    await store.writeCandidateDecisionRecord({
       decision: "accepted",
       candidateManifestHash: "a".repeat(64),
       evidenceHash: "b".repeat(64),
       policyVersion: "1",
       recordedAt: "2026-07-14T12:01:00.000Z",
+      decisionVersion: "2",
+      authority: "human",
     });
     // status.json exists only after run-start; the store replaces it in place.
     await store.writeRunStatus({
