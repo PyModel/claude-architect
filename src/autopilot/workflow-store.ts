@@ -1766,12 +1766,20 @@ export class WorkflowStore {
       throw workflowError("workflow journal exceeds its size limit", "workflow-journal-too-large");
     }
     await assertDirectoryIdentity(this.workflowDirectory, directory);
-    await unsafeOnRefusal(appendDurable(
-      this.durableSession(directory),
-      path.basename(this.journalPath),
-      bytes,
-      { expectedSize },
-    ));
+    try {
+      await unsafeOnRefusal(appendDurable(
+        this.durableSession(directory),
+        path.basename(this.journalPath),
+        bytes,
+        { expectedSize },
+      ));
+    } catch (error) {
+      // A short append leaves a torn journal tail, not an unsafe directory.
+      if (error instanceof RuntimeError && error.message.startsWith("durable append was incomplete")) {
+        throw workflowError(error.message, "invalid-workflow-journal");
+      }
+      throw error;
+    }
     await assertDirectoryIdentity(this.workflowDirectory, directory);
   }
 

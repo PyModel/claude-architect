@@ -2,6 +2,7 @@ import {
   appendFile,
   link,
   mkdtemp,
+  open,
   readFile,
   readdir,
   rename,
@@ -13,7 +14,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   LEGAL_WORKFLOW_PHASE_EDGES,
   WorkflowStore,
@@ -600,6 +601,34 @@ describe("WorkflowStore", () => {
         completion: null,
       }],
     });
+  });
+
+  it("classifies an incomplete journal append as an invalid journal", async () => {
+    const store = await createStore("journal-short-append");
+    const probe = await open(store.journalPath, "a");
+    const handlePrototype = Object.getPrototypeOf(probe) as {
+      writeFile(this: unknown, data: unknown, ...rest: unknown[]): Promise<void>;
+    };
+    await probe.close();
+    const realWriteFile = handlePrototype.writeFile;
+    // Simulate a kernel short write: only the first half of the journal record lands.
+    const shortWrite = vi.spyOn(handlePrototype, "writeFile").mockImplementation(
+      async function (this: unknown, data: unknown, ...rest: unknown[]) {
+        if (Buffer.isBuffer(data) && data.includes('"event"')) {
+          return realWriteFile.call(this, data.subarray(0, data.byteLength >> 1), ...rest);
+        }
+        return realWriteFile.call(this, data, ...rest);
+      },
+    );
+    try {
+      await expect(store.beginIntent({
+        expectedRevision: 0,
+        operation: "run-task",
+        idempotencyKey: "run:task-1",
+      })).rejects.toMatchObject({ detail: { toolError: "invalid-workflow-journal" } });
+    } finally {
+      shortWrite.mockRestore();
+    }
   });
 
   it("ignores a torn final record and repairs only that tail before the next append", async () => {
