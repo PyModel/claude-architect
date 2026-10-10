@@ -2044,6 +2044,50 @@ describe("runPipeline", () => {
     )).resolves.toEqual({ recorded: true });
   }, 120_000);
 
+  it("demotes the promoted salvage candidate when its re-verification throws", async () => {
+    // Bug t07-1: salvage promoted the composed candidate (moving the anchor),
+    // then the fallback demoted the pre-promotion attempt, whose exact-OID
+    // anchor delete could no longer match.
+    const repo = await initSlicedRepo();
+    const runId = "pipeline-slices-salvage-verification-error";
+    const deps = dependencies({
+      runId,
+      roleRunner: async args => {
+        if (args.role === "implementer") {
+          return success(fenced({
+            reportVersion: "1",
+            candidateCommit: await commitRoleFile(args, "slice-two.txt", "slice two candidate\n"),
+            status: "complete",
+            summary: "slice complete",
+          }));
+        }
+        return { ok: false, rawOutput: "", failure: "timeout", producerId: "stub" };
+      },
+    });
+    deps.runAttempt = fakeAttempt(runId, async checkout => {
+      await writeFile(path.join(checkout, "slice-one.txt"), "slice one candidate\n");
+    });
+    const originalVerify = AcceptanceVerifier.prototype.verify;
+    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(function (args) {
+      if (String(args.logNamePrefix).includes("salvage")) {
+        return Promise.reject(new Error("salvage verification infrastructure failed"));
+      }
+      return originalVerify.call(this, args);
+    });
+
+    const result = await runPipeline(repo, slicedSpec(), deps);
+
+    expect(result).toMatchObject({ status: "failed", failure: "producer-failure" });
+    const store = new ArtifactStore(runId);
+    await expect(store.readResult()).resolves.toMatchObject({
+      status: "failed",
+      failure: "producer-failure",
+      candidate: null,
+    });
+    await expectRefMissing(repo, `refs/claude-architect/candidates/${runId}`);
+    await expect(store.readPipelineActiveMarker()).resolves.toBeNull();
+  }, 120_000);
+
   it("archives an unexpected final-verification error before clearing lifecycle authority", async () => {
     const repo = await initSlicedRepo();
     const runId = "pipeline-slices-final-verification-error";
