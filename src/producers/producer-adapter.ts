@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import type {
   PlatformServices,
   ResolvedExecutable,
@@ -131,7 +132,7 @@ export class DescriptorAdapter implements ProducerAdapter {
     readonly descriptor: ProducerDescriptor,
     private readonly deps: import("./host-store.js").HostStoreContext = {
       env: process.env,
-      homeDirectory: (process.env.HOME ?? process.env.USERPROFILE ?? ""),
+      homeDirectory: homedir(),
     },
   ) {
     this.producerId = descriptor.id;
