@@ -332,6 +332,10 @@ describe("LockOwnership", () => {
 
     it("reclaims a dead holder's two-link lock and the next acquisition succeeds", async () => {
       const { locksDir, lockPath } = await crashedLock({ pid: 7777, processToken: "dead-tok" });
+      // Orphans of other crashed acquisitions are separate files and stay put.
+      const orphans = ["00000000", "ffffffff"].map(prefix =>
+        path.join(locksDir, `.recovery-lock-${prefix}-2222-4333-8444-555555555555.tmp`));
+      for (const orphan of orphans) await writeFile(orphan, await readFile(lockPath));
       const contents = Buffer.from(formatLockRecord({
         pid: nodeProcess.pid,
         processToken: "next-tok",
@@ -348,7 +352,9 @@ describe("LockOwnership", () => {
       expect(holder).toBe("reclaimed");
       expect(lock).not.toBeNull();
       expect(await readFile(lockPath)).toEqual(contents);
-      expect(await readdir(locksDir)).toEqual([path.basename(lockPath)]);
+      expect((await readdir(locksDir)).sort()).toEqual(
+        [...orphans.map(orphan => path.basename(orphan)), path.basename(lockPath)].sort(),
+      );
     });
 
     it("never reclaims a live holder's lock in the same two-link state", async () => {
@@ -371,11 +377,15 @@ describe("LockOwnership", () => {
       const aliasPath = path.join(locksDir, "operator-alias");
       await rm(temporaryPath);
       await link(lockPath, aliasPath);
+      // Same name shape and bytes, but a different file: never the lock's link.
+      const unrelatedPath = path.join(locksDir, ".recovery-lock-11111111-2222-4333-8444-555555555555.tmp");
+      await writeFile(unrelatedPath, await readFile(lockPath));
 
       const result = await reclaimDeadLock(lockPath, () => false, async () => null);
 
       expect(result).toBe("contended");
       expect(await readFile(lockPath)).toEqual(await readFile(aliasPath));
+      expect(await readFile(unrelatedPath)).toEqual(await readFile(lockPath));
     });
   });
 

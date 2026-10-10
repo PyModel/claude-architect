@@ -155,6 +155,47 @@ export async function removeLockIfUnchanged(
   return afterMetadata.nlink === BigInt(expectedLinks - 1);
 }
 
+const TEMPORARY_LOCK_NAME = /^\.recovery-lock-[0-9a-f-]{36}\.tmp$/;
+
+/**
+ * A holder that crashed after linking its record into place but before
+ * unlinking the temporary leaves the lock with a second link, its
+ * `.recovery-lock-<uuid>.tmp` sibling. Remove that sibling only while it is
+ * provably the same file with the same bytes; anything else stays contended.
+ */
+async function removeCrashedTemporarySibling(
+  lockPath: string,
+  identity: DirectoryIdentity,
+  contents: Buffer,
+): Promise<boolean> {
+  const parentPath = path.dirname(lockPath);
+  for (const name of await readdir(parentPath)) {
+    if (!TEMPORARY_LOCK_NAME.test(name)) continue;
+    const temporaryPath = path.join(parentPath, name);
+    let metadata;
+    try {
+      metadata = await lstat(temporaryPath, { bigint: true });
+    } catch (error) {
+      if (isMissing(error)) continue;
+      throw error;
+    }
+    if (!metadata.isFile() || !sameDirectoryIdentity(metadata, identity)) continue;
+    let handle: FileHandle;
+    try {
+      handle = await open(temporaryPath, constants.O_RDONLY | NO_FOLLOW);
+    } catch (error) {
+      if (isMissing(error)) return false;
+      throw error;
+    }
+    try {
+      return await removeLockIfUnchanged(temporaryPath, handle, identity, contents, 2);
+    } finally {
+      await handle.close();
+    }
+  }
+  return false;
+}
+
 export async function reclaimDeadLock(
   lockPath: string,
   isProcessAlive: (pid: number) => boolean,
@@ -193,16 +234,14 @@ export async function reclaimDeadLock(
       });
       return "unverifiable";
     }
-    return await removeLockIfUnchanged(
-      lockPath,
-      handle,
-      {
-        dev: metadata.dev,
-        ino: metadata.ino,
-        birthtimeNs: metadata.birthtimeNs,
-      },
-      contents,
-    ) ? "reclaimed" : "contended";
+    const identity = { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
+    if (metadata.nlink === 2n
+      && !await removeCrashedTemporarySibling(lockPath, identity, contents)) {
+      return "contended";
+    }
+    return await removeLockIfUnchanged(lockPath, handle, identity, contents)
+      ? "reclaimed"
+      : "contended";
   } finally {
     await handle.close();
   }
