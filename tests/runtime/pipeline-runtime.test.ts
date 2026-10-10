@@ -59,6 +59,7 @@ import {
   registerSecretValue,
 } from "../../src/runtime/redaction.js";
 import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
+import { RunDecision } from "../../src/runtime/run-decision.js";
 import { specSha256 } from "../../src/protocol/spec-hash.js";
 import { initializeRunStart } from "../../src/runtime/run-start.js";
 import { AcceptanceVerifier } from "../../src/verify/acceptance-verifier.js";
@@ -2374,6 +2375,46 @@ describe("runPipeline", () => {
     expect(result.failure).toBe("cancelled");
     expect(result.gate.reasons[0]).toContain("cancelled before increment 2");
     expect(roles).toEqual([]);
+  }, 120_000);
+
+  it("archives an unsliced pipeline that fails after verification as rejected", async () => {
+    // Bug o-1: an unsliced pipeline whose review never ran left the archive at
+    // verified-candidate with no failure and its anchor in place, so the
+    // decision advisory offered a candidate the pipeline had not reviewed.
+    const repo = await initRepo();
+    const runId = "pipeline-unsliced-review-cancelled";
+    const controller = new AbortController();
+    const deps = dependencies({
+      runId,
+      roleRunner: async args => { throw new Error(`unexpected role ${args.role}`); },
+      edit: async repoPath => {
+        await writeFile(path.join(repoPath, "a.txt"), "candidate\n");
+        controller.abort();
+      },
+    });
+    deps.abortSignal = controller.signal;
+
+    const result = await runPipeline(repo, validSpec(), deps);
+
+    expect(result.status).toBe("failed");
+    expect(result.failure).toBe("cancelled");
+    const store = new ArtifactStore(runId);
+    const archived = await store.readResult();
+    expect(archived?.status).not.toBe("verified-candidate");
+    expect(archived).toMatchObject({
+      status: "cancelled",
+      failure: "cancelled",
+      candidate: null,
+      evidence: {
+        pipelineFailure: { failure: "cancelled", reason: "cancelled before review round 1" },
+      },
+    });
+    await expectRefMissing(repo, `refs/claude-architect/candidates/${runId}`);
+    await expect(store.readPipelineActiveMarker()).resolves.toBeNull();
+    await expect(store.readPipelineArtifact("pipeline-result"))
+      .resolves.toMatchObject({ status: "failed", failure: "cancelled" });
+    await expect(new RunDecision().evaluate(runId, { authority: "autonomous" }))
+      .resolves.toMatchObject({ state: "rejected", reasons: ["cancelled"] });
   }, 120_000);
 
   it("fails invalid increment output after one archived repair", async () => {
