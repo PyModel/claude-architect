@@ -224,6 +224,25 @@ describe("ProducerAdapter", () => {
     }
   });
 
+  it("keeps the edit lane closed for a descriptor without a probe hook even when its executable resolves", async () => {
+    const adapter = new DescriptorAdapter({
+      id: "no-probe-hook",
+      executable: { name: "no-probe-hook" },
+      isolation: "inherited-config-only",
+      structuredOutput: false,
+    });
+    const report = await adapter.probe({
+      ps: { resolveExecutable: async () => executable } as unknown as PlatformServices,
+      os: "darwin",
+      arch: "arm64",
+      environmentType: "native",
+    });
+    expect(report.laneEligibility.edit).toBe(false);
+    expect(report.available).toBe(false);
+    expect(report.reason).toBe("probe-failed");
+    expect(report.writeConfinementBackend).toBeNull();
+  });
+
   it("defaults the descriptor-driven adapter's home directory to the OS home directory", async () => {
     // os.homedir() honours HOME when set, so only an unset HOME tells the OS
     // answer apart from an environment-variable fallback.
