@@ -42,8 +42,15 @@ async function waitForFile(filePath: string, timeoutMs = 10_000): Promise<string
 
 // Reads the pid the server wrote. The server's writeFileSync truncates before it
 // writes, so an early read can see an empty or partial file; Number("") is 0, and
-// kill(0, 0) "succeeds" against the caller's own process group. Keep polling
-// until the file holds a complete pid.
+// kill(0, 0) "succeeds" against the caller's own process group, and a digit
+// prefix of a half-written pid names the wrong process. Fixtures end the pid with
+// a newline; only a newline-terminated pid counts as complete.
+function parsePid(text: string): number {
+  if (!/^\d+\n$/.test(text)) return 0;
+  const pid = Number(text);
+  return Number.isSafeInteger(pid) && pid > 1 ? pid : 0;
+}
+
 async function waitForPid(filePath: string, timeoutMs = 10_000): Promise<number> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -51,10 +58,8 @@ async function waitForPid(filePath: string, timeoutMs = 10_000): Promise<number>
       if (error instanceof Error && "code" in error && error.code === "ENOENT") return "";
       throw error;
     });
-    if (/^\d+$/.test(text)) {
-      const pid = Number(text);
-      if (Number.isSafeInteger(pid) && pid > 1) return pid;
-    }
+    const pid = parsePid(text);
+    if (pid) return pid;
     await new Promise(resolve => setTimeout(resolve, 20));
   }
   throw new Error(`timed out waiting for a pid in ${filePath}`);
@@ -120,8 +125,8 @@ async function reapServer(pidFile: string, knownPid: number): Promise<void> {
     // exist.
     const deadline = Date.now() + 2_000;
     do {
-      pid = Number(await readFile(pidFile, "utf8").catch(() => "0"));
-      if (Number.isSafeInteger(pid) && pid > 1) break;
+      pid = parsePid(await readFile(pidFile, "utf8").catch(() => ""));
+      if (pid) break;
       await new Promise(resolve => setTimeout(resolve, 25));
     } while (Date.now() < deadline);
   }
@@ -328,7 +333,7 @@ describe("runtime bootstrap", () => {
         "import { writeFileSync } from 'node:fs';",
         "writeFileSync(process.env.TEST_SERVER_STARTED_FILE, 'up');",
         "setTimeout(() => {",
-        "  writeFileSync(process.env.TEST_SERVER_PID_FILE, String(process.pid));",
+        "  writeFileSync(process.env.TEST_SERVER_PID_FILE, String(process.pid) + '\\n');",
         "}, 400);",
         "setInterval(() => {}, 1000);",
         "",
@@ -360,7 +365,7 @@ describe("runtime bootstrap", () => {
       // The server does write its pid — just too late for the read above. Wait
       // for it here rather than reading once, so a regression fails on the
       // process still being alive instead of on an unwritten file.
-      const leaked = Number(await waitForFile(pidFile, 5_000));
+      const leaked = await waitForPid(pidFile, 5_000);
       expect(leaked).toBeGreaterThan(1);
       await waitForProcessGone(leaked, 5_000);
     },
@@ -388,7 +393,7 @@ describe("runtime bootstrap", () => {
       "  writeFileSync(process.env.TEST_SIGNAL_FILE, 'SIGIO');",
       "  process.exit(47);",
       "});",
-      "writeFileSync(process.env.TEST_SERVER_PID_FILE, String(process.pid));",
+      "writeFileSync(process.env.TEST_SERVER_PID_FILE, String(process.pid) + '\\n');",
       "setInterval(() => {}, 1000);",
       "",
     ].join("\n"));
@@ -445,7 +450,7 @@ describe("runtime bootstrap", () => {
       await symlink(process.execPath, path.join(bin, "node"));
       await writeFile(serverPath, [
         "import { writeFileSync } from 'node:fs';",
-        "writeFileSync(process.env.TEST_SERVER_PID_FILE, String(process.pid));",
+        "writeFileSync(process.env.TEST_SERVER_PID_FILE, String(process.pid) + '\\n');",
         "process.on('SIGTERM', () => {",
         "  writeFileSync(process.env.TEST_SIGNAL_FILE, 'SIGTERM');",
         "});",
@@ -490,7 +495,7 @@ describe("runtime bootstrap", () => {
     await symlink(process.execPath, path.join(bin, "node"));
     await writeFile(serverPath, [
       "import { writeFileSync } from 'node:fs';",
-      "writeFileSync(process.env.TEST_SERVER_PID_FILE, String(process.pid));",
+      "writeFileSync(process.env.TEST_SERVER_PID_FILE, String(process.pid) + '\\n');",
       "setInterval(() => {}, 1000);",
       "",
     ].join("\n"));
