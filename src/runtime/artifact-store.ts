@@ -65,14 +65,18 @@ import {
 import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { AdvisorReport } from "../pipeline/report-types.js";
 import type { RunStatus } from "./run-status.js";
-import { flushDirectory } from "../platform/durable-directory.js";
+import {
+  NO_FOLLOW,
+  flushDirectory,
+  sameDevIno,
+  type DirectoryIdentity,
+} from "../platform/durable-directory.js";
 
 const SAFE_COMPONENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const WINDOWS_RESERVED_COMPONENT = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
 const CANDIDATE_REF_PREFIX = "refs/claude-architect/candidates/";
 const PRUNE_BACKUP_REF_PREFIX = "refs/claude-architect/prune-backups/";
 const CLEANUP_JOURNAL = "cleanup.ndjson";
-const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const MAX_ARCHIVE_FILE_BYTES = 8_000_000;
 const MAX_EVIDENCE_REFERENCES = 4_096;
 const MAX_EVIDENCE_DEPTH = 16;
@@ -137,17 +141,15 @@ interface RunEntry {
   directory: string;
   modifiedAtMs: number;
   bytes: number;
-  identity: DirectoryIdentity;
+  identity: ArchiveDirectoryIdentity;
 }
 
-interface DirectoryIdentity {
-  dev: number;
-  ino: number;
-}
+/** The archive compares its directories by exact device and inode only. */
+type ArchiveDirectoryIdentity = Pick<DirectoryIdentity, "dev" | "ino">;
 
 interface ValidatedDirectory {
   path: string;
-  identity: DirectoryIdentity;
+  identity: ArchiveDirectoryIdentity;
 }
 
 type PruneReason = "max-age" | "max-bytes";
@@ -232,7 +234,7 @@ function isWithin(root: string, candidate: string): boolean {
     || (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`));
 }
 
-async function ensurePlainDirectory(directory: string): Promise<DirectoryIdentity> {
+async function ensurePlainDirectory(directory: string): Promise<ArchiveDirectoryIdentity> {
   let created = false;
   try {
     await mkdir(directory, { mode: 0o700 });
@@ -240,7 +242,7 @@ async function ensurePlainDirectory(directory: string): Promise<DirectoryIdentit
   } catch (error) {
     if (!isAlreadyPresent(error)) throw error;
   }
-  const metadata = await lstat(directory);
+  const metadata = await lstat(directory, { bigint: true });
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
   }
@@ -248,7 +250,7 @@ async function ensurePlainDirectory(directory: string): Promise<DirectoryIdentit
   return { dev: metadata.dev, ino: metadata.ino };
 }
 
-async function ensurePlainDirectoryTree(directory: string): Promise<DirectoryIdentity> {
+async function ensurePlainDirectoryTree(directory: string): Promise<ArchiveDirectoryIdentity> {
   try {
     return await ensurePlainDirectory(directory);
   } catch (error) {
@@ -262,20 +264,19 @@ async function ensurePlainDirectoryTree(directory: string): Promise<DirectoryIde
 
 async function assertDirectoryIdentity(
   directory: string,
-  expected: DirectoryIdentity,
+  expected: ArchiveDirectoryIdentity,
 ): Promise<void> {
-  const metadata = await lstat(directory);
+  const metadata = await lstat(directory, { bigint: true });
   if (metadata.isSymbolicLink()
     || !metadata.isDirectory()
-    || metadata.dev !== expected.dev
-    || metadata.ino !== expected.ino) {
+    || !sameDevIno(metadata, expected)) {
     throw new RuntimeError("archive directory identity changed during operation");
   }
 }
 
 async function readRegularFile(
   filename: string,
-  parentIdentity?: DirectoryIdentity,
+  parentIdentity?: ArchiveDirectoryIdentity,
 ): Promise<string> {
   // Reject a symlinked leaf on every platform. `O_NOFOLLOW` is the atomic guard
   // on POSIX but is a no-op on Windows (`O_NOFOLLOW` is undefined there, so
@@ -332,14 +333,14 @@ async function readRegularFile(
 
 async function directoryBytes(
   directory: string,
-  expectedIdentity?: DirectoryIdentity,
+  expectedIdentity?: ArchiveDirectoryIdentity,
 ): Promise<number> {
-  const metadata = await lstat(directory);
+  const metadata = await lstat(directory, { bigint: true });
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new RuntimeError("archive size accounting requires a plain directory");
   }
   if (expectedIdentity !== undefined
-    && (metadata.dev !== expectedIdentity.dev || metadata.ino !== expectedIdentity.ino)) {
+    && !sameDevIno(metadata, expectedIdentity)) {
     throw new RuntimeError("archive directory identity changed during size accounting");
   }
   const identity = { dev: metadata.dev, ino: metadata.ino };
@@ -1048,7 +1049,7 @@ export class ArtifactStore {
       for (const component of components.slice(0, -1)) {
         await assertDirectoryIdentity(directory.path, directory.identity);
         const child = path.join(directory.path, component);
-        const metadata = await lstat(child);
+        const metadata = await lstat(child, { bigint: true });
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
           throw new RuntimeError("archived evidence directory is not a plain directory");
         }
@@ -1102,7 +1103,7 @@ export class ArtifactStore {
         if (STORE_TEMPORARY_RESIDUE.test(name)) continue;
         validateComponent(name, "log name");
         const child = path.join(directory.path, name);
-        const metadata = await lstat(child);
+        const metadata = await lstat(child, { bigint: true });
         if (metadata.isSymbolicLink()) {
           throw new RuntimeError("archived evidence must not contain symbolic links");
         }
@@ -1175,7 +1176,7 @@ export class ArtifactStore {
   private async ensureExistingRunDirectory(directory: string): Promise<ValidatedDirectory | null> {
     const canonicalRunsRoot = await this.ensureRunsRoot();
     try {
-      const metadata = await lstat(directory);
+      const metadata = await lstat(directory, { bigint: true });
       if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
         throw new RuntimeError(`archive directory must not be a symbolic link: ${redact(directory)}`);
       }
@@ -1427,12 +1428,12 @@ export class ArtifactStore {
     const entries = await Promise.all((await this.list()).map(async runId => {
       const directory = path.join(this.runsRoot, runId);
       try {
-        const metadata = await lstat(directory);
+        const metadata = await lstat(directory, { bigint: true });
         if (metadata.isSymbolicLink() || !metadata.isDirectory()) return null;
         return {
           runId,
           directory,
-          modifiedAtMs: metadata.mtimeMs,
+          modifiedAtMs: Number(metadata.mtimeMs) + Number(metadata.mtimeNs % 1_000_000n) / 1_000_000,
           bytes: await directoryBytes(directory, { dev: metadata.dev, ino: metadata.ino }),
           identity: { dev: metadata.dev, ino: metadata.ino },
         };
@@ -1705,7 +1706,7 @@ export class ArtifactStore {
       const runStore = new ArtifactStore(entry.runId);
       let prepared: PreparedAnchorCleanup | null = null;
       let transaction: AnchorCleanupTransaction | null = null;
-      let runsRootIdentity: DirectoryIdentity | null = null;
+      let runsRootIdentity: ArchiveDirectoryIdentity | null = null;
       let archiveRemovalCommitted = false;
       try {
         // Fast path: never wait on a checkout lease for a run that still
