@@ -18,7 +18,6 @@ import type { CheckoutLock, PlatformServices } from "../platform/platform-servic
 import { getPlatformServices } from "../platform/select-platform.js";
 import type { AcceptanceVerifyResult } from "../verify/acceptance-verifier.js";
 import { AcceptanceVerifier } from "../verify/acceptance-verifier.js";
-import { readRunDecisionSnapshot } from "../runtime/run-decision.js";
 import type { CandidateArtifact, ChangedPath } from "../protocol/attempt-result.js";
 import type { AutopilotSpec } from "../protocol/autopilot-spec.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
@@ -31,7 +30,6 @@ import { ArtifactStore } from "../runtime/artifact-store.js";
 import { isAutopilotAcceptance } from "../runtime/candidate-decisions.js";
 import { redact, redactRecord } from "../runtime/redaction.js";
 import type { AdvisorReport, ReviewReport } from "../pipeline/report-types.js";
-import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { RolePackage } from "../pipeline/role-prompts.js";
 import {
   runRole,
@@ -40,10 +38,12 @@ import {
 } from "../pipeline/role-runner.js";
 import { extractJson } from "../pipeline/structured-output.js";
 import { RuntimeError, isMissing } from "../util/errors.js";
+import { canonicalArtifactHash } from "./autopilot-eligibility.js";
 import {
-  autopilotEligibilityRecordHash,
-  canonicalArtifactHash,
-} from "./autopilot-eligibility.js";
+  loadRunEvidence,
+  REQUIRED_TASK_EVIDENCE_REFS,
+  type RunEvidenceStore,
+} from "./run-evidence.js";
 import {
   WorkflowBranchManager,
   type WorkflowBranchIdentity,
@@ -61,14 +61,6 @@ const MAX_TASK_EVIDENCE_REFS = 4_096;
 // memory and blow the Producer input budget, so bound the aggregate and fail
 // closed rather than producing an artifact nothing can consume.
 const MAX_TASK_EVIDENCE_BYTES = 8 * 1024 * 1024;
-const REQUIRED_TASK_EVIDENCE_REFS = [
-  "decision.json",
-  "manifest.json",
-  "pipeline/pipeline-result.json",
-  "pipeline/post-pipeline-autopilot.json",
-  "result.json",
-  "review-snapshot.json",
-] as const;
 export const FINAL_BRANCH_ARTIFACT_REF = "final-branch-artifact.json";
 export const FINAL_BRANCH_REPORT_REF = "final-branch-report.json";
 export const FINAL_VERIFICATION_REF = "final-verification.json";
@@ -167,6 +159,8 @@ export interface FinalBranchReviewerDependencies {
   evidenceStore?: (
     runId: string,
   ) => Pick<ArtifactStore, "readEvidence" | "listEvidenceReferences">;
+  /** The archive the default task evidence validator loads Run Evidence from. */
+  runEvidenceStore?: (runId: string) => RunEvidenceStore;
   taskEvidenceValidator?: (
     task: AutopilotTaskState,
     evidence: FinalBranchTaskEvidence,
@@ -253,30 +247,18 @@ async function validateArchivedTaskEvidence(
   task: AutopilotTaskState,
   evidence: FinalBranchTaskEvidence,
   context: TaskEvidenceValidationContext,
+  store: RunEvidenceStore,
 ): Promise<void> {
-  const store = new ArtifactStore(evidence.runId);
-  let result;
-  let manifest;
-  let pipelineResult;
-  let snapshot;
-  let advisor;
-  let eligibility;
-  let decision;
-  try {
-    const decisionSnapshot = await readRunDecisionSnapshot(evidence.runId, { store });
-    result = decisionSnapshot.result;
-    manifest = decisionSnapshot.manifest;
-    snapshot = decisionSnapshot.reviewSnapshot;
-    decision = decisionSnapshot.decision;
-    [pipelineResult, advisor, eligibility] = await Promise.all([
-      store.readPipelineArtifact<PipelineResult>("pipeline-result"),
-      store.readAdvisorReport(),
-      store.readAutopilotEligibility(),
-    ]);
-  } catch {
-    fail("missing-task-evidence", `task evidence archive is invalid: ${task.id}`);
+  const loaded = await loadRunEvidence(evidence.runId, {
+    repoRoot: context.checkoutPath,
+    baseCommitOid: context.expectedParentCommitOid,
+    candidateManifestHash: evidence.candidateManifestHash,
+    eligibilityHash: task.eligibilityHash,
+  }, store);
+  if (!loaded.ok) {
+    fail("missing-task-evidence", `task evidence identities do not match: ${task.id}`);
   }
-  const candidate = result?.candidate ?? null;
+  const { candidate, decision, eligibilityHash } = loaded.evidence;
   const [promotionParent, promotionTree] = await Promise.all([
     context.git(context.checkoutPath, [
       "rev-parse", "--verify", `${evidence.promotionCommitOid}^`,
@@ -285,33 +267,7 @@ async function validateArchivedTaskEvidence(
       "rev-parse", "--verify", `${evidence.promotionCommitOid}^{tree}`,
     ]),
   ]);
-  if (result === null
-    || manifest === null
-    || pipelineResult === null
-    || snapshot === null
-    || advisor === null
-    || eligibility === null
-    || decision === null
-    || candidate === null
-    || result.status !== "verified-candidate"
-    || result.runId !== evidence.runId
-    || manifest.runId !== evidence.runId
-    || manifest.baseCommitOid !== context.expectedParentCommitOid
-    || pipelineResult.runId !== evidence.runId
-    || candidate.baseCommitOid !== context.expectedParentCommitOid
-    || candidate.manifestHash !== evidence.candidateManifestHash
-    || manifest.candidateManifestHash !== evidence.candidateManifestHash
-    || pipelineResult.finalCandidateCommit !== candidate.candidateCommitOid
-    || eligibility.runId !== evidence.runId
-    || eligibility.baseCommitOid !== context.expectedParentCommitOid
-    || eligibility.candidateCommitOid !== candidate.candidateCommitOid
-    || eligibility.candidateTreeOid !== candidate.candidateTreeOid
-    || eligibility.candidateManifestHash !== evidence.candidateManifestHash
-    || !eligibility.eligible
-    || eligibility.reasons.length !== 0
-    || task.eligibilityHash === null
-    || autopilotEligibilityRecordHash(eligibility) !== task.eligibilityHash
-    || !isAutopilotAcceptance(decision, evidence.candidateManifestHash, task.eligibilityHash)
+  if (!isAutopilotAcceptance(decision, evidence.candidateManifestHash, eligibilityHash)
     || !succeeded(promotionParent)
     || promotionParent.stdout.trim() !== context.expectedParentCommitOid
     || !succeeded(promotionTree)
@@ -916,7 +872,11 @@ export class FinalBranchReviewer {
     this.artifactStore = dependencies.artifactStore ?? (workflowId =>
       new ArtifactStore(`final-${canonicalArtifactHash(workflowId).slice(0, 24)}`));
     this.evidenceStore = dependencies.evidenceStore ?? (runId => new ArtifactStore(runId));
-    this.taskEvidenceValidator = dependencies.taskEvidenceValidator ?? validateArchivedTaskEvidence;
+    const runEvidenceStore = dependencies.runEvidenceStore ?? (runId => new ArtifactStore(runId));
+    this.taskEvidenceValidator = dependencies.taskEvidenceValidator
+      ?? (async (task, evidence, context) => await validateArchivedTaskEvidence(
+        task, evidence, context, runEvidenceStore(evidence.runId),
+      ));
     this.materialize = dependencies.materialize ?? (async request => {
       const workflowHash = createHash("sha256").update(request.workflowId).digest("hex");
       const manager = new WorktreeManager(

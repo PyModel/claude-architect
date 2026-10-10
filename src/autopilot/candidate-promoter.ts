@@ -8,7 +8,6 @@ import {
 } from "../integrate/controlled-integrator.js";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
-import type { PipelineResult } from "../pipeline/pipeline-runtime.js";
 import type { CandidateArtifact } from "../protocol/attempt-result.js";
 import { ArtifactStore } from "../runtime/artifact-store.js";
 import {
@@ -19,19 +18,13 @@ import {
 import { isLockContention } from "../platform/lock-ownership.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
 import { redact } from "../runtime/redaction.js";
-import { reviewSnapshotHash } from "../runtime/review-snapshot.js";
-import { readRunDecisionSnapshot } from "../runtime/run-decision.js";
 import { logger } from "../util/logger.js";
 import {
   WorkflowBranchManager,
   type WorkflowBranchIdentity,
 } from "./branch-manager.js";
-import {
-  advisorReportHash,
-  autopilotEligibilityRecordHash,
-  pipelineResultHash,
-  type AutopilotEligibilityRecord,
-} from "./autopilot-eligibility.js";
+import type { AutopilotEligibilityRecord } from "./autopilot-eligibility.js";
+import { loadRunEvidence } from "./run-evidence.js";
 import type { AutopilotWorkflowState } from "./types.js";
 import { WorkflowStore } from "./workflow-store.js";
 
@@ -370,57 +363,14 @@ export class CandidatePromoter {
       return rejected(classification);
     };
 
-    let result;
-    let manifest;
-    let pipelineResult;
-    let snapshot;
-    let advisor;
-    let eligibility: AutopilotEligibilityRecord | null;
-    try {
-      const decisionSnapshot = await readRunDecisionSnapshot(request.runId, { store: artifactStore });
-      result = decisionSnapshot.result;
-      manifest = decisionSnapshot.manifest;
-      snapshot = decisionSnapshot.reviewSnapshot;
-      [pipelineResult, advisor, eligibility] = await Promise.all([
-        artifactStore.readPipelineArtifact<PipelineResult>("pipeline-result"),
-        artifactStore.readAdvisorReport(),
-        artifactStore.readAutopilotEligibility(),
-      ]);
-    } catch {
-      return finishFailure("evidence-mismatch");
-    }
-    if (eligibility === null) return finishFailure("eligibility-missing");
-    if (!eligibility.eligible || eligibility.reasons.length !== 0) {
-      return finishFailure("eligibility-red");
-    }
-    const eligibilityHash = autopilotEligibilityRecordHash(eligibility);
-    if (task.eligibilityHash !== eligibilityHash) return finishFailure("eligibility-stale");
-    const artifact = result?.candidate ?? null;
-    if (result === null || manifest === null || pipelineResult === null || snapshot === null
-      || advisor === null || artifact === null) return finishFailure("run-evidence-missing");
-    let evidenceHashesMatch = false;
-    try {
-      evidenceHashesMatch = eligibility.pipelineResultHash === pipelineResultHash(pipelineResult)
-        && eligibility.reviewSnapshotHash === reviewSnapshotHash(snapshot)
-        && eligibility.advisorReportHash === advisorReportHash(advisor);
-    } catch {
-      return finishFailure("evidence-mismatch");
-    }
-    if (result.status !== "verified-candidate"
-      || result.runId !== request.runId
-      || manifest.runId !== request.runId
-      || manifest.repoRoot !== request.workflowCheckoutPath
-      || manifest.baseCommitOid !== request.expectedHead
-      || manifest.candidateManifestHash !== request.expectedArtifactHash
-      || artifact.baseCommitOid !== request.expectedHead
-      || artifact.manifestHash !== request.expectedArtifactHash
-      || eligibility.baseCommitOid !== request.expectedHead
-      || eligibility.candidateCommitOid !== artifact.candidateCommitOid
-      || eligibility.candidateTreeOid !== artifact.candidateTreeOid
-      || eligibility.candidateManifestHash !== artifact.manifestHash
-      || !evidenceHashesMatch) {
-      return finishFailure("evidence-mismatch");
-    }
+    const loaded = await loadRunEvidence(request.runId, {
+      repoRoot: request.workflowCheckoutPath,
+      baseCommitOid: request.expectedHead,
+      candidateManifestHash: request.expectedArtifactHash,
+      eligibilityHash: task.eligibilityHash,
+    }, artifactStore);
+    if (!loaded.ok) return finishFailure(loaded.classification);
+    const { candidate: artifact, eligibility, eligibilityHash } = loaded.evidence;
 
     const identity = await this.branchManager.load(request.workflowId);
     if (identity === null
