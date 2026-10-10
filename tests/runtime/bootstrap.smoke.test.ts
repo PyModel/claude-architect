@@ -144,9 +144,22 @@ describe("runtime bootstrap", () => {
     temporaryPaths.push(root);
     const pidFile = path.join(root, "server.pid");
     await writeFile(pidFile, "");
-    const writer = setTimeout(() => { void writeFile(pidFile, "4242"); }, 150);
+    const writer = setTimeout(() => { void writeFile(pidFile, "4242\n"); }, 150);
     try {
       expect(await waitForPid(pidFile, 5_000)).toBe(4242);
+    } finally {
+      clearTimeout(writer);
+    }
+  });
+
+  it("pid read never returns a digit prefix of a partially written pid", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ca-bootstrap-partial-pid-"));
+    temporaryPaths.push(root);
+    const pidFile = path.join(root, "server.pid");
+    await writeFile(pidFile, "123");
+    const writer = setTimeout(() => { void writeFile(pidFile, "12345\n"); }, 150);
+    try {
+      expect(await waitForPid(pidFile, 5_000)).toBe(12345);
     } finally {
       clearTimeout(writer);
     }
