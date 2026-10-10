@@ -7,8 +7,11 @@ import type {
 } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
 import { probeOsConfinedCli, type OsConfinedCliProbe } from "./cli-probe.js";
-import type { HostStateDescriptor, HostStoreContext } from "./host-store.js";
-import { isProducerAuthenticated } from "./host-store.js";
+import {
+  isProducerAuthenticated,
+  type HostStateDescriptor,
+  type HostStoreContext,
+} from "./host-store.js";
 import { renderProducerPrompt } from "./prompt-renderer.js";
 
 export type PlatformState = "certified" | "tested" | "conditional" | "unsupported" | "unknown";
