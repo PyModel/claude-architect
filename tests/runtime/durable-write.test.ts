@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -115,6 +115,23 @@ describe("PlatformSafety durable-write", () => {
     await expect(writeAtomic(session, "tamper.txt", "data", "replace")).rejects.toThrow(
       "durable directory session identity changed",
     );
+  });
+
+  it("refuses a directory with a real birth time when the recorded birth time is zero (o-5)", async () => {
+    const metadata = await lstat(testDir, { bigint: true });
+    if (metadata.birthtimeNs <= 0n) return; // filesystem records no birth time: nothing to mismatch
+    const session = new DurableDirectorySession(testDir, {
+      dev: metadata.dev,
+      ino: metadata.ino,
+      birthtimeNs: 0n,
+    });
+    try {
+      await expect(session.assertIdentity()).rejects.toThrow(
+        "durable directory session identity changed",
+      );
+    } finally {
+      await session.close();
+    }
   });
 
   it("rejects operations after session is closed", async () => {

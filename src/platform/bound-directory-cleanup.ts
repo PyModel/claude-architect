@@ -6,6 +6,12 @@ import type { PlatformServices } from "./platform-services.js";
 import { resolveWindowsFilesystemHelper } from "./windows-filesystem-helper.js";
 import { windowsEssentialEnvironment } from "./windows-env.js";
 import { RuntimeError } from "../util/errors.js";
+import {
+  NO_FOLLOW,
+  requireBirthtimeIdentity,
+  sameDirectoryIdentity,
+  type DirectoryIdentity,
+} from "./durable-directory.js";
 
 const DEFAULT_EMPTY_DIRECTORY_TIMEOUT_MS = 120_000;
 export const EMPTY_DIRECTORY_TIMEOUT_ENV = "CLAUDE_ARCHITECT_EMPTY_DIRECTORY_TIMEOUT_MS";
@@ -38,6 +44,17 @@ export function resolveEmptyDirectoryTimeoutMs(
   );
   return DEFAULT_EMPTY_DIRECTORY_TIMEOUT_MS;
 }
+/**
+ * The cleanup child's identity rule. The child runs under `node -e` and cannot
+ * import {@link sameDirectoryIdentity}, so it carries this inline copy (plus a
+ * file-type check); a test pins its agreement with the canonical comparator.
+ * Zero birth times are refused where the child captures an identity.
+ */
+export const CHILD_SAME_IDENTITY_SOURCE = String.raw`(left, right) => left.dev === right.dev
+  && left.ino === right.ino
+  && left.birthtimeNs === right.birthtimeNs
+  && left.isDirectory() === right.isDirectory()
+  && left.isSymbolicLink() === right.isSymbolicLink()`;
 const EMPTY_DIRECTORY_SCRIPT = String.raw`
 const { execFileSync } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
@@ -73,12 +90,7 @@ const isMountPoint = entry => {
     process.exit(40);
   }
 };
-const sameIdentity = (left, right) => left.dev === right.dev
-  && left.ino === right.ino
-  && left.birthtimeNs > 0n
-  && left.birthtimeNs === right.birthtimeNs
-  && left.isDirectory() === right.isDirectory()
-  && left.isSymbolicLink() === right.isSymbolicLink();
+const sameIdentity = ${CHILD_SAME_IDENTITY_SOURCE};
 // One lsof spawn resolves a whole batch of handles; per-directory spawns made
 // large trees (node_modules) blow the cleanup budget.
 const darwinHandlePaths = fds => {
@@ -280,6 +292,7 @@ const emptyBoundDirectory = async expected => {
     isDirectory: () => true,
     isSymbolicLink: () => false,
   };
+  if (expected.birthtimeNs <= 0n) process.exit(41);
   await emptyBoundDirectory(expected);
 })().catch(error => {
   // Codes only, never paths: this lands in bounded redacted diagnostics.
@@ -289,22 +302,6 @@ const emptyBoundDirectory = async expected => {
   process.exit(49);
 });
 `;
-
-export interface BoundDirectoryIdentity {
-  dev: bigint;
-  ino: bigint;
-  birthtimeNs: bigint;
-}
-
-function sameBoundIdentity(
-  metadata: { dev: bigint; ino: bigint; birthtimeNs: bigint },
-  expected: BoundDirectoryIdentity,
-): boolean {
-  return metadata.dev === expected.dev
-    && metadata.ino === expected.ino
-    && metadata.birthtimeNs > 0n
-    && metadata.birthtimeNs === expected.birthtimeNs;
-}
 
 async function closeBoundHandle(handle: FileHandle | undefined, primaryError: unknown) {
   try {
@@ -361,7 +358,7 @@ async function darwinHandlePath(
 
 async function removeWindowsBoundEmptyDirectory(
   directory: string,
-  expectedIdentity: BoundDirectoryIdentity,
+  expectedIdentity: DirectoryIdentity,
   platformServices: PlatformServices,
 ): Promise<void> {
   const helper = await resolveWindowsFilesystemHelper();
@@ -440,10 +437,11 @@ export async function verifyBoundDirectoryCleanupSupport(
 
 export async function removeBoundEmptyDirectory(
   directory: string,
-  expectedIdentity: BoundDirectoryIdentity,
+  boundIdentity: DirectoryIdentity,
   platformServices: PlatformServices,
   remove?: typeof rmdir,
 ): Promise<void> {
+  const expectedIdentity = requireBirthtimeIdentity(boundIdentity, "bound directory");
   await verifyBoundDirectoryCleanupSupport(platformServices);
   if (platformServices.os === "win32") {
     if (remove !== undefined) {
@@ -458,18 +456,18 @@ export async function removeBoundEmptyDirectory(
     const named = await lstat(directory, { bigint: true });
     if (!named.isDirectory()
       || named.isSymbolicLink()
-      || !sameBoundIdentity(named, expectedIdentity)) {
+      || !sameDirectoryIdentity(named, expectedIdentity)) {
       throw new RuntimeError("directory identity changed before bound removal");
     }
-    handle = await open(directory, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    handle = await open(directory, constants.O_RDONLY | NO_FOLLOW);
     const opened = await handle.stat({ bigint: true });
-    if (!opened.isDirectory() || !sameBoundIdentity(opened, expectedIdentity)) {
+    if (!opened.isDirectory() || !sameDirectoryIdentity(opened, expectedIdentity)) {
       throw new RuntimeError("opened directory identity changed before bound removal");
     }
     const settledNamed = await lstat(directory, { bigint: true });
     if (!settledNamed.isDirectory()
       || settledNamed.isSymbolicLink()
-      || !sameBoundIdentity(settledNamed, expectedIdentity)) {
+      || !sameDirectoryIdentity(settledNamed, expectedIdentity)) {
       throw new RuntimeError("directory identity changed before final bound removal");
     }
     const darwinPath = platformServices.os === "darwin"
@@ -482,12 +480,12 @@ export async function removeBoundEmptyDirectory(
     const removalTarget = await lstat(directory, { bigint: true });
     if (!removalTarget.isDirectory()
       || removalTarget.isSymbolicLink()
-      || !sameBoundIdentity(removalTarget, expectedIdentity)) {
+      || !sameDirectoryIdentity(removalTarget, expectedIdentity)) {
       throw new RuntimeError("directory identity changed at the final removal boundary");
     }
     await (remove ?? rmdir)(directory);
     const removed = await handle.stat({ bigint: true });
-    if (!sameBoundIdentity(removed, expectedIdentity)) {
+    if (!sameDirectoryIdentity(removed, expectedIdentity)) {
       throw new RuntimeError("directory handle identity changed during removal");
     }
     if (platformServices.os === "linux") {
@@ -511,9 +509,10 @@ export async function removeBoundEmptyDirectory(
 
 export async function emptyBoundDirectory(
   directory: string,
-  expectedIdentity: BoundDirectoryIdentity,
+  boundIdentity: DirectoryIdentity,
   platformServices: PlatformServices,
 ): Promise<void> {
+  const expectedIdentity = requireBirthtimeIdentity(boundIdentity, "bound directory");
   await verifyBoundDirectoryCleanupSupport(platformServices);
   const helper = platformServices.os === "win32"
     ? await resolveWindowsFilesystemHelper()

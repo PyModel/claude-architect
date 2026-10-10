@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { reviewDiffArgs, gitSucceeded as succeeded } from "../git/checked-git.js";
 import { constants } from "node:fs";
+import { NO_FOLLOW } from "../platform/durable-directory.js";
 import { open } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
@@ -51,7 +52,6 @@ import { WorkflowStore } from "./workflow-store.js";
 
 const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
-const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const MAX_FINAL_BRANCH_ARTIFACT_BYTES = 64 * 1024 * 1024;
 const MAX_TASK_EVIDENCE_REFS = 4_096;
 // The reference COUNT was bounded but the total bytes were not, and every frozen

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { constants, type Stats } from "node:fs";
+import { constants, type BigIntStats, type Stats } from "node:fs";
 import {
   lstat,
   link,
@@ -17,9 +17,13 @@ import { loadSchemas } from "../protocol/schema-loader.js";
 import { resolveStateDir } from "../runtime/state-dir.js";
 import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
 import type { AutopilotPhase, AutopilotWorkflowState } from "./types.js";
-import { flushDirectory } from "../platform/durable-directory.js";
+import {
+  NO_FOLLOW,
+  flushDirectory,
+  sameDevIno,
+  type DirectoryIdentity,
+} from "../platform/durable-directory.js";
 
-const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const MAX_WRITER_LOCK_BYTES = 512;
 const MAX_WORKFLOW_OWNER_BYTES = 1_024;
 export const MAX_WORKFLOW_STATE_BYTES = 1_000_000;
@@ -110,11 +114,8 @@ export const LEGAL_WORKFLOW_PHASE_EDGES: Readonly<
   cancelled: [],
 });
 
-interface DirectoryIdentity {
-  dev: number;
-  ino: number;
-  canonicalPath: string;
-}
+/** Workflow state directories compare by exact device and inode plus canonical path. */
+type WorkflowDirectoryIdentity = Pick<DirectoryIdentity, "dev" | "ino"> & { canonicalPath: string };
 
 interface PreciseFileIdentity {
   dev: bigint;
@@ -203,7 +204,7 @@ function workflowError(message: string, toolError: string): RuntimeError {
   return new RuntimeError(message, { toolError });
 }
 
-function isPlainDirectory(metadata: Stats): boolean {
+function isPlainDirectory(metadata: Stats | BigIntStats): boolean {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
 }
 
@@ -284,12 +285,8 @@ async function workflowOwnerStatus(
   return currentToken === record.processToken ? "live" : "dead";
 }
 
-function sameIdentity(metadata: Stats, identity: DirectoryIdentity): boolean {
-  return metadata.dev === identity.dev && metadata.ino === identity.ino;
-}
-
-async function inspectPlainDirectory(directory: string): Promise<DirectoryIdentity> {
-  const metadata = await lstat(directory);
+async function inspectPlainDirectory(directory: string): Promise<WorkflowDirectoryIdentity> {
+  const metadata = await lstat(directory, { bigint: true });
   if (!isPlainDirectory(metadata)) {
     throw workflowError(
       "workflow state directory must be a plain directory",
@@ -305,14 +302,14 @@ async function inspectPlainDirectory(directory: string): Promise<DirectoryIdenti
 
 async function assertDirectoryIdentity(
   directory: string,
-  expected: DirectoryIdentity,
+  expected: WorkflowDirectoryIdentity,
 ): Promise<void> {
   const [metadata, canonicalPath] = await Promise.all([
-    lstat(directory),
+    lstat(directory, { bigint: true }),
     realpath(directory),
   ]);
   if (!isPlainDirectory(metadata)
-    || !sameIdentity(metadata, expected)
+    || !sameDevIno(metadata, expected)
     || canonicalPath !== expected.canonicalPath) {
     throw workflowError("workflow state directory identity changed", "unsafe-workflow-state");
   }
@@ -1047,7 +1044,7 @@ export class WorkflowStore {
     });
   }
 
-  private async ensureWorkflowDirectory(): Promise<DirectoryIdentity> {
+  private async ensureWorkflowDirectory(): Promise<WorkflowDirectoryIdentity> {
     const root = await inspectPlainDirectory(this.stateRoot);
     await mkdir(this.workflowsDirectory, { mode: 0o700 }).catch(error => {
       if (errorCode(error) !== "EEXIST") throw error;
@@ -1068,7 +1065,7 @@ export class WorkflowStore {
     return workflow;
   }
 
-  private async existingWorkflowDirectory(): Promise<DirectoryIdentity> {
+  private async existingWorkflowDirectory(): Promise<WorkflowDirectoryIdentity> {
     const root = await inspectPlainDirectory(this.stateRoot);
     const workflows = await inspectPlainDirectory(this.workflowsDirectory);
     const workflow = await inspectPlainDirectory(this.workflowDirectory);
@@ -1080,7 +1077,7 @@ export class WorkflowStore {
   }
 
   private async createWorkflowOwner(
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
   ): Promise<WorkflowOwnerRecord> {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     const record: WorkflowOwnerRecord = {
@@ -1150,7 +1147,7 @@ export class WorkflowStore {
   }
 
   private async readWorkflowOwner(
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
   ): Promise<WorkflowOwnerIdentity> {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     let handle: FileHandle;
@@ -1190,7 +1187,7 @@ export class WorkflowStore {
 
   private async removeWorkflowOwner(
     identity: WorkflowOwnerIdentity,
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
   ): Promise<boolean> {
     let handle: FileHandle;
     try {
@@ -1238,7 +1235,7 @@ export class WorkflowStore {
   }
 
   private async withWriterLock<T>(
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
     operation: () => Promise<T>,
   ): Promise<T> {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
@@ -1340,7 +1337,7 @@ export class WorkflowStore {
     }
   }
 
-  private async readWriterLock(directory: DirectoryIdentity): Promise<WriterLockIdentity> {
+  private async readWriterLock(directory: WorkflowDirectoryIdentity): Promise<WriterLockIdentity> {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     const handle = await open(this.lockPath, constants.O_RDONLY | NO_FOLLOW);
     try {
@@ -1381,7 +1378,7 @@ export class WorkflowStore {
 
   private async retireWriterLock(
     identity: WriterLockIdentity,
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
   ): Promise<boolean> {
     let handle: FileHandle;
     try {
@@ -1428,7 +1425,7 @@ export class WorkflowStore {
 
   private async retireWriterOwner(
     identity: WriterLockIdentity,
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
   ): Promise<boolean> {
     let handle: FileHandle;
     try {
@@ -1475,7 +1472,7 @@ export class WorkflowStore {
     return true;
   }
 
-  private async recoverAbandonedStateFiles(directory: DirectoryIdentity): Promise<void> {
+  private async recoverAbandonedStateFiles(directory: WorkflowDirectoryIdentity): Promise<void> {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     const names = (await readdir(this.workflowDirectory)).filter(name =>
       /^\.state\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:tmp|publish)$/u
@@ -1549,7 +1546,7 @@ export class WorkflowStore {
   }
 
   private async readFromDirectory(
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
   ): Promise<AutopilotWorkflowState | null> {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     let handle: FileHandle | undefined;
@@ -1622,7 +1619,7 @@ export class WorkflowStore {
   private async publishJournalCheckpointIfNeeded(
     persisted: AutopilotWorkflowState,
     journal: JournalRead,
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
   ): Promise<void> {
     const current = this.withJournalCheckpoint(persisted, journal);
     if (persisted.intentJournal.entryCount !== current.intentJournal.entryCount
@@ -1634,7 +1631,7 @@ export class WorkflowStore {
   private async publishJournalCheckpoint(
     state: AutopilotWorkflowState,
     journal: JournalRead,
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
   ): Promise<void> {
     const next = this.withJournalCheckpoint(state, journal);
     const bytes = serializeState(next, this.workflowId, this.maxStateBytes);
@@ -1642,7 +1639,7 @@ export class WorkflowStore {
     await this.publish(bytes, directory, false);
   }
 
-  private async readJournalForAppend(directory: DirectoryIdentity): Promise<JournalRead> {
+  private async readJournalForAppend(directory: WorkflowDirectoryIdentity): Promise<JournalRead> {
     let journal = await this.readJournalFromDirectory(directory);
     if (!journal.tornTail) return journal;
     await this.truncateTornJournalTail(directory, journal);
@@ -1653,7 +1650,7 @@ export class WorkflowStore {
     return journal;
   }
 
-  private async readJournalFromDirectory(directory: DirectoryIdentity): Promise<JournalRead> {
+  private async readJournalFromDirectory(directory: WorkflowDirectoryIdentity): Promise<JournalRead> {
     await assertDirectoryIdentity(this.workflowDirectory, directory);
     let handle: FileHandle | undefined;
     try {
@@ -1716,7 +1713,7 @@ export class WorkflowStore {
   }
 
   private async truncateTornJournalTail(
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
     snapshot: JournalRead,
   ): Promise<void> {
     if (!snapshot.tornTail || snapshot.identity === null) return;
@@ -1749,7 +1746,7 @@ export class WorkflowStore {
 
   private async appendJournalEntry(
     bytes: Buffer,
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
     expectedSize: number,
   ): Promise<void> {
     if (expectedSize + bytes.byteLength > this.maxJournalBytes) {
@@ -1789,7 +1786,7 @@ export class WorkflowStore {
   }
 
   private async assertCurrentRevision(
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
     expectedRevision: number,
   ): Promise<void> {
     const current = await this.readFromDirectory(directory);
@@ -1800,7 +1797,7 @@ export class WorkflowStore {
 
   private async publish(
     bytes: Buffer,
-    directory: DirectoryIdentity,
+    directory: WorkflowDirectoryIdentity,
     create: boolean,
   ): Promise<void> {
     const temporaryPath = path.join(

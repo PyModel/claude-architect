@@ -8,17 +8,20 @@ import {
   removeExpectedLockPath,
   cleanupOwnedLockPaths,
 } from "../platform/lock-ownership.js";
-import { sameDirectoryIdentity, syncDirectoryMetadata } from "../platform/durable-directory.js";
+import {
+  NO_FOLLOW,
+  sameDirectoryIdentity,
+  syncDirectoryMetadata,
+  type DirectoryIdentity,
+} from "../platform/durable-directory.js";
 import { RuntimeError, isMissing } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { boundedRedactedDiagnostic } from "./redaction.js";
 import {
-  NO_FOLLOW,
   MAX_STATE_FILE_BYTES,
   MAX_STATE_FILE_BYTES_BIGINT,
   MAX_QUARANTINE_REASON_BYTES,
   MAX_QUARANTINE_RECORD_BYTES,
-  type DirectoryIdentity,
   isPlainDirectory,
   validateRunId,
   plainDirectoryIdentity,
@@ -315,9 +318,7 @@ async function publishRecoveryQuarantineJournal(
           && currentSnapshot.journalIdentity.dev === snapshot.journalIdentity.dev
           && currentSnapshot.journalIdentity.ino === snapshot.journalIdentity.ino
           && currentSnapshot.journalIdentity.birthtimeNs === snapshot.journalIdentity.birthtimeNs;
-      if (currentSnapshot.rootIdentity.dev !== snapshot.rootIdentity.dev
-        || currentSnapshot.rootIdentity.ino !== snapshot.rootIdentity.ino
-        || currentSnapshot.rootIdentity.birthtimeNs !== snapshot.rootIdentity.birthtimeNs
+      if (!sameDirectoryIdentity(currentSnapshot.rootIdentity, snapshot.rootIdentity)
         || !sameJournalIdentity
         || !currentSnapshot.bytes.equals(snapshot.bytes)) {
         throw new RuntimeError("recovery quarantine journal changed before publication");
@@ -388,9 +389,7 @@ async function publishRecoveryQuarantineJournal(
     || publishedSnapshot.journalIdentity.dev !== temporaryIdentity.dev
     || publishedSnapshot.journalIdentity.ino !== temporaryIdentity.ino
     || publishedSnapshot.journalIdentity.birthtimeNs !== temporaryIdentity.birthtimeNs
-    || publishedSnapshot.rootIdentity.dev !== snapshot.rootIdentity.dev
-    || publishedSnapshot.rootIdentity.ino !== snapshot.rootIdentity.ino
-    || publishedSnapshot.rootIdentity.birthtimeNs !== snapshot.rootIdentity.birthtimeNs
+    || !sameDirectoryIdentity(publishedSnapshot.rootIdentity, snapshot.rootIdentity)
     || !publishedSnapshot.bytes.equals(nextBytes)) {
     throw new RuntimeError("recovery quarantine journal changed after publication");
   }
@@ -411,9 +410,7 @@ async function appendRecoveryQuarantineRecord(
   if (snapshot.runIds.has(record.runId)) {
     await syncRecoveryDirectory(runsRoot);
     const settledSnapshot = await readRecoveryQuarantineJournal(runsRoot);
-    if (settledSnapshot.rootIdentity.dev !== snapshot.rootIdentity.dev
-      || settledSnapshot.rootIdentity.ino !== snapshot.rootIdentity.ino
-      || settledSnapshot.rootIdentity.birthtimeNs !== snapshot.rootIdentity.birthtimeNs
+    if (!sameDirectoryIdentity(settledSnapshot.rootIdentity, snapshot.rootIdentity)
       || settledSnapshot.journalIdentity === null
       || snapshot.journalIdentity === null
       || settledSnapshot.journalIdentity.dev !== snapshot.journalIdentity.dev
@@ -454,9 +451,7 @@ export async function quarantineRun(
     const quarantineIdentity = await plainDirectoryIdentity(quarantinePath);
     const currentRoot = await lstat(runsRoot, { bigint: true });
     if (quarantineIdentity === null
-      || quarantineIdentity.dev !== runIdentity.dev
-      || quarantineIdentity.ino !== runIdentity.ino
-      || quarantineIdentity.birthtimeNs !== runIdentity.birthtimeNs
+      || !sameDirectoryIdentity(quarantineIdentity, runIdentity)
       || !isPlainDirectory(currentRoot)
       || !sameDirectoryIdentity(currentRoot, runsIdentity)) {
       throw new RuntimeError("poisoned recovery run identity changed during quarantine");

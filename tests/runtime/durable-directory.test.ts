@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
-import { chmod, lstat, mkdir, mkdtemp, open, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, open, rm, rmdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { verifyBoundDirectoryCleanupSupport } from "../../src/platform/bound-directory-cleanup.js";
@@ -9,6 +9,9 @@ import {
   assertWindowsDirectoryWriteIntegrity,
   assertWindowsPrivateDirectory,
   ensurePrivateDirectory,
+  requireBirthtimeIdentity,
+  sameDevIno,
+  sameDirectoryIdentity,
   syncDirectoryMetadata,
   syncDirectoryTreeMetadata,
 } from "../../src/platform/durable-directory.js";
@@ -256,5 +259,53 @@ describe("directory metadata durability", () => {
       syncWindowsDirectory,
     })).rejects.toBe(permissionError);
     expect(syncWindowsDirectory).not.toHaveBeenCalled();
+  });
+});
+
+describe("canonical directory identity", () => {
+  it("rejects a directory removed and recreated at the same path", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ca-directory-identity-"));
+    try {
+      const directory = path.join(root, "target");
+      await mkdir(directory);
+      const original = await lstat(directory, { bigint: true });
+      await rmdir(directory);
+      // Hold the freed inode so the recreated directory cannot reuse it.
+      await mkdir(path.join(root, "placeholder"));
+      await mkdir(directory);
+      const recreated = await lstat(directory, { bigint: true });
+      expect(sameDirectoryIdentity(original, original)).toBe(true);
+      expect(sameDirectoryIdentity(recreated, original)).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("compares all three fields exactly, so two zero birth times are equal", () => {
+    const zero = { dev: 1n, ino: 2n, birthtimeNs: 0n };
+    expect(sameDirectoryIdentity(zero, { ...zero })).toBe(true);
+    expect(sameDirectoryIdentity(zero, { ...zero, birthtimeNs: 5n })).toBe(false);
+    expect(sameDirectoryIdentity({ ...zero, birthtimeNs: 5n }, zero)).toBe(false);
+    expect(sameDirectoryIdentity(zero, { ...zero, ino: 3n })).toBe(false);
+    expect(sameDirectoryIdentity(zero, { ...zero, dev: 3n })).toBe(false);
+  });
+
+  it("refuses a zero birth time when capturing an identity that guards a destructive operation", () => {
+    expect(() => requireBirthtimeIdentity({ dev: 1n, ino: 2n, birthtimeNs: 0n }, "quarantine"))
+      .toThrow("quarantine lacks stable birth-time identity");
+    expect(() => requireBirthtimeIdentity({ dev: 1n, ino: 2n, birthtimeNs: -1n }, "quarantine"))
+      .toThrow("quarantine lacks stable birth-time identity");
+    expect(requireBirthtimeIdentity(
+      { dev: 1n, ino: 2n, birthtimeNs: 7n, size: 9n } as { dev: bigint; ino: bigint; birthtimeNs: bigint },
+      "quarantine",
+    )).toEqual({ dev: 1n, ino: 2n, birthtimeNs: 7n });
+  });
+
+  it("treats device or inode values that differ only above 2^53 as different", () => {
+    const base = 2n ** 60n;
+    expect(Number(base) === Number(base + 1n)).toBe(true); // lossy as a number
+    expect(sameDevIno({ dev: base, ino: 1n }, { dev: base + 1n, ino: 1n })).toBe(false);
+    expect(sameDevIno({ dev: 1n, ino: base }, { dev: 1n, ino: base + 1n })).toBe(false);
+    expect(sameDevIno({ dev: base, ino: base }, { dev: base, ino: base })).toBe(true);
   });
 });

@@ -16,7 +16,7 @@ import {
   acquireWxFileLock, CLEANUP_JOURNAL_LOCK_KEY, withLockContentionDetail,
 } from "./posix-platform-services.js";
 import { normalizeWindowsEnv, windowsEssentialEnvironment } from "./windows-env.js";
-import { assertWindowsDirectoryWriteIntegrity } from "./durable-directory.js";
+import { assertWindowsDirectoryWriteIntegrity, type DirectoryIdentity } from "./durable-directory.js";
 
 const childHandles = new WeakMap<SupervisedProcess, ChildProcess>();
 
@@ -341,7 +341,7 @@ export class WindowsPlatformServices implements PlatformServices {
 
   async assertDirectoryWriteIntegrity(
     directory: string,
-    expectedIdentity: { dev: bigint; ino: bigint; birthtimeNs: bigint },
+    expectedIdentity: DirectoryIdentity,
   ): Promise<void> {
     await assertWindowsDirectoryWriteIntegrity(directory, expectedIdentity, this);
   }

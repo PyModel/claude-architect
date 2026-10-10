@@ -12,8 +12,11 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import {
+  NO_FOLLOW,
   ensurePrivateDirectory as ensurePlatformPrivateDirectory,
+  sameDirectoryIdentity,
   syncDirectoryMetadata,
+  type DirectoryIdentity,
 } from "../platform/durable-directory.js";
 import { RuntimeError, errorCode } from "../util/errors.js";
 import { platformPathsEqual } from "../util/platform-path.js";
@@ -75,15 +78,10 @@ export interface WorktreeRemovalManifestIssue {
   repositoryIdentity?: string;
 }
 
-interface FilesystemIdentity {
-  dev: bigint;
-  ino: bigint;
-  birthtimeNs: bigint;
-}
-
-function sameIdentity(
-  metadata: { dev: bigint; ino: bigint; birthtimeNs: bigint },
-  expected: FilesystemIdentity,
+/** Manifest-file identity; file identity checks keep their own rule. */
+function sameFileIdentity(
+  metadata: DirectoryIdentity,
+  expected: DirectoryIdentity,
 ): boolean {
   return metadata.dev === expected.dev
     && metadata.ino === expected.ino
@@ -95,7 +93,7 @@ function manifestRoot(): string {
   return path.join(resolveStateDir(), MANIFEST_DIRECTORY);
 }
 
-async function ensurePrivateDirectory(directory: string): Promise<FilesystemIdentity> {
+async function ensurePrivateDirectory(directory: string): Promise<DirectoryIdentity> {
   return await ensurePlatformPrivateDirectory(directory, {
     description: "worktree removal manifest directory",
   });
@@ -103,10 +101,12 @@ async function ensurePrivateDirectory(directory: string): Promise<FilesystemIden
 
 async function assertDirectoryIdentity(
   directory: string,
-  expected: FilesystemIdentity,
+  expected: DirectoryIdentity,
 ): Promise<void> {
   const metadata = await lstat(directory, { bigint: true });
-  if (!metadata.isDirectory() || metadata.isSymbolicLink() || !sameIdentity(metadata, expected)) {
+  if (!metadata.isDirectory()
+    || metadata.isSymbolicLink()
+    || !sameDirectoryIdentity(metadata, expected)) {
     throw new RuntimeError("worktree removal manifest directory identity changed");
   }
 }
@@ -123,14 +123,14 @@ async function assertMissing(filename: string, description: string): Promise<voi
 
 async function assertManifestIdentity(
   manifestPath: string,
-  expected: FilesystemIdentity,
+  expected: DirectoryIdentity,
   expectedLinks: bigint,
 ): Promise<void> {
   const metadata = await lstat(manifestPath, { bigint: true });
   if (!metadata.isFile()
     || metadata.isSymbolicLink()
     || metadata.nlink !== expectedLinks
-    || !sameIdentity(metadata, expected)) {
+    || !sameFileIdentity(metadata, expected)) {
     throw new RuntimeError("worktree removal manifest publication identity changed");
   }
 }
@@ -138,9 +138,9 @@ async function assertManifestIdentity(
 async function writeSyncedManifest(
   handle: FileHandle,
   manifest: WorktreeRemovalManifest,
-): Promise<FilesystemIdentity> {
+): Promise<DirectoryIdentity> {
   let primaryError: unknown;
-  let identity: FilesystemIdentity | undefined;
+  let identity: DirectoryIdentity | undefined;
   try {
     await handle.writeFile(`${JSON.stringify(manifest)}\n`);
     await handle.sync();
@@ -316,11 +316,11 @@ export async function verifyWorktreeRemovalManifestStorage(): Promise<void> {
       constants.O_WRONLY
         | constants.O_CREAT
         | constants.O_EXCL
-        | (constants.O_NOFOLLOW ?? 0),
+        | NO_FOLLOW,
       0o600,
     );
     sourceExists = true;
-    let identity: FilesystemIdentity;
+    let identity: DirectoryIdentity;
     try {
       await handle.writeFile("claude-architect hard-link capability probe\n");
       await handle.sync();
@@ -394,7 +394,7 @@ export async function persistWorktreeRemovalManifest(
       constants.O_WRONLY
         | constants.O_CREAT
         | constants.O_EXCL
-        | (constants.O_NOFOLLOW ?? 0),
+        | NO_FOLLOW,
       0o600,
     );
     temporaryExists = true;
@@ -462,7 +462,7 @@ export async function replaceWorktreeRemovalManifest(
       constants.O_WRONLY
         | constants.O_CREAT
         | constants.O_EXCL
-        | (constants.O_NOFOLLOW ?? 0),
+        | NO_FOLLOW,
       0o600,
     );
     temporaryExists = true;
@@ -542,7 +542,7 @@ async function readLinkedManifest(
 ): Promise<Buffer> {
   const handle = await open(
     manifestPath,
-    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+    constants.O_RDONLY | NO_FOLLOW,
   );
   let primaryError: unknown;
   try {
@@ -560,8 +560,8 @@ async function readLinkedManifest(
       || !published.isFile()
       || published.isSymbolicLink()
       || published.nlink !== 2n
-      || !sameIdentity(temporary, opened)
-      || !sameIdentity(published, opened)
+      || !sameFileIdentity(temporary, opened)
+      || !sameFileIdentity(published, opened)
       || temporary.size !== opened.size
       || published.size !== opened.size) {
       throw new RuntimeError("linked worktree removal manifest residue is ambiguous");
@@ -580,14 +580,14 @@ async function readLinkedManifest(
       lstat(manifestPath, { bigint: true }),
     ]);
     if (offset !== size
-      || !sameIdentity(settled, opened)
+      || !sameFileIdentity(settled, opened)
       || settled.nlink !== 2n
       || settled.size !== opened.size
       || settled.mtimeNs !== opened.mtimeNs
       || settled.ctimeNs !== opened.ctimeNs
-      || !sameIdentity(settledTemporary, opened)
+      || !sameFileIdentity(settledTemporary, opened)
       || settledTemporary.nlink !== 2n
-      || !sameIdentity(settledPublished, opened)
+      || !sameFileIdentity(settledPublished, opened)
       || settledPublished.nlink !== 2n) {
       throw new RuntimeError("linked worktree removal manifest residue changed while reading");
     }
@@ -639,7 +639,7 @@ export async function settleLinkedWorktreeRemovalManifest(
     || !published.isFile()
     || published.isSymbolicLink()
     || published.nlink !== 2n
-    || !sameIdentity(temporary, published)) {
+    || !sameFileIdentity(temporary, published)) {
     throw new RuntimeError("linked worktree removal manifest residue is ambiguous");
   }
   const publishedIdentity = {
@@ -680,7 +680,7 @@ export async function assertNoPendingWorktreeRemovalForRepository(
   repositoryIdentity: string,
 ): Promise<void> {
   const root = manifestRoot();
-  let rootIdentity: FilesystemIdentity;
+  let rootIdentity: DirectoryIdentity;
   let entries;
   try {
     rootIdentity = await ensurePlatformPrivateDirectory(root, {
@@ -743,7 +743,7 @@ export async function readPendingWorktreeRemovalManifests(): Promise<{
       }],
     };
   }
-  let rootIdentity: FilesystemIdentity;
+  let rootIdentity: DirectoryIdentity;
   let entries;
   try {
     rootIdentity = await ensurePrivateDirectory(root);
@@ -776,7 +776,7 @@ export async function readPendingWorktreeRemovalManifests(): Promise<{
         if (!published.isFile()
           || published.isSymbolicLink()
           || published.nlink !== 2n
-          || !sameIdentity(published, guard)) {
+          || !sameFileIdentity(published, guard)) {
           throw new RuntimeError("worktree removal manifest guard pair is inconsistent");
         }
       } else {
@@ -815,7 +815,7 @@ export async function readPendingWorktreeRemovalManifests(): Promise<{
         }
       } else if (metadata.length !== 2
         || metadata.some(({ metadata: value }) => value.nlink !== 2n)
-        || !sameIdentity(metadata[0]!.metadata, metadata[1]!.metadata)) {
+        || !sameFileIdentity(metadata[0]!.metadata, metadata[1]!.metadata)) {
         throw new RuntimeError("manifest hard-link probe pair is inconsistent");
       }
       for (const { path: probePath } of metadata.reverse()) {

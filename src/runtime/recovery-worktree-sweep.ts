@@ -10,10 +10,7 @@ import type { AutopilotWorkflowState } from "../autopilot/types.js";
 import { TERMINAL_PHASES, WorkflowStore } from "../autopilot/workflow-store.js";
 import { git } from "../git/git-exec.js";
 import { gitPathOutput } from "../git/git-output.js";
-import {
-  managedWorktreeDirectoryIdentity,
-  type ManagedWorktreeDirectoryIdentity,
-} from "./worktree-manager.js";
+import { managedWorktreeDirectoryIdentity } from "./worktree-manager.js";
 import {
   lockOwnerStatus,
   type LockOwnerStatus,
@@ -23,7 +20,7 @@ import {
   createOwnedLock,
   releaseOwnedLock,
 } from "../platform/lock-ownership.js";
-import { sameDirectoryIdentity } from "../platform/durable-directory.js";
+import { sameDirectoryIdentity, type DirectoryIdentity } from "../platform/durable-directory.js";
 import { RuntimeError } from "../util/errors.js";
 import {
   isManagedWorktreeNamespace,
@@ -34,7 +31,6 @@ import {
   WORKFLOW_WORKTREE_NAME,
   LEGACY_FINAL_WORKTREE_NAME,
   WORKFLOW_OWNERSHIP_NAME,
-  type DirectoryIdentity,
   type WorktreeSweepIssue,
   assertPrivateRecoveryDirectory,
   plainDirectoryIdentity,
@@ -233,7 +229,7 @@ async function sweepOrphanWorktreeRoot(
       ));
       continue;
     }
-    let expectedIdentity: ManagedWorktreeDirectoryIdentity;
+    let expectedIdentity: DirectoryIdentity;
     try {
       const identity = await managedWorktreeDirectoryIdentity(worktreePath);
       if (identity === null) continue;
@@ -372,9 +368,7 @@ async function sweepOrphanWorktreeRoot(
     try {
       const currentIdentity = await managedWorktreeDirectoryIdentity(worktreePath);
       if (currentIdentity !== null) {
-        if (currentIdentity.dev !== expectedIdentity.dev
-          || currentIdentity.ino !== expectedIdentity.ino
-          || currentIdentity.birthtimeNs !== expectedIdentity.birthtimeNs) {
+        if (!sameDirectoryIdentity(currentIdentity, expectedIdentity)) {
           throw new RuntimeError("worktree directory identity changed after lease acquisition");
         }
         let workflowClaimed = false;

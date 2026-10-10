@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
+import { NO_FOLLOW } from "../platform/durable-directory.js";
 import { lstat, open, readdir, realpath, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import nodeProcess from "node:process";
@@ -43,7 +44,6 @@ const MAX_CHECKOUT_LOCK_BYTES = 4_096;
 const MAX_AUTOPILOT_OWNER_BYTES = 1_024;
 const MAX_AUTOPILOT_REGISTRATION_BYTES = 32_768;
 const MAX_AUTOPILOT_SCAN_ENTRIES = 1_024;
-const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const WORKFLOW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const OID = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
 

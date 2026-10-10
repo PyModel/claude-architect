@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
-import { ensurePrivateDirectory, syncDirectoryMetadata } from "../platform/durable-directory.js";
+import { NO_FOLLOW, ensurePrivateDirectory, syncDirectoryMetadata } from "../platform/durable-directory.js";
 import { openDurableDirectorySession, writeAtomic } from "../platform/durable-write.js";
 import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
 import { platformPathsEqual } from "../util/platform-path.js";
@@ -123,7 +123,7 @@ async function ensureNamespaceIgnored(
   try {
     const handle = await open(
       ignorePath,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0),
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
       0o600,
     );
     try {
