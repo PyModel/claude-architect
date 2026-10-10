@@ -1,14 +1,20 @@
+import { realpathSync } from "node:fs";
 import { mkdtemp, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { git } from "../../src/git/git-exec.js";
+import { getPlatformServices } from "../../src/platform/select-platform.js";
 import { recoverPendingWorktreeRemovals } from "../../src/runtime/recovery-worktree-removals.js";
 import {
   managedWorktreeDirectoryIdentity,
   WorktreeManager,
 } from "../../src/runtime/worktree-manager.js";
-import { readPendingWorktreeRemovalManifests } from "../../src/runtime/worktree-transaction.js";
+import {
+  readPendingWorktreeRemovalManifests,
+  type WorktreeTransactionPhase,
+  type WorktreeTransactionPhaseObserver,
+} from "../../src/runtime/worktree-transaction.js";
 
 let temporaryPaths: string[] = [];
 let previousPluginData: string | undefined;
@@ -138,4 +144,80 @@ describe("worktree transaction", () => {
     expect(await registeredWorktrees(directory)).not.toContain(physicalPath);
     expect(await manifestNames()).toEqual([]);
   });
+
+  type Outcome = "rolled back" | "fully created" | "fully removed";
+  const crashTable: Array<{
+    operation: "create" | "remove";
+    phase: WorktreeTransactionPhase;
+    write: number;
+    outcome: Outcome;
+  }> = [
+    { operation: "create", phase: "creation-intent", write: 1, outcome: "rolled back" },
+    { operation: "create", phase: "creation-intent", write: 2, outcome: "rolled back" },
+    { operation: "remove", phase: "registration-intent", write: 1, outcome: "fully created" },
+    { operation: "remove", phase: "registration-staged", write: 1, outcome: "fully created" },
+    { operation: "remove", phase: "physical-removal-intent", write: 1, outcome: "fully created" },
+    { operation: "remove", phase: "physical-removal-started", write: 1, outcome: "fully removed" },
+    { operation: "remove", phase: "physical-removed", write: 1, outcome: "fully removed" },
+  ];
+
+  it.each(crashTable)(
+    "recovers a $operation crash after $phase write $write as $outcome",
+    async ({ operation, phase, write, outcome }) => {
+      const { directory, base } = await initRepo();
+      const runId = "run-crash-table";
+      const worktreePath = join(
+        realpathSync.native(directory),
+        ".worktrees",
+        "claude-architect",
+        runId,
+      );
+      if (operation === "remove") {
+        await new WorktreeManager(directory, runId).create(base);
+      }
+      // The crashed process held the checkout lock; its death releases it.
+      const lease = await getPlatformServices().acquireCheckoutLock(directory);
+      let writes = 0;
+      let crashed!: () => void;
+      const crash = new Promise<void>(resolve => { crashed = resolve; });
+      const afterTransactionPhase: WorktreeTransactionPhaseObserver = async recorded => {
+        if (recorded !== phase || ++writes !== write) return;
+        crashed();
+        // Nothing after this durable write ever runs, exactly as in a crash.
+        await new Promise<never>(() => {});
+      };
+      const manager = new WorktreeManager(directory, runId, undefined, {
+        borrowedCheckoutLease: lease,
+        afterTransactionPhase,
+      });
+      const interrupted = operation === "create"
+        ? manager.create(base)
+        : manager.remove(worktreePath);
+      await Promise.race([
+        crash,
+        interrupted.then(() => { throw new Error(`${operation} finished without reaching ${phase}`); }),
+      ]);
+      await lease.release();
+      expect(await manifestNames()).toHaveLength(1);
+
+      await expect(recoverPendingWorktreeRemovals()).resolves.toEqual([]);
+
+      expect(await manifestNames()).toEqual([]);
+      const registered = await registeredWorktrees(directory);
+      if (outcome === "fully created") {
+        await expect(stat(worktreePath)).resolves.toBeDefined();
+        expect(registered).toContain(await realpath(worktreePath));
+        await expect(runGit(worktreePath, ["rev-parse", "HEAD"])).resolves.toBe(base);
+      } else {
+        await expect(stat(worktreePath)).rejects.toMatchObject({ code: "ENOENT" });
+        expect(registered).toHaveLength(1);
+        // Only the namespace's own ignore file remains: no placeholder or quarantine.
+        expect(await readdir(dirname(worktreePath))).toEqual([".gitignore"]);
+      }
+      const commonDir = await realpath(await runGit(directory, [
+        "rev-parse", "--path-format=absolute", "--git-common-dir",
+      ]));
+      expect(await readdir(join(commonDir, "claude-architect-quarantine"))).toEqual([]);
+    },
+  );
 });
