@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { link, lstat, mkdir, open, type FileHandle } from "node:fs/promises";
 import path from "node:path";
@@ -17,6 +17,7 @@ import {
   readHandleBytes,
   reclaimDeadLock,
   removeLockIfUnchanged,
+  temporaryLockFileName,
   withLockContentionDetail,
   type DeadLockReclaimResult,
 } from "./lock-ownership.js";
@@ -303,7 +304,7 @@ export async function tryAcquireLock(
   if (parentIdentity === null) {
     throw new RuntimeError("lock parent must remain a plain directory");
   }
-  const temporaryPath = path.join(parentPath, `.recovery-lock-${randomUUID()}.tmp`);
+  const temporaryPath = path.join(parentPath, temporaryLockFileName());
   let handle: FileHandle | undefined;
   let temporaryIdentity: DirectoryIdentity | undefined;
   let temporaryCreated = false;
