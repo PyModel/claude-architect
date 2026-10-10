@@ -41060,7 +41060,7 @@ import path31 from "node:path";
 
 // src/runtime/worktree-manager.ts
 import { randomUUID as randomUUID5 } from "node:crypto";
-import { lstat as lstat14, mkdir as mkdir7, readdir as readdir7, realpath as realpath8, rename as rename3 } from "node:fs/promises";
+import { lstat as lstat14, mkdir as mkdir7, readdir as readdir7, realpath as realpath8, rename as rename2 } from "node:fs/promises";
 import path23 from "node:path";
 
 // src/platform/bound-directory-cleanup.ts
@@ -41522,7 +41522,7 @@ async function emptyBoundDirectory(directory, boundIdentity, platformServices) {
   }
 }
 
-// src/runtime/worktree-removal-manifest.ts
+// src/runtime/worktree-transaction.ts
 import { randomUUID as randomUUID4 } from "node:crypto";
 import { constants as constants12 } from "node:fs";
 import {
@@ -41531,17 +41531,24 @@ import {
   open as open12,
   readdir as readdir6,
   realpath as realpath7,
-  rename as rename2,
   rm as rm6
 } from "node:fs/promises";
 import path22 from "node:path";
 var MANIFEST_DIRECTORY = "worktree-removals";
 var MANIFEST_NAME = /^([a-z0-9][a-z0-9-]{0,127})\.json$/i;
-var TEMPORARY_MANIFEST_NAME = /^\.([a-z0-9][a-z0-9-]{0,127})\.[0-9a-f-]{36}\.tmp$/i;
+var TEMPORARY_MANIFEST_NAME = /^\.([a-z0-9][a-z0-9-]{0,127})(?:\.json)?\.[0-9a-f-]{36}\.tmp$/i;
 var HARDLINK_PROBE_NAME = /^\.hardlink-probe-([0-9a-f-]{36})\.(source|linked)$/i;
 var MANIFEST_REMOVAL_GUARD = /^\.remove-manifest-([a-z0-9][a-z0-9-]{0,127})\.[0-9a-f-]{36}\.guard$/i;
 var MANIFEST_VERSION = "1";
 var MAX_MANIFEST_BYTES = 32768n;
+var WORKTREE_TRANSACTION_PHASES = [
+  "registration-intent",
+  "registration-staged",
+  "physical-removal-intent",
+  "physical-removal-started",
+  "physical-removed",
+  "creation-intent"
+];
 function sameFileIdentity(metadata, expected) {
   return metadata.dev === expected.dev && metadata.ino === expected.ino && metadata.birthtimeNs > 0n && metadata.birthtimeNs === expected.birthtimeNs;
 }
@@ -41573,41 +41580,6 @@ async function assertManifestIdentity(manifestPath, expected, expectedLinks) {
   if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== expectedLinks || !sameFileIdentity(metadata, expected)) {
     throw new RuntimeError("worktree removal manifest publication identity changed");
   }
-}
-async function writeSyncedManifest(handle, manifest) {
-  let primaryError;
-  let identity;
-  try {
-    await handle.writeFile(`${JSON.stringify(manifest)}
-`);
-    await handle.sync();
-    const metadata = await handle.stat({ bigint: true });
-    if (!metadata.isFile() || metadata.birthtimeNs <= 0n) {
-      throw new RuntimeError("worktree removal manifest temporary file lacks stable identity");
-    }
-    identity = {
-      dev: metadata.dev,
-      ino: metadata.ino,
-      birthtimeNs: metadata.birthtimeNs
-    };
-  } catch (error51) {
-    primaryError = error51;
-    throw error51;
-  } finally {
-    try {
-      await handle.close();
-    } catch (closeError) {
-      if (primaryError === void 0) throw closeError;
-      throw new AggregateError(
-        [primaryError, closeError],
-        "manifest write failed and its handle could not be closed"
-      );
-    }
-  }
-  if (identity === void 0) {
-    throw new RuntimeError("worktree removal manifest temporary identity is unavailable");
-  }
-  return identity;
 }
 function validateManifestPath(manifestPath, transactionId) {
   const root = manifestRoot();
@@ -41660,15 +41632,7 @@ function parseManifest(contents, transactionId) {
     "transactionId"
   ].sort();
   const keys = Object.keys(record2).sort();
-  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index]) || record2.manifestVersion !== MANIFEST_VERSION || record2.transactionId !== transactionId || typeof record2.phase !== "string" || ![
-    "registration-intent",
-    "registration-staged",
-    "physical-removal-intent",
-    "physical-removal-started",
-    "physical-removed",
-    "creation-intent",
-    "creation-root-changed"
-  ].includes(record2.phase) || typeof record2.commonDir !== "string" || typeof record2.commonDirBirthtimeNs !== "string" || !/^\d+$/u.test(record2.commonDirBirthtimeNs) || typeof record2.commonDirDev !== "string" || !/^\d+$/u.test(record2.commonDirDev) || typeof record2.commonDirIno !== "string" || !/^\d+$/u.test(record2.commonDirIno) || typeof record2.physicalPresent !== "boolean" || typeof record2.physicalPath !== "string" || typeof record2.physicalQuarantinePath !== "string" || typeof record2.physicalBirthtimeNs !== "string" || !/^\d+$/u.test(record2.physicalBirthtimeNs) || typeof record2.physicalDev !== "string" || !/^\d+$/u.test(record2.physicalDev) || typeof record2.physicalIno !== "string" || !/^\d+$/u.test(record2.physicalIno) || typeof record2.physicalRootBirthtimeNs !== "string" || !/^\d+$/u.test(record2.physicalRootBirthtimeNs) || typeof record2.physicalRootDev !== "string" || !/^\d+$/u.test(record2.physicalRootDev) || typeof record2.physicalRootIno !== "string" || !/^\d+$/u.test(record2.physicalRootIno) || typeof record2.registrationRoot !== "string" || typeof record2.registrationRootBirthtimeNs !== "string" || !/^\d+$/u.test(record2.registrationRootBirthtimeNs) || typeof record2.registrationRootDev !== "string" || !/^\d+$/u.test(record2.registrationRootDev) || typeof record2.registrationRootIno !== "string" || !/^\d+$/u.test(record2.registrationRootIno) || typeof record2.registrationPath !== "string" || typeof record2.quarantineRoot !== "string" || typeof record2.quarantineRootBirthtimeNs !== "string" || !/^\d+$/u.test(record2.quarantineRootBirthtimeNs) || typeof record2.quarantineRootDev !== "string" || !/^\d+$/u.test(record2.quarantineRootDev) || typeof record2.quarantineRootIno !== "string" || !/^\d+$/u.test(record2.quarantineRootIno) || typeof record2.quarantinePath !== "string" || typeof record2.registrationBirthtimeNs !== "string" || !/^\d+$/u.test(record2.registrationBirthtimeNs) || typeof record2.registrationDev !== "string" || !/^\d+$/u.test(record2.registrationDev) || typeof record2.registrationIno !== "string" || !/^\d+$/u.test(record2.registrationIno) || ![
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index]) || record2.manifestVersion !== MANIFEST_VERSION || record2.transactionId !== transactionId || typeof record2.phase !== "string" || !WORKTREE_TRANSACTION_PHASES.includes(record2.phase) || typeof record2.commonDir !== "string" || typeof record2.commonDirBirthtimeNs !== "string" || !/^\d+$/u.test(record2.commonDirBirthtimeNs) || typeof record2.commonDirDev !== "string" || !/^\d+$/u.test(record2.commonDirDev) || typeof record2.commonDirIno !== "string" || !/^\d+$/u.test(record2.commonDirIno) || typeof record2.physicalPresent !== "boolean" || typeof record2.physicalPath !== "string" || typeof record2.physicalQuarantinePath !== "string" || typeof record2.physicalBirthtimeNs !== "string" || !/^\d+$/u.test(record2.physicalBirthtimeNs) || typeof record2.physicalDev !== "string" || !/^\d+$/u.test(record2.physicalDev) || typeof record2.physicalIno !== "string" || !/^\d+$/u.test(record2.physicalIno) || typeof record2.physicalRootBirthtimeNs !== "string" || !/^\d+$/u.test(record2.physicalRootBirthtimeNs) || typeof record2.physicalRootDev !== "string" || !/^\d+$/u.test(record2.physicalRootDev) || typeof record2.physicalRootIno !== "string" || !/^\d+$/u.test(record2.physicalRootIno) || typeof record2.registrationRoot !== "string" || typeof record2.registrationRootBirthtimeNs !== "string" || !/^\d+$/u.test(record2.registrationRootBirthtimeNs) || typeof record2.registrationRootDev !== "string" || !/^\d+$/u.test(record2.registrationRootDev) || typeof record2.registrationRootIno !== "string" || !/^\d+$/u.test(record2.registrationRootIno) || typeof record2.registrationPath !== "string" || typeof record2.quarantineRoot !== "string" || typeof record2.quarantineRootBirthtimeNs !== "string" || !/^\d+$/u.test(record2.quarantineRootBirthtimeNs) || typeof record2.quarantineRootDev !== "string" || !/^\d+$/u.test(record2.quarantineRootDev) || typeof record2.quarantineRootIno !== "string" || !/^\d+$/u.test(record2.quarantineRootIno) || typeof record2.quarantinePath !== "string" || typeof record2.registrationBirthtimeNs !== "string" || !/^\d+$/u.test(record2.registrationBirthtimeNs) || typeof record2.registrationDev !== "string" || !/^\d+$/u.test(record2.registrationDev) || typeof record2.registrationIno !== "string" || !/^\d+$/u.test(record2.registrationIno) || ![
     record2.commonDir,
     record2.physicalPath,
     record2.physicalQuarantinePath,
@@ -41740,129 +41704,31 @@ async function verifyWorktreeRemovalManifestStorage() {
     );
   }
 }
-function validateManifestForWrite(manifest) {
+function manifestBytes(manifest) {
   const bytes = Buffer.from(`${JSON.stringify(manifest)}
 `);
   if (BigInt(bytes.byteLength) > MAX_MANIFEST_BYTES) {
     throw new RuntimeError("worktree removal manifest exceeds its recovery size limit");
   }
   parseManifest(bytes, manifest.transactionId);
+  return bytes;
+}
+async function manifestSession(root) {
+  return new DurableDirectorySession(root, await ensurePrivateDirectory2(root));
 }
 async function persistWorktreeRemovalManifest(manifest) {
   if (!MANIFEST_NAME.test(`${manifest.transactionId}.json`)) {
     throw new RuntimeError("worktree removal transaction id is invalid");
   }
-  validateManifestForWrite(manifest);
+  const bytes = manifestBytes(manifest);
   const root = manifestRoot();
-  const rootIdentity = await ensurePrivateDirectory2(root);
-  const manifestPath = path22.join(root, `${manifest.transactionId}.json`);
-  const temporaryPath = path22.join(
-    root,
-    `.${manifest.transactionId}.${randomUUID4()}.tmp`
-  );
-  let temporaryExists = false;
-  let manifestExists = false;
-  try {
-    const handle = await open12(
-      temporaryPath,
-      constants12.O_WRONLY | constants12.O_CREAT | constants12.O_EXCL | NO_FOLLOW,
-      384
-    );
-    temporaryExists = true;
-    const temporaryIdentity = await writeSyncedManifest(handle, manifest);
-    await assertDirectoryIdentity3(root, rootIdentity);
-    await assertManifestIdentity(temporaryPath, temporaryIdentity, 1n);
-    await link3(temporaryPath, manifestPath);
-    manifestExists = true;
-    await assertDirectoryIdentity3(root, rootIdentity);
-    await Promise.all([
-      assertManifestIdentity(temporaryPath, temporaryIdentity, 2n),
-      assertManifestIdentity(manifestPath, temporaryIdentity, 2n)
-    ]);
-    await rm6(temporaryPath);
-    temporaryExists = false;
-    await assertDirectoryIdentity3(root, rootIdentity);
-    await assertManifestIdentity(manifestPath, temporaryIdentity, 1n);
-    await syncDirectoryMetadata(root);
-    await assertDirectoryIdentity3(root, rootIdentity);
-    await assertManifestIdentity(manifestPath, temporaryIdentity, 1n);
-    return manifestPath;
-  } catch (error51) {
-    const cleanupErrors = [];
-    try {
-      await assertDirectoryIdentity3(root, rootIdentity);
-    } catch (identityError) {
-      cleanupErrors.push(identityError);
-      temporaryExists = false;
-      manifestExists = false;
-    }
-    if (temporaryExists) {
-      try {
-        await rm6(temporaryPath, { force: true });
-      } catch (cleanupError) {
-        cleanupErrors.push(cleanupError);
-      }
-    }
-    if (manifestExists) {
-      try {
-        await rm6(manifestPath, { force: true });
-      } catch (cleanupError) {
-        cleanupErrors.push(cleanupError);
-      }
-    }
-    if (cleanupErrors.length > 0) {
-      throw new AggregateError(
-        [error51, ...cleanupErrors],
-        "worktree removal manifest persistence and rollback failed"
-      );
-    }
-    throw error51;
-  }
+  await publishExclusive(await manifestSession(root), `${manifest.transactionId}.json`, bytes);
+  return path22.join(root, `${manifest.transactionId}.json`);
 }
 async function replaceWorktreeRemovalManifest(manifestPath, manifest) {
-  validateManifestForWrite(manifest);
+  const bytes = manifestBytes(manifest);
   const root = validateManifestPath(manifestPath, manifest.transactionId);
-  const rootIdentity = await ensurePrivateDirectory2(root);
-  const temporaryPath = path22.join(
-    root,
-    `.${manifest.transactionId}.${randomUUID4()}.tmp`
-  );
-  let temporaryExists = false;
-  let primaryError;
-  try {
-    const handle = await open12(
-      temporaryPath,
-      constants12.O_WRONLY | constants12.O_CREAT | constants12.O_EXCL | NO_FOLLOW,
-      384
-    );
-    temporaryExists = true;
-    const temporaryIdentity = await writeSyncedManifest(handle, manifest);
-    await assertDirectoryIdentity3(root, rootIdentity);
-    await assertManifestIdentity(temporaryPath, temporaryIdentity, 1n);
-    await rename2(temporaryPath, manifestPath);
-    temporaryExists = false;
-    await assertDirectoryIdentity3(root, rootIdentity);
-    await assertManifestIdentity(manifestPath, temporaryIdentity, 1n);
-    await syncDirectoryMetadata(root);
-    await assertDirectoryIdentity3(root, rootIdentity);
-    await assertManifestIdentity(manifestPath, temporaryIdentity, 1n);
-  } catch (error51) {
-    primaryError = error51;
-    throw error51;
-  } finally {
-    if (temporaryExists) {
-      try {
-        await assertDirectoryIdentity3(root, rootIdentity);
-        await rm6(temporaryPath, { force: true });
-      } catch (cleanupError) {
-        if (primaryError === void 0) throw cleanupError;
-        throw new AggregateError(
-          [primaryError, cleanupError],
-          "worktree removal manifest replacement and rollback failed"
-        );
-      }
-    }
-  }
+  await writeAtomic(await manifestSession(root), path22.basename(manifestPath), bytes, "replace");
 }
 async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
   const root = validateManifestPath(manifestPath, transactionId);
@@ -42197,6 +42063,149 @@ async function readPendingWorktreeRemovalManifests() {
   }
   return { pending, issues };
 }
+async function beginWorktreeCreation(record2, afterPhase) {
+  if (record2.physicalPresent) {
+    throw new RuntimeError("worktree creation intent must start without a placeholder");
+  }
+  const { transactionId, ...fields } = record2;
+  const manifest = {
+    manifestVersion: MANIFEST_VERSION,
+    transactionId,
+    phase: "creation-intent",
+    ...fields
+  };
+  const manifestPath = await persistWorktreeRemovalManifest(manifest);
+  await afterPhase?.(manifest.phase);
+  return { manifestPath, manifest };
+}
+async function bindWorktreeCreationPlaceholder(creation, placeholder, afterPhase) {
+  if (creation.manifest.phase !== "creation-intent" || creation.manifest.physicalPresent) {
+    throw new RuntimeError("worktree creation placeholder is already bound");
+  }
+  const manifest = {
+    ...creation.manifest,
+    physicalPresent: true,
+    physicalDev: placeholder.dev.toString(),
+    physicalIno: placeholder.ino.toString(),
+    physicalBirthtimeNs: placeholder.birthtimeNs.toString()
+  };
+  await replaceWorktreeRemovalManifest(creation.manifestPath, manifest);
+  await afterPhase?.(manifest.phase);
+  return { manifestPath: creation.manifestPath, manifest };
+}
+async function rollbackPrecommit(manifestPath, transactionId, staged, primaryError) {
+  try {
+    await staged.rollback();
+    await removeWorktreeRemovalManifest(manifestPath, transactionId);
+  } catch (rollbackError) {
+    throw new AggregateError(
+      [primaryError, rollbackError],
+      "worktree removal failed before commit and its rollback did not complete"
+    );
+  }
+  throw primaryError;
+}
+async function coordinateWorktreeRemoval(coordination) {
+  let manifest = {
+    manifestVersion: MANIFEST_VERSION,
+    phase: "registration-intent",
+    ...coordination.transaction
+  };
+  const manifestPath = await persistWorktreeRemovalManifest(manifest);
+  const record2 = async (next) => {
+    await replaceWorktreeRemovalManifest(manifestPath, next);
+    manifest = next;
+    await coordination.afterPhase?.(next.phase);
+  };
+  await coordination.afterPhase?.(manifest.phase);
+  let staged;
+  try {
+    staged = await coordination.stageRegistration();
+  } catch (stageError) {
+    let rolledBack;
+    try {
+      rolledBack = await coordination.stageFailureWasRolledBack();
+    } catch (observationError) {
+      throw new AggregateError(
+        [stageError, observationError],
+        "worktree registration staging failed and rollback state is ambiguous"
+      );
+    }
+    if (rolledBack) {
+      try {
+        await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
+      } catch (manifestError) {
+        throw new AggregateError(
+          [stageError, manifestError],
+          "worktree registration staging failed and its manifest could not be removed"
+        );
+      }
+    }
+    throw stageError;
+  }
+  try {
+    await record2({ ...manifest, phase: "registration-staged" });
+    await record2({ ...manifest, phase: "physical-removal-intent" });
+    await coordination.removePhysical(async () => {
+      await record2({ ...manifest, phase: "physical-removal-started" });
+    });
+  } catch (precommitError) {
+    if (manifest.phase === "physical-removal-started") throw precommitError;
+    let unchanged;
+    try {
+      unchanged = await coordination.physicalIsUnchanged();
+    } catch (observationError) {
+      throw new AggregateError(
+        [precommitError, observationError],
+        "worktree removal failed and physical rollback state is ambiguous"
+      );
+    }
+    if (unchanged) {
+      return await rollbackPrecommit(
+        manifestPath,
+        manifest.transactionId,
+        staged,
+        precommitError
+      );
+    }
+    throw precommitError;
+  }
+  await record2({ ...manifest, phase: "physical-removed" });
+  await staged.commit();
+  await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
+}
+function isWorktreeCreationTransaction(manifest) {
+  return manifest.phase === "creation-intent";
+}
+function planWorktreeRemovalReplay(manifest, observed) {
+  const { phase, physicalPresent } = manifest;
+  const { registrationActive, physicalAtPath, physicalInQuarantine } = observed;
+  if (phase === "creation-intent") {
+    throw new RuntimeError("worktree creation transaction is not a removal");
+  }
+  const committed = phase === "physical-removed";
+  if (!registrationActive && !committed) {
+    throw new RuntimeError("worktree removal registration disappeared before commit");
+  }
+  if (committed && (physicalAtPath || physicalInQuarantine)) {
+    throw new RuntimeError("committed physical worktree removal reappeared");
+  }
+  if (phase === "physical-removal-intent" && physicalPresent && !physicalAtPath && !physicalInQuarantine) {
+    throw new RuntimeError(
+      "intended physical worktree removal has no provable original or quarantine"
+    );
+  }
+  const physicalGone = !physicalAtPath && !physicalInQuarantine;
+  const rollback = phase === "registration-intent" ? !physicalPresent || physicalAtPath : phase === "physical-removal-intent" ? physicalPresent ? !physicalGone : physicalGone : phase === "registration-staged" && (physicalPresent ? physicalAtPath : physicalGone);
+  if (!rollback && phase === "registration-staged") {
+    throw new RuntimeError("staged worktree removal physical state is inconsistent");
+  }
+  return {
+    action: rollback ? "rollback" : "complete",
+    verifyRegistrationBacklink: registrationActive && !committed,
+    quarantinePhysical: !rollback && phase === "physical-removal-started" && physicalAtPath
+  };
+}
 
 // src/platform/platform-safety.ts
 var PlatformSafety = class {
@@ -42271,91 +42280,6 @@ var PlatformSafety = class {
   }
 };
 var platformSafety = new PlatformSafety();
-
-// src/runtime/worktree-removal-coordinator.ts
-async function rollbackPrecommit(manifestPath, transactionId, staged, primaryError) {
-  try {
-    await staged.rollback();
-    await removeWorktreeRemovalManifest(manifestPath, transactionId);
-  } catch (rollbackError) {
-    throw new AggregateError(
-      [primaryError, rollbackError],
-      "worktree removal failed before commit and its rollback did not complete"
-    );
-  }
-  throw primaryError;
-}
-async function coordinateWorktreeRemoval(coordination) {
-  let manifest = {
-    manifestVersion: "1",
-    phase: "registration-intent",
-    ...coordination.transaction
-  };
-  const manifestPath = await persistWorktreeRemovalManifest(manifest);
-  let staged;
-  try {
-    staged = await coordination.stageRegistration();
-  } catch (stageError) {
-    let rolledBack;
-    try {
-      rolledBack = await coordination.stageFailureWasRolledBack();
-    } catch (observationError) {
-      throw new AggregateError(
-        [stageError, observationError],
-        "worktree registration staging failed and rollback state is ambiguous"
-      );
-    }
-    if (rolledBack) {
-      try {
-        await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
-      } catch (manifestError) {
-        throw new AggregateError(
-          [stageError, manifestError],
-          "worktree registration staging failed and its manifest could not be removed"
-        );
-      }
-    }
-    throw stageError;
-  }
-  try {
-    manifest = { ...manifest, phase: "registration-staged" };
-    await replaceWorktreeRemovalManifest(manifestPath, manifest);
-    manifest = { ...manifest, phase: "physical-removal-intent" };
-    await replaceWorktreeRemovalManifest(manifestPath, manifest);
-    await coordination.removePhysical(async () => {
-      const removalStarted = {
-        ...manifest,
-        phase: "physical-removal-started"
-      };
-      await replaceWorktreeRemovalManifest(manifestPath, removalStarted);
-      manifest = removalStarted;
-    });
-  } catch (precommitError) {
-    if (manifest.phase === "physical-removal-started") throw precommitError;
-    let unchanged;
-    try {
-      unchanged = await coordination.physicalIsUnchanged();
-    } catch (observationError) {
-      throw new AggregateError(
-        [precommitError, observationError],
-        "worktree removal failed and physical rollback state is ambiguous"
-      );
-    }
-    if (unchanged) {
-      return await rollbackPrecommit(
-        manifestPath,
-        manifest.transactionId,
-        staged,
-        precommitError
-      );
-    }
-    throw precommitError;
-  }
-  manifest = { ...manifest, phase: "physical-removed" };
-  await replaceWorktreeRemovalManifest(manifestPath, manifest);
-  await staged.commit();
-  await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
-}
 
 // src/runtime/worktree-manager.ts
 var MAX_DIAGNOSTIC_LENGTH3 = 2e3;
@@ -42484,7 +42408,7 @@ async function removeDirectoryByQuarantine(root, target, quarantineLabel, option
   if (path23.dirname(quarantinePath) !== quarantineRoot) {
     throw new RuntimeError("managed worktree quarantine path escaped its root");
   }
-  const move = options.rename ?? rename3;
+  const move = options.rename ?? rename2;
   const wait = options.delay ?? delay2;
   let moveError;
   let moved = false;
@@ -42732,7 +42656,7 @@ async function restoreStagedRegistration(registrationRoot, registrationPath, qua
   if (registrationRootIdentity === null || !sameDirectoryIdentity(registrationRootIdentity, expectedRegistrationRootIdentity) || quarantineRootIdentity === null || !sameDirectoryIdentity(quarantineRootIdentity, expectedQuarantineRootIdentity) || sourceIdentity === null || !sameDirectoryIdentity(sourceIdentity, expectedIdentity) || destinationIdentity !== null) {
     throw new RuntimeError("staged worktree registration rollback is unsafe");
   }
-  const move = dependencies.rename ?? rename3;
+  const move = dependencies.rename ?? rename2;
   const wait = dependencies.delay ?? delay2;
   let moveError;
   let restored = false;
@@ -43044,6 +42968,7 @@ async function removeStaleWorktreeRegistration(repoRoot, worktreePath, worktreeG
     )
   ]);
   await coordinateWorktreeRemoval({
+    afterPhase: dependencies.afterTransactionPhase,
     transaction: {
       transactionId,
       commonDir: registration.commonDir,
@@ -43171,6 +43096,7 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
     )
   ]);
   await coordinateWorktreeRemoval({
+    afterPhase: dependencies.afterTransactionPhase,
     transaction: {
       transactionId,
       commonDir: registration.commonDir,
@@ -43241,8 +43167,6 @@ async function removeRegisteredWorktree(repoRoot, worktreePath, dependencies = {
     }
   });
 }
-var WorktreeRootChangedError = class extends RuntimeError {
-};
 var WorktreeManager = class {
   constructor(repoRoot, runId, platformServices = getPlatformServices(), dependencies = {}) {
     this.repoRoot = repoRoot;
@@ -43382,10 +43306,8 @@ var WorktreeManager = class {
       worktreesRoot,
       `.create-${path23.basename(worktreePath)}-${transactionId}`
     );
-    let manifest = {
-      manifestVersion: "1",
+    const intent = await beginWorktreeCreation({
       transactionId,
-      phase: "creation-intent",
       commonDir,
       commonDirDev: commonDirIdentity.dev.toString(),
       commonDirIno: commonDirIdentity.ino.toString(),
@@ -43412,8 +43334,7 @@ var WorktreeManager = class {
       registrationDev: "0",
       registrationIno: "0",
       registrationBirthtimeNs: "0"
-    };
-    const manifestPath = await persistWorktreeRemovalManifest(manifest);
+    }, this.dependencies.afterTransactionPhase);
     await assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root");
     await mkdir7(stagingPath, { mode: 448 });
     await syncChangedDirectories(this.dependencies, worktreesRoot);
@@ -43422,16 +43343,13 @@ var WorktreeManager = class {
       "worktree creation placeholder"
     );
     await assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root");
-    manifest = {
-      ...manifest,
-      physicalPresent: true,
-      physicalDev: physicalIdentity.dev.toString(),
-      physicalIno: physicalIdentity.ino.toString(),
-      physicalBirthtimeNs: physicalIdentity.birthtimeNs.toString()
-    };
-    await replaceWorktreeRemovalManifest(manifestPath, manifest);
+    const { manifestPath } = await bindWorktreeCreationPlaceholder(
+      intent,
+      physicalIdentity,
+      this.dependencies.afterTransactionPhase
+    );
     await assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root");
-    await (this.dependencies.rename ?? rename3)(stagingPath, worktreePath);
+    await (this.dependencies.rename ?? rename2)(stagingPath, worktreePath);
     await syncChangedDirectories(this.dependencies, worktreesRoot);
     await Promise.all([
       assertDirectoryIdentity4(worktreesRoot, rootIdentity, "managed worktree root"),
@@ -43442,7 +43360,7 @@ var WorktreeManager = class {
   async captureCreatedIdentity(worktreePath, worktreesRoot, expectedRootIdentity) {
     const settledRootIdentity = await managedWorktreeDirectoryIdentity(worktreesRoot);
     if (settledRootIdentity === null || !sameDirectoryIdentity(settledRootIdentity, expectedRootIdentity)) {
-      throw new WorktreeRootChangedError(
+      throw new RuntimeError(
         "managed worktree root identity changed during creation"
       );
     }
@@ -44444,7 +44362,7 @@ import {
   opendir,
   readdir as readdir8,
   realpath as realpath11,
-  rename as rename4,
+  rename as rename3,
   rm as rm8
 } from "node:fs/promises";
 import path27 from "node:path";
@@ -46173,7 +46091,7 @@ var ArtifactStore = class _ArtifactStore {
     const runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
     await assertDirectoryIdentity5(entry.directory, entry.identity);
     await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
-    await rename4(entry.directory, quarantinePath);
+    await rename3(entry.directory, quarantinePath);
     await flushDirectory(this.runsRoot);
     await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
     await assertDirectoryIdentity5(quarantinePath, entry.identity);
@@ -46287,7 +46205,7 @@ var ArtifactStore = class _ArtifactStore {
           runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
           await assertDirectoryIdentity5(entry.directory, entry.identity);
           await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
-          await rename4(entry.directory, quarantinePath);
+          await rename3(entry.directory, quarantinePath);
           await flushDirectory(this.runsRoot);
           await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
           await assertDirectoryIdentity5(quarantinePath, entry.identity);
@@ -46333,7 +46251,7 @@ var ArtifactStore = class _ArtifactStore {
               const expectedRunsRoot = runsRootIdentity ?? await ensurePlainDirectory(this.runsRoot);
               await assertDirectoryIdentity5(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity5(quarantinePath, entry.identity);
-              await rename4(quarantinePath, entry.directory);
+              await rename3(quarantinePath, entry.directory);
               await flushDirectory(this.runsRoot);
               await assertDirectoryIdentity5(this.runsRoot, expectedRunsRoot);
               await assertDirectoryIdentity5(entry.directory, entry.identity);
@@ -55779,7 +55697,7 @@ function runClaimsWorktree(runId, managedId) {
 }
 
 // src/runtime/recovery-worktree-removals.ts
-import { lstat as lstat24, readdir as readdir10, realpath as realpath17, rename as rename5 } from "node:fs/promises";
+import { lstat as lstat24, readdir as readdir10, realpath as realpath17, rename as rename4 } from "node:fs/promises";
 import path40 from "node:path";
 async function assertRegistrationBacklink(registrationPath, expectedPhysicalPath) {
   const backlink = await readStableRegularFile(path40.join(registrationPath, "gitdir"), 32768n);
@@ -55969,7 +55887,7 @@ async function recoverWorktreeCreationIntent(manifestPath, manifest, platformSer
         throw new RuntimeError("worktree creation registration disappeared");
       }
       await assertRegistrationBacklink(activeRegistration, manifest.physicalPath);
-      await rename5(activeRegistration, manifest.quarantinePath);
+      await rename4(activeRegistration, manifest.quarantinePath);
       await Promise.all([syncDirectory(registrationRoot), syncDirectory(quarantineRoot)]);
       if (await managedWorktreeDirectoryIdentity(activeRegistration) !== null) {
         throw new RuntimeError("worktree creation registration reappeared after staging");
@@ -56012,7 +55930,7 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
     let recoveryError;
     let repositoryIdentity;
     try {
-      if (manifest.phase === "creation-intent") {
+      if (isWorktreeCreationTransaction(manifest)) {
         repositoryIdentity = await realpath17(manifest.commonDir);
         await recoverWorktreeCreationIntent(
           manifestPath,
@@ -56314,9 +56232,6 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
         path40.basename(manifest.physicalQuarantinePath),
         `.remove-${path40.basename(manifest.physicalPath)}-${manifest.transactionId}`
       );
-      if (manifest.phase === "creation-root-changed") {
-        throw new RuntimeError("worktree creation root changed and requires manual resolution");
-      }
       const expectedRegistrationIdentity = {
         dev: BigInt(manifest.registrationDev),
         ino: BigInt(manifest.registrationIno),
@@ -56391,28 +56306,21 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
           }
         }
         const activeRegistrationPath = quarantineIdentity !== null ? manifest.quarantinePath : registrationIdentity !== null ? manifest.registrationPath : null;
-        if (activeRegistrationPath === null && manifest.phase !== "physical-removed") {
-          throw new RuntimeError("worktree removal registration disappeared before commit");
-        }
-        if (activeRegistrationPath !== null && manifest.phase !== "physical-removed") {
+        const replay = planWorktreeRemovalReplay(manifest, {
+          registrationActive: activeRegistrationPath !== null,
+          physicalAtPath: physicalIdentity !== null,
+          physicalInQuarantine: physicalQuarantineIdentity !== null
+        });
+        if (replay.verifyRegistrationBacklink) {
           await assertRegistrationBacklink(activeRegistrationPath, manifest.physicalPath);
         }
-        if (manifest.phase === "physical-removed" && (physicalIdentity !== null || physicalQuarantineIdentity !== null)) {
-          throw new RuntimeError("committed physical worktree removal reappeared");
-        }
-        if (manifest.phase === "physical-removal-intent" && manifest.physicalPresent && physicalIdentity === null && physicalQuarantineIdentity === null) {
-          throw new RuntimeError(
-            "intended physical worktree removal has no provable original or quarantine"
-          );
-        }
-        const rollback = manifest.phase === "registration-intent" ? !manifest.physicalPresent || physicalIdentity !== null : manifest.phase === "physical-removal-intent" ? manifest.physicalPresent ? physicalIdentity !== null || physicalQuarantineIdentity !== null : physicalIdentity === null && physicalQuarantineIdentity === null : manifest.phase === "registration-staged" && (manifest.physicalPresent ? physicalIdentity !== null : physicalIdentity === null && physicalQuarantineIdentity === null);
-        if (rollback) {
-          if (manifest.phase === "physical-removal-intent" && physicalQuarantineIdentity !== null) {
+        if (replay.action === "rollback") {
+          if (physicalQuarantineIdentity !== null) {
             if (expectedPhysicalIdentity === null || physicalIdentity !== null) {
               throw new RuntimeError("physical worktree rollback state is inconsistent");
             }
             await assertRemovalRootsUnchanged();
-            await rename5(manifest.physicalQuarantinePath, manifest.physicalPath);
+            await rename4(manifest.physicalQuarantinePath, manifest.physicalPath);
             const restoredPhysical = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
             const settledPhysicalQuarantine = await managedWorktreeDirectoryIdentity(
               manifest.physicalQuarantinePath
@@ -56440,15 +56348,12 @@ async function recoverPendingWorktreeRemovals(platformServices = getPlatformServ
           await syncRemovalRoots();
           await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
         } else {
-          if (manifest.phase === "registration-staged") {
-            throw new RuntimeError("staged worktree removal physical state is inconsistent");
-          }
-          if (manifest.phase === "physical-removal-started" && physicalIdentity !== null) {
+          if (replay.quarantinePhysical) {
             if (registrationIdentity !== null || expectedPhysicalIdentity === null || physicalQuarantineIdentity !== null) {
               throw new RuntimeError("started worktree removal state is inconsistent");
             }
             await assertRemovalRootsUnchanged();
-            await rename5(manifest.physicalPath, manifest.physicalQuarantinePath);
+            await rename4(manifest.physicalPath, manifest.physicalQuarantinePath);
             physicalIdentity = await managedWorktreeDirectoryIdentity(manifest.physicalPath);
             physicalQuarantineIdentity = await managedWorktreeDirectoryIdentity(
               manifest.physicalQuarantinePath
