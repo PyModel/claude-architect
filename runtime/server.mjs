@@ -31992,6 +31992,35 @@ async function removeLockIfUnchanged(lockPath, handle, expectedIdentity, expecte
   const afterMetadata = await handle.stat({ bigint: true });
   return afterMetadata.nlink === BigInt(expectedLinks - 1);
 }
+var TEMPORARY_LOCK_NAME = /^\.recovery-lock-[0-9a-f-]{36}\.tmp$/;
+async function removeCrashedTemporarySibling(lockPath, identity, contents) {
+  const parentPath = path.dirname(lockPath);
+  for (const name of await readdir(parentPath)) {
+    if (!TEMPORARY_LOCK_NAME.test(name)) continue;
+    const temporaryPath = path.join(parentPath, name);
+    let metadata;
+    try {
+      metadata = await lstat(temporaryPath, { bigint: true });
+    } catch (error51) {
+      if (isMissing(error51)) continue;
+      throw error51;
+    }
+    if (!metadata.isFile() || !sameDirectoryIdentity(metadata, identity)) continue;
+    let handle;
+    try {
+      handle = await open(temporaryPath, constants.O_RDONLY | NO_FOLLOW);
+    } catch (error51) {
+      if (isMissing(error51)) return false;
+      throw error51;
+    }
+    try {
+      return await removeLockIfUnchanged(temporaryPath, handle, identity, contents, 2);
+    } finally {
+      await handle.close();
+    }
+  }
+  return false;
+}
 async function reclaimDeadLock(lockPath, isProcessAlive2, getProcessStartToken) {
   let handle;
   try {
@@ -32026,16 +32055,11 @@ async function reclaimDeadLock(lockPath, isProcessAlive2, getProcessStartToken) 
       });
       return "unverifiable";
     }
-    return await removeLockIfUnchanged(
-      lockPath,
-      handle,
-      {
-        dev: metadata.dev,
-        ino: metadata.ino,
-        birthtimeNs: metadata.birthtimeNs
-      },
-      contents
-    ) ? "reclaimed" : "contended";
+    const identity = { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
+    if (metadata.nlink === 2n && !await removeCrashedTemporarySibling(lockPath, identity, contents)) {
+      return "contended";
+    }
+    return await removeLockIfUnchanged(lockPath, handle, identity, contents) ? "reclaimed" : "contended";
   } finally {
     await handle.close();
   }
