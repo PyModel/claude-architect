@@ -301,6 +301,15 @@ describe("canonical directory identity", () => {
     )).toEqual({ dev: 1n, ino: 2n, birthtimeNs: 7n });
   });
 
+  it("distinguishes directory identities whose values collide under Number()", () => {
+    const base = 2n ** 60n;
+    const identity = { dev: base, ino: base, birthtimeNs: 7n };
+    expect(Number(base) === Number(base + 1n)).toBe(true);
+    expect(sameDirectoryIdentity(identity, { ...identity })).toBe(true);
+    expect(sameDirectoryIdentity(identity, { ...identity, dev: base + 1n })).toBe(false);
+    expect(sameDirectoryIdentity(identity, { ...identity, ino: base + 1n })).toBe(false);
+  });
+
   it("treats device or inode values that differ only above 2^53 as different", () => {
     const base = 2n ** 60n;
     expect(Number(base) === Number(base + 1n)).toBe(true); // lossy as a number
