@@ -82,6 +82,22 @@ The reproducibility record for a Delegation Attempt. It identifies the base comm
 
 The data record behind one kind of archived artifact in the Artifact Store: its file under the run directory, the validator that proves archived bytes are that kind on the way out, and, for kinds the store writes, the redaction-and-validation step on the way in plus the write mode (immutable, replace, or replace-if-present). Every typed store façade (`readManifest()`, `readDecision()`, …) is one line over the shared `readArtifact`/`writeArtifact` pair. A store is bound to one run at construction; its façades name no run id.
 
+### Cleanup Journal
+
+The durable, append-only record of archive prune and reclaim operations for one plugin data root. An intent is recorded before a run's archive is moved or removed, and a completion or rollback after; recovery replays any intent left without one. The live prune path and recovery write the same journal under the same rules.
+
+### Checkout Lock
+
+The exclusive claim on one repository (identified by its Git common directory) that every runtime operation mutating that repository's checkout, managed worktrees or recovery state holds. Live runs and recovery acquire and release it under one protocol; a holder releases only a lock it can prove it still owns.
+
+### Worktree Transaction
+
+The durable, phase-by-phase record of creating or removing one managed worktree. Each phase is recorded before its effect, so recovery can roll an interrupted creation or removal forward or back from whatever phase it reached.
+
+### Run Evidence
+
+The frozen set of archived records Autopilot relies on before promoting a Candidate Artifact or approving the final branch: the result, Run Manifest, decision, review snapshot, pipeline result and eligibility record. Run Evidence is usable only when every record names the same run, base, candidate and manifest hash.
+
 ### Routing Policy
 
 Host-owned rules that order Producer preferences and required capabilities. Routing Policy is distinct from the Producer registry, which contains machine facts rather than preferences.
