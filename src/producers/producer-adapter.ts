@@ -6,6 +6,9 @@ import type {
   SupervisedExit,
 } from "../platform/platform-services.js";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
+import { probeOsConfinedCli, type OsConfinedCliProbe } from "./cli-probe.js";
+import type { HostStateDescriptor, HostStoreContext } from "./host-store.js";
+import { isProducerAuthenticated } from "./host-store.js";
 import { renderProducerPrompt } from "./prompt-renderer.js";
 
 export type PlatformState = "certified" | "tested" | "conditional" | "unsupported" | "unknown";
@@ -98,29 +101,53 @@ export type ProducerConfigurationProfile = {
 
 export type ProducerIsolation = ProducerConfigurationProfile["isolationState"];
 
+/**
+ * A Producer Descriptor is the data that defines a Producer, plus hooks for
+ * only the custom code its CLI genuinely needs. DescriptorAdapter is the one
+ * adapter implementation; each hook replaces the corresponding default.
+ */
 export interface ProducerDescriptor {
   readonly id: string;
   readonly executable: { name: string };
   readonly isolation: ProducerIsolation;
-  readonly hostState?: import("./host-store.js").HostStateDescriptor;
+  readonly hostState?: HostStateDescriptor;
   readonly prompt?: {
     actionPreamble?: boolean;
     bootstrapPlacement?: "before" | "after";
   };
-  readonly structuredOutput?: boolean;
+  readonly structuredOutput: boolean;
   readonly executionModes?: string[];
   readonly configurationProfile?: ProducerConfigurationProfile;
-  probe?(ctx: ProbeContext, deps: import("./host-store.js").HostStoreContext): Promise<CapabilityReport>;
+  probe?(ctx: ProbeContext, deps: HostStoreContext): Promise<CapabilityReport>;
   buildInvocation?(
     spec: DelegationSpec,
     ctx: InvocationContext,
-    deps?: import("./host-store.js").HostStoreContext,
+    deps: HostStoreContext,
   ): ProducerInvocation;
   normalizeEvents?(raw: { stdout: string; stderr: string; exit: SupervisedExit }): {
     events: AdapterEvent[];
     producerSummary: string | null;
     ok: boolean;
   };
+}
+
+/**
+ * Probe hook body for a CLI Producer confined by the host OS backend: the
+ * shared probe, with identity and auth taken from the descriptor.
+ */
+export function probeDescriptorCli(
+  descriptor: ProducerDescriptor,
+  ctx: ProbeContext,
+  deps: HostStoreContext,
+  options: Pick<OsConfinedCliProbe, "parseVersion" | "inspectSurface" | "writeConfinementBackend"> = {},
+): Promise<CapabilityReport> {
+  return probeOsConfinedCli(ctx, {
+    ...options,
+    producerId: descriptor.id,
+    executableName: descriptor.executable.name,
+    structuredOutput: descriptor.structuredOutput,
+    isAuthenticated: () => isProducerAuthenticated(descriptor, deps),
+  });
 }
 
 export class DescriptorAdapter implements ProducerAdapter {
@@ -130,13 +157,13 @@ export class DescriptorAdapter implements ProducerAdapter {
 
   constructor(
     readonly descriptor: ProducerDescriptor,
-    private readonly deps: import("./host-store.js").HostStoreContext = {
+    private readonly deps: HostStoreContext = {
       env: process.env,
       homeDirectory: homedir(),
     },
   ) {
     this.producerId = descriptor.id;
-    this.structuredOutput = descriptor.structuredOutput ?? false;
+    this.structuredOutput = descriptor.structuredOutput;
     this.executionModes = descriptor.executionModes ? [...descriptor.executionModes] : ["edit"];
   }
 
@@ -144,7 +171,6 @@ export class DescriptorAdapter implements ProducerAdapter {
     if (this.descriptor.probe) {
       return this.descriptor.probe(ctx, this.deps);
     }
-    const { isProducerAuthenticated } = await import("./host-store.js");
     const resolved = await ctx.ps
       .resolveExecutable({ name: this.descriptor.executable.name })
       .catch(() => null);
@@ -197,7 +223,8 @@ export class DescriptorAdapter implements ProducerAdapter {
 
   configurationProfile(): ProducerConfigurationProfile {
     if (this.descriptor.configurationProfile) {
-      return this.descriptor.configurationProfile;
+      // A fresh copy per call: the descriptor's data is shared by every adapter.
+      return structuredClone(this.descriptor.configurationProfile);
     }
     return {
       isolationState: this.descriptor.isolation,

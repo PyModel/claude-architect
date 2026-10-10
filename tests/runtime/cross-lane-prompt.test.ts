@@ -187,6 +187,7 @@ describe("Cross-Lane Prompt Renderer (Slice 2.2)", () => {
       id: "test-after-no-preamble",
       executable: { name: "test" },
       isolation: "inherited-config-only",
+      structuredOutput: false,
       prompt: {
         actionPreamble: false,
         bootstrapPlacement: "after",
@@ -206,6 +207,7 @@ describe("Cross-Lane Prompt Renderer (Slice 2.2)", () => {
       id: "test-before-no-preamble",
       executable: { name: "test" },
       isolation: "inherited-config-only",
+      structuredOutput: false,
       prompt: {
         actionPreamble: false,
         bootstrapPlacement: "before",
@@ -220,6 +222,7 @@ describe("Cross-Lane Prompt Renderer (Slice 2.2)", () => {
       id: "test-after-with-preamble",
       executable: { name: "test" },
       isolation: "inherited-config-only",
+      structuredOutput: false,
       prompt: {
         actionPreamble: true,
         bootstrapPlacement: "after",
