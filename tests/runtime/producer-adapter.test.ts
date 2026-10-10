@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { describe, expect, it } from "vitest";
 import type { PlatformServices, ResolvedExecutable } from "../../src/platform/platform-services.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
@@ -209,5 +210,39 @@ describe("ProducerAdapter", () => {
     );
     expect(invocation.stdin).toContain(EDIT_ACTION_PREAMBLE);
     expect(invocation.stdin).toContain(LINT_BEFORE_TYPECHECK_INSTRUCTION);
+  });
+
+  it("defaults the descriptor-driven adapter's home directory to the OS home directory", async () => {
+    // os.homedir() honours HOME when set, so only an unset HOME tells the OS
+    // answer apart from an environment-variable fallback.
+    const savedHome = process.env.HOME;
+    delete process.env.HOME;
+    try {
+      const expected = homedir();
+      const seen: string[] = [];
+      const adapter = new DescriptorAdapter({
+        id: "home-default",
+        executable: { name: "home-default" },
+        isolation: "inherited-config-only",
+        structuredOutput: false,
+        hostState: {
+          resolveStore: deps => {
+            seen.push(deps.homeDirectory);
+            return deps.homeDirectory;
+          },
+          authMarker: () => false,
+        },
+      });
+      await adapter.probe({
+        ps: { resolveExecutable: async () => executable } as unknown as PlatformServices,
+        os: "darwin",
+        arch: "arm64",
+        environmentType: "native",
+      });
+      expect(expected.length).toBeGreaterThan(0);
+      expect(seen).toEqual([expected]);
+    } finally {
+      if (savedHome !== undefined) process.env.HOME = savedHome;
+    }
   });
 });
