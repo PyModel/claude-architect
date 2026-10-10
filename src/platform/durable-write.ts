@@ -12,7 +12,24 @@ import {
   type DirectoryIdentity,
 } from "./durable-directory.js";
 
-const SAFE_COMPONENT = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
+// A leaf name inside a session directory: an optional leading dot (hidden
+// records such as lock owners and quarantines) then a plain component. "." and
+// ".." never match.
+const SAFE_COMPONENT = /^\.?[a-z0-9][a-z0-9._-]{0,253}$/i;
+
+function assertSafeLeaf(name: string): void {
+  if (path.isAbsolute(name)
+    || path.basename(name) !== name
+    || !SAFE_COMPONENT.test(name)) {
+    throw new RuntimeError(`atomic write target must be a safe leaf name: ${name}`);
+  }
+}
+
+/** Exact 64-bit device and inode of a file a primitive published. */
+export interface PublishedFileIdentity {
+  dev: bigint;
+  ino: bigint;
+}
 
 export type DurableWriteMode = "immutable" | "replace";
 
@@ -44,6 +61,10 @@ export class DurableDirectorySession {
     this.identity = identity;
     this.policy = policy;
     this.handle = handle;
+  }
+
+  get platform(): NodeJS.Platform {
+    return this.policy.platform ?? nodeProcess.platform;
   }
 
   async assertIdentity(): Promise<void> {
@@ -171,11 +192,7 @@ export async function writeAtomic(
   bytes: Buffer | string,
   mode: DurableWriteMode,
 ): Promise<void> {
-  if (path.isAbsolute(name)
-    || path.basename(name) !== name
-    || !SAFE_COMPONENT.test(name)) {
-    throw new RuntimeError(`atomic write target must be a safe leaf name: ${name}`);
-  }
+  assertSafeLeaf(name);
 
   const destination = path.join(session.directory, name);
   const temporaryPath = path.join(session.directory, `.${name}.${randomUUID()}.tmp`);
@@ -247,4 +264,204 @@ export async function writeAtomic(
       }
     }
   }
+}
+
+/**
+ * Append caller-serialized bytes to a regular file in the session directory:
+ * no-follow append open, single-link and identity checks against the
+ * directory session, fsync, then a directory flush. With `expectedSize` the
+ * file must hold exactly that many bytes before the append and that many plus
+ * the appended bytes after it.
+ */
+export async function appendDurable(
+  session: DurableDirectorySession,
+  name: string,
+  bytes: Buffer | string,
+  options: { expectedSize?: number } = {},
+): Promise<void> {
+  assertSafeLeaf(name);
+  const payload = typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes;
+  const filename = path.join(session.directory, name);
+  await session.assertIdentity();
+  const handle = await open(
+    filename,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | NO_FOLLOW,
+    0o600,
+  );
+  let primaryError: unknown;
+  try {
+    const metadata = await handle.stat({ bigint: true });
+    const named = await lstat(filename, { bigint: true });
+    if (!metadata.isFile()
+      || metadata.nlink !== 1n
+      || !named.isFile()
+      || named.isSymbolicLink()
+      || named.nlink !== 1n
+      || named.dev !== metadata.dev
+      || named.ino !== metadata.ino
+      || (options.expectedSize !== undefined && metadata.size !== BigInt(options.expectedSize))) {
+      throw new RuntimeError(`durable append target changed before append: ${name}`);
+    }
+    await session.assertIdentity();
+    await handle.writeFile(payload);
+    await handle.sync();
+    const settled = await handle.stat({ bigint: true });
+    if (options.expectedSize !== undefined
+      && settled.size !== BigInt(options.expectedSize + payload.byteLength)) {
+      throw new RuntimeError(`durable append was incomplete: ${name}`);
+    }
+  } catch (error) {
+    primaryError = error;
+  }
+  try {
+    await handle.close();
+  } catch (closeError) {
+    if (primaryError !== undefined) {
+      throw new AggregateError([primaryError, closeError], "durable append failed and its handle could not be closed");
+    }
+    throw closeError;
+  }
+  if (primaryError !== undefined) throw primaryError;
+  await session.sync();
+  await session.assertIdentity();
+}
+
+/**
+ * Hard-link an existing single-link regular file to an absent leaf, keeping
+ * the source. EEXIST is rethrown unchanged so callers can classify contention.
+ * After the link both names must be the same plain file with exactly two
+ * links; otherwise the new name is removed and the publish fails.
+ */
+export async function linkExclusive(
+  session: DurableDirectorySession,
+  sourceName: string,
+  destinationName: string,
+): Promise<PublishedFileIdentity> {
+  assertSafeLeaf(sourceName);
+  assertSafeLeaf(destinationName);
+  const source = path.join(session.directory, sourceName);
+  const destination = path.join(session.directory, destinationName);
+  await session.assertIdentity();
+  const before = await lstat(source, { bigint: true });
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n) {
+    throw new RuntimeError(`exclusive publish source is not a single-link file: ${sourceName}`);
+  }
+  await link(source, destination);
+  try {
+    const [published, retained] = await Promise.all([
+      lstat(destination, { bigint: true }),
+      lstat(source, { bigint: true }),
+    ]);
+    if (!published.isFile()
+      || published.isSymbolicLink()
+      || published.nlink !== 2n
+      || published.dev !== before.dev
+      || published.ino !== before.ino
+      || retained.dev !== before.dev
+      || retained.ino !== before.ino) {
+      throw new RuntimeError(`exclusive publish source changed: ${destinationName}`);
+    }
+    await session.assertIdentity();
+  } catch (error) {
+    await removeIfSameFile(destination, before);
+    throw error;
+  }
+  return { dev: before.dev, ino: before.ino };
+}
+
+async function removeIfSameFile(filename: string, identity: PublishedFileIdentity): Promise<void> {
+  try {
+    const current = await lstat(filename, { bigint: true });
+    if (current.isFile() && current.dev === identity.dev && current.ino === identity.ino) {
+      await rm(filename);
+    }
+  } catch (error) {
+    if (!isMissingEntry(error)) throw error;
+  }
+}
+
+function isMissingEntry(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error
+    && (error as { code?: unknown }).code === "ENOENT";
+}
+
+/**
+ * Publish new bytes under a leaf that must not exist yet: exclusive temp,
+ * fsync, link with link-count checks, temp removal, directory flush. An
+ * existing destination fails with EEXIST and is left untouched; no temporary
+ * file survives a failure.
+ */
+export async function publishExclusive(
+  session: DurableDirectorySession,
+  name: string,
+  bytes: Buffer | string,
+): Promise<PublishedFileIdentity> {
+  assertSafeLeaf(name);
+  const temporaryName = `.${name}.${randomUUID()}.tmp`;
+  const temporaryPath = path.join(session.directory, temporaryName);
+  const destination = path.join(session.directory, name);
+  let temporaryCreated = false;
+  let published: PublishedFileIdentity | undefined;
+  try {
+    await session.assertIdentity();
+    const handle = await open(
+      temporaryPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
+      0o600,
+    );
+    temporaryCreated = true;
+    try {
+      await handle.writeFile(typeof bytes === "string" ? Buffer.from(bytes, "utf8") : bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    published = await linkExclusive(session, temporaryName, name);
+    await rm(temporaryPath);
+    temporaryCreated = false;
+    await session.sync();
+    await session.assertIdentity();
+    return published;
+  } catch (error) {
+    if (published !== undefined) await removeIfSameFile(destination, published);
+    throw error;
+  } finally {
+    if (temporaryCreated) await rm(temporaryPath, { force: true });
+  }
+}
+
+/**
+ * Rename a plain directory to an absent leaf of the same session directory,
+ * prove it kept its identity, and flush the parent.
+ */
+export async function moveDirectory(
+  session: DurableDirectorySession,
+  sourceName: string,
+  destinationName: string,
+): Promise<DirectoryIdentity> {
+  assertSafeLeaf(sourceName);
+  assertSafeLeaf(destinationName);
+  const source = path.join(session.directory, sourceName);
+  const destination = path.join(session.directory, destinationName);
+  await session.assertIdentity();
+  const before = await lstat(source, { bigint: true });
+  if (!before.isDirectory() || before.isSymbolicLink()) {
+    throw new RuntimeError(`directory move source is not a plain directory: ${sourceName}`);
+  }
+  const identity: DirectoryIdentity = { dev: before.dev, ino: before.ino, birthtimeNs: before.birthtimeNs };
+  try {
+    await lstat(destination);
+    throw new RuntimeError(`directory move destination already exists: ${destinationName}`);
+  } catch (error) {
+    if (!isMissingEntry(error)) throw error;
+  }
+  await renameWithRetry(source, destination, session.platform);
+  const moved = await lstat(destination, { bigint: true });
+  if (!moved.isDirectory() || moved.isSymbolicLink() || !sameDirectoryIdentity(moved, identity)) {
+    throw new RuntimeError(`moved directory identity changed: ${destinationName}`);
+  }
+  await session.assertIdentity();
+  await session.sync();
+  await session.assertIdentity();
+  return identity;
 }
