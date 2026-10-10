@@ -290,11 +290,11 @@ beforeEach(async () => {
   process.env.NODE_ENV = "test";
   worktreePath = await temporaryDirectory("ca-role-worktree-");
   const runStartDirectory = await realpath(await temporaryDirectory("ca-role-run-start-"));
-  const metadata = await lstat(runStartDirectory);
+  const metadata = await lstat(runStartDirectory, { bigint: true });
   runStartTarget = {
     publicDirectory: runStartDirectory,
     canonicalDirectory: runStartDirectory,
-    identity: { dev: metadata.dev, ino: metadata.ino },
+    identity: { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs },
   };
 
   const seatbelt = SANDBOX_BACKENDS.find(backend => backend.id === "macos-seatbelt");

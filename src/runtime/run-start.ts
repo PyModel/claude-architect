@@ -1,12 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import {
   access,
   lstat,
   open,
   realpath,
-  rename,
-  rm,
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +15,13 @@ import type {
 } from "../platform/platform-services.js";
 import { RuntimeError } from "../util/errors.js";
 import type { ArtifactStore } from "./artifact-store.js";
-import { NO_FOLLOW, flushDirectory } from "../platform/durable-directory.js";
+import {
+  NO_FOLLOW,
+  flushDirectory,
+  sameDevIno,
+  type DirectoryIdentity,
+} from "../platform/durable-directory.js";
+import { DurableDirectorySession, writeAtomic } from "../platform/durable-write.js";
 
 
 export interface RunStartRecord {
@@ -40,7 +43,7 @@ export interface RunStartRecord {
 export interface RunStartTarget {
   publicDirectory: string;
   canonicalDirectory: string;
-  identity: { dev: number; ino: number };
+  identity: DirectoryIdentity;
 }
 
 export interface RunStartContext {
@@ -91,13 +94,12 @@ export async function parentDeathWatchdogInvocation(
 
 function assertDirectoryIdentity(target: RunStartTarget): Promise<void> {
   return Promise.all([
-    lstat(target.publicDirectory),
+    lstat(target.publicDirectory, { bigint: true }),
     realpath(target.publicDirectory),
   ]).then(([metadata, canonical]) => {
     if (!metadata.isDirectory()
       || metadata.isSymbolicLink()
-      || metadata.dev !== target.identity.dev
-      || metadata.ino !== target.identity.ino
+      || !sameDevIno(metadata, target.identity)
       || canonical !== target.canonicalDirectory) {
       throw new RuntimeError("run archive directory identity changed");
     }
@@ -129,32 +131,15 @@ export async function writeRunStart(
     return;
   }
 
-  const temporaryPath = path.join(
+  // The session flushes with flushDirectory: this is a hot path, so it never
+  // spawns the Windows directory helper.
+  const session = new DurableDirectorySession(
     target.canonicalDirectory,
-    `.run-start.${randomUUID()}.tmp`,
+    target.identity,
+    { syncDirectory: flushDirectory },
   );
-  let created = false;
-  let handle;
-  try {
-    handle = await open(
-      temporaryPath,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
-      0o600,
-    );
-    created = true;
-    await handle.writeFile(serialized, "utf8");
-    await handle.sync();
-    await handle.close();
-    handle = undefined;
-    await assertDirectoryIdentity(target);
-    await rename(temporaryPath, destination);
-    created = false;
-    await flushDirectory(target.canonicalDirectory);
-    await assertDirectoryIdentity(target);
-  } finally {
-    await handle?.close();
-    if (created) await rm(temporaryPath, { force: true });
-  }
+  await writeAtomic(session, "run-start.json", serialized, "replace");
+  await assertDirectoryIdentity(target);
 }
 
 export async function initializeRunStart(
@@ -163,14 +148,14 @@ export async function initializeRunStart(
 ): Promise<RunStartContext> {
   await store.writeLog("lifecycle", "attempt lock acquired\n");
   const canonicalDirectory = await realpath(store.runDirectory);
-  const metadata = await lstat(store.runDirectory);
+  const metadata = await lstat(store.runDirectory, { bigint: true });
   if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
     throw new RuntimeError("run archive directory is not a plain directory");
   }
   const target: RunStartTarget = {
     publicDirectory: store.runDirectory,
     canonicalDirectory,
-    identity: { dev: metadata.dev, ino: metadata.ino },
+    identity: { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs },
   };
   await writeRunStart(target, record, true);
   return { target, record };
