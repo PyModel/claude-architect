@@ -1,26 +1,54 @@
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type { DelegationSpec } from "../protocol/delegation-spec.js";
-import { probeOsConfinedCli } from "./cli-probe.js";
 import {
-  isProducerAuthenticated,
   resolveDefaultEnv,
   resolveInheritedWritablePaths,
   type HostStoreContext,
 } from "./host-store.js";
 import { normalizePlainText, renderProducerPrompt } from "./plain-text.js";
-import type {
-  CapabilityReport,
-  InvocationContext,
-  ProbeContext,
-  ProducerAdapter,
-  ProducerConfigurationProfile,
-  ProducerDescriptor,
-  ProducerInvocation,
+import {
+  DescriptorAdapter,
+  probeDescriptorCli,
+  type InvocationContext,
+  type ProducerDescriptor,
+  type ProducerInvocation,
 } from "./producer-adapter.js";
 
 const OPENCODE_REQUIRED_ENV = ["OPENCODE_CONFIG_DIR", "XDG_DATA_HOME"] as const;
+
+function buildOpenCodeInvocation(
+  spec: DelegationSpec,
+  ctx: InvocationContext,
+  deps: HostStoreContext,
+): ProducerInvocation {
+  const args = [
+    "run",
+    "--dir",
+    ctx.worktreePath,
+    "--agent",
+    "build",
+    "--auto",
+    "--log-level",
+    "ERROR",
+  ];
+  if (spec.producerOverrides?.model !== undefined) {
+    args.push("--model", spec.producerOverrides.model);
+  }
+
+  return {
+    executable: ctx.executable,
+    args,
+    stdin: renderProducerPrompt(spec, {
+      readOnly: ctx.readOnly === true,
+      ...openCodeDescriptor.prompt,
+    }),
+    requiredEnv: [...OPENCODE_REQUIRED_ENV],
+    inheritedStateWritablePaths: resolveInheritedWritablePaths(openCodeDescriptor, deps),
+    env: resolveDefaultEnv(openCodeDescriptor, deps),
+    network: "allowed",
+  };
+}
 
 export const openCodeDescriptor: ProducerDescriptor = {
   id: "opencode",
@@ -50,73 +78,17 @@ export const openCodeDescriptor: ProducerDescriptor = {
   },
   structuredOutput: false,
   executionModes: ["edit"],
+  configurationProfile: {
+    isolationState: "controlled-config-with-copied-credentials",
+    credentialSources: ["~/.local/share/opencode/auth.json"],
+    behavioralConfigSources: ["explicit invocation argv"],
+    repositoryInstructionSources: ["worktree AGENTS.md"],
+    environmentDependencies: [...OPENCODE_REQUIRED_ENV],
+    temporaryHomeStrategy: "temp HOME with XDG_DATA_HOME passthrough for the auth store",
+  },
+  probe: (ctx, deps) => probeDescriptorCli(openCodeDescriptor, ctx, deps),
+  buildInvocation: buildOpenCodeInvocation,
+  normalizeEvents: normalizePlainText,
 };
 
-export interface OpenCodeAdapterDeps extends HostStoreContext {}
-
-export class OpenCodeAdapter implements ProducerAdapter {
-  readonly producerId = openCodeDescriptor.id;
-  readonly structuredOutput = openCodeDescriptor.structuredOutput!;
-  readonly executionModes = openCodeDescriptor.executionModes!;
-  readonly descriptor = openCodeDescriptor;
-
-  constructor(private readonly deps: OpenCodeAdapterDeps = {
-    env: process.env,
-    homeDirectory: homedir(),
-  }) {}
-
-  async probe(ctx: ProbeContext): Promise<CapabilityReport> {
-    return probeOsConfinedCli(ctx, {
-      producerId: this.producerId,
-      executableName: "opencode",
-      structuredOutput: this.structuredOutput,
-      isAuthenticated: () => isProducerAuthenticated(openCodeDescriptor, this.deps),
-    });
-  }
-
-  buildInvocation(spec: DelegationSpec, ctx: InvocationContext): ProducerInvocation {
-    const args = [
-      "run",
-      "--dir",
-      ctx.worktreePath,
-      "--agent",
-      "build",
-      "--auto",
-      "--log-level",
-      "ERROR",
-    ];
-    if (spec.producerOverrides?.model !== undefined) {
-      args.push("--model", spec.producerOverrides.model);
-    }
-
-    return {
-      executable: ctx.executable,
-      args,
-      stdin: renderProducerPrompt(spec, {
-        readOnly: ctx.readOnly === true,
-        ...openCodeDescriptor.prompt,
-      }),
-      requiredEnv: [...OPENCODE_REQUIRED_ENV],
-      inheritedStateWritablePaths: resolveInheritedWritablePaths(openCodeDescriptor, this.deps),
-      env: resolveDefaultEnv(openCodeDescriptor, this.deps),
-      network: "allowed",
-    };
-  }
-
-  normalizeEvents(
-    raw: Parameters<ProducerAdapter["normalizeEvents"]>[0],
-  ): ReturnType<ProducerAdapter["normalizeEvents"]> {
-    return normalizePlainText(raw);
-  }
-
-  configurationProfile(): ProducerConfigurationProfile {
-    return {
-      isolationState: "controlled-config-with-copied-credentials",
-      credentialSources: ["~/.local/share/opencode/auth.json"],
-      behavioralConfigSources: ["explicit invocation argv"],
-      repositoryInstructionSources: ["worktree AGENTS.md"],
-      environmentDependencies: [...OPENCODE_REQUIRED_ENV],
-      temporaryHomeStrategy: "temp HOME with XDG_DATA_HOME passthrough for the auth store",
-    };
-  }
-}
+export class OpenCodeAdapter extends DescriptorAdapter { constructor(deps?: HostStoreContext) { super(openCodeDescriptor, deps); } }
