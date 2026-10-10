@@ -278,7 +278,7 @@ export async function recoverStaleRuns(
                   pid => ps.getProcessStartToken(pid),
                 );
                 if (lockedMarkerStatus === "dead") {
-                  if (lockedMarker.sliced) await archiveInterruptedPipeline(store, lockedResult);
+                  await archiveInterruptedPipeline(store, lockedResult);
                   await cleanupRunWorktreesUnderLease(
                     commonDir,
                     entry.name,

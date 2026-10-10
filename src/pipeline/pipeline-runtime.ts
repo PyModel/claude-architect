@@ -1,4 +1,4 @@
-import { gitChecked as checkedGit, gitFailure, gitSucceeded, reviewDiff } from "../git/checked-git.js";
+import { gitChecked as checkedGit, gitSucceeded, reviewDiff } from "../git/checked-git.js";
 import { git } from "../git/git-exec.js";
 import { WorktreeManager, withManagedWorktree } from "../runtime/worktree-manager.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
@@ -50,7 +50,6 @@ import type { RolePackage } from "./role-prompts.js";
 import type { RoleRunArgs, RoleRunResult } from "./role-runner.js";
 import {
   SliceRunner,
-  SliceExecutionError,
   findSliceExecutionError,
   scopeSpecToSlice,
   cleanupTemporarySliceRefs,
@@ -87,6 +86,7 @@ import {
   type LinkedWorktreeGitAccess,
 } from "./git-writable-roots.js";
 import { runAdvisorStage as bundledAdvisorStage } from "./advisor-stage.js";
+import { TerminalRecorder, containsTerminalArchiveError } from "./terminal-recorder.js";
 
 export {
   scopeSpecToSlice,
@@ -155,43 +155,6 @@ export interface PipelineDependencies extends AttemptRuntimeDependencies {
   ) => Promise<AttemptResult>;
 }
 
-const CANDIDATE_REF_PREFIX = "refs/claude-architect/candidates/";
-
-
-
-
-
-
-
-function failedResult(
-  attempt: AttemptResult,
-  rounds: PipelineRound[],
-  finalCandidateCommit: string,
-  reason: string,
-  failure: FailureClassification = "producer-failure",
-  increments: PipelineIncrement[] = [],
-  slices: PipelineSlice[] = [],
-  haltedSliceIndex: number | null = null,
-): PipelineResult {
-  return {
-    runId: attempt.runId,
-    status: "failed",
-    attempt,
-    increments,
-    slices,
-    haltedSliceIndex,
-    rounds,
-    verification: null,
-    gate: {
-      decisionReady: false,
-      requiresHumanDecision: false,
-      reasons: [reason],
-    },
-    finalCandidateCommit,
-    failure,
-  };
-}
-
 const MAX_PROGRESS_NOTES_LENGTH = 8_000;
 const PROGRESS_TRUNCATION_NOTE = "\n\n[progress notes truncated]";
 
@@ -219,101 +182,6 @@ function attemptLogRefs(attempt: AttemptResult): string[] {
     attempt.logsRef,
     ...attempt.executedVerification.flatMap(outcome => [outcome.stdoutRef, outcome.stderrRef]),
   ])];
-}
-
-class SlicedFailureArchiveError extends RuntimeError {
-  constructor(readonly cause: unknown) {
-    super(cause instanceof Error ? cause.message : "sliced failure archival failed");
-    this.name = "SlicedFailureArchiveError";
-  }
-}
-
-
-function containsSlicedFailureArchiveError(error: unknown): boolean {
-  if (error instanceof SlicedFailureArchiveError) return true;
-  if (!(error instanceof AggregateError)) return false;
-  return error.errors.some(containsSlicedFailureArchiveError);
-}
-
-function failedAttemptStatus(failure: FailureClassification): AttemptResult["status"] {
-  if (failure === "unavailable" || failure === "authentication-required") return "unavailable";
-  if (failure === "cancelled") return "cancelled";
-  return "failed";
-}
-
-async function archiveSlicedFailure(args: {
-  checkoutPath: string;
-  attempt: AttemptResult;
-  failure: FailureClassification;
-  reason: string;
-  store: ArtifactStore;
-}): Promise<AttemptResult> {
-  try {
-    const manifest = await args.store.readManifest();
-    if (manifest === null) {
-      throw new RuntimeError("run manifest is missing while archiving sliced failure");
-    }
-    const retainCandidate = args.failure === "verification-failure";
-    if (!retainCandidate && args.attempt.candidate !== null) {
-      const candidate = args.attempt.candidate;
-      const expectedRef = `${CANDIDATE_REF_PREFIX}${args.attempt.runId}`;
-      if (candidate.anchorRef !== expectedRef) {
-        throw new RuntimeError("sliced candidate anchor does not match run id");
-      }
-      const deleted = await git(args.checkoutPath, [
-        "update-ref",
-        "--no-deref",
-        "-d",
-        candidate.anchorRef,
-        candidate.candidateCommitOid,
-      ]);
-      if (deleted.exitCode !== 0) throw gitFailure("delete sliced candidate anchor", deleted);
-    }
-    const failedAttempt: AttemptResult = {
-      ...args.attempt,
-      status: failedAttemptStatus(args.failure),
-      failure: args.failure,
-      summary: args.reason,
-      candidate: retainCandidate ? args.attempt.candidate : null,
-      unresolvedIssues: [...args.attempt.unresolvedIssues, args.reason],
-      evidence: {
-        ...args.attempt.evidence,
-        pipelineFailure: { failure: args.failure, reason: args.reason },
-      },
-    };
-    await args.store.promoteTerminalArtifacts({ result: failedAttempt, manifest });
-    return failedAttempt;
-  } catch (error) {
-    if (error instanceof SlicedFailureArchiveError) throw error;
-    throw new SlicedFailureArchiveError(error);
-  }
-}
-
-async function archiveSliceExecutionError(args: {
-  checkoutPath: string;
-  error: unknown;
-  attempt: AttemptResult;
-  store: ArtifactStore;
-}): Promise<{ sliceError: SliceExecutionError; failedAttempt: AttemptResult }> {
-  const sliceError = findSliceExecutionError(args.error);
-  if (sliceError === null) throw args.error;
-  try {
-    return {
-      sliceError,
-      failedAttempt: await archiveSlicedFailure({
-        checkoutPath: args.checkoutPath,
-        attempt: args.attempt,
-        failure: sliceError.failure,
-        reason: sliceError.message,
-        store: args.store,
-      }),
-    };
-  } catch (archiveError) {
-    throw new AggregateError(
-      [args.error, archiveError],
-      "sliced pipeline failed and its attempt result could not be archived",
-    );
-  }
 }
 
 async function promoteFinalCandidate(args: {
@@ -448,7 +316,8 @@ interface PipelineRunState {
   pipelineSlices: PipelineSlice[];
   incrementOutcome: IncrementOutcome | undefined;
   frozenTestEvidence: string;
-  authoritySafeToRelease: boolean;
+  /** The only writer of terminal artifacts and of the authority-release flag. */
+  readonly recorder: TerminalRecorder;
 }
 
 type PhaseOutcome =
@@ -461,25 +330,8 @@ function terminal(result: PipelineResult): PhaseOutcome {
   return { state: "terminal", result };
 }
 
-/** A failure recorded against the initial attempt at the current candidate. */
-function failedAtCurrentCandidate(
-  state: PipelineRunState,
-  reason: string,
-  failure: FailureClassification,
-): PipelineResult {
-  return failedResult(
-    state.attempt,
-    state.rounds,
-    state.currentCandidateCommit,
-    reason,
-    failure,
-    state.increments,
-    state.pipelineSlices,
-  );
-}
-
+/** A failed exit at the current candidate, archived by the terminal recorder. */
 async function archivePipelineFailure(
-  context: RunContext,
   state: PipelineRunState,
   args: {
     reason: string;
@@ -488,27 +340,15 @@ async function archivePipelineFailure(
     haltedSliceIndex?: number | null;
   },
 ): Promise<PipelineResult> {
-  const failedAttempt = state.sliced
-    ? await archiveSlicedFailure({
-      checkoutPath: context.checkoutPath,
-      attempt: state.attempt,
-      failure: args.failure,
-      reason: args.reason,
-      store: context.store,
-    })
-    : state.attempt;
-  if (state.sliced) state.authoritySafeToRelease = true;
-  state.finalAttempt = failedAttempt;
-  return failedResult(
-    failedAttempt,
-    state.rounds,
-    state.currentCandidateCommit,
-    args.reason,
-    args.failure,
-    state.increments,
-    args.slices ?? state.pipelineSlices,
-    args.haltedSliceIndex ?? null,
-  );
+  return await state.recorder.fail(state, {
+    reason: args.reason,
+    failure: args.failure,
+    rounds: state.rounds,
+    increments: state.increments,
+    slices: args.slices ?? state.pipelineSlices,
+    haltedSliceIndex: args.haltedSliceIndex ?? null,
+    finalCandidateCommit: state.currentCandidateCommit,
+  });
 }
 
 /**
@@ -526,25 +366,24 @@ async function salvagePipelineFailure(
   args: { reason: string; failure: FailureClassification },
 ): Promise<PipelineResult> {
   const { checkoutPath, spec, store } = context;
-  const fallback = async (): Promise<PipelineResult> => archivePipelineFailure(context, state, args);
+  const fallback = async (): Promise<PipelineResult> => archivePipelineFailure(state, args);
   if (state.finalAttempt.candidate === null) return await fallback();
 
-  let salvagedAttempt = state.finalAttempt;
-  let salvagedCommit = state.currentCandidateCommit;
-  if (salvagedCommit !== state.finalAttempt.candidate.candidateCommitOid) {
+  if (state.currentCandidateCommit !== state.finalAttempt.candidate.candidateCommitOid) {
     const promoted = await promoteFinalCandidate({
       checkoutPath,
       attempt: state.finalAttempt,
       initialCandidate: state.finalAttempt.candidate,
       baselineCommit: state.baselineCommit,
-      candidateCommit: salvagedCommit,
+      candidateCommit: state.currentCandidateCommit,
       store,
     });
     if (!promoted.ok) return await fallback();
-    salvagedAttempt = promoted.attempt;
-    salvagedCommit = promoted.candidateCommit;
+    // result.json and the anchor now name the promoted candidate; a later
+    // fallback must demote exactly that, or the anchor delete misses it.
+    state.finalAttempt = promoted.attempt;
+    state.currentCandidateCommit = promoted.candidateCommit;
   }
-  if (state.sliced) state.authoritySafeToRelease = true;
 
   let verified;
   try {
@@ -552,93 +391,24 @@ async function salvagePipelineFailure(
       checkoutPath,
       spec,
       deps,
-      attempt: salvagedAttempt,
+      attempt: state.finalAttempt,
       baselineCommit: state.baselineCommit,
-      candidateCommit: salvagedCommit,
+      candidateCommit: state.currentCandidateCommit,
       store,
       namespace: "salvage",
     });
   } catch {
     return await fallback();
   }
-  const manifestForArchive = await store.readManifest();
-  if (manifestForArchive === null) return await fallback();
-  if (!verified.verification.pass) {
-    // The freshest evidence says these bytes do not verify. Record that where
-    // the accept gate reads it, or the archived run keeps advertising the
-    // stale verified-candidate status and stays acceptable. The bytes are
-    // retained; only their acceptability is withdrawn.
-    const demoted: AttemptResult = {
-      ...salvagedAttempt,
-      status: "failed",
-      failure: "verification-failure",
-      summary: args.reason,
-      unresolvedIssues: [
-        ...salvagedAttempt.unresolvedIssues,
-        args.reason,
-        "salvage re-verification failed",
-      ],
-      evidence: {
-        ...salvagedAttempt.evidence,
-        pipelineFailure: { failure: args.failure, reason: args.reason },
-      },
-    };
-    await store.promoteTerminalArtifacts({ result: demoted, manifest: manifestForArchive });
-    state.finalAttempt = demoted;
-    await store.writePipelineArtifact("verification", verified.verification);
-    const failed = failedResult(
-      demoted,
-      state.rounds,
-      salvagedCommit,
-      args.reason,
-      args.failure,
-      state.increments,
-      state.pipelineSlices,
-    );
-    await store.writePipelineArtifact("pipeline-result", failed);
-    return failed;
-  }
-
-  // A human reading the archived run later must be able to see that the
-  // pipeline never reviewed this candidate. Record that durably in the
-  // result the accept path reads, not only in the transient gate.
-  salvagedAttempt = {
-    ...salvagedAttempt,
-    evidence: {
-      ...salvagedAttempt.evidence,
-      pipelineReviewIncomplete: { failure: args.failure, reason: args.reason },
-    },
-  };
-  await store.promoteTerminalArtifacts({
-    result: salvagedAttempt,
-    manifest: manifestForArchive,
-  });
-
-  state.finalAttempt = salvagedAttempt;
-  await store.writePipelineArtifact("verification", verified.verification);
-  const salvaged: PipelineResult = {
-    runId: state.attempt.runId,
-    status: "human-decision-required",
-    attempt: salvagedAttempt,
+  return await state.recorder.salvage(state, {
+    reason: args.reason,
+    failure: args.failure,
+    rounds: state.rounds,
     increments: state.increments,
     slices: state.pipelineSlices,
-    haltedSliceIndex: null,
-    rounds: state.rounds,
+    finalCandidateCommit: state.currentCandidateCommit,
     verification: verified.verification,
-    gate: {
-      decisionReady: false,
-      requiresHumanDecision: true,
-      reasons: [
-        args.reason,
-        "the candidate passed independent verification; the pipeline could not"
-        + " complete its own review, so the whole-branch review is the human's",
-      ],
-    },
-    finalCandidateCommit: salvagedCommit,
-    failure: null,
-  };
-  await store.writePipelineArtifact("pipeline-result", salvaged);
-  return salvaged;
+  });
 }
 
 /**
@@ -661,14 +431,12 @@ async function resolveHaltedSlicePhase(
     haltReason: string,
     failure: FailureClassification,
   ): Promise<PipelineResult> => {
-    const failed = await archivePipelineFailure(context, state, {
+    return await archivePipelineFailure(state, {
       reason: haltReason,
       failure,
       slices: phase.slices,
       haltedSliceIndex: phase.haltedSliceIndex,
     });
-    await store.writePipelineArtifact("pipeline-result", failed);
-    return failed;
   };
   if (state.currentCandidateCommit === state.baselineCommit) {
     return await archiveHalt(reason, "verification-failure");
@@ -686,7 +454,6 @@ async function resolveHaltedSlicePhase(
   }
   state.finalAttempt = promoted.attempt;
   state.currentCandidateCommit = promoted.candidateCommit;
-  state.authoritySafeToRelease = true;
   await context.notePhase("partial halt verification");
   const verified = await verifyCandidate({
     checkoutPath,
@@ -698,8 +465,7 @@ async function resolveHaltedSlicePhase(
     store,
     namespace: "final",
   });
-  await store.writePipelineArtifact("verification", verified.verification);
-  const haltResult: PipelineResult = {
+  return await state.recorder.halt({
     runId: state.attempt.runId,
     status: "human-decision-required",
     attempt: state.finalAttempt,
@@ -715,9 +481,7 @@ async function resolveHaltedSlicePhase(
     },
     finalCandidateCommit: state.currentCandidateCommit,
     failure: null,
-  };
-  await store.writePipelineArtifact("pipeline-result", haltResult);
-  return haltResult;
+  });
 }
 
 /**
@@ -792,11 +556,10 @@ async function runIncrementPhase(
     // here. Otherwise the loop keeps launching Producers even though the
     // caller has already given up on the run.
     if (deps.abortSignal?.aborted === true) {
-      return terminal(failedAtCurrentCandidate(
-        state,
-        `cancelled before increment ${increment}`,
-        "cancelled",
-      ));
+      return terminal(await archivePipelineFailure(state, {
+        reason: `cancelled before increment ${increment}`,
+        failure: "cancelled",
+      }));
     }
     await context.notePhase(`increment ${increment}/${maxIncrements}`);
     const previousCandidateCommit = state.currentCandidateCommit;
@@ -809,11 +572,10 @@ async function runIncrementPhase(
         try {
           gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
         } catch {
-          return terminal(failedAtCurrentCandidate(
-            state,
-            "increment git object isolation could not be established",
-            "sandbox-violation",
-          ));
+          return terminal(await archivePipelineFailure(state, {
+            reason: "increment git object isolation could not be established",
+            failure: "sandbox-violation",
+          }));
         }
         const diffText = await reviewDiff(checkoutPath, state.baselineCommit, previousCandidateCommit);
         let incrementRun;
@@ -837,18 +599,16 @@ async function runIncrementPhase(
             ...(context.runStart === undefined ? {} : { runStart: context.runStart }),
           });
         } catch {
-          return terminal(failedAtCurrentCandidate(
-            state,
-            "increment phase failed unexpectedly",
-            "producer-failure",
-          ));
+          return terminal(await archivePipelineFailure(state, {
+            reason: "increment phase failed unexpectedly",
+            failure: "producer-failure",
+          }));
         }
         if (!incrementRun.ok) {
-          return terminal(failedAtCurrentCandidate(
-            state,
-            `increment phase did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
-            incrementRun.failure,
-          ));
+          return terminal(await archivePipelineFailure(state, {
+            reason: `increment phase did not produce valid structured output (see ${incrementRun.failedRoleLogRef})`,
+            failure: incrementRun.failure,
+          }));
         }
 
         const report = redactRecord(incrementRun.report);
@@ -867,11 +627,10 @@ async function runIncrementPhase(
           }),
         });
         if (adoptionFailure !== null) {
-          return terminal(failedAtCurrentCandidate(
-            state,
-            adoptionFailure.reason,
-            adoptionFailure.failure,
-          ));
+          return terminal(await archivePipelineFailure(state, {
+            reason: adoptionFailure.reason,
+            failure: adoptionFailure.failure,
+          }));
         }
         const [previousTree, candidateTree] = await Promise.all([
           checkedGit(checkoutPath, ["rev-parse", `${previousCandidateCommit}^{tree}`]),
@@ -903,11 +662,10 @@ async function runReviewRounds(
   const { checkoutPath, spec, store } = context;
   for (let round = 1; round <= maxRounds; round += 1) {
     if (deps.abortSignal?.aborted === true) {
-      return terminal(failedAtCurrentCandidate(
-        state,
-        `cancelled before review round ${round}`,
-        "cancelled",
-      ));
+      return terminal(await archivePipelineFailure(state, {
+        reason: `cancelled before review round ${round}`,
+        failure: "cancelled",
+      }));
     }
     await context.notePhase(`review round ${round}/${maxRounds}`);
     const reviewedCommit = state.currentCandidateCommit;
@@ -981,7 +739,7 @@ async function runReviewRounds(
         try {
           gitObjectAccess = await resolveLinkedWorktreeWritableRoots(worktreePath);
         } catch {
-          return terminal(await archivePipelineFailure(context, state, {
+          return terminal(await archivePipelineFailure(state, {
             reason: "fixer git object isolation could not be established",
             failure: "sandbox-violation",
           }));
@@ -1021,7 +779,7 @@ async function runReviewRounds(
           }),
         });
         if (adoptionFailure !== null) {
-          return terminal(await archivePipelineFailure(context, state, {
+          return terminal(await archivePipelineFailure(state, {
             reason: adoptionFailure.reason,
             failure: adoptionFailure.failure,
           }));
@@ -1052,7 +810,7 @@ async function promoteReviewedCandidate(
     store: context.store,
   });
   if (!promoted.ok) {
-    return terminal(await archivePipelineFailure(context, state, {
+    return terminal(await archivePipelineFailure(state, {
       reason: `${state.sliced ? "sliced" : "fixer"} ${promoted.reason}`,
       failure: promoted.failure,
     }));
@@ -1082,7 +840,6 @@ async function finalizePipelineGate(
     store,
     ...(state.sliced ? { namespace: "final" } : {}),
   });
-  await store.writePipelineArtifact("verification", verified.verification);
   const lastRound = state.rounds.at(-1);
   await context.emitStatus("gating");
   await context.notePhase("evaluating gate");
@@ -1106,30 +863,15 @@ async function finalizePipelineGate(
   // A refusing gate lived only in the pipeline-result artifact, which the
   // accept path never reads: it loads the archived attempt, sees
   // verified-candidate with no failure, and offers the candidate as clean.
-  // `archiveSlicedFailure` already records incompleteness in evidence for
-  // exactly this reason; a gate that completed and said no needs the same
-  // durability, or "blocking findings survived" is invisible at decision time.
-  const manifestForArchive = await store.readManifest();
-  if (manifestForArchive === null) {
-    if (!gate.decisionReady) {
-      throw new RuntimeError(
-        "pipeline gate refused the candidate and the refusal could not be archived",
-        { reasons: gate.reasons },
-      );
-    }
-    throw new RuntimeError(
-      "pipeline gate cleared the candidate and the clearance could not be archived",
-      {
-        candidateCommitOid: state.currentCandidateCommit,
-        requiresHumanDecision: gate.requiresHumanDecision,
-      },
-    );
-  }
+  // A gate that completed and said no is therefore recorded in the attempt
+  // the recorder archives, or "blocking findings survived" is invisible at
+  // decision time.
+  let finalAttempt = state.finalAttempt;
   if (!gate.decisionReady) {
-    state.finalAttempt = {
-      ...state.finalAttempt,
+    finalAttempt = {
+      ...finalAttempt,
       evidence: {
-        ...state.finalAttempt.evidence,
+        ...finalAttempt.evidence,
         pipelineGateRefused: {
           reasons: gate.reasons,
           requiresHumanDecision: gate.requiresHumanDecision,
@@ -1147,26 +889,21 @@ async function finalizePipelineGate(
     clearedAt: new Date().toISOString(),
   };
   if (gateClearedRecord !== null) {
-    state.finalAttempt = {
-      ...state.finalAttempt,
+    finalAttempt = {
+      ...finalAttempt,
       evidence: {
-        ...state.finalAttempt.evidence,
+        ...finalAttempt.evidence,
         pipelineGateCleared: {
           candidateCommitOid: state.currentCandidateCommit,
           requiresHumanDecision: gate.requiresHumanDecision,
         },
       },
     };
-    await store.writePipelineGateCleared(gateClearedRecord);
   }
-  await store.promoteTerminalArtifacts({
-    result: state.finalAttempt,
-    manifest: manifestForArchive,
-  });
-  const result: PipelineResult = {
+  const result = await state.recorder.succeed(state, {
     runId: state.attempt.runId,
     status: gate.decisionReady ? "decision-ready" : "human-decision-required",
-    attempt: state.finalAttempt,
+    attempt: finalAttempt,
     increments: state.increments,
     slices: state.pipelineSlices,
     haltedSliceIndex: null,
@@ -1176,12 +913,10 @@ async function finalizePipelineGate(
     finalCandidateCommit: state.currentCandidateCommit,
     failure: null,
     pipelineGateCleared: gateClearedRecord,
-  };
-  await store.writePipelineArtifact("pipeline-result", result);
+  });
   // The terminal done/failed status is written by `runPipeline` while it still
   // holds the lease, before `finally` releases it, so it is not repeated here.
   await context.notePhase(`finished: ${result.status}`);
-  state.authoritySafeToRelease = true;
   return result;
 }
 
@@ -1296,19 +1031,24 @@ async function runPipelineWithLease(
     // the last slice index is the honest position for them.
     sliceIndex: sliceCount,
   });
+  const recorder = new TerminalRecorder({ checkoutPath, store, sliced });
   if (attempt.status !== "verified-candidate" || attempt.candidate === null) {
-    if (slicedMarkerEstablished) await store.clearPipelineActiveMarker();
     // Propagate the attempt's own classification (e.g. verification-failure for a
     // base-changed candidate, timeout, sandbox-violation) instead of flattening
     // every non-verified implement phase to producer-failure. A blameless base
     // movement is then triageable from `failure` alone, not only structural evidence.
-    return failedResult(
-      attempt,
-      [],
-      "",
-      "implement phase did not produce a verified candidate",
-      attempt.failure ?? "producer-failure",
-    );
+    const failed = await recorder.fail({ finalAttempt: attempt }, {
+      reason: "implement phase did not produce a verified candidate",
+      failure: attempt.failure ?? "producer-failure",
+      rounds: [],
+      increments: [],
+      slices: [],
+      finalCandidateCommit: "",
+    });
+    if (slicedMarkerEstablished && recorder.authoritySafeToRelease) {
+      await store.clearPipelineActiveMarker();
+    }
+    return failed;
   }
 
   if (!sliced) await store.writePipelineActiveMarker(activeOwner);
@@ -1325,7 +1065,7 @@ async function runPipelineWithLease(
     pipelineSlices: [],
     incrementOutcome: undefined,
     frozenTestEvidence: testEvidence(attempt),
-    authoritySafeToRelease: !sliced,
+    recorder,
   };
   let pipelinePrimaryError: unknown;
   try {
@@ -1336,20 +1076,25 @@ async function runPipelineWithLease(
       error: unknown,
       completedSlices: PipelineSlice[],
     ): Promise<PipelineResult> => {
-      const archived = await archiveSliceExecutionError({ checkoutPath, error, attempt, store });
-      state.authoritySafeToRelease = true;
-      state.finalAttempt = archived.failedAttempt;
-      if (error !== archived.sliceError) throw error;
-      const failed = failedResult(
-        archived.failedAttempt,
-        state.rounds,
-        completedSlices.at(-1)?.candidateCommit ?? state.baselineCommit,
-        archived.sliceError.message,
-        archived.sliceError.failure,
-        state.increments,
-        completedSlices,
-      );
-      await store.writePipelineArtifact("pipeline-result", failed);
+      const sliceError = findSliceExecutionError(error);
+      if (sliceError === null) throw error;
+      let failed: PipelineResult;
+      try {
+        failed = await recorder.fail(state, {
+          reason: sliceError.message,
+          failure: sliceError.failure,
+          rounds: state.rounds,
+          increments: state.increments,
+          slices: completedSlices,
+          finalCandidateCommit: completedSlices.at(-1)?.candidateCommit ?? state.baselineCommit,
+        });
+      } catch (archiveError) {
+        throw new AggregateError(
+          [error, archiveError],
+          "sliced pipeline failed and its attempt result could not be archived",
+        );
+      }
+      if (error !== sliceError) throw error;
       return failed;
     };
 
@@ -1450,22 +1195,17 @@ async function runPipelineWithLease(
     return await finalizePipelineGate(context, deps, state, maxRounds);
   } catch (error) {
     let terminalError = error;
-    if (sliced
-      && state.finalAttempt.status === "verified-candidate"
-      && !containsSlicedFailureArchiveError(error)) {
+    if (state.finalAttempt.status === "verified-candidate"
+      && !containsTerminalArchiveError(error)) {
       try {
-        state.finalAttempt = await archiveSlicedFailure({
-          checkoutPath,
-          attempt: state.finalAttempt,
+        await archivePipelineFailure(state, {
+          reason: "pipeline terminated before completing trusted gates",
           failure: "verification-failure",
-          reason: "sliced pipeline terminated before completing trusted gates",
-          store,
         });
-        state.authoritySafeToRelease = true;
       } catch (archiveError) {
         terminalError = new AggregateError(
           [error, archiveError],
-          "sliced pipeline failed and its attempt result could not be archived",
+          `${sliced ? "sliced " : ""}pipeline failed and its attempt result could not be archived`,
         );
       }
     }
@@ -1477,23 +1217,18 @@ async function runPipelineWithLease(
   } finally {
     const cleanupErrors = await cleanupTemporarySliceRefs(checkoutPath, temporarySliceRefs);
     if (cleanupErrors.length > 0
-      && sliced
       && state.finalAttempt.status === "verified-candidate"
-      && !containsSlicedFailureArchiveError(pipelinePrimaryError)) {
+      && !containsTerminalArchiveError(pipelinePrimaryError)) {
       try {
-        state.finalAttempt = await archiveSlicedFailure({
-          checkoutPath,
-          attempt: state.finalAttempt,
-          failure: "verification-failure",
+        await archivePipelineFailure(state, {
           reason: "temporary slice ref cleanup did not complete",
-          store,
+          failure: "verification-failure",
         });
-        state.authoritySafeToRelease = true;
       } catch (archiveError) {
         cleanupErrors.push(archiveError);
       }
     }
-    if (cleanupErrors.length === 0 && state.authoritySafeToRelease) {
+    if (cleanupErrors.length === 0 && recorder.authoritySafeToRelease) {
       try {
         await store.clearPipelineActiveMarker();
       } catch (cleanupError) {
