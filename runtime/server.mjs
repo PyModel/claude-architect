@@ -44640,11 +44640,25 @@ var journalTail = Promise.resolve();
 function withJournal(work) {
   const result = journalTail.then(async () => {
     const journalLock = await getPlatformServices().acquireCleanupJournalLock();
+    let outcome;
     try {
-      return await work();
-    } finally {
-      await journalLock.release();
+      outcome = { value: await work() };
+    } catch (error51) {
+      outcome = { error: error51 };
     }
+    try {
+      await journalLock.release();
+    } catch (releaseError) {
+      if ("error" in outcome) {
+        throw new AggregateError(
+          [outcome.error, releaseError],
+          "cleanup journal operation failed and its lock could not be released"
+        );
+      }
+      throw releaseError;
+    }
+    if ("error" in outcome) throw outcome.error;
+    return outcome.value;
   });
   journalTail = result.catch(() => {
   });
