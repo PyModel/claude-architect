@@ -18,6 +18,7 @@ import {
   resolveDefaultEnv,
   resolveInheritedWritablePaths,
 } from "../../src/producers/host-store.js";
+import { registry } from "../../src/producers/producer-registry.js";
 import {
   EDIT_ACTION_PREAMBLE,
   LINT_BEFORE_TYPECHECK_INSTRUCTION,
@@ -210,6 +211,17 @@ describe("ProducerAdapter", () => {
     );
     expect(invocation.stdin).toContain(EDIT_ACTION_PREAMBLE);
     expect(invocation.stdin).toContain(LINT_BEFORE_TYPECHECK_INSTRUCTION);
+  });
+
+  it("serves every registered Producer through the generic descriptor-driven adapter", () => {
+    const adapters = registry.all();
+    expect(adapters.map(adapter => adapter.producerId).sort()).toEqual(
+      ["agy", "claude", "codex", "opencode", "pi", "pythinker"],
+    );
+    for (const adapter of adapters) {
+      expect(adapter, adapter.producerId).toBeInstanceOf(DescriptorAdapter);
+      expect((adapter as DescriptorAdapter).descriptor.id).toBe(adapter.producerId);
+    }
   });
 
   it("defaults the descriptor-driven adapter's home directory to the OS home directory", async () => {
