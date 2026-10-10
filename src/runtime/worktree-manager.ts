@@ -17,17 +17,15 @@ import {
   repositoryNamespaceRoot,
 } from "./managed-worktree-root.js";
 import {
-  coordinateWorktreeRemoval,
-  type StagedWorktreeRegistration,
-} from "./worktree-removal-coordinator.js";
-import {
   assertNoPendingWorktreeRemovalForRepository,
-  persistWorktreeRemovalManifest,
+  beginWorktreeCreation,
+  bindWorktreeCreationPlaceholder,
+  coordinateWorktreeRemoval,
   removeWorktreeRemovalManifest,
-  replaceWorktreeRemovalManifest,
   verifyWorktreeRemovalManifestStorage,
-  type WorktreeRemovalManifest,
-} from "./worktree-removal-manifest.js";
+  type StagedWorktreeRegistration,
+  type WorktreeTransactionPhaseObserver,
+} from "./worktree-transaction.js";
 import {
   ensurePrivateDirectory,
   requireBirthtimeIdentity,
@@ -74,6 +72,8 @@ export interface WorktreeManagerDependencies {
   verifyRemovalStorage?: () => Promise<void>;
   /** Caller-owned repository lease held for this manager's complete operation. */
   borrowedCheckoutLease?: CheckoutLock;
+  /** Observes each durably recorded Worktree Transaction phase. */
+  afterTransactionPhase?: WorktreeTransactionPhaseObserver;
 }
 
 
@@ -982,6 +982,7 @@ export async function removeStaleWorktreeRegistration(
     ),
   ]);
   await coordinateWorktreeRemoval({
+    afterPhase: dependencies.afterTransactionPhase,
     transaction: {
       transactionId,
       commonDir: registration.commonDir,
@@ -1121,6 +1122,7 @@ export async function removeRegisteredWorktree(
     ),
   ]);
   await coordinateWorktreeRemoval({
+    afterPhase: dependencies.afterTransactionPhase,
     transaction: {
       transactionId,
       commonDir: registration.commonDir,
@@ -1195,8 +1197,6 @@ export async function removeRegisteredWorktree(
     },
   });
 }
-
-class WorktreeRootChangedError extends RuntimeError {}
 
 interface WorktreeCreationIntent {
   manifestPath: string;
@@ -1365,10 +1365,8 @@ export class WorktreeManager {
       worktreesRoot,
       `.create-${path.basename(worktreePath)}-${transactionId}`,
     );
-    let manifest: WorktreeRemovalManifest = {
-      manifestVersion: "1",
+    const intent = await beginWorktreeCreation({
       transactionId,
-      phase: "creation-intent",
       commonDir,
       commonDirDev: commonDirIdentity.dev.toString(),
       commonDirIno: commonDirIdentity.ino.toString(),
@@ -1395,8 +1393,7 @@ export class WorktreeManager {
       registrationDev: "0",
       registrationIno: "0",
       registrationBirthtimeNs: "0",
-    };
-    const manifestPath = await persistWorktreeRemovalManifest(manifest);
+    }, this.dependencies.afterTransactionPhase);
     await assertDirectoryIdentity(worktreesRoot, rootIdentity, "managed worktree root");
     await mkdir(stagingPath, { mode: 0o700 });
     await syncChangedDirectories(this.dependencies, worktreesRoot);
@@ -1405,14 +1402,11 @@ export class WorktreeManager {
       "worktree creation placeholder",
     );
     await assertDirectoryIdentity(worktreesRoot, rootIdentity, "managed worktree root");
-    manifest = {
-      ...manifest,
-      physicalPresent: true,
-      physicalDev: physicalIdentity.dev.toString(),
-      physicalIno: physicalIdentity.ino.toString(),
-      physicalBirthtimeNs: physicalIdentity.birthtimeNs.toString(),
-    };
-    await replaceWorktreeRemovalManifest(manifestPath, manifest);
+    const { manifestPath } = await bindWorktreeCreationPlaceholder(
+      intent,
+      physicalIdentity,
+      this.dependencies.afterTransactionPhase,
+    );
     await assertDirectoryIdentity(worktreesRoot, rootIdentity, "managed worktree root");
     await (this.dependencies.rename ?? rename)(stagingPath, worktreePath);
     await syncChangedDirectories(this.dependencies, worktreesRoot);
@@ -1431,7 +1425,7 @@ export class WorktreeManager {
     const settledRootIdentity = await managedWorktreeDirectoryIdentity(worktreesRoot);
     if (settledRootIdentity === null
       || !sameDirectoryIdentity(settledRootIdentity, expectedRootIdentity)) {
-      throw new WorktreeRootChangedError(
+      throw new RuntimeError(
         "managed worktree root identity changed during creation",
       );
     }

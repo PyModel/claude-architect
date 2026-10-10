@@ -1,5 +1,5 @@
 import { RuntimeError } from "../util/errors.js";
-import { assertNoPendingWorktreeRemovalForRepository } from "../runtime/worktree-removal-manifest.js";
+import { assertNoPendingWorktreeRemovalForRepository } from "../runtime/worktree-transaction.js";
 import type { CheckoutLock, PlatformServices } from "./platform-services.js";
 import { getPlatformServices } from "./select-platform.js";
 import {

@@ -23,7 +23,7 @@ import { getPlatformServices } from "../platform/select-platform.js";
 import { RuntimeError } from "../util/errors.js";
 import { platformPathsEqual } from "../util/platform-path.js";
 import { ArtifactStore } from "./artifact-store.js";
-import { readPendingWorktreeRemovalManifests } from "./worktree-removal-manifest.js";
+import { readPendingWorktreeRemovalManifests } from "./worktree-transaction.js";
 import {
   SAFE_RUN_ID,
   type RunStartRecord,
