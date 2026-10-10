@@ -11,7 +11,7 @@ import {
   readPendingWorktreeRemovalManifests,
   replaceWorktreeRemovalManifest,
   type WorktreeRemovalManifest,
-} from "../../src/runtime/worktree-removal-manifest.js";
+} from "../../src/runtime/worktree-transaction.js";
 
 const transactionId = "00000000-0000-4000-8000-000000000123";
 let stateRoot: string;
@@ -226,6 +226,28 @@ describe("worktree removal manifest recovery", () => {
     }]);
     await expect(access(temporaryPath)).resolves.toBeUndefined();
     expect((await lstat(publishedPath)).nlink).toBe(2);
+  });
+
+  it("retains linked residue named by the shared durable publish primitive", async () => {
+    const root = path.join(stateRoot, "worktree-removals");
+    await mkdir(root, { mode: 0o700 });
+    const temporaryPath = path.join(
+      root,
+      `.${transactionId}.json.00000000-0000-4000-8000-000000000129.tmp`,
+    );
+    const publishedPath = path.join(root, `${transactionId}.json`);
+    await writeFile(temporaryPath, `${JSON.stringify(manifest())}\n`, { mode: 0o600 });
+    await link(temporaryPath, publishedPath);
+
+    const result = await readPendingWorktreeRemovalManifests();
+
+    expect(result.issues).toEqual([]);
+    expect(result.pending).toEqual([{
+      manifestPath: publishedPath,
+      manifest: manifest(),
+      temporaryPath,
+      temporaryKind: "linked",
+    }]);
   });
 
   it("removes an unpublished temporary manifest without requiring its repository", async () => {

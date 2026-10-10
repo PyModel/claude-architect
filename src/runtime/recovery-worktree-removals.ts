@@ -27,13 +27,15 @@ import { readStableRegularFile } from "../util/stable-file.js";
 import { boundedRedactedDiagnostic } from "./redaction.js";
 import { isManagedWorktreeRoot } from "./managed-worktree-root.js";
 import {
+  isWorktreeCreationTransaction,
+  planWorktreeRemovalReplay,
   readPendingWorktreeRemovalManifests,
   readWorktreeRemovalManifest,
   removeWorktreeRemovalManifest,
   settleLinkedWorktreeRemovalManifest,
   type WorktreeRemovalManifest,
   type WorktreeRemovalManifestIssue,
-} from "./worktree-removal-manifest.js";
+} from "./worktree-transaction.js";
 import { stateRoot } from "./recovery-shared.js";
 
 async function assertRegistrationBacklink(
@@ -345,7 +347,7 @@ export async function recoverPendingWorktreeRemovals(
     let recoveryError: unknown;
     let repositoryIdentity: string | undefined;
     try {
-      if (manifest.phase === "creation-intent") {
+      if (isWorktreeCreationTransaction(manifest)) {
         repositoryIdentity = await realpath(manifest.commonDir);
         await recoverWorktreeCreationIntent(
           manifestPath,
@@ -669,9 +671,6 @@ export async function recoverPendingWorktreeRemovals(
         path.basename(manifest.physicalQuarantinePath),
         `.remove-${path.basename(manifest.physicalPath)}-${manifest.transactionId}`,
       );
-      if (manifest.phase === "creation-root-changed") {
-        throw new RuntimeError("worktree creation root changed and requires manual resolution");
-      }
       const expectedRegistrationIdentity = {
         dev: BigInt(manifest.registrationDev),
         ino: BigInt(manifest.registrationIno),
@@ -758,38 +757,18 @@ export async function recoverPendingWorktreeRemovals(
         : registrationIdentity !== null
           ? manifest.registrationPath
           : null;
-      if (activeRegistrationPath === null && manifest.phase !== "physical-removed") {
-        throw new RuntimeError("worktree removal registration disappeared before commit");
+      const replay = planWorktreeRemovalReplay(manifest, {
+        registrationActive: activeRegistrationPath !== null,
+        physicalAtPath: physicalIdentity !== null,
+        physicalInQuarantine: physicalQuarantineIdentity !== null,
+      });
+      if (replay.verifyRegistrationBacklink) {
+        await assertRegistrationBacklink(activeRegistrationPath!, manifest.physicalPath);
       }
-      if (activeRegistrationPath !== null && manifest.phase !== "physical-removed") {
-        await assertRegistrationBacklink(activeRegistrationPath, manifest.physicalPath);
-      }
-
-      if (manifest.phase === "physical-removed"
-        && (physicalIdentity !== null || physicalQuarantineIdentity !== null)) {
-        throw new RuntimeError("committed physical worktree removal reappeared");
-      }
-      if (manifest.phase === "physical-removal-intent"
-        && manifest.physicalPresent
-        && physicalIdentity === null
-        && physicalQuarantineIdentity === null) {
-        throw new RuntimeError(
-          "intended physical worktree removal has no provable original or quarantine",
-        );
-      }
-      const rollback = manifest.phase === "registration-intent"
-        ? !manifest.physicalPresent || physicalIdentity !== null
-        : manifest.phase === "physical-removal-intent"
-          ? (manifest.physicalPresent
-            ? physicalIdentity !== null || physicalQuarantineIdentity !== null
-            : physicalIdentity === null && physicalQuarantineIdentity === null)
-          : manifest.phase === "registration-staged"
-            && (manifest.physicalPresent
-              ? physicalIdentity !== null
-              : physicalIdentity === null && physicalQuarantineIdentity === null);
-      if (rollback) {
-        if (manifest.phase === "physical-removal-intent"
-          && physicalQuarantineIdentity !== null) {
+      if (replay.action === "rollback") {
+        // Only an interrupted physical-removal-intent rollback finds the
+        // physical directory quarantined.
+        if (physicalQuarantineIdentity !== null) {
           if (expectedPhysicalIdentity === null || physicalIdentity !== null) {
             throw new RuntimeError("physical worktree rollback state is inconsistent");
           }
@@ -824,11 +803,7 @@ export async function recoverPendingWorktreeRemovals(
         await syncRemovalRoots();
         await removeWorktreeRemovalManifest(manifestPath, manifest.transactionId);
       } else {
-        if (manifest.phase === "registration-staged") {
-          throw new RuntimeError("staged worktree removal physical state is inconsistent");
-        }
-        if (manifest.phase === "physical-removal-started"
-          && physicalIdentity !== null) {
+        if (replay.quarantinePhysical) {
           if (registrationIdentity !== null
             || expectedPhysicalIdentity === null
             || physicalQuarantineIdentity !== null) {

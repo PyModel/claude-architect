@@ -8,7 +8,7 @@ import {
   managedWorktreeDirectoryIdentity,
   WorktreeManager,
 } from "../../src/runtime/worktree-manager.js";
-import { readPendingWorktreeRemovalManifests } from "../../src/runtime/worktree-removal-manifest.js";
+import { readPendingWorktreeRemovalManifests } from "../../src/runtime/worktree-transaction.js";
 
 let temporaryPaths: string[] = [];
 let previousPluginData: string | undefined;
