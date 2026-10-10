@@ -35,11 +35,13 @@ import type { VerificationCommand } from "../protocol/delegation-spec.js";
 import { loadSchemas } from "../protocol/schema-loader.js";
 import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
 import {
-  containsRegisteredSecret,
-  containsRegisteredSecretValue,
-  redact,
-  redactRecord,
-} from "./redaction.js";
+  appendCleanupRecord,
+  serializeJson,
+  type AnchorCleanup,
+  type CleanupRecord,
+  type PruneReason,
+} from "./cleanup-journal.js";
+import { redact, redactRecord } from "./redaction.js";
 import {
   reviewSnapshotHash,
   validateReviewSnapshot,
@@ -76,7 +78,6 @@ const SAFE_COMPONENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const WINDOWS_RESERVED_COMPONENT = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
 const CANDIDATE_REF_PREFIX = "refs/claude-architect/candidates/";
 const PRUNE_BACKUP_REF_PREFIX = "refs/claude-architect/prune-backups/";
-const CLEANUP_JOURNAL = "cleanup.ndjson";
 const MAX_ARCHIVE_FILE_BYTES = 8_000_000;
 const MAX_EVIDENCE_REFERENCES = 4_096;
 const MAX_EVIDENCE_DEPTH = 16;
@@ -152,23 +153,6 @@ interface ValidatedDirectory {
   identity: ArchiveDirectoryIdentity;
 }
 
-type PruneReason = "max-age" | "max-bytes";
-type AnchorCleanup = "not-applicable" | "deleted" | "already-absent";
-
-interface CleanupRecord {
-  event: "prune-cleanup-intent" | "prune-cleanup-complete" | "prune-cleanup-rollback";
-  runId: string;
-  reason: PruneReason;
-  anchorCleanup: AnchorCleanup | "pending";
-  archiveBytes: number;
-  quarantineName: string;
-  repoRoot: string | null;
-  anchorRef: string | null;
-  backupRef: string | null;
-  candidateCommitOid: string | null;
-  recordedAt: string;
-}
-
 interface PreparedAnchorCleanup {
   outcome: AnchorCleanup;
   repoRoot: string | null;
@@ -182,8 +166,6 @@ interface AnchorCleanupTransaction {
   commit(): Promise<void>;
   rollback(): Promise<void>;
 }
-
-let cleanupJournalTail: Promise<void> = Promise.resolve();
 
 function isSafeComponent(value: string): boolean {
   const base = value.split(".", 1)[0] ?? value;
@@ -376,62 +358,6 @@ async function directoryBytes(
     });
   }
   return total;
-}
-
-function enqueueCleanupJournalWrite(write: () => Promise<void>): Promise<void> {
-  const result = cleanupJournalTail.then(write, write);
-  cleanupJournalTail = result.catch(() => {});
-  return result;
-}
-
-function escapeJsonPropertyKeys(serialized: string): string {
-  let result = "";
-  let cursor = 0;
-  while (cursor < serialized.length) {
-    if (serialized[cursor] !== '"') {
-      result += serialized[cursor];
-      cursor += 1;
-      continue;
-    }
-
-    let end = cursor + 1;
-    while (end < serialized.length) {
-      if (serialized[end] === "\\") {
-        end += 2;
-        continue;
-      }
-      if (serialized[end] === '"') break;
-      end += 1;
-    }
-    const token = serialized.slice(cursor, end + 1);
-    let next = end + 1;
-    while (/\s/.test(serialized[next] ?? "")) next += 1;
-    if (serialized[next] !== ":") {
-      result += token;
-      cursor = end + 1;
-      continue;
-    }
-
-    const key = JSON.parse(token) as string;
-    let escaped = "";
-    for (let index = 0; index < key.length; index += 1) {
-      escaped += `\\u${key.charCodeAt(index).toString(16).padStart(4, "0")}`;
-    }
-    result += `"${escaped}"`;
-    cursor = end + 1;
-  }
-  return result;
-}
-
-function serializeJson(value: unknown, indentation?: number): string {
-  if (containsRegisteredSecretValue(value)) {
-    throw new RuntimeError("archive JSON cannot be safely persisted after redaction");
-  }
-  const serialized = escapeJsonPropertyKeys(JSON.stringify(value, null, indentation));
-  if (containsRegisteredSecret(serialized)) {
-    throw new RuntimeError("archive JSON cannot be safely persisted after redaction");
-  }
-  return serialized;
 }
 
 function preserveIdentity(value: string, label: string): string {
@@ -1601,38 +1527,8 @@ export class ArtifactStore {
   }
 
   private async appendCleanupRecord(record: CleanupRecord): Promise<void> {
-    await enqueueCleanupJournalWrite(async () => {
-      // Cross-process mutex over the shared journal: serializes this append against
-      // a concurrent process's append or recovery torn-tail truncation. Leaf lock —
-      // acquired and released here without holding any other lock across it.
-      const journalLock = await getPlatformServices().acquireCleanupJournalLock();
-      try {
-        await this.ensureRunsRoot();
-        const runsRootIdentity = await ensurePlainDirectory(this.runsRoot);
-        const filename = path.join(this.runsRoot, CLEANUP_JOURNAL);
-        const handle = await open(
-          filename,
-          constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | NO_FOLLOW,
-          0o600,
-        );
-        try {
-          await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-          const metadata = await handle.stat();
-          if (!metadata.isFile()) throw new RuntimeError("cleanup journal is not a regular file");
-          const line = `${serializeJson(record)}\n`;
-          await handle.writeFile(line, { encoding: "utf8" });
-          await handle.sync();
-          await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-        } finally {
-          await handle.close();
-        }
-        await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-        await flushDirectory(this.runsRoot);
-        await assertDirectoryIdentity(this.runsRoot, runsRootIdentity);
-      } finally {
-        await journalLock.release();
-      }
-    });
+    await this.ensureRunsRoot();
+    await appendCleanupRecord(this.runsRoot, record);
   }
 
   // Reclaim a run whose delegating repository has been deleted. The intent is written
