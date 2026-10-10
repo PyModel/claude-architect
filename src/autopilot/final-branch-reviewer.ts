@@ -256,7 +256,7 @@ async function validateArchivedTaskEvidence(
     eligibilityHash: task.eligibilityHash,
   }, store);
   if (!loaded.ok) {
-    fail("missing-task-evidence", `task evidence identities do not match: ${task.id}`);
+    fail("missing-task-evidence", `task evidence is not coherent (${loaded.classification}): ${task.id}`);
   }
   const { candidate, decision, eligibilityHash } = loaded.evidence;
   const [promotionParent, promotionTree] = await Promise.all([
