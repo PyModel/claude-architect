@@ -291,19 +291,23 @@ function withoutSupportRoots(args: string[]): string[] {
 }
 
 /**
- * Make a record platform-neutral without losing bytes that matter: path
- * separators become "/", and long
- * strings (rendered prompts) collapse to their sha256.
+ * Make a record platform-neutral and checkout-independent without losing
+ * bytes that matter: path separators become "/", the checkout root becomes
+ * "<checkout>/" (before hashing, so rendered prompts embedding vendored skill
+ * paths hash the same everywhere), and long strings (rendered prompts)
+ * collapse to their sha256.
  */
-function canonical(value: unknown): unknown {
+function canonical(value: unknown, checkoutRoot: string): unknown {
   if (typeof value === "string") {
-    let text = value;
-    text = text.split("\\").join("/");
+    const root = checkoutRoot.split("\\").join("/").replace(/\/?$/, "/");
+    const text = value.split("\\").join("/").split(root).join("<checkout>/");
     return text.length > 200 ? `sha256:${createHash("sha256").update(text).digest("hex")}` : text;
   }
-  if (Array.isArray(value)) return value.map(canonical);
+  if (Array.isArray(value)) return value.map(entry => canonical(entry, checkoutRoot));
   if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, canonical(entry)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, canonical(entry, checkoutRoot)]),
+    );
   }
   return value;
 }
@@ -401,7 +405,7 @@ async function characterize(
     invocation,
     environment,
     events,
-  }, checkoutRoot));
+  }, checkoutRoot), checkoutRoot);
 }
 
 const PRODUCERS: Array<[string, Factory, ProducerDescriptor]> = [
@@ -676,7 +680,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
             "requiredEnv": [
               "PI_API_KEY",
             ],
-            "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+            "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
           },
           "effortHigh": {
             "args": [
@@ -702,7 +706,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
             "requiredEnv": [
               "PI_API_KEY",
             ],
-            "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+            "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
           },
           "effortInvalid": {
             "args": [
@@ -728,7 +732,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
             "requiredEnv": [
               "PI_API_KEY",
             ],
-            "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+            "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
           },
           "gitRedirect": {
             "args": [
@@ -752,7 +756,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
             "requiredEnv": [
               "PI_API_KEY",
             ],
-            "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+            "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
           },
           "gitRedirectReadOnly": {
             "args": [
@@ -1375,7 +1379,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "OPENCODE_CONFIG_DIR",
                 "XDG_DATA_HOME",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "effortHigh": {
               "args": [
@@ -1406,7 +1410,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "OPENCODE_CONFIG_DIR",
                 "XDG_DATA_HOME",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "effortInvalid": {
               "args": [
@@ -1437,7 +1441,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "OPENCODE_CONFIG_DIR",
                 "XDG_DATA_HOME",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "gitRedirect": {
               "args": [
@@ -1468,7 +1472,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "OPENCODE_CONFIG_DIR",
                 "XDG_DATA_HOME",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "gitRedirectReadOnly": {
               "args": [
@@ -1532,7 +1536,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "OPENCODE_CONFIG_DIR",
                 "XDG_DATA_HOME",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "modelAndEffort": {
               "args": [
@@ -1565,7 +1569,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "OPENCODE_CONFIG_DIR",
                 "XDG_DATA_HOME",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "readOnly": {
               "args": [
@@ -2087,7 +2091,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
           "base": {
             "args": [
               "-p",
-              "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
               "--add-dir",
               "/work/tree",
               "--new-project",
@@ -2114,7 +2118,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
           "effortHigh": {
             "args": [
               "-p",
-              "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
               "--add-dir",
               "/work/tree",
               "--new-project",
@@ -2143,7 +2147,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
           "effortInvalid": {
             "args": [
               "-p",
-              "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
               "--add-dir",
               "/work/tree",
               "--new-project",
@@ -2172,7 +2176,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
           "gitRedirect": {
             "args": [
               "-p",
-              "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
               "--add-dir",
               "/work/tree",
               "--new-project",
@@ -2226,7 +2230,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
           "model": {
             "args": [
               "-p",
-              "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
               "--add-dir",
               "/work/tree",
               "--new-project",
@@ -2255,7 +2259,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
           "modelAndEffort": {
             "args": [
               "-p",
-              "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
               "--add-dir",
               "/work/tree",
               "--new-project",
@@ -2853,7 +2857,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
             "base": {
               "args": [
                 "--prompt",
-                "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+                "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
               ],
               "env": {
                 "PYTHINKER_CLI_NO_AUTO_UPDATE": "1",
@@ -2882,7 +2886,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
             "gitRedirect": {
               "args": [
                 "--prompt",
-                "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+                "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
               ],
               "env": {
                 "PYTHINKER_CLI_NO_AUTO_UPDATE": "1",
@@ -2928,7 +2932,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
             "model": {
               "args": [
                 "--prompt",
-                "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+                "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
                 "--model",
                 "model-x",
               ],
@@ -3572,7 +3576,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CLAUDE_CONFIG_DIR",
                 "ANTHROPIC_API_KEY",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "effortHigh": {
               "args": [
@@ -3606,7 +3610,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CLAUDE_CONFIG_DIR",
                 "ANTHROPIC_API_KEY",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "effortInvalid": {
               "error": "Claude effort override "turbo" is unsupported; use one of low|medium|high|xhigh|max.",
@@ -3641,7 +3645,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CLAUDE_CONFIG_DIR",
                 "ANTHROPIC_API_KEY",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "gitRedirectReadOnly": {
               "args": [
@@ -3707,7 +3711,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CLAUDE_CONFIG_DIR",
                 "ANTHROPIC_API_KEY",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "modelAndEffort": {
               "args": [
@@ -3743,7 +3747,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CLAUDE_CONFIG_DIR",
                 "ANTHROPIC_API_KEY",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "readOnly": {
               "args": [
@@ -4361,7 +4365,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CODEX_CA_CERTIFICATE",
                 "SSL_CERT_FILE",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "effortHigh": {
               "args": [
@@ -4417,7 +4421,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CODEX_CA_CERTIFICATE",
                 "SSL_CERT_FILE",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "effortInvalid": {
               "args": [
@@ -4473,7 +4477,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CODEX_CA_CERTIFICATE",
                 "SSL_CERT_FILE",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "gitRedirect": {
               "args": [
@@ -4531,7 +4535,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CODEX_CA_CERTIFICATE",
                 "SSL_CERT_FILE",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "gitRedirectReadOnly": {
               "args": [
@@ -4645,7 +4649,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CODEX_CA_CERTIFICATE",
                 "SSL_CERT_FILE",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "modelAndEffort": {
               "args": [
@@ -4703,7 +4707,7 @@ describe("Producer Adapter characterization (descriptor migration guard)", () =>
                 "CODEX_CA_CERTIFICATE",
                 "SSL_CERT_FILE",
               ],
-              "stdin": "sha256:694c1602e509fd0e7bbdaeb216f680bb9988feb5ab3dbd20fbadfe6287578ff5",
+              "stdin": "sha256:2d833852f36a3d6339192342faa20c721f577bc09590311ac3c49416f3b6a23c",
             },
             "readOnly": {
               "args": [
