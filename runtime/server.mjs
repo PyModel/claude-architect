@@ -33568,6 +33568,7 @@ async function writeAtomic(session, name, bytes, mode) {
   const temporaryPath = path7.join(session.directory, `.${name}.${randomUUID2()}.tmp`);
   let handle;
   let temporaryCreated = false;
+  let primary;
   try {
     await session.assertIdentity();
     handle = await open4(
@@ -33612,18 +33613,24 @@ async function writeAtomic(session, name, bytes, mode) {
     }
     await session.sync();
     await session.assertIdentity();
+  } catch (error51) {
+    primary = { error: error51 };
+    throw error51;
   } finally {
+    const cleanup = [];
     if (handle !== void 0) {
-      try {
-        await handle.close();
-      } catch {
-      }
+      await handle.close().catch((closeError) => {
+        cleanup.push(closeError);
+      });
     }
     if (temporaryCreated) {
-      try {
-        await rm2(temporaryPath, { force: true });
-      } catch {
-      }
+      await rm2(temporaryPath, { force: true }).catch((removeError) => {
+        cleanup.push(removeError);
+      });
+    }
+    if (cleanup.length > 0) {
+      const errors = primary === void 0 ? cleanup : [primary.error, ...cleanup];
+      throw new AggregateError(errors, `atomic write cleanup failed: ${name}` + (primary === void 0 ? "" : `; primary failure: ${primary.error instanceof Error ? primary.error.message : String(primary.error)}`));
     }
   }
 }
