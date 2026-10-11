@@ -22,6 +22,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/lane-launchers.test.sh | scripts/, agents/, src/mcp/server.ts, src/producers/*-adapter.ts, skills/delegate/SKILL.md | file-presence/grep checks | contract | no |
 | tests/plugin-manifest.test.mjs | .claude-plugin/plugin.json, marketplace.json | JSON field assertions | contract | no |
 | tests/runtime/acceptance-verifier.test.ts | src/verify/acceptance-verifier.ts | AcceptanceVerifier | unit | no |
+| tests/runtime/adapter-characterization.test.ts | src/producers/*-adapter.ts | ProducerAdapter.buildInvocation, normalizeEvents, configurationProfile (golden characterization, path-independent) | contract | no |
 | tests/runtime/agy-adapter.test.ts | src/producers/agy-adapter.ts | AgyAdapter, renderProducerPrompt, producerRuntime, renderSkillBootstrap | contract | no |
 | tests/runtime/allowlist-sufficiency.test.ts | src/mcp/allowlist-sufficiency.ts | resolveImport, checkAllowlistSufficiency, allowlistSufficiencyDiagnostic | unit | no |
 | tests/runtime/artifact-store-bytes.test.ts | src/runtime/artifact-store.ts, src/runtime/run-manifest.ts | ArtifactStore, buildRunManifest | contract | no |
@@ -40,6 +41,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/autopilot/candidate-promoter.integration.test.ts | src/autopilot/candidate-promoter.ts | CandidatePromoter | integration | no |
 | tests/runtime/autopilot/candidate-promoter.test.ts | src/autopilot/candidate-promoter.ts | CandidatePromoter | unit | YES (minor) — `vi.spyOn(logger, "warn")` (L447) |
 | tests/runtime/autopilot/final-branch-reviewer.test.ts | src/autopilot/final-branch-reviewer.ts | FinalBranchReviewer, WorkflowStore, WorkflowBranchManager | adversarial | YES — `vi.spyOn(branchManager, "revalidateUnderLock").mockImplementation(...)` (L637) replaces the real revalidation path |
+| tests/runtime/autopilot/run-evidence.test.ts | src/autopilot/run-evidence.ts | loadRunEvidence, REQUIRED_TASK_EVIDENCE_REFS | adversarial | no |
 | tests/runtime/autopilot/workflow-state-schema.test.ts | src/protocol/schema-loader.ts, src/autopilot/types.ts | loadSchemas, AutopilotWorkflowState | contract | no |
 | tests/runtime/autopilot/workflow-store.test.ts | src/autopilot/workflow-store.ts | WorkflowStore, LEGAL_WORKFLOW_PHASE_EDGES | integration | no |
 | tests/runtime/baseline-verifier.test.ts | src/verify/baseline-verifier.ts | verifyBaseline, WorktreeManager | integration | no |
@@ -47,11 +49,13 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/bootstrap.smoke.test.ts | runtime/bootstrap.mjs | spawned CLI process | smoke | no |
 | tests/runtime/bound-directory-cleanup.test.ts | src/platform/bound-directory-cleanup.ts | resolveEmptyDirectoryTimeoutMs | unit | no |
 | tests/runtime/candidate-decision.test.ts | src/protocol/candidate-decision.ts, src/protocol/schema-loader.ts | loadSchemas, CandidateDecision types | contract | no |
+| tests/runtime/candidate-decisions.test.ts | src/runtime/candidate-decisions.ts | recordCandidateDecision, integrationRefusal, isAutopilotAcceptance, authorityForProvenance | adversarial | no |
 | tests/runtime/candidate-tree.test.ts | src/git/candidate-tree.ts | freezeCandidate | integration | YES — `vi.mock("../../src/git/git-exec.js", ...)` (L439) wraps `git()` to inject failures |
 | tests/runtime/capability-probe.test.ts | src/producers/capability-probe.ts | probeAll, CodexAdapter, ProducerRegistry | contract | no |
 | tests/runtime/changed-path-manifest.test.ts | src/git/changed-path-manifest.ts | computeChangedPathManifest, parseRawDiff, manifestHashOf | unit | no |
 | tests/runtime/checked-git.test.ts | src/git/checked-git.ts | gitChecked, gitSucceeded, reviewDiffArgs | unit | no |
 | tests/runtime/claude-adapter.test.ts | src/producers/claude-adapter.ts | ClaudeAdapter, renderProducerPrompt | contract | no |
+| tests/runtime/cleanup-journal.test.ts | src/runtime/cleanup-journal.ts | appendCleanupRecord, readPendingCleanupIntents | integration | YES — `vi.mock("node:fs/promises", ...)` observes the directory flush (OS fault/observation injection; the journal itself is real) |
 | tests/runtime/codex-adapter.test.ts | src/producers/codex-adapter.ts | CodexAdapter, codexDescriptor, sandboxSupportWritableRoots | contract | no |
 | tests/runtime/consolidator.test.ts | src/pipeline/consolidator.ts | consolidate, detectNonConvergence | unit | no |
 | tests/runtime/controlled-integrator.test.ts | src/integrate/controlled-integrator.ts | applyCandidateTree, stageCandidateTreeUnderLock | integration | YES — `vi.mock("../../src/git/git-exec.js", ...)` (L797) injects mid-operation git failures |
@@ -73,24 +77,24 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/git-writable-roots.test.ts | src/pipeline/git-writable-roots.ts | resolveLinkedWorktreeWritableRoots | integration | no |
 | tests/runtime/handshake.smoke.test.ts | src/mcp/server.ts (via runtime/server.mjs) | createServer, MCP handshake | smoke | no |
 | tests/runtime/human-decision-gate.test.ts | src/mcp/server.ts | confirmWithHuman | unit | no |
+| tests/runtime/jev-screen.test.ts | src/mcp/jev-screen.ts | jevScreen | unit | no — the TypeSafe API is reached through an injected `fetch` |
 | tests/runtime/legacy-decision-provenance.test.ts | src/runtime/artifact-store.ts | ArtifactStore | integration | YES — hand-writes `decision.json` bytes in a prior release's shape (~L498-816) instead of via a real decision flow |
 | tests/runtime/live-bundle.test.ts | src/mcp/live-bundle.ts | checkLiveBundle, liveBundleDiagnostic | unit | no |
 | tests/runtime/lock-contention.test.ts | src/platform/select-platform.ts | getPlatformServices, acquireCheckoutLock | integration | no |
-| tests/runtime/lock-ownership.test.ts | src/platform/lock-ownership.ts | formatLockRecord, parseLockRecord, reclaimDeadLock, lockOwnerStatus | unit/contract | YES — `vi.spyOn(logger, "warn")` (L690-691) mocks internal logger |
+| tests/runtime/lock-ownership.test.ts | src/platform/lock-ownership.ts, src/platform/checkout-lock.ts | reclaimDeadLock, acquireCheckoutLock, releaseLock, tryAcquireLock | unit/contract | YES — `vi.spyOn(logger, "warn")` (L690-691) mocks internal logger |
 | tests/runtime/mcp-cancellation.test.ts | src/mcp/server.ts | start (MCP server) | integration | no |
 | tests/runtime/mcp-decision-gate.test.ts | src/mcp/server.ts, src/runtime/artifact-store.ts | start, ArtifactStore | integration | no |
 | tests/runtime/mcp-input-schema.test.ts | src/mcp/server.ts | delegateInputSchema, delegatePipelineInputSchema | contract | no |
 | tests/runtime/mcp-output-schema.test.ts | src/mcp/server.ts, src/mcp/doctor.ts | delegatePipelineOutput, doctorOutput, doctor | contract | no |
 | tests/runtime/opencode-adapter.test.ts | src/producers/opencode-adapter.ts | OpenCodeAdapter | integration | no |
-| tests/runtime/jev-screen.test.ts | src/mcp/jev-screen.ts | jevScreen | unit | no — the TypeSafe API is reached through an injected `fetch` |
 | tests/runtime/pi-adapter.test.ts | src/producers/pi-adapter.ts | PiAdapter | integration | no |
 | tests/runtime/pipeline-runtime.test.ts | src/pipeline/pipeline-runtime.ts | runPipeline, runIncrement, runReviews, verifyCandidate | integration | YES — extensive `vi.spyOn(AcceptanceVerifier.prototype, "verify")`, `ArtifactStore.prototype.*`, `WorktreeManager.prototype.create` (L792,927,933,1010,1180,1239,1378,1483,2076,3345,3424) replace internal src behavior |
 | tests/runtime/pipeline/advisor-stage.test.ts | src/pipeline/advisor-stage.ts | runAdvisorStage | integration | no |
 | tests/runtime/pipeline/autopilot-eligibility.test.ts | src/autopilot/autopilot-eligibility.ts | evaluateAutopilotEligibility | unit | no |
 | tests/runtime/pipeline/slice-runner.test.ts | src/pipeline/slice-runner.ts | SliceRunner, PipelineSlice, SliceAttempt | integration | no |
 | tests/runtime/pipeline/wayfinder.test.ts | src/pipeline/wayfinder.ts | routeSlice | unit | no |
-| tests/runtime/platform-safety.test.ts | src/platform/platform-safety.ts | PlatformSafety.withCheckoutLease | unit | no |
 | tests/runtime/platform-path.test.ts | src/util/platform-path.ts | platformPathsEqual | unit | no |
+| tests/runtime/platform-safety.test.ts | src/platform/platform-safety.ts | PlatformSafety.withCheckoutLease | unit | no |
 | tests/runtime/plugin-wiring.test.mjs | .mcp.json, runtime/bootstrap.mjs, runtime/server.mjs, agents/advisor.md | file/wiring assertions | contract | no |
 | tests/runtime/posix-platform-services.test.ts | src/platform/posix-platform-services.ts | PosixPlatformServices, CLEANUP_JOURNAL_LOCK_KEY | integration | no |
 | tests/runtime/pre-push-hook.test.ts | .githooks/pre-push | shell script source assertions | contract | no |
@@ -117,6 +121,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/routing-policy.test.ts | src/producers/routing-policy.ts | route | unit | no |
 | tests/runtime/run-decision.test.ts | src/runtime/run-decision.ts | RunDecision, runDecision, readRunDecisionSnapshot | unit | no |
 | tests/runtime/run-manifest.test.ts | src/runtime/run-manifest.ts | buildRunManifest, verifyRunManifest | unit | no |
+| tests/runtime/run-start.test.ts | src/runtime/run-start.ts | writeRunStart, initializeRunStart | integration | no |
 | tests/runtime/run-status.test.ts | src/runtime/run-status.ts, src/runtime/attempt-runtime.ts | StatusEmitter, runAttempt, initializeRunStart | integration | YES — `vi.spyOn(ArtifactStore.prototype, "writeRunStatus")` + `vi.spyOn(logger, "warn")` (L1661-1663) force failure paths mid-run |
 | tests/runtime/sandbox-backends.test.ts | src/platform/sandbox/backends.ts | selectSandboxBackend, SANDBOX_BACKENDS | unit | no |
 | tests/runtime/scaffold.test.ts | src/util/logger.ts | logger | unit | no |
@@ -138,12 +143,13 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/windows-filesystem-helper.test.ts | src/platform/windows-filesystem-helper.ts | resolveWindowsFilesystemHelper, removeBoundEmptyDirectory | smoke | no |
 | tests/runtime/windows-helper-resolve.test.ts | src/platform/windows-platform-services.ts | resolveJobKillHelper, WindowsPlatformServices, resolveWindowsFilesystemHelper | unit | no |
 | tests/runtime/windows-job-kill.test.ts | src/platform/windows-platform-services.ts | resolveJobKillHelper, WindowsPlatformServices | smoke | no |
-| tests/runtime/windows-platform.test.ts | src/platform/windows-platform-services.ts | canonicalizeForScope, acquireWxFileLock, WindowsPlatformServices | unit | no |
+| tests/runtime/windows-platform.test.ts | src/platform/windows-platform-services.ts | canonicalizeForScope, WindowsPlatformServices | unit | no |
 | tests/runtime/windows-resolve.test.ts | src/platform/windows-env.ts, src/platform/windows-platform-services.ts | normalizeWindowsEnv, resolveWindowsExecutable | unit | no |
 | tests/runtime/worktree-manager.test.ts | src/runtime/worktree-manager.ts | WorktreeManager, managedWorktreeDirectoryIdentity, removeManagedWorktreeDirectory | integration | no |
 | tests/runtime/worktree-registration.test.ts | src/git/worktree-registration.ts | findWorktreeRegistration | unit | no |
 | tests/runtime/worktree-removal-manifest.test.ts | src/runtime/worktree-removal-manifest.ts | persistWorktreeRemovalManifest, readPendingWorktreeRemovalManifests, replaceWorktreeRemovalManifest, assertNoPendingWorktreeRemovalForRepository | integration | no |
 | tests/runtime/worktree-sweep.test.ts | src/runtime/recovery-worktree-sweep.ts | recoverStaleRuns, WorktreeManager | integration | no |
+| tests/runtime/worktree-transaction.test.ts | src/runtime/worktree-transaction.ts | persistWorktreeRemovalManifest, readPendingWorktreeRemovalManifests, planWorktreeRemovalReplay | integration | no |
 | tests/validate-release.test.sh | scripts/validate-release.sh | validate-release CLI contract | integration | no |
 
 ## Past the interface

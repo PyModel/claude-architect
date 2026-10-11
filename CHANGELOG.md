@@ -53,6 +53,20 @@ All notable changes to Claude Architect are recorded here. The format follows
 - `src/runtime/recovery-manager.ts` (3,880 lines, nine concerns) is split into one module per concern: `recovery-runs`, `recovery-prune-journal`, `recovery-quarantine`, `recovery-worktree-removals`, `recovery-worktree-sweep`, and `recovery-autopilot`, over a `recovery-shared` leaf. `recovery-manager` keeps only `recoverStaleRuns`, which sequences them. The declarations moved verbatim, and the modules import in one direction.
 - CI pins every GitHub Action to a commit SHA with its version as a comment, and pins the Claude Code CLI it installs. A wiring test enforces both.
 
+- Internal deepening (no protocol or on-disk format change): one Cleanup Journal module owns `cleanup.ndjson`; one Checkout Lock module owns every checkout, recovery and cleanup-journal lock under the owned (link-publish, handle-verified) protocol, with transient Windows errors retried inside the deadline; one Candidate Decisions module owns provenance-to-authority mapping, idempotency and conflicts, anchor removal and the integration and Autopilot acceptance checks (MCP handlers only resolve provenance); one Run Evidence loader gives Autopilot's promoter and final reviewer the union of their former evidence checks; one Worktree Transaction module owns the version-1 manifest, phases and replay (the removal coordinator is gone); durable append, exclusive publish and directory move are shared primitives; `roleRunner` is the only role-run injection seam; Producer adapters are built from descriptors. Live checkout locks now need a locks directory that reports a birth time, as recovery already did.
+
+### Fixed
+
+- A pipeline that failed after its candidate passed verification (review cancelled, fixer or adoption failure, an unexpected error) on an unsliced run used to leave an archive a person could accept and integrate; every terminal exit now goes through one terminal recorder that demotes the result with the failure classification, removes the candidate anchor (except for a verification failure), always writes `pipeline/pipeline-result.json`, and releases authority only after its files are written. Crash recovery archives an interrupted unsliced pipeline the same way.
+- Crash recovery's cleanup-journal appends now go through the same redacting serializer and directory flush as live prunes, and an append after another process crashed mid-write repairs the torn final line first instead of corrupting the journal.
+- A checkout-lock release can no longer delete a lock another holder published in its place, and a dead holder's lock left with its temporary record still linked (a crash between publish and cleanup) is reclaimed instead of staying locked across restarts.
+- A worktree manifest naming the never-written `creation-root-changed` phase is rejected as malformed (recovery fails closed).
+- Re-sending an identical rejection after its candidate anchor was removed now succeeds against real Git (`show-ref --verify` exits 128 for an absent ref, which the old check misread).
+- When salvage promoted a candidate and its re-verification then threw, the fallback demoted the pre-promotion attempt and failed to remove the promoted anchor.
+- Directory identity checks use 64-bit device/inode values and one exact birth-time rule everywhere (a recorded zero birth time no longer matches a directory that has one).
+- An atomic write whose temporary-file cleanup also fails reports both failures, primary first, instead of swallowing the cleanup error.
+- A descriptor-driven Producer adapter with no probe hook reports the edit lane unavailable instead of eligible.
+
 ### Removed
 
 - The GitHub shipping adapter (`src/ship/`, about 1,190 lines), the Autopilot v1 spec and workflow-state schemas, and the `doctor` checks `autopilot-remote-recovery-required` and `autopilot-pr-recovery-required`.
