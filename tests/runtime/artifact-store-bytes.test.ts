@@ -2,8 +2,15 @@ import { createHash } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AttemptResult } from "../../src/protocol/attempt-result.js";
+
+// manifest.json embeds the runtime version; pin it so a release bump does not
+// read as an on-disk format change.
+vi.mock("../../src/protocol/versions.js", async importOriginal => ({
+  ...await importOriginal<typeof import("../../src/protocol/versions.js")>(),
+  RUNTIME_VERSION: "0.52.0",
+}));
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
 import { buildRunManifest } from "../../src/runtime/run-manifest.js";
 

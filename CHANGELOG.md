@@ -6,6 +6,8 @@ All notable changes to Claude Architect are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-10-11
+
 ### Security
 
 - `@modelcontextprotocol/sdk` 1.30.0 → 1.32.1 (its OAuth client could send credentials to an authorization server chosen by the MCP server), plus lockfile updates for the `fast-uri`, `ip-address`, `hono`, `qs`, `proxy-addr`, and `source-map-js` advisories; `npm audit` reports 0 vulnerabilities. CodeQL actions 4.37.7 → 4.38.3; `@types/node` 26.2.0 → 26.6.5; `vitest` 4.1.11 → 5.0.3.
@@ -1435,7 +1437,8 @@ Initial public release.
 - Native OpenCode assets under `.opencode/` and `opencode.json`, so the same lanes and skill work outside Claude Code.
 - SVG banner and shields badges for the README.
 
-[Unreleased]: https://github.com/PyModel/claude-architect/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/PyModel/claude-architect/compare/v0.53.0...HEAD
+[0.53.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.53.0
 [0.43.0]: https://github.com/PyModel/claude-architect/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/PyModel/claude-architect/compare/v0.41.0...v0.42.0
 [0.16.0]: https://github.com/PyModel/claude-architect/compare/v0.15.0...v0.16.0
