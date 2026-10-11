@@ -271,6 +271,33 @@ describe("PlatformSafety durable-write", () => {
       }
     });
 
+    it("refuses and writes nothing when the directory is swapped at the append's own open", async () => {
+      const directory = path.join(testDir, "journal-dir");
+      const displaced = path.join(testDir, "displaced");
+      await mkdir(directory);
+      const session = await openDurableDirectorySession(directory);
+      const journal = path.join(directory, "journal.ndjson");
+      let swapped = false;
+      // The pre-open identity check has already passed when open is called, so
+      // only the post-open re-check can catch this swap.
+      vi.mocked(open).mockImplementationOnce(async (...args: Parameters<typeof open>) => {
+        swapped = true;
+        await actualFs.rename(directory, displaced);
+        await actualFs.mkdir(directory);
+        return actualFs.open(...args);
+      });
+      try {
+        await expect(appendDurable(session, "journal.ndjson", "line\n"))
+          .rejects.toThrow("durable directory session identity changed");
+        expect(swapped).toBe(true);
+        expect(String(vi.mocked(open).mock.calls.at(-1)?.[0])).toBe(journal);
+        expect(await readFile(journal, "utf8")).toBe("");
+        expect(await readdir(displaced)).toEqual([]);
+      } finally {
+        await session.close();
+      }
+    });
+
     it("refuses to append when the file size is not the expected size", async () => {
       await writeFile(path.join(testDir, "journal.ndjson"), "abc");
       const session = await openDurableDirectorySession(testDir);
