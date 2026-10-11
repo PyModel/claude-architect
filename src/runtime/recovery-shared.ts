@@ -105,6 +105,11 @@ export async function assertPrivateRecoveryDirectory(directory: string): Promise
   });
 }
 
+/**
+ * The identity of a plain directory, or null when it is absent. A zero birth
+ * time is returned as observed (and compared exactly); a caller whose identity
+ * guards a destructive operation passes it through requireBirthtimeIdentity.
+ */
 export async function plainDirectoryIdentity(directory: string): Promise<DirectoryIdentity | null> {
   try {
     const metadata = await lstat(directory, { bigint: true });

@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { lstat, open } from "node:fs/promises";
 import path from "node:path";
-import { NO_FOLLOW, flushDirectory } from "../platform/durable-directory.js";
+import { NO_FOLLOW, flushDirectory, requireBirthtimeIdentity } from "../platform/durable-directory.js";
 import { DurableDirectorySession, appendDurable } from "../platform/durable-write.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { RuntimeError, isMissing } from "../util/errors.js";
@@ -363,8 +363,10 @@ async function truncateCleanupTornTail(filename: string): Promise<void> {
 export async function appendCleanupRecord(runsRoot: string, record: CleanupRecord): Promise<void> {
   const line = `${serializeJson(record)}\n`;
   await withJournal(async () => {
-    const identity = await plainDirectoryIdentity(runsRoot);
-    if (identity === null) throw new RuntimeError("cleanup journal root disappeared");
+    const observed = await plainDirectoryIdentity(runsRoot);
+    if (observed === null) throw new RuntimeError("cleanup journal root disappeared");
+    // The session guards torn-tail truncation, a destructive write.
+    const identity = requireBirthtimeIdentity(observed, "cleanup journal root");
     // A hot path: flushDirectory never spawns the Windows directory helper.
     const session = new DurableDirectorySession(runsRoot, identity, { syncDirectory: flushDirectory });
     // Repair a torn tail left by a crashed appender before writing, so this

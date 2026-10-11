@@ -44855,8 +44855,9 @@ async function appendCleanupRecord(runsRoot, record2) {
   const line = `${serializeJson(record2)}
 `;
   await withJournal(async () => {
-    const identity = await plainDirectoryIdentity(runsRoot);
-    if (identity === null) throw new RuntimeError("cleanup journal root disappeared");
+    const observed = await plainDirectoryIdentity(runsRoot);
+    if (observed === null) throw new RuntimeError("cleanup journal root disappeared");
+    const identity = requireBirthtimeIdentity(observed, "cleanup journal root");
     const session = new DurableDirectorySession(runsRoot, identity, { syncDirectory: flushDirectory });
     const filename = path26.join(runsRoot, CLEANUP_JOURNAL);
     const { text, tornTail } = await readCleanupJournal(filename);
