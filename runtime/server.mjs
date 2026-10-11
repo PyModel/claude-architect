@@ -47119,6 +47119,10 @@ var RunDecision = class {
       } else {
         reasons.push(`attempt status is ${snapshot.result.status}`);
       }
+      const pipelineFailure = snapshot.result.evidence?.pipelineFailure;
+      if (isRecord7(pipelineFailure) && typeof pipelineFailure.reason === "string") {
+        reasons.push(pipelineFailure.reason);
+      }
       return { state: "rejected", reasons };
     }
     if (snapshot.result.candidate === null) {

@@ -259,6 +259,11 @@ export class RunDecision {
       } else {
         reasons.push(`attempt status is ${snapshot.result.status}`);
       }
+      // Recorded by the terminal recorder; result.json is redacted on write.
+      const pipelineFailure = snapshot.result.evidence?.pipelineFailure;
+      if (isRecord(pipelineFailure) && typeof pipelineFailure.reason === "string") {
+        reasons.push(pipelineFailure.reason);
+      }
       return { state: "rejected", reasons };
     }
 
