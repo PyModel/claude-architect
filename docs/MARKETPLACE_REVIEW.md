@@ -10,7 +10,7 @@ No Producer can mark its own work accepted. `decideCandidate` records a provenan
 
 ## Component inventory
 
-- Skill: `/claude-architect:delegate` in `skills/delegate/SKILL.md`.
+- Skill: `/architect:delegate` in `skills/delegate/SKILL.md`.
 - Read-only advisor: `advisor`.
 - MCP tools: `validateDelegationSpec`, `delegate`, `delegatePipeline`, `reviewCandidate`, `decideCandidate`, `integrateCandidate`, `doctor`, `gitStatus`, `gitDiff`, `gitLog`, and `gitChangedFiles`.
 - Packaged runtime: `runtime/bootstrap.mjs`, `runtime/server.mjs`, schemas, and Windows watchdog/helper support.
@@ -98,7 +98,7 @@ Known limitations are material: editing is confined only on macOS arm64 (Codex a
 2. Restart or reload Claude Code so the packaged MCP server is registered.
 3. Install and authenticate at least one supported Producer CLI. For the certified lane, use a supported Codex CLI on native macOS arm64 and confirm `doctor` reports `codex-native-sandbox` with edit eligibility.
 4. Run the plugin's `doctor` MCP surface (or the corresponding Claude workflow) to inspect Node, Git, Producer, platform, and confinement status before delegating.
-5. Invoke `/claude-architect:delegate`, choose a Producer, and review the generated scope and verification plan.
+5. Invoke `/architect:delegate`, choose a Producer, and review the generated scope and verification plan.
 
 Exact marketplace CLI syntax can vary by Claude Code release; use the current Claude Code plugin-manager documentation rather than copying an unverified command.
 

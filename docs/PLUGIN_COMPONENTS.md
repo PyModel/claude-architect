@@ -4,7 +4,7 @@ This inventory describes the shipped surfaces relevant to marketplace review. Th
 
 ## Skill
 
-`skills/delegate/SKILL.md` defines `/claude-architect:delegate`. It instructs Claude to build a versioned Delegation Spec, choose a Producer explicitly, call the MCP lifecycle, review exact frozen bytes, invoke the configured decision gate, and integrate only an accepted candidate whose provenance is integrable and whose manifest hash matches. It recommends `delegatePipeline` for non-trivial changes. If the requested Producer is not eligible, the workflow reports it unavailable instead of substituting another Producer or bypassing confinement. The skill itself is orchestration text; it does not directly receive Bash or file-edit tools.
+`skills/delegate/SKILL.md` defines `/architect:delegate`. It instructs Claude to build a versioned Delegation Spec, choose a Producer explicitly, call the MCP lifecycle, review exact frozen bytes, invoke the configured decision gate, and integrate only an accepted candidate whose provenance is integrable and whose manifest hash matches. It recommends `delegatePipeline` for non-trivial changes. If the requested Producer is not eligible, the workflow reports it unavailable instead of substituting another Producer or bypassing confinement. The skill itself is orchestration text; it does not directly receive Bash or file-edit tools.
 
 ## Agents
 

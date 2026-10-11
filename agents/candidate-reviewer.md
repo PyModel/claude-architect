@@ -1,7 +1,7 @@
 ---
 name: candidate-reviewer
 description: Independent read-only reviewer for ONE frozen Candidate Artifact. Input is a checkoutPath, runId, protocolVersion, and the review brief (spec, success criteria, findings to re-check); output is a structured verdict. Reads the exact anchored bytes through reviewCandidate and never edits, decides, or integrates.
-tools: Read, Grep, Glob, mcp__plugin_claude-architect_runtime__reviewCandidate
+tools: Read, Grep, Glob, mcp__plugin_architect_runtime__reviewCandidate
 model: opus
 ---
 

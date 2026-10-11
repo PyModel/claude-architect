@@ -1,7 +1,7 @@
 ---
 name: advisor
 description: Strictly non-mutating commitment-boundary advisor. Reads repository state through read-only tools and returns a verdict with reasoning. Never edits.
-tools: Read, Grep, Glob, mcp__plugin_claude-architect_runtime__gitStatus, mcp__plugin_claude-architect_runtime__gitDiff, mcp__plugin_claude-architect_runtime__gitLog, mcp__plugin_claude-architect_runtime__gitChangedFiles
+tools: Read, Grep, Glob, mcp__plugin_architect_runtime__gitStatus, mcp__plugin_architect_runtime__gitDiff, mcp__plugin_architect_runtime__gitLog, mcp__plugin_architect_runtime__gitChangedFiles
 model: opus
 ---
 

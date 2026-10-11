@@ -66,10 +66,10 @@ describe("P0-A plugin wiring", () => {
       "Read",
       "Grep",
       "Glob",
-      "mcp__plugin_claude-architect_runtime__gitStatus",
-      "mcp__plugin_claude-architect_runtime__gitDiff",
-      "mcp__plugin_claude-architect_runtime__gitLog",
-      "mcp__plugin_claude-architect_runtime__gitChangedFiles",
+      "mcp__plugin_architect_runtime__gitStatus",
+      "mcp__plugin_architect_runtime__gitDiff",
+      "mcp__plugin_architect_runtime__gitLog",
+      "mcp__plugin_architect_runtime__gitChangedFiles",
     ]);
     for (const forbidden of ["Bash", "Write", "Edit"]) {
       assert.equal(tools.includes(forbidden), false, `advisor must exclude ${forbidden}`);
@@ -287,9 +287,9 @@ describe("P0-A plugin wiring", () => {
       $schema: "https://json.schemastore.org/claude-code-settings.json",
       permissions: {
         allow: [
-          "mcp__plugin_claude-architect_runtime__autopilotStart",
-          "mcp__plugin_claude-architect_runtime__autopilotStatus",
-          "mcp__plugin_claude-architect_runtime__autopilotResume",
+          "mcp__plugin_architect_runtime__autopilotStart",
+          "mcp__plugin_architect_runtime__autopilotStatus",
+          "mcp__plugin_architect_runtime__autopilotResume",
         ],
       },
     });
@@ -358,7 +358,7 @@ test("subagent-driven-delegation skill keeps the trust invariants that upstream 
     "SDD skill must use the fully qualified command");
 
   const delegate = read("skills/delegate/SKILL.md");
-  assert.match(delegate, /\/claude-architect:subagent-driven-delegation/u,
+  assert.match(delegate, /\/architect:subagent-driven-delegation/u,
     "delegate skill must point at the SDD skill for multi-task plans");
 });
 
@@ -387,7 +387,7 @@ test("codex skill ships the direct CLI lane without obscuring its trust boundary
     "codex skill frontmatter must contain only name and description");
   assert.match(frontmatter, /^name:\s*codex$/mu);
 
-  assert.match(skill, /\/claude-architect:codex/u,
+  assert.match(skill, /\/architect:codex/u,
     "codex skill must use its plugin-qualified command");
   assert.doesNotMatch(skill, /(^|[^:])\/codex\b/mu,
     "codex skill must never present a bare command");
@@ -426,9 +426,9 @@ test("codex skill ships the direct CLI lane without obscuring its trust boundary
   assert.match(skill, /direct, unverified lane/u,
     "codex skill must identify itself as unverified");
   assert.ok(
-    skill.includes("Use `/claude-architect:delegate` for the verified lane"),
+    skill.includes("Use `/architect:delegate` for the verified lane"),
     "codex skill must point users to verified delegation");
-  assert.match(skill, /Only `\/claude-architect:delegate`[^.]*independently verified/u,
+  assert.match(skill, /Only `\/architect:delegate`[^.]*independently verified/u,
     "codex skill must reserve independent verification for the delegation lane");
   assert.match(skill, /direct skill must never call itself verified/u,
     "codex skill must reject verified-lane claims");
@@ -448,7 +448,7 @@ test("codex skill ships the direct CLI lane without obscuring its trust boundary
     "codex skill must use the worktree terminology");
 
   const readme = read("README.md");
-  assert.match(readme, /\/claude-architect:codex/u,
+  assert.match(readme, /\/architect:codex/u,
     "README must advertise the plugin-qualified Codex skill");
   assert.doesNotMatch(readme, /(^|[^:])\/codex\b/mu,
     "README must never advertise a bare Codex command");
@@ -458,7 +458,7 @@ test("codex skill ships the direct CLI lane without obscuring its trust boundary
     "README must name the verified lane's isolation boundary");
   assert.match(
     readme,
-    /Use `\/claude-architect:delegate`[^.\n]*verified lane[^.\n]*frozen Candidate Artifact/u,
+    /Use `\/architect:delegate`[^.\n]*verified lane[^.\n]*frozen Candidate Artifact/u,
     "README must name the verified lane's canonical frozen artifact",
   );
   assert.doesNotMatch(readme, /isolated production/u,
@@ -525,8 +525,8 @@ test("delegation-lane agent ships the produce-only courier contract", () => {
   const toolsLine = /^tools:\s*(.+)$/mu.exec(frontmatter)?.[1] ?? "";
   const tools = toolsLine.split(",").map(t => t.trim());
   assert.deepEqual(tools.sort(), [
-    "mcp__plugin_claude-architect_runtime__delegate",
-    "mcp__plugin_claude-architect_runtime__delegatePipeline",
+    "mcp__plugin_architect_runtime__delegate",
+    "mcp__plugin_architect_runtime__delegatePipeline",
   ].sort(), "delegation-lane must have exactly the two dispatch tools");
   for (const forbidden of [
     "reviewCandidate", "decideCandidate", "integrateCandidate",

@@ -5,13 +5,13 @@ description: Run the Codex CLI directly in the user's checkout for code analysis
 
 # Codex Skill Guide
 
-Always present this skill as `/claude-architect:codex`. Never show a shorter command.
+Always present this skill as `/architect:codex`. Never show a shorter command.
 
 ## Trust boundary
 
-`/claude-architect:codex` is the direct, unverified lane: it runs `codex exec` against the user's checkout without an isolated worktree, frozen Candidate Artifact, or independent verification. Use it for direct CLI assistance when those controls are not required. Use `/claude-architect:delegate` for the verified lane when changes need isolation, a frozen Candidate Artifact, independent verification, and controlled integration.
+`/architect:codex` is the direct, unverified lane: it runs `codex exec` against the user's checkout without an isolated worktree, frozen Candidate Artifact, or independent verification. Use it for direct CLI assistance when those controls are not required. Use `/architect:delegate` for the verified lane when changes need isolation, a frozen Candidate Artifact, independent verification, and controlled integration.
 
-Only `/claude-architect:delegate` produces a frozen, independently verified Candidate Artifact and drives review, decision, and guarded integration. This direct skill must never call itself verified or invoke those lifecycle tools.
+Only `/architect:delegate` produces a frozen, independently verified Candidate Artifact and drives review, decision, and guarded integration. This direct skill must never call itself verified or invoke those lifecycle tools.
 
 ## Running a Task
 1. For a new session (resumes inherit the prior model/effort — see step 5), ask the user (via `AskUserQuestion`) which **model** AND which **reasoning effort** to use, in a **single prompt with two questions**. When the user expresses no preference, default to `gpt-6.1-sol` at `high`.

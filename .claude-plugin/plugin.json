@@ -1,5 +1,5 @@
 {
-  "name": "claude-architect",
+  "name": "architect",
   "displayName": "Claude Architect",
   "version": "0.52.0",
   "description": "Verified coding-agent delegation for Claude Code with isolated Producers, frozen candidate artifacts, independent review, and human-controlled integration.",

@@ -41,7 +41,7 @@ Claude Code requires Node.js 22 or newer. The runtime needs Git 2.40 or newer: r
 
 ```bash
 claude plugin marketplace add PyModel/claude-architect
-claude plugin install claude-architect@claude-architect
+claude plugin install architect@claude-architect
 claude plugin list --json
 ```
 
@@ -52,7 +52,7 @@ Restart Claude Code after installing or updating. Install and authenticate at le
 Open Claude Code in a Git repository and name the Producer you want:
 
 ```text
-/claude-architect:delegate Use Codex to add rate limiting to the public API, run the tests, and show me the independently reviewed candidate before integration.
+/architect:delegate Use Codex to add rate limiting to the public API, run the tests, and show me the independently reviewed candidate before integration.
 ```
 
 If no Producer is named, the skill asks you to choose one. Model selection inside a lane is optional and defers to that CLI's configured default:
@@ -72,10 +72,10 @@ Non-trivial work runs through the fresh-context review pipeline. Read the exact 
 The direct, unverified Codex CLI lane runs `codex exec` against your current checkout without an isolated worktree, frozen Candidate Artifact, or independent verification:
 
 ```text
-/claude-architect:codex Review this checkout with gpt-6.1-sol at high reasoning.
+/architect:codex Review this checkout with gpt-6.1-sol at high reasoning.
 ```
 
-Use it for direct Codex assistance when those controls are not required. Use `/claude-architect:delegate` when changes need the verified lane and its isolated worktree, frozen Candidate Artifact, independent verification, and guarded integration.
+Use it for direct Codex assistance when those controls are not required. Use `/architect:delegate` when changes need the verified lane and its isolated worktree, frozen Candidate Artifact, independent verification, and guarded integration.
 
 ### Superpowers inside an attempt
 
@@ -95,9 +95,9 @@ This never relaxes the gates themselves: independent verification decides what m
 
 | Kind | Name | Purpose |
 |---|---|---|
-| Skill | `/claude-architect:delegate` | Builds a versioned spec and drives delegation, review, decision, and guarded integration. |
-| Skill | `/claude-architect:codex` | Runs Codex CLI directly against the current checkout without the verified delegation lifecycle. |
-| Skill | `/claude-architect:subagent-driven-delegation` | Executes a multi-task plan with the Superpowers subagent-driven-development loop, using a verified Producer as the implementer for every task. |
+| Skill | `/architect:delegate` | Builds a versioned spec and drives delegation, review, decision, and guarded integration. |
+| Skill | `/architect:codex` | Runs Codex CLI directly against the current checkout without the verified delegation lifecycle. |
+| Skill | `/architect:subagent-driven-delegation` | Executes a multi-task plan with the Superpowers subagent-driven-development loop, using a verified Producer as the implementer for every task. |
 | Agent | `advisor` | Strictly read-only commitment-boundary advisor. |
 | Agent | `candidate-reviewer` | Read-only Opus reviewer for one frozen candidate: reads the exact bytes through `reviewCandidate`, returns two verdicts and a recommendation, never decides or integrates. |
 | Agent | `delegation-lane` | Courier that dispatches one delegation as a native subagent row. |

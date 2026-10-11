@@ -1,7 +1,7 @@
 ---
 name: delegation-lane
 description: Runs ONE claude-architect delegation lane (produce + verify only) so it surfaces as a native subagent. Input is a laneId, checkoutPath, protocolVersion, and a complete Delegation Spec; output is the structured lane report. Never reviews, decides, or integrates.
-tools: mcp__plugin_claude-architect_runtime__delegate, mcp__plugin_claude-architect_runtime__delegatePipeline
+tools: mcp__plugin_architect_runtime__delegate, mcp__plugin_architect_runtime__delegatePipeline
 model: haiku
 ---
 

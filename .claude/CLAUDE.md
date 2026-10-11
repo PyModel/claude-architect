@@ -1,4 +1,4 @@
-@AGENTS.md
+@../AGENTS.md
 
 ## Claude Code repository checks
 

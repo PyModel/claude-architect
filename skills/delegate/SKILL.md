@@ -11,13 +11,13 @@ PROTOCOL_VERSION: 3.0.0
 
 The current session is the architect: it owns requirements, the Delegation Spec, Producer selection, review, and acceptance. Producers are untrusted — their output is only a candidate until the runtime freezes it, independently verifies it, and the architect reviews the exact anchored bytes.
 
-Always present this skill as `/claude-architect:delegate`. Never show a shorter command.
+Always present this skill as `/architect:delegate`. Never show a shorter command.
 
 ## Superpowers across the trust boundary
 
 When the upstream Superpowers plugin is available, keep its host-loop skills on the architect side: `brainstorming` before freezing the Delegation Spec, `writing-plans` to turn an agreed design into objectively checkable work or slices, `verification-before-completion` before recording a decision. Generic `executing-plans` and `subagent-driven-development` may coordinate architect-owned non-writing analysis only, never a writing task.
 
-To execute any multi-task plan that writes files, use `/claude-architect:subagent-driven-delegation`: the Superpowers subagent-driven-development loop — ledger, per-task brief, per-task review, final whole-branch review — with the delegation lifecycle below replacing the generic implementer subagent. No skill grants a Producer permission to plan instead of editing, dispatch nested agents, review itself, accept a candidate, or integrate bytes. Without the plugin, proceed without those skills rather than approximating them.
+To execute any multi-task plan that writes files, use `/architect:subagent-driven-delegation`: the Superpowers subagent-driven-development loop — ledger, per-task brief, per-task review, final whole-branch review — with the delegation lifecycle below replacing the generic implementer subagent. No skill grants a Producer permission to plan instead of editing, dispatch nested agents, review itself, accept a candidate, or integrate bytes. Without the plugin, proceed without those skills rather than approximating them.
 
 Edit-lane Producers receive a deliberately smaller, vendored procedure subset:
 
@@ -31,7 +31,7 @@ The runtime supplies these by absolute path inside each isolated attempt. Never 
 
 The delegated CLIs are the architect's **implementation agents** — Claude Code's subagent idiom, except each agent launches an *untrusted Producer* through the trusted MCP runtime inside an isolated Git worktree. Present them as a roster: the human picks one `subagent_type`, exactly one agent runs per attempt, and no agent may review or accept its own work.
 
-If the user invokes `/claude-architect:delegate` without naming a CLI, implementer, or agent, use the host's structured question tool when available, ask this question, and wait for the answer. Include the producer and reasoning control in each option so the user knows what the lane will run:
+If the user invokes `/architect:delegate` without naming a CLI, implementer, or agent, use the host's structured question tool when available, ask this question, and wait for the answer. Include the producer and reasoning control in each option so the user knows what the lane will run:
 
 > Which CLI should handle this delegation? Each choice shows its model and reasoning default. Use a custom answer to name a different supported reasoning level.
 
@@ -150,7 +150,7 @@ call count does and does not mean:
 
 1. Call `validateDelegationSpec` with the exact Delegation Spec and `protocolVersion: "3.0.0"` copied from this skill's `PROTOCOL_VERSION` marker. This read-only call starts no Producer. Keep its runtime-returned `specSha256` as the identity of the spec you dispatch. Never hash the spec file or reimplement the canonicalization algorithm; file bytes and object key order are not the runtime's canonical wire identity.
 2. When validation returns `ok:false` with `validationErrors`, repair only the reported spec defects and revalidate. This repair loop must not touch a Producer.
-3. Call `delegate` through `mcp__plugin_claude-architect_runtime__delegate` with `checkoutPath`, the validated candidate spec, the same `protocolVersion`, and `expectedSpecSha256` set to the runtime-returned `specSha256`. The runtime compares that identity before it touches the checkout or starts a Producer.
+3. Call `delegate` through `mcp__plugin_architect_runtime__delegate` with `checkoutPath`, the validated candidate spec, the same `protocolVersion`, and `expectedSpecSha256` set to the runtime-returned `specSha256`. The runtime compares that identity before it touches the checkout or starts a Producer.
 4. When dispatch returns `ok:false` with `validationErrors`, repair only the reported defects, revalidate for the replacement digest, and resubmit — this catches a spec changed after validation without touching a Producer.
 5. On `spec-identity-mismatch` or `spec-identity-unverifiable`, no work started. Never trust a lane-supplied replacement digest or retry the same payload: reuse the exact validated spec and retained runtime digest in a direct foreground dispatch, or rebuild a lane prompt containing those exact values.
 6. When either call returns a protocol/schema diagnostic, stop and tell the user to update the installed marketplace copy and reload Claude Code. Never guess across a version mismatch.

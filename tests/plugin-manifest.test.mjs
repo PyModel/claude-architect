@@ -8,14 +8,15 @@ const changelog = fs.readFileSync(new URL("../CHANGELOG.md", import.meta.url), "
 
 assert.equal(typeof manifest.repository, "string", "plugin repository must be a URL string");
 assert.equal("bugs" in manifest, false, "plugin manifest must not contain unsupported npm fields");
-assert.equal(manifest.name, "claude-architect", "plugin must use the Claude Architect identity");
+assert.equal(manifest.name, "architect", "plugin must use the Claude Architect identity (claude- prefix is reserved)");
 assert.equal(manifest.displayName, "Claude Architect", "plugin must expose its human-readable name");
-assert.equal(marketplace.name, manifest.name, "marketplace and plugin names must match");
+assert.equal(marketplace.name, "claude-architect", "marketplace keeps the repository slug");
 assert.equal(marketplace.plugins[0].name, manifest.name, "marketplace entry and plugin names must match");
 assert.equal(marketplace.plugins[0].displayName, manifest.displayName, "marketplace display name must match");
 assert.equal(marketplace.plugins[0].source, "./", "marketplace must package the repository root");
 assert.equal(marketplace.plugins[0].strict, true, "plugin manifest must remain authoritative");
 assert.equal(marketplace.renames["claude-master"], manifest.name, "former plugin name must migrate");
+assert.equal(marketplace.renames["claude-architect"], manifest.name, "former plugin name must migrate");
 assert.equal(
   manifest.repository,
   "https://github.com/PyModel/claude-architect",

@@ -3,7 +3,7 @@ import fs from "node:fs";
 
 const skill = fs.readFileSync(new URL("../skills/delegate/SKILL.md", import.meta.url), "utf8");
 
-assert.match(skill, /If the user invokes `\/claude-architect:delegate` without naming a CLI, implementer, or agent, use the host's structured question tool when available, ask this question, and wait for the answer\./);
+assert.match(skill, /If the user invokes `\/architect:delegate` without naming a CLI, implementer, or agent, use the host's structured question tool when available, ask this question, and wait for the answer\./);
 assert.match(skill, /Which CLI should handle this delegation\?.*Use a custom answer to name a different supported reasoning level\./);
 
 for (const lane of ["codex-implementer", "opencode-implementer", "pi-implementer", "pythinker-implementer", "agy-implementer", "claude-implementer"]) {

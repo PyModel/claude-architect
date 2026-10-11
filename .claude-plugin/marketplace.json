@@ -5,11 +5,12 @@
     "name": "elkaix"
   },
   "renames": {
-    "claude-master": "claude-architect"
+    "claude-master": "architect",
+    "claude-architect": "architect"
   },
   "plugins": [
     {
-      "name": "claude-architect",
+      "name": "architect",
       "displayName": "Claude Architect",
       "source": "./",
       "version": "0.52.0",
