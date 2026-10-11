@@ -2458,7 +2458,7 @@ describe("runPipeline", () => {
     await expect(store.readPipelineArtifact("pipeline-result"))
       .resolves.toMatchObject({ status: "failed", failure: "cancelled" });
     await expect(new RunDecision().evaluate(runId, { authority: "autonomous" }))
-      .resolves.toMatchObject({ state: "rejected", reasons: ["cancelled"] });
+      .resolves.toMatchObject({ state: "rejected", reasons: ["cancelled", "cancelled before review round 1"] });
   }, 120_000);
 
   it.each<{
