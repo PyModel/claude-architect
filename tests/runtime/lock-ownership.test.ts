@@ -32,6 +32,9 @@ import {
 // A passthrough of node:fs/promises whose link() can be armed to fail once with
 // a chosen errno, the way an antivirus scan briefly holds a file on Windows.
 const linkFault = vi.hoisted(() => ({ code: null as string | null, fired: 0 }));
+// A directory lstat() can be armed to report no birth time, as on a Linux
+// filesystem without statx btime support.
+const birthtimeFault = vi.hoisted(() => ({ directory: null as string | null }));
 vi.mock("node:fs/promises", async importOriginal => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
   return {
@@ -44,6 +47,14 @@ vi.mock("node:fs/promises", async importOriginal => {
         throw Object.assign(new Error(`${code}: injected link failure`), { code });
       }
       return actual.link(source, destination);
+    },
+    async lstat(...args: Parameters<typeof actual.lstat>) {
+      const metadata = await actual.lstat(...args);
+      if (birthtimeFault.directory !== null && args[0] === birthtimeFault.directory
+        && typeof metadata.birthtimeNs === "bigint") {
+        metadata.birthtimeNs = 0n;
+      }
+      return metadata;
     },
   };
 });
@@ -469,6 +480,21 @@ describe("LockOwnership", () => {
         await expect(readFile(lockPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
       });
     }
+
+    it("refuses a locks directory without birth time with a distinct error", async () => {
+      const key = createHash("sha256").update("no-birthtime").digest("hex");
+      const locksDir = path.join(tempDir, "state", "locks");
+      await mkdir(locksDir, { recursive: true });
+      birthtimeFault.directory = locksDir;
+      try {
+        await expect(acquireLock(key, { platform: "linux" })).rejects.toThrow(
+          "locks directory lacks stable birth-time identity",
+        );
+      } finally {
+        birthtimeFault.directory = null;
+      }
+      expect(await readdir(locksDir)).toEqual([]);
+    });
 
     it("does not retry the same error off Windows, where it is not transient", async () => {
       const key = createHash("sha256").update("transient-posix").digest("hex");
