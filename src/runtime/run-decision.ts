@@ -11,7 +11,7 @@ import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
 import {
   type DecisionAuthority,
   decisionAuthority,
-} from "../mcp/decision-authority.js";
+} from "./candidate-decisions.js";
 import {
   AcceptanceVerifier,
   type AcceptanceVerifyArgs,

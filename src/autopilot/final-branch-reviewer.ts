@@ -13,7 +13,7 @@ import { git } from "../git/git-exec.js";
 import { openDurableDirectorySession, writeAtomic } from "../platform/durable-write.js";
 import { WorktreeManager } from "../runtime/worktree-manager.js";
 import { PlatformSafety } from "../platform/platform-safety.js";
-import { assertNoPendingWorktreeRemovalForRepository } from "../runtime/worktree-removal-manifest.js";
+import { assertNoPendingWorktreeRemovalForRepository } from "../runtime/worktree-transaction.js";
 import type { CheckoutLock, PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import type { AcceptanceVerifyResult } from "../verify/acceptance-verifier.js";
