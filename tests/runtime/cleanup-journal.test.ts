@@ -14,6 +14,9 @@ import { platformServicesDouble } from "../helpers/platform-services-double.js";
 // Passthrough recorder: every real file operation still runs; the test only
 // observes which handle was written and which was fsynced, in order.
 const fileEvents = vi.hoisted(() => [] as Array<{ op: "write" | "sync"; path: string }>);
+// A directory lstat() can be armed to report no birth time, as on a Linux
+// filesystem without statx btime support.
+const birthtimeFault = vi.hoisted(() => ({ directory: null as string | null }));
 
 vi.mock("node:fs/promises", async importOriginal => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
@@ -33,6 +36,14 @@ vi.mock("node:fs/promises", async importOriginal => {
         fileEvents.push({ op: "sync", path: filename });
       };
       return handle;
+    },
+    lstat: async (...args: Parameters<typeof actual.lstat>) => {
+      const metadata = await actual.lstat(...args);
+      if (birthtimeFault.directory !== null && args[0] === birthtimeFault.directory
+        && typeof metadata.birthtimeNs === "bigint") {
+        metadata.birthtimeNs = 0n;
+      }
+      return metadata;
     },
   };
 });
@@ -181,6 +192,25 @@ describe("cleanup journal", () => {
     const text = await readFile(journal, "utf8");
     expect(text.startsWith(complete)).toBe(true);
     expect(text.endsWith("\n")).toBe(true);
+  });
+
+  it("refuses to repair or append in a runs root without birth-time identity", async () => {
+    const runsRoot = path.join(process.env.CLAUDE_PLUGIN_DATA!, "runs");
+    const journal = path.join(runsRoot, "cleanup.ndjson");
+    await mkdir(runsRoot, { recursive: true });
+    const repoRoot = path.join(process.env.CLAUDE_PLUGIN_DATA!, "repo");
+    const before = `${JSON.stringify(intentRecord("run-first", repoRoot))}\n`
+      + JSON.stringify(intentRecord("run-torn", repoRoot)).slice(0, 60);
+    await writeFile(journal, before);
+
+    birthtimeFault.directory = runsRoot;
+    try {
+      await expect(appendCleanupRecord(runsRoot, intentRecord("run-second", repoRoot)))
+        .rejects.toThrow("cleanup journal root lacks stable birth-time identity");
+    } finally {
+      birthtimeFault.directory = null;
+    }
+    await expect(readFile(journal, "utf8")).resolves.toBe(before);
   });
 
   it("lands every concurrent append from one process as a complete, parseable line", async () => {
