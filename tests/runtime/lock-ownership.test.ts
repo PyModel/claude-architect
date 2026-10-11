@@ -17,14 +17,17 @@ import {
   lockOwnerStatus,
   parseLockOwner,
   parseLockRecord,
-  reclaimDeadCheckoutLocks,
-  reclaimDeadLock,
   type LockOwner,
   type LockRecord,
 } from "../../src/platform/lock-ownership.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 import { logger } from "../../src/util/logger.js";
-import { acquireLock, tryAcquireLockReclaimingDead } from "../../src/platform/checkout-lock.js";
+import {
+  acquireLock,
+  reclaimDeadCheckoutLocks,
+  reclaimDeadLock,
+  tryAcquireLockReclaimingDead,
+} from "../../src/platform/checkout-lock.js";
 
 // A passthrough of node:fs/promises whose link() can be armed to fail once with
 // a chosen errno, the way an antivirus scan briefly holds a file on Windows.

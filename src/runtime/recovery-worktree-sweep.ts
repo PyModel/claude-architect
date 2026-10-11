@@ -14,13 +14,13 @@ import { managedWorktreeDirectoryIdentity } from "./worktree-manager.js";
 import {
   lockOwnerStatus,
   type LockOwnerStatus,
-  type DeadLockReclaimResult,
 } from "../platform/lock-ownership.js";
 import {
   checkoutLockKey,
   releaseLock,
   tryAcquireLockReclaimingDead,
   type AcquiredLock,
+  type DeadLockReclaimResult,
 } from "../platform/checkout-lock.js";
 import { sameDirectoryIdentity, type DirectoryIdentity } from "../platform/durable-directory.js";
 import { RuntimeError } from "../util/errors.js";

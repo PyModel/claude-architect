@@ -1,12 +1,8 @@
-import { randomUUID } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat, open, readdir, readFile, rm, type FileHandle } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import nodeProcess from "node:process";
 import { resolveStateDir } from "../runtime/state-dir.js";
 import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
-import { logger } from "../util/logger.js";
-import { NO_FOLLOW, sameDirectoryIdentity, type DirectoryIdentity } from "./durable-directory.js";
 
 export const MAX_STATE_FILE_BYTES = 1_000_000;
 export const MAX_STATE_FILE_BYTES_BIGINT = BigInt(MAX_STATE_FILE_BYTES);
@@ -29,8 +25,6 @@ export interface LockRecord {
 }
 
 export type LockOwnerStatus = "dead" | "live" | "unverifiable";
-export type DeadLockReclaimResult = "reclaimed" | "live" | "unverifiable" | "malformed" | "contended";
-
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -41,17 +35,6 @@ export function isPlainDirectory(metadata: {
   isSymbolicLink(): boolean;
 }): boolean {
   return metadata.isDirectory() && !metadata.isSymbolicLink();
-}
-
-export async function plainDirectoryIdentity(directoryPath: string): Promise<DirectoryIdentity | null> {
-  try {
-    const metadata = await lstat(directoryPath, { bigint: true });
-    if (!isPlainDirectory(metadata) || metadata.birthtimeNs <= 0n) return null;
-    return { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
-  } catch (error) {
-    if (isMissing(error)) return null;
-    throw error;
-  }
 }
 
 export function isCheckoutLockFileName(filename: string): boolean {
@@ -116,160 +99,6 @@ export async function lockOwnerStatus(
   const currentToken = await getProcessStartToken(owner.pid);
   if (currentToken === null) return "unverifiable";
   return currentToken === owner.processToken ? "live" : "dead";
-}
-
-export async function readHandleBytes(handle: FileHandle, length: number): Promise<Buffer> {
-  const buffer = Buffer.alloc(length);
-  let bytesRead = 0;
-  while (bytesRead < length) {
-    const result = await handle.read(buffer, bytesRead, length - bytesRead, bytesRead);
-    if (result.bytesRead === 0) break;
-    bytesRead += result.bytesRead;
-  }
-  return bytesRead === length ? buffer : buffer.subarray(0, bytesRead);
-}
-
-export async function removeLockIfUnchanged(
-  lockPath: string,
-  handle: FileHandle,
-  expectedIdentity: DirectoryIdentity,
-  expectedContents: Buffer,
-  expectedLinks = 1,
-): Promise<boolean> {
-  const beforeMetadata = await handle.stat({ bigint: true });
-  if (!beforeMetadata.isFile()
-    || beforeMetadata.isSymbolicLink()
-    || !sameDirectoryIdentity(beforeMetadata, expectedIdentity)
-    || beforeMetadata.nlink !== BigInt(expectedLinks)
-    || beforeMetadata.size !== BigInt(expectedContents.byteLength)) {
-    return false;
-  }
-  const currentBytes = await readHandleBytes(handle, expectedContents.byteLength);
-  if (!currentBytes.equals(expectedContents)) return false;
-  try {
-    await rm(lockPath, { force: true });
-  } catch (error) {
-    if (isMissing(error)) return false;
-    throw error;
-  }
-  const afterMetadata = await handle.stat({ bigint: true });
-  return afterMetadata.nlink === BigInt(expectedLinks - 1);
-}
-
-const TEMPORARY_LOCK_NAME = /^\.recovery-lock-[0-9a-f-]{36}\.tmp$/;
-
-/** A fresh name for the exclusive record a holder links into place as its lock. */
-export function temporaryLockFileName(): string {
-  return `.recovery-lock-${randomUUID()}.tmp`;
-}
-
-/**
- * A holder that crashed after linking its record into place but before
- * unlinking the temporary leaves the lock with a second link, its
- * `.recovery-lock-<uuid>.tmp` sibling. Remove that sibling only while it is
- * provably the same file with the same bytes; anything else stays contended.
- */
-async function removeCrashedTemporarySibling(
-  lockPath: string,
-  identity: DirectoryIdentity,
-  contents: Buffer,
-): Promise<boolean> {
-  const parentPath = path.dirname(lockPath);
-  for (const name of await readdir(parentPath)) {
-    if (!TEMPORARY_LOCK_NAME.test(name)) continue;
-    const temporaryPath = path.join(parentPath, name);
-    let metadata;
-    try {
-      metadata = await lstat(temporaryPath, { bigint: true });
-    } catch (error) {
-      if (isMissing(error)) continue;
-      throw error;
-    }
-    if (!metadata.isFile() || !sameDirectoryIdentity(metadata, identity)) continue;
-    let handle: FileHandle;
-    try {
-      handle = await open(temporaryPath, constants.O_RDONLY | NO_FOLLOW);
-    } catch (error) {
-      if (isMissing(error)) continue;
-      throw error;
-    }
-    try {
-      return await removeLockIfUnchanged(temporaryPath, handle, identity, contents, 2);
-    } finally {
-      await handle.close();
-    }
-  }
-  return false;
-}
-
-export async function reclaimDeadLock(
-  lockPath: string,
-  isProcessAlive: (pid: number) => boolean,
-  getProcessStartToken: (pid: number) => Promise<string | null>,
-): Promise<DeadLockReclaimResult> {
-  let handle: FileHandle;
-  try {
-    handle = await open(lockPath, constants.O_RDONLY | NO_FOLLOW);
-  } catch (error) {
-    if (isMissing(error)) return "contended";
-    throw error;
-  }
-  try {
-    const metadata = await handle.stat({ bigint: true });
-    if (!metadata.isFile() || metadata.size > MAX_STATE_FILE_BYTES_BIGINT) {
-      throw new RuntimeError("recovery lock must be a bounded regular file");
-    }
-    const contents = await readHandleBytes(handle, Number(metadata.size));
-    if (BigInt(contents.byteLength) !== metadata.size) return "contended";
-    const owner = parseLockOwner(contents.toString("utf8"));
-    if (owner === null) {
-      logger.warn("startup recovery preserved malformed lock", {
-        event: "recovery-malformed-lock",
-        lockName: path.basename(lockPath),
-        reason: "invalid-owner-record",
-      });
-      return "malformed";
-    }
-    const ownerStatus = await lockOwnerStatus(owner, isProcessAlive, getProcessStartToken);
-    if (ownerStatus === "live") return "live";
-    if (ownerStatus === "unverifiable") {
-      logger.warn("startup recovery preserved unverifiable lock", {
-        event: "recovery-unverifiable-lock",
-        lockName: path.basename(lockPath),
-        reason: "process-token-unavailable",
-      });
-      return "unverifiable";
-    }
-    const identity = { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
-    if (metadata.nlink === 2n
-      && !await removeCrashedTemporarySibling(lockPath, identity, contents)) {
-      return "contended";
-    }
-    return await removeLockIfUnchanged(lockPath, handle, identity, contents)
-      ? "reclaimed"
-      : "contended";
-  } finally {
-    await handle.close();
-  }
-}
-
-export async function reclaimDeadCheckoutLocks(
-  locksRoot: string,
-  isProcessAlive: (pid: number) => boolean,
-  getProcessStartToken: (pid: number) => Promise<string | null>,
-): Promise<void> {
-  let entries;
-  try {
-    entries = await readdir(locksRoot, { withFileTypes: true });
-  } catch (error) {
-    if (isMissing(error)) return;
-    throw error;
-  }
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    if (!isCheckoutLockFileName(entry.name)) continue;
-    const lockPath = path.join(locksRoot, entry.name);
-    await reclaimDeadLock(lockPath, isProcessAlive, getProcessStartToken);
-  }
 }
 
 

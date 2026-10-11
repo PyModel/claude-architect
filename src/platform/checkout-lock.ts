@@ -1,25 +1,27 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { link, lstat, mkdir, open, type FileHandle } from "node:fs/promises";
+import { link, lstat, mkdir, open, readdir, rm, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import nodeProcess from "node:process";
 import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
+import { logger } from "../util/logger.js";
 import type { CheckoutLock, FileLock, LockOwnerAnnotation, PlatformServices } from "./platform-services.js";
-import { NO_FOLLOW, sameDirectoryIdentity, type DirectoryIdentity } from "./durable-directory.js";
+import {
+  NO_FOLLOW,
+  sameDirectoryIdentity,
+  type DirectoryIdentity,
+} from "./durable-directory.js";
 import {
   LOCK_CONTENDED,
   MAX_STATE_FILE_BYTES,
   MAX_STATE_FILE_BYTES_BIGINT,
   formatLockRecord,
+  isCheckoutLockFileName,
   isPlainDirectory,
   lockFilePath,
-  plainDirectoryIdentity,
-  readHandleBytes,
-  reclaimDeadLock,
-  removeLockIfUnchanged,
-  temporaryLockFileName,
+  lockOwnerStatus,
+  parseLockOwner,
   withLockContentionDetail,
-  type DeadLockReclaimResult,
 } from "./lock-ownership.js";
 
 /**
@@ -292,6 +294,25 @@ async function cleanupOwnedLockPaths(
   return errors;
 }
 
+/**
+ * The locks directory guards every lock removal, so it needs a birth time: a
+ * removed and recreated directory with a reused inode is otherwise
+ * indistinguishable.
+ */
+async function lockParentIdentity(parentPath: string): Promise<DirectoryIdentity> {
+  let metadata;
+  try {
+    metadata = await lstat(parentPath, { bigint: true });
+  } catch (error) {
+    if (isMissing(error)) throw new RuntimeError("lock parent must remain a plain directory");
+    throw error;
+  }
+  if (!isPlainDirectory(metadata) || metadata.birthtimeNs <= 0n) {
+    throw new RuntimeError("lock parent must remain a plain directory");
+  }
+  return { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
+}
+
 export async function tryAcquireLock(
   lockPath: string,
   contents: Buffer,
@@ -300,10 +321,7 @@ export async function tryAcquireLock(
     throw new RuntimeError("new lock exceeds its size limit");
   }
   const parentPath = path.dirname(lockPath);
-  const parentIdentity = await plainDirectoryIdentity(parentPath);
-  if (parentIdentity === null) {
-    throw new RuntimeError("lock parent must remain a plain directory");
-  }
+  const parentIdentity = await lockParentIdentity(parentPath);
   const temporaryPath = path.join(parentPath, temporaryLockFileName());
   let handle: FileHandle | undefined;
   let temporaryIdentity: DirectoryIdentity | undefined;
@@ -548,4 +566,160 @@ export async function acquireCleanupJournalLock(
     timeoutMessage: "cleanup journal is locked",
     ownerToken,
   });
+}
+
+export type DeadLockReclaimResult = "reclaimed" | "live" | "unverifiable" | "malformed" | "contended";
+
+export async function readHandleBytes(handle: FileHandle, length: number): Promise<Buffer> {
+  const buffer = Buffer.alloc(length);
+  let bytesRead = 0;
+  while (bytesRead < length) {
+    const result = await handle.read(buffer, bytesRead, length - bytesRead, bytesRead);
+    if (result.bytesRead === 0) break;
+    bytesRead += result.bytesRead;
+  }
+  return bytesRead === length ? buffer : buffer.subarray(0, bytesRead);
+}
+
+export async function removeLockIfUnchanged(
+  lockPath: string,
+  handle: FileHandle,
+  expectedIdentity: DirectoryIdentity,
+  expectedContents: Buffer,
+  expectedLinks = 1,
+): Promise<boolean> {
+  const beforeMetadata = await handle.stat({ bigint: true });
+  if (!beforeMetadata.isFile()
+    || beforeMetadata.isSymbolicLink()
+    || !sameDirectoryIdentity(beforeMetadata, expectedIdentity)
+    || beforeMetadata.nlink !== BigInt(expectedLinks)
+    || beforeMetadata.size !== BigInt(expectedContents.byteLength)) {
+    return false;
+  }
+  const currentBytes = await readHandleBytes(handle, expectedContents.byteLength);
+  if (!currentBytes.equals(expectedContents)) return false;
+  try {
+    await rm(lockPath, { force: true });
+  } catch (error) {
+    if (isMissing(error)) return false;
+    throw error;
+  }
+  const afterMetadata = await handle.stat({ bigint: true });
+  return afterMetadata.nlink === BigInt(expectedLinks - 1);
+}
+
+const TEMPORARY_LOCK_NAME = /^\.recovery-lock-[0-9a-f-]{36}\.tmp$/;
+
+/** A fresh name for the exclusive record a holder links into place as its lock. */
+export function temporaryLockFileName(): string {
+  return `.recovery-lock-${randomUUID()}.tmp`;
+}
+
+/**
+ * A holder that crashed after linking its record into place but before
+ * unlinking the temporary leaves the lock with a second link, its
+ * `.recovery-lock-<uuid>.tmp` sibling. Remove that sibling only while it is
+ * provably the same file with the same bytes; anything else stays contended.
+ */
+async function removeCrashedTemporarySibling(
+  lockPath: string,
+  identity: DirectoryIdentity,
+  contents: Buffer,
+): Promise<boolean> {
+  const parentPath = path.dirname(lockPath);
+  for (const name of await readdir(parentPath)) {
+    if (!TEMPORARY_LOCK_NAME.test(name)) continue;
+    const temporaryPath = path.join(parentPath, name);
+    let metadata;
+    try {
+      metadata = await lstat(temporaryPath, { bigint: true });
+    } catch (error) {
+      if (isMissing(error)) continue;
+      throw error;
+    }
+    if (!metadata.isFile() || !sameDirectoryIdentity(metadata, identity)) continue;
+    let handle: FileHandle;
+    try {
+      handle = await open(temporaryPath, constants.O_RDONLY | NO_FOLLOW);
+    } catch (error) {
+      if (isMissing(error)) continue;
+      throw error;
+    }
+    try {
+      return await removeLockIfUnchanged(temporaryPath, handle, identity, contents, 2);
+    } finally {
+      await handle.close();
+    }
+  }
+  return false;
+}
+
+export async function reclaimDeadLock(
+  lockPath: string,
+  isProcessAlive: (pid: number) => boolean,
+  getProcessStartToken: (pid: number) => Promise<string | null>,
+): Promise<DeadLockReclaimResult> {
+  let handle: FileHandle;
+  try {
+    handle = await open(lockPath, constants.O_RDONLY | NO_FOLLOW);
+  } catch (error) {
+    if (isMissing(error)) return "contended";
+    throw error;
+  }
+  try {
+    const metadata = await handle.stat({ bigint: true });
+    if (!metadata.isFile() || metadata.size > MAX_STATE_FILE_BYTES_BIGINT) {
+      throw new RuntimeError("recovery lock must be a bounded regular file");
+    }
+    const contents = await readHandleBytes(handle, Number(metadata.size));
+    if (BigInt(contents.byteLength) !== metadata.size) return "contended";
+    const owner = parseLockOwner(contents.toString("utf8"));
+    if (owner === null) {
+      logger.warn("startup recovery preserved malformed lock", {
+        event: "recovery-malformed-lock",
+        lockName: path.basename(lockPath),
+        reason: "invalid-owner-record",
+      });
+      return "malformed";
+    }
+    const ownerStatus = await lockOwnerStatus(owner, isProcessAlive, getProcessStartToken);
+    if (ownerStatus === "live") return "live";
+    if (ownerStatus === "unverifiable") {
+      logger.warn("startup recovery preserved unverifiable lock", {
+        event: "recovery-unverifiable-lock",
+        lockName: path.basename(lockPath),
+        reason: "process-token-unavailable",
+      });
+      return "unverifiable";
+    }
+    const identity = { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
+    if (metadata.nlink === 2n
+      && !await removeCrashedTemporarySibling(lockPath, identity, contents)) {
+      return "contended";
+    }
+    return await removeLockIfUnchanged(lockPath, handle, identity, contents)
+      ? "reclaimed"
+      : "contended";
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function reclaimDeadCheckoutLocks(
+  locksRoot: string,
+  isProcessAlive: (pid: number) => boolean,
+  getProcessStartToken: (pid: number) => Promise<string | null>,
+): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(locksRoot, { withFileTypes: true });
+  } catch (error) {
+    if (isMissing(error)) return;
+    throw error;
+  }
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!isCheckoutLockFileName(entry.name)) continue;
+    const lockPath = path.join(locksRoot, entry.name);
+    await reclaimDeadLock(lockPath, isProcessAlive, getProcessStartToken);
+  }
 }

@@ -7,14 +7,14 @@ import { git } from "../git/git-exec.js";
 import {
   lockOwnerStatus,
   type LockOwnerStatus,
-  reclaimDeadLock,
-  reclaimDeadCheckoutLocks,
   lockIsOwnedByLiveProcess,
   defaultIsProcessAlive,
 } from "../platform/lock-ownership.js";
 import {
   CLEANUP_JOURNAL_LOCK_KEY,
   checkoutLockKey,
+  reclaimDeadCheckoutLocks,
+  reclaimDeadLock,
   releaseLock,
   tryAcquireLockReclaimingDead,
 } from "../platform/checkout-lock.js";
