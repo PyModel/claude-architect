@@ -951,12 +951,12 @@ export class FinalBranchReviewer {
 
       const rawDiff = parseRawDiff(await checkedGit(this.runGit, state.worktreePath, [
         "diff-tree", "-r", "--no-commit-id", "--no-renames", "--raw", "-z",
-        state.baseCommitOid, headTreeOid,
+        state.baseCommitOid, headTreeOid, "--",
       ]));
       const [nameStatusOutput, treeOutput, patch] = await Promise.all([
         checkedGit(this.runGit, state.worktreePath, [
           "diff-tree", "-r", "--no-commit-id", "--no-renames", "--name-status", "-z",
-          state.baseCommitOid, headTreeOid,
+          state.baseCommitOid, headTreeOid, "--",
         ]),
         checkedGit(this.runGit, state.worktreePath, ["ls-tree", "-r", "-z", headTreeOid]),
         checkedGit(

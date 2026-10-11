@@ -141,7 +141,7 @@ async function candidateHasCaseCollision(args: Pick<
   const [changedOutput, treeOutput] = await Promise.all([
     checkedGit(args.worktreePath, [
       "diff-tree", "-r", "--no-commit-id", "--no-renames", "--name-only", "-z",
-      args.baseCommitOid, args.artifact.candidateTreeOid,
+      args.baseCommitOid, args.artifact.candidateTreeOid, "--",
     ]),
     checkedGit(args.worktreePath, [
       "ls-tree", "-r", "--name-only", "-z", args.artifact.candidateTreeOid,
@@ -168,6 +168,7 @@ export async function recomputeManifest(args: Pick<
       "-z",
       args.baseCommitOid,
       args.artifact.candidateTreeOid,
+      "--",
     ]),
     checkedGit(args.worktreePath, [
       "diff-tree",
@@ -178,6 +179,7 @@ export async function recomputeManifest(args: Pick<
       "-z",
       args.baseCommitOid,
       args.artifact.candidateTreeOid,
+      "--",
     ]),
     checkedGit(args.worktreePath, ["ls-tree", "-r", "-z", args.artifact.candidateTreeOid]),
   ]);
@@ -208,6 +210,7 @@ async function singleCommitIdentityMatches(args: StructuralVerifyArgs): Promise<
       "-n",
       "1",
       args.artifact.candidateCommitOid,
+      "--",
     ]),
   ]);
   if (anchorResult.exitCode !== 0 || treeResult.exitCode !== 0 || parentResult.exitCode !== 0) {

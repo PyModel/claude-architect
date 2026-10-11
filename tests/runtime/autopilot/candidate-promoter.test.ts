@@ -221,11 +221,12 @@ function fixture(options: {
     if (args[0] === "rev-parse" && args[2]?.endsWith("^{tree}")) return ok(`${treeOid}\n`);
     if (args[0] === "rev-parse" && args[2]?.endsWith("^")) return ok(`${baseOid}\n`);
     if (args[0] === "rev-list" && args[1] === "--parents") {
+      const commit = args[4];
       // A real single-parent commit prints "<commit> <parent>"; the merge case
       // prints a second parent, which promotion must refuse.
       return ok(options.mergeCommitParents
-        ? `${args.at(-1)} ${baseOid} ${treeOid}\n`
-        : `${args.at(-1)} ${baseOid}\n`);
+        ? `${commit} ${baseOid} ${treeOid}\n`
+        : `${commit} ${baseOid}\n`);
     }
     if (args[0] === "log") return ok(`${message}\n`);
     if (args[0] === "write-tree") return ok(`${indexTree}\n`);

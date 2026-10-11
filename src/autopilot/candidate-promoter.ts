@@ -213,8 +213,8 @@ export class CandidatePromoter {
       // first parent is the expected head and whose tree and message match would
       // otherwise be accepted as the promotion commit on the recovery paths.
       // Pin the parent count instead of trusting the first-parent walk.
-      this.runGit(checkout, ["rev-list", "--parents", "-n", "1", commitOid]),
-      this.runGit(checkout, ["log", "-1", "--format=%B", commitOid]),
+      this.runGit(checkout, ["rev-list", "--parents", "-n", "1", commitOid, "--"]),
+      this.runGit(checkout, ["log", "-1", "--format=%B", commitOid, "--"]),
     ]);
     const lineage = succeeded(parents) ? parents.stdout.trim().split(/\s+/u) : [];
     return succeeded(tree) && tree.stdout.trim() === treeOid

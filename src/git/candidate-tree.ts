@@ -185,6 +185,7 @@ export async function freezeCandidate(args: FreezeCandidateArgs): Promise<Freeze
       "-z",
       args.baseCommitOid,
       candidateTreeOid,
+      "--",
     ]));
     const frozenOutOfScope = rawDiff.filter(entry =>
       !isAllowed(
@@ -214,6 +215,7 @@ export async function freezeCandidate(args: FreezeCandidateArgs): Promise<Freeze
       "-z",
       args.baseCommitOid,
       candidateTreeOid,
+      "--",
     ]);
     const treeOutput = await checkedGit(
       args.repoRoot,

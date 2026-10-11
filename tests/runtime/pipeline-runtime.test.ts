@@ -2575,13 +2575,15 @@ describe("runPipeline", () => {
     const runId = `pipeline-terminal-${exit.replace(/[^a-z]+/gu, "-")}`;
 
     let returned: string;
+    let thrown: unknown;
     try {
       returned = (await runPipeline(repo, spec(), deps(runId))).status;
-    } catch {
+    } catch (error) {
       returned = "thrown";
+      thrown = error;
     }
 
-    expect(returned).toBe(status);
+    expect(returned, `unexpected throw: ${String(thrown)}`).toBe(status);
     const recorded = await new ArtifactStore(runId)
       .readPipelineArtifact<{ status: string; runId: string }>("pipeline-result");
     expect(recorded).toMatchObject({

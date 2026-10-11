@@ -83,7 +83,7 @@ export async function composeSliceOntoHead(args: ComposeSliceArgs): Promise<stri
   const changes = parseRawDiffEntries(await checked(
     args.checkoutPath,
     // Raw output abbreviates object ids by default; update-index needs them whole.
-    ["diff", "--raw", "-z", "--no-abbrev", "--no-renames", `${args.base}..${args.sliceCommit}`],
+    ["diff", "--raw", "-z", "--no-abbrev", "--no-renames", `${args.base}..${args.sliceCommit}`, "--"],
     args.objectReadOptions,
     runGit,
   ));
@@ -91,7 +91,7 @@ export async function composeSliceOntoHead(args: ComposeSliceArgs): Promise<stri
 
   const occupied = new Set((await checked(
     args.checkoutPath,
-    ["diff", "--name-only", "-z", "--no-renames", `${args.base}..${args.head}`],
+    ["diff", "--name-only", "-z", "--no-renames", `${args.base}..${args.head}`, "--"],
     args.objectReadOptions,
     runGit,
   )).split("\0").filter(entry => entry.length > 0));

@@ -69,7 +69,7 @@ async function collectRepositoryInstructions(
 
   const instructions: RepositoryInstructionInput[] = [];
   for (const instructionPath of presentPaths) {
-    const blob = await runGit(repoRoot, ["show", `${baseCommitOid}:${instructionPath}`]);
+    const blob = await runGit(repoRoot, ["show", `${baseCommitOid}:${instructionPath}`, "--"]);
     assertCompleteGitOutput(`collect repository instruction ${instructionPath}`, blob);
     instructions.push({ path: instructionPath, content: blob.stdout });
   }

@@ -41049,7 +41049,8 @@ async function freezeCandidate(args) {
       "--raw",
       "-z",
       args.baseCommitOid,
-      candidateTreeOid
+      candidateTreeOid,
+      "--"
     ]));
     const frozenOutOfScope = rawDiff.filter((entry) => !isAllowed(
       entry.path,
@@ -41075,7 +41076,8 @@ async function freezeCandidate(args) {
       "--name-status",
       "-z",
       args.baseCommitOid,
-      candidateTreeOid
+      candidateTreeOid,
+      "--"
     ]);
     const treeOutput = await checkedGit(
       args.repoRoot,
@@ -44490,7 +44492,8 @@ async function candidateHasCaseCollision(args) {
       "--name-only",
       "-z",
       args.baseCommitOid,
-      args.artifact.candidateTreeOid
+      args.artifact.candidateTreeOid,
+      "--"
     ]),
     gitChecked(args.worktreePath, [
       "ls-tree",
@@ -44512,7 +44515,8 @@ async function recomputeManifest(args) {
       "--raw",
       "-z",
       args.baseCommitOid,
-      args.artifact.candidateTreeOid
+      args.artifact.candidateTreeOid,
+      "--"
     ]),
     gitChecked(args.worktreePath, [
       "diff-tree",
@@ -44522,7 +44526,8 @@ async function recomputeManifest(args) {
       "--name-status",
       "-z",
       args.baseCommitOid,
-      args.artifact.candidateTreeOid
+      args.artifact.candidateTreeOid,
+      "--"
     ]),
     gitChecked(args.worktreePath, ["ls-tree", "-r", "-z", args.artifact.candidateTreeOid])
   ]);
@@ -44547,7 +44552,8 @@ async function singleCommitIdentityMatches(args) {
       "--parents",
       "-n",
       "1",
-      args.artifact.candidateCommitOid
+      args.artifact.candidateCommitOid,
+      "--"
     ])
   ]);
   if (anchorResult.exitCode !== 0 || treeResult.exitCode !== 0 || parentResult.exitCode !== 0) {
@@ -49363,7 +49369,8 @@ var FinalBranchReviewer = class {
         "--raw",
         "-z",
         state.baseCommitOid,
-        headTreeOid
+        headTreeOid,
+        "--"
       ]));
       const [nameStatusOutput, treeOutput, patch] = await Promise.all([
         checkedGit2(this.runGit, state.worktreePath, [
@@ -49374,7 +49381,8 @@ var FinalBranchReviewer = class {
           "--name-status",
           "-z",
           state.baseCommitOid,
-          headTreeOid
+          headTreeOid,
+          "--"
         ]),
         checkedGit2(this.runGit, state.worktreePath, ["ls-tree", "-r", "-z", headTreeOid]),
         checkedGit2(
@@ -50610,8 +50618,8 @@ var CandidatePromoter = class {
       // first parent is the expected head and whose tree and message match would
       // otherwise be accepted as the promotion commit on the recovery paths.
       // Pin the parent count instead of trusting the first-parent walk.
-      this.runGit(checkout, ["rev-list", "--parents", "-n", "1", commitOid]),
-      this.runGit(checkout, ["log", "-1", "--format=%B", commitOid])
+      this.runGit(checkout, ["rev-list", "--parents", "-n", "1", commitOid, "--"]),
+      this.runGit(checkout, ["log", "-1", "--format=%B", commitOid, "--"])
     ]);
     const lineage = gitSucceeded(parents) ? parents.stdout.trim().split(/\s+/u) : [];
     return gitSucceeded(tree) && tree.stdout.trim() === treeOid && lineage.length === 2 && lineage[0] === commitOid && lineage[1] === parentOid && gitSucceeded(body) && body.stdout.trimEnd() === message;
@@ -51498,7 +51506,7 @@ async function collectRepositoryInstructions(repoRoot, baseCommitOid, runGit) {
   }
   const instructions = [];
   for (const instructionPath of presentPaths) {
-    const blob = await runGit(repoRoot, ["show", `${baseCommitOid}:${instructionPath}`]);
+    const blob = await runGit(repoRoot, ["show", `${baseCommitOid}:${instructionPath}`, "--"]);
     assertCompleteGitOutput(`collect repository instruction ${instructionPath}`, blob);
     instructions.push({ path: instructionPath, content: blob.stdout });
   }
@@ -52478,14 +52486,14 @@ async function composeSliceOntoHead(args) {
   const changes = parseRawDiffEntries(await checked(
     args.checkoutPath,
     // Raw output abbreviates object ids by default; update-index needs them whole.
-    ["diff", "--raw", "-z", "--no-abbrev", "--no-renames", `${args.base}..${args.sliceCommit}`],
+    ["diff", "--raw", "-z", "--no-abbrev", "--no-renames", `${args.base}..${args.sliceCommit}`, "--"],
     args.objectReadOptions,
     runGit
   ));
   if (changes.length === 0) return args.head;
   const occupied = new Set((await checked(
     args.checkoutPath,
-    ["diff", "--name-only", "-z", "--no-renames", `${args.base}..${args.head}`],
+    ["diff", "--name-only", "-z", "--no-renames", `${args.base}..${args.head}`, "--"],
     args.objectReadOptions,
     runGit
   )).split("\0").filter((entry) => entry.length > 0));
@@ -52760,7 +52768,8 @@ async function verifyCandidate(args) {
           "--name-status",
           "--no-renames",
           "-z",
-          `${args.baselineCommit}..${args.candidateCommit}`
+          `${args.baselineCommit}..${args.candidateCommit}`,
+          "--"
         ]),
         gitChecked(worktreePath, ["status", "--porcelain"]),
         git(worktreePath, [
@@ -52862,7 +52871,8 @@ async function importPromotedObjects(args) {
     "--objects",
     args.promotedCommit,
     "--not",
-    args.baselineCommit
+    args.baselineCommit,
+    "--"
   ]);
 }
 async function validateCandidateProvenance(args) {

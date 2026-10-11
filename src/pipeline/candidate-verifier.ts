@@ -188,6 +188,7 @@ export async function verifyCandidate(args: {
           "--no-renames",
           "-z",
           `${args.baselineCommit}..${args.candidateCommit}`,
+          "--",
         ]),
         checkedGit(worktreePath, ["status", "--porcelain"]),
         git(worktreePath, [

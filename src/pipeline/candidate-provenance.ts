@@ -40,6 +40,7 @@ export async function importPromotedObjects(args: {
     args.promotedCommit,
     "--not",
     args.baselineCommit,
+    "--",
   ]);
 }
 

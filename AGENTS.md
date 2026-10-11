@@ -155,8 +155,12 @@ All dependencies track latest, with one deliberate pin. Provenance for future se
   GHSA-frvp-7c67-39w9 — which is why Dependabot's own update job failed rather
   than proposing a bump. SDK 1.30.0 declares `^1.19.9 || ^2.0.5`. Keep the
   resolution at >= 2.0.5 (`npm why @hono/node-server`).
-- `vitest` 4.x — the `test(name, fn, { timeout })` options-object third argument was
-  removed in v4; use a numeric third argument or options as the second argument.
+- `vitest` 5.x (requires Node `^22.12.0 || ^24`) — the `test(name, fn, { timeout })`
+  options-object third argument was removed in v4; use a numeric third argument or
+  options as the second argument.
+- Git calls that take revisions end them with `--`. Without it, Git runs `stat` on each
+  revision to rule out a same-named file, and on Windows a long worktree path makes that
+  `stat` fail with `Filename too long`.
 - `esbuild` tracks latest; any bump changes `runtime/server.mjs` bytes, so rebuild
   and commit the bundle in the same change (`bash scripts/build-runtime.sh`).
 
