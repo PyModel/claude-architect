@@ -55,7 +55,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/changed-path-manifest.test.ts | src/git/changed-path-manifest.ts | computeChangedPathManifest, parseRawDiff, manifestHashOf | unit | no |
 | tests/runtime/checked-git.test.ts | src/git/checked-git.ts | gitChecked, gitSucceeded, reviewDiffArgs | unit | no |
 | tests/runtime/claude-adapter.test.ts | src/producers/claude-adapter.ts | ClaudeAdapter, renderProducerPrompt | contract | no |
-| tests/runtime/cleanup-journal.test.ts | src/runtime/cleanup-journal.ts | appendCleanupRecord, readPendingCleanupIntents | integration | YES — `vi.mock("node:fs/promises", ...)` observes the directory flush (OS fault/observation injection; the journal itself is real) |
+| tests/runtime/cleanup-journal.test.ts | src/runtime/cleanup-journal.ts | appendCleanupRecord, readPendingCleanupIntents | integration | YES — `vi.mock("node:fs/promises", ...)` observes the directory flush and arms `lstat` to report a zero birth time for the runs root (OS fault/observation injection; the journal itself is real) |
 | tests/runtime/codex-adapter.test.ts | src/producers/codex-adapter.ts | CodexAdapter, codexDescriptor, sandboxSupportWritableRoots | contract | no |
 | tests/runtime/consolidator.test.ts | src/pipeline/consolidator.ts | consolidate, detectNonConvergence | unit | no |
 | tests/runtime/controlled-integrator.test.ts | src/integrate/controlled-integrator.ts | applyCandidateTree, stageCandidateTreeUnderLock | integration | YES — `vi.mock("../../src/git/git-exec.js", ...)` (L797) injects mid-operation git failures |
@@ -81,7 +81,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/legacy-decision-provenance.test.ts | src/runtime/artifact-store.ts | ArtifactStore | integration | YES — hand-writes `decision.json` bytes in a prior release's shape (~L498-816) instead of via a real decision flow |
 | tests/runtime/live-bundle.test.ts | src/mcp/live-bundle.ts | checkLiveBundle, liveBundleDiagnostic | unit | no |
 | tests/runtime/lock-contention.test.ts | src/platform/select-platform.ts | getPlatformServices, acquireCheckoutLock | integration | no |
-| tests/runtime/lock-ownership.test.ts | src/platform/lock-ownership.ts, src/platform/checkout-lock.ts | reclaimDeadLock, acquireCheckoutLock, releaseLock, tryAcquireLock | unit/contract | YES — `vi.spyOn(logger, "warn")` (L690-691) mocks internal logger |
+| tests/runtime/lock-ownership.test.ts | src/platform/lock-ownership.ts, src/platform/checkout-lock.ts | reclaimDeadLock, acquireCheckoutLock, releaseLock, tryAcquireLock | unit/contract | YES — `vi.spyOn(logger, "warn")` (L201, L214) mocks internal logger; `vi.mock("node:fs/promises", ...)` arms one `link` errno and a zero `lstat` birth time for the locks directory (OS fault injection; the lock is real) |
 | tests/runtime/mcp-cancellation.test.ts | src/mcp/server.ts | start (MCP server) | integration | no |
 | tests/runtime/mcp-decision-gate.test.ts | src/mcp/server.ts, src/runtime/artifact-store.ts | start, ArtifactStore | integration | no |
 | tests/runtime/mcp-input-schema.test.ts | src/mcp/server.ts | delegateInputSchema, delegatePipelineInputSchema | contract | no |
@@ -164,6 +164,7 @@ site below was read; each verdict names the reason.
 | Site | What it does | Verdict |
 | --- | --- | --- |
 | `tests/runtime/artifact-store.test.ts` (`vi.mock("node:fs/promises")`) | wraps `open` to fail a write | keep: OS fault injection; the store's durability is what is being proven, and it is real |
+| `tests/runtime/cleanup-journal.test.ts`, `tests/runtime/lock-ownership.test.ts` (`vi.mock("node:fs/promises")`) | `lstat` reports a zero birth time for one directory; `link` fails once with an armed errno | keep: OS fault injection for filesystems without birth time and transient Windows errors; the journal and lock are real |
 | `tests/runtime/attempt-runtime.test.ts:582` | `WorktreeManager.prototype.create` calls through, then makes `cleanup` throw | keep: fault injection on a real worktree; proves the outcome survives cleanup failure |
 | `tests/runtime/autopilot/final-branch-reviewer.test.ts:637` | `revalidateUnderLock` replaced to assert the lock is held and count calls after cleanup | keep: observes ordering of a real lock; the property proven is the caller's sequencing, not revalidation itself |
 | `tests/runtime/candidate-tree.test.ts:439`, `tests/runtime/controlled-integrator.test.ts:797` | `git-exec` wrapped to fail one call mid-sequence | keep: a real repository cannot make git die at step N deterministically; every other call is real git |
@@ -172,7 +173,7 @@ site below was read; each verdict names the reason.
 | `tests/runtime/pipeline-runtime.test.ts` (11 sites) | `AcceptanceVerifier.prototype.verify`, `ArtifactStore.prototype.*`, `WorktreeManager.prototype.create` spied; each calls through and either asserts the lease is held, counts calls, or fails once | keep: every spy runs the real method; the pipeline, store, verifier, and worktrees are real. Sites that never call through (`1180`, `1483`) reject a single durable write to prove the failure is reported, not swallowed |
 | `tests/runtime/run-status.test.ts:1661` | `writeRunStatus` rejected once; `logger.warn` observed | keep: proves status is advisory and never breaks control flow |
 | `tests/runtime/repo-preconditions.test.ts:982`, `tests/runtime/skill-bootstrap.test.ts:59` | `node:fs` failures forced | keep: fail-closed branches unreachable without an injected fault |
-| `branch-manager.test.ts:911`, `candidate-promoter.test.ts:447`, `lock-ownership.test.ts:690`, `recovery-manager.test.ts:897` | `logger.warn` / `console.error` spied | keep: log observation, no behaviour substituted |
+| `branch-manager.test.ts:911`, `candidate-promoter.test.ts:447`, `lock-ownership.test.ts:201`, `recovery-manager.test.ts:897` | `logger.warn` / `console.error` spied | keep: log observation, no behaviour substituted |
 
 Nothing was moved or deleted: no test replaces the component whose property it
 proves. Any future entry here must carry a verdict in this table.
