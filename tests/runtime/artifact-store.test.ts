@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { constants } from "node:fs";
 import { createHash } from "node:crypto";
 import {
   access,
@@ -42,7 +43,7 @@ import {
 } from "./pipeline/autopilot-fixtures.js";
 
 const filesystemHooks = vi.hoisted(() => ({
-  beforeOpen: undefined as undefined | ((filename: string) => Promise<void>),
+  beforeOpen: undefined as undefined | ((filename: string, flags?: string | number) => Promise<void>),
   beforeLink: undefined as undefined | ((source: string, destination: string) => Promise<void>),
   beforeLstat: undefined as undefined | ((filename: string) => Promise<void>),
   beforeDirectoryRead: undefined as undefined | ((filename: string) => Promise<void>),
@@ -55,7 +56,7 @@ vi.mock("node:fs/promises", async importOriginal => {
     ...actual,
     open: async (...args: Parameters<typeof actual.open>) => {
       const hook = filesystemHooks.beforeOpen;
-      if (hook !== undefined) await hook(String(args[0]));
+      if (hook !== undefined) await hook(String(args[0]), args[1]);
       return actual.open(...args);
     },
     link: async (...args: Parameters<typeof actual.link>) => {
@@ -1560,8 +1561,10 @@ describe("ArtifactStore", () => {
     const oldTime = new Date(Date.now() - 60_000);
     await utimes(store.runDirectory, oldTime, oldTime);
     let swapped = false;
-    filesystemHooks.beforeOpen = async filename => {
+    // Target the append's own open (O_APPEND), not the torn-tail pre-read.
+    filesystemHooks.beforeOpen = async (filename, flags) => {
       if (swapped || filename !== cleanupJournal) return;
+      if (typeof flags !== "number" || (flags & constants.O_APPEND) === 0) return;
       swapped = true;
       filesystemHooks.beforeOpen = undefined;
       await rename(runsRoot, preservedRunsRoot);
@@ -1577,12 +1580,8 @@ describe("ArtifactStore", () => {
     expect(pruned.removed).not.toContain(runId);
     expect(pruned.retained.some(entry => entry.runId === runId)).toBe(true);
     await expect(stat(join(preservedRunsRoot, runId))).resolves.toBeDefined();
-    // No intent was written: the journal is absent or empty in the swapped-in root.
-    const journalText = await readFile(cleanupJournal, "utf8").catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return "";
-      throw error;
-    });
-    expect(journalText).toBe("");
+    // No intent was written: the append's O_CREAT left an empty journal.
+    await expect(readFile(cleanupJournal, "utf8")).resolves.toBe("");
   });
 
   it("deletes a candidate anchor before pruning its archive", async () => {
