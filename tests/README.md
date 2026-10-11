@@ -63,7 +63,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/cross-lane-launch.test.ts | src/producers/producer-runtime.ts, producer-registry.ts | producerRuntime, registry | contract | no |
 | tests/runtime/cross-lane-probe.test.ts | src/producers/*-adapter.ts (6 adapters) | probe() on each ProducerAdapter | contract | no |
 | tests/runtime/cross-lane-prompt.test.ts | src/producers/prompt-renderer.ts | renderProducerPrompt, renderList, DescriptorAdapter | unit | no |
-| tests/runtime/decision-authority.test.ts | src/runtime/candidate-decisions.ts, src/mcp/server.ts | decisionAuthority, readDecisionAdvisory, start | integration | no |
+| tests/runtime/decision-authority.test.ts | src/runtime/candidate-decisions.ts, src/mcp/server.ts, src/mcp/tools.ts | decisionAuthority, readDecisionAdvisory, start | integration | no |
 | tests/runtime/dependency-link.test.ts | src/verify/dependency-link.ts | linkPrimaryDependencies, probeCowSupport | integration | no |
 | tests/runtime/doctor.test.ts | src/mcp/doctor.ts | doctor | contract | no |
 | tests/runtime/durable-directory.test.ts | src/platform/durable-directory.ts | ensurePrivateDirectory, syncDirectoryMetadata | integration | no |
