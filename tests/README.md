@@ -96,7 +96,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/platform-path.test.ts | src/util/platform-path.ts | platformPathsEqual | unit | no |
 | tests/runtime/platform-safety.test.ts | src/platform/platform-safety.ts | PlatformSafety.withCheckoutLease | unit | no |
 | tests/runtime/plugin-wiring.test.mjs | .mcp.json, runtime/bootstrap.mjs, runtime/server.mjs, agents/advisor.md | file/wiring assertions | contract | no |
-| tests/runtime/posix-platform-services.test.ts | src/platform/posix-platform-services.ts | PosixPlatformServices, CLEANUP_JOURNAL_LOCK_KEY | integration | no |
+| tests/runtime/posix-platform-services.test.ts | src/platform/posix-platform-services.ts, src/platform/checkout-lock.ts | PosixPlatformServices, CLEANUP_JOURNAL_LOCK_KEY | integration | no |
 | tests/runtime/pre-push-hook.test.ts | .githooks/pre-push | shell script source assertions | contract | no |
 | tests/runtime/probe-cache.test.ts | src/producers/producer-runtime.ts, producer-registry.ts | ProducerRuntime, ProducerRegistry, ProducerAdapter | unit | no |
 | tests/runtime/process-supervisor.test.ts | src/platform/process-supervisor.ts | supervise | integration | no |
@@ -147,7 +147,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/windows-resolve.test.ts | src/platform/windows-env.ts, src/platform/windows-platform-services.ts | normalizeWindowsEnv, resolveWindowsExecutable | unit | no |
 | tests/runtime/worktree-manager.test.ts | src/runtime/worktree-manager.ts | WorktreeManager, managedWorktreeDirectoryIdentity, removeManagedWorktreeDirectory | integration | no |
 | tests/runtime/worktree-registration.test.ts | src/git/worktree-registration.ts | findWorktreeRegistration | unit | no |
-| tests/runtime/worktree-removal-manifest.test.ts | src/runtime/worktree-removal-manifest.ts | persistWorktreeRemovalManifest, readPendingWorktreeRemovalManifests, replaceWorktreeRemovalManifest, assertNoPendingWorktreeRemovalForRepository | integration | no |
+| tests/runtime/worktree-removal-manifest.test.ts | src/runtime/worktree-transaction.ts | persistWorktreeRemovalManifest, readPendingWorktreeRemovalManifests, replaceWorktreeRemovalManifest, assertNoPendingWorktreeRemovalForRepository | integration | no |
 | tests/runtime/worktree-sweep.test.ts | src/runtime/recovery-worktree-sweep.ts | recoverStaleRuns, WorktreeManager | integration | no |
 | tests/runtime/worktree-transaction.test.ts | src/runtime/worktree-transaction.ts | persistWorktreeRemovalManifest, readPendingWorktreeRemovalManifests, planWorktreeRemovalReplay | integration | no |
 | tests/validate-release.test.sh | scripts/validate-release.sh | validate-release CLI contract | integration | no |
