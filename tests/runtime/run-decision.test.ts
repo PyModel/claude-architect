@@ -366,6 +366,29 @@ describe("RunDecision", () => {
       }
     });
 
+    it("3a. rejected verdict carries the recorded pipeline failure reason", async () => {
+      const runId = "pipeline-failed-run";
+      const result = makeResult(runId, {
+        status: "failed",
+        failure: "cancelled",
+        evidence: {
+          pipelineFailure: { failure: "cancelled", reason: "reviewer cancelled mid-round" },
+        },
+      });
+      const store = createMockStore(runId, {
+        readResult: async () => result,
+      });
+      const verdict = await runDecision.evaluate(runId, {
+        store,
+        authority: "autonomous",
+      });
+
+      expect(verdict).toEqual({
+        state: "rejected",
+        reasons: ["cancelled", "reviewer cancelled mid-round"],
+      });
+    });
+
     it("3b. state: rejected when candidate decision is rejected or revision-requested", async () => {
       const runId = "decision-rejected-run";
       const snapshot = makeReviewSnapshot(runId);
