@@ -32228,10 +32228,10 @@ async function lockParentIdentity(parentPath) {
     if (isMissing(error51)) throw new RuntimeError("lock parent must remain a plain directory");
     throw error51;
   }
-  if (!isPlainDirectory(metadata) || metadata.birthtimeNs <= 0n) {
+  if (!isPlainDirectory(metadata)) {
     throw new RuntimeError("lock parent must remain a plain directory");
   }
-  return { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
+  return requireBirthtimeIdentity(metadata, "locks directory");
 }
 async function tryAcquireLock(lockPath, contents) {
   if (contents.byteLength > MAX_STATE_FILE_BYTES) {

@@ -8,6 +8,7 @@ import { logger } from "../util/logger.js";
 import type { CheckoutLock, FileLock, LockOwnerAnnotation, PlatformServices } from "./platform-services.js";
 import {
   NO_FOLLOW,
+  requireBirthtimeIdentity,
   sameDirectoryIdentity,
   type DirectoryIdentity,
 } from "./durable-directory.js";
@@ -307,10 +308,10 @@ async function lockParentIdentity(parentPath: string): Promise<DirectoryIdentity
     if (isMissing(error)) throw new RuntimeError("lock parent must remain a plain directory");
     throw error;
   }
-  if (!isPlainDirectory(metadata) || metadata.birthtimeNs <= 0n) {
+  if (!isPlainDirectory(metadata)) {
     throw new RuntimeError("lock parent must remain a plain directory");
   }
-  return { dev: metadata.dev, ino: metadata.ino, birthtimeNs: metadata.birthtimeNs };
+  return requireBirthtimeIdentity(metadata, "locks directory");
 }
 
 export async function tryAcquireLock(
