@@ -840,6 +840,10 @@ export async function runAttempt(
     return archivedResult;
   } catch (error) {
     primaryError = error;
+    const homeFailure = (error as { producerHomeFailure?: unknown } | null)?.producerHomeFailure;
+    if (typeof homeFailure === "string") {
+      logger.warn("attempt Producer HOME was preserved", { error: homeFailure });
+    }
     // Guarded like every other status site: for a pipeline-managed run the
     // pipeline owns the terminal status and writes `failed` itself, and writing
     // it here too resets round/role from this thinner context.

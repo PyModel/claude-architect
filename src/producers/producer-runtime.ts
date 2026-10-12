@@ -24,6 +24,7 @@ import {
   allocateProducerHome,
   producerHomeRoot,
   type ProducerHomeLease,
+  type ProducerHomeRetirement,
 } from "../runtime/producer-home.js";
 import type {
   AdapterEvent,
@@ -266,12 +267,7 @@ export class ProducerRuntime {
       return await this.planWithHome(request, adapter, descriptor, report, report.resolvedExecutable, tempHome, home);
     } catch (error) {
       if (home === null) throw error;
-      const retirement = await home.retire();
-      if (retirement.ok) throw error;
-      throw new AggregateError(
-        [error, new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved")],
-        "launch planning failed and its Producer HOME could not be retired",
-      );
+      throw withHomeFailure(error, await home.retire());
     }
   }
 
@@ -382,11 +378,7 @@ export class ProducerRuntime {
       // and its environment. Retire first, while secrets still redact.
       const retirement = plan.home === null ? null : await plan.home.retire();
       plan.builtEnvironment.secretRegistration.dispose();
-      if (retirement === null || retirement.ok) throw error;
-      throw new AggregateError(
-        [error, new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved")],
-        "Producer launch failed and its HOME could not be retired",
-      );
+      throw retirement === null ? error : withHomeFailure(error, retirement);
     }
   }
 
@@ -428,6 +420,20 @@ export class ProducerRuntime {
       ok: normalized.ok,
     };
   }
+}
+
+/**
+ * The primary error stays the thrown value, so its classification reaches the
+ * caller; a HOME that could not be retired rides on it as a redacted
+ * `producerHomeFailure` diagnostic.
+ */
+function withHomeFailure(error: unknown, retirement: ProducerHomeRetirement): unknown {
+  if (retirement.ok) return error;
+  const diagnostic = retirement.diagnostic ?? "Producer HOME preserved";
+  if (typeof error === "object" && error !== null) {
+    return Object.assign(error, { producerHomeFailure: diagnostic });
+  }
+  return new RuntimeError(String(error), { producerHomeFailure: diagnostic });
 }
 
 /**

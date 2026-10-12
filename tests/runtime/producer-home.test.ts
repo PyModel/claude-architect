@@ -27,6 +27,7 @@ import {
 } from "../../src/runtime/producer-home.js";
 import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
 import { containsRegisteredSecret } from "../../src/runtime/redaction.js";
+import { RuntimeError } from "../../src/util/errors.js";
 import { platformServicesDouble } from "../helpers/platform-services-double.js";
 
 const REVIEW_JSON = JSON.stringify({ reportVersion: "1", verdict: "approve", findings: [], coverageGaps: [] });
@@ -320,33 +321,41 @@ describe("runtime-owned Producer HOME", () => {
     expect(await homeRootEntries()).toEqual([]);
   });
 
-  it("keeps the planning error and a redacted diagnostic when rollback cannot retire", async () => {
-    const adapter = new ScriptedAdapter("process.exit(0)");
-    const failure = new Error("adapter rejected the invocation");
-    const moved: string[] = [];
-    adapter.buildInvocation = (_spec, ctx) => {
-      // The allocation disappears from its name before the rollback runs.
-      const home = ctx.tempHome!;
-      renameSync(home, `${home}.gone`);
-      moved.push(`${home}.gone`, home);
-      throw failure;
-    };
+  it.each(["planning", "launch"] as const)("rethrows the classified %s error with the rollback diagnostic attached", async phase => {
+    const failure = new RuntimeError("producer launch rejected", { classification: "producer-unavailable" });
+    let home = "";
+    const adapter = new ScriptedAdapter(`
+      const home = ${HOME_EXPRESSION};
+      require("fs").renameSync(home, home + ".gone");
+    `);
+    if (phase === "planning") {
+      adapter.buildInvocation = (_spec, ctx) => {
+        // The allocation disappears from its name before the rollback runs.
+        home = ctx.tempHome!;
+        renameSync(home, `${home}.gone`);
+        throw failure;
+      };
+    } else {
+      const build = adapter.buildInvocation.bind(adapter);
+      adapter.buildInvocation = (planned, ctx) => {
+        home = ctx.tempHome!;
+        return build(planned, ctx);
+      };
+      adapter.normalizeEvents = () => { throw failure; };
+    }
     const runtime = new ProducerRuntime(new ProducerRegistry([adapter]));
+    const request = { adapter, spec: spec(), worktreePath, intent: "read-only" as const, ps: getPlatformServices() };
 
-    const error = await runtime.planLaunch({
-      adapter,
-      spec: spec(),
-      worktreePath,
-      intent: "read-only",
-      ps: getPlatformServices(),
-    }).catch((caught: unknown) => caught);
+    const error = await (phase === "planning" ? runtime.planLaunch(request) : runtime.launch(request))
+      .catch((caught: unknown) => caught);
 
-    expect(error).toBeInstanceOf(AggregateError);
-    const errors = (error as AggregateError).errors;
-    expect(errors[0]).toBe(failure);
-    expect(String((errors[1] as Error).message)).toMatch(/moved away before retirement/u);
-    expect(String((errors[1] as Error).message)).not.toContain(moved[1]!);
-    await expect(access(moved[0]!)).resolves.toBeUndefined();
+    // The caller still sees the primary error and its classification.
+    expect(error).toBe(failure);
+    expect(failure.detail?.classification).toBe("producer-unavailable");
+    const diagnostic = (failure as RuntimeError & { producerHomeFailure?: string }).producerHomeFailure;
+    expect(diagnostic).toMatch(/moved away before retirement/u);
+    expect(diagnostic).not.toContain(home);
+    await expect(access(`${home}.gone`)).resolves.toBeUndefined();
   });
 
   it("never retires a borrowed HOME", async () => {

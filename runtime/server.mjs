@@ -40402,12 +40402,7 @@ var ProducerRuntime = class {
       return await this.planWithHome(request, adapter, descriptor, report, report.resolvedExecutable, tempHome, home);
     } catch (error51) {
       if (home === null) throw error51;
-      const retirement = await home.retire();
-      if (retirement.ok) throw error51;
-      throw new AggregateError(
-        [error51, new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved")],
-        "launch planning failed and its Producer HOME could not be retired"
-      );
+      throw withHomeFailure(error51, await home.retire());
     }
   }
   async planWithHome(request, adapter, descriptor, report, executable, tempHome, home) {
@@ -40489,11 +40484,7 @@ var ProducerRuntime = class {
     } catch (error51) {
       const retirement = plan.home === null ? null : await plan.home.retire();
       plan.builtEnvironment.secretRegistration.dispose();
-      if (retirement === null || retirement.ok) throw error51;
-      throw new AggregateError(
-        [error51, new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved")],
-        "Producer launch failed and its HOME could not be retired"
-      );
+      throw retirement === null ? error51 : withHomeFailure(error51, retirement);
     }
   }
   async launchPlanned(request, plan) {
@@ -40523,6 +40514,14 @@ var ProducerRuntime = class {
     };
   }
 };
+function withHomeFailure(error51, retirement) {
+  if (retirement.ok) return error51;
+  const diagnostic = retirement.diagnostic ?? "Producer HOME preserved";
+  if (typeof error51 === "object" && error51 !== null) {
+    return Object.assign(error51, { producerHomeFailure: diagnostic });
+  }
+  return new RuntimeError(String(error51), { producerHomeFailure: diagnostic });
+}
 function withHomeClaimRecording(ps, lease) {
   return Object.assign(Object.create(ps), {
     os: ps.os,
@@ -52685,6 +52684,10 @@ async function runAttempt(checkoutPath, spec, deps) {
       return archivedResult;
     } catch (error51) {
       primaryError = error51;
+      const homeFailure = error51?.producerHomeFailure;
+      if (typeof homeFailure === "string") {
+        logger.warn("attempt Producer HOME was preserved", { error: homeFailure });
+      }
       if (!statusContext.pipelineManaged) {
         await emitStatus("failed", {
           detail: error51 instanceof Error ? error51.message : "attempt failed unexpectedly"
