@@ -485,7 +485,7 @@ test("CI exercises the supported macOS 15, Ubuntu, and Windows runners", () => {
     "CI must test the approved three-platform runner matrix",
   );
   assert.doesNotMatch(workflow, /macos-14/u);
-  assert.match(workflow, /name: test \(windows-latest\)\n\s+needs: test/u,
+  assert.match(workflow, /name: test \(windows-latest\)\r?\n\s+needs: test/u,
     "Sharded Windows legs must still report the required test (windows-latest) check");
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40} # v7\./u);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40} # v7\./u);

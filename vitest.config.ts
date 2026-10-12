@@ -10,7 +10,9 @@ export default defineConfig({
     include: ["tests/runtime/**/*.test.{ts,mjs}"],
     environment: "node",
     setupFiles: ["tests/support/isolated-state-dir.ts"],
-    testTimeout: 30_000,
+    // Windows runs these Git-heavy suites ~15x slower; several integration
+    // tests sit at 27-30s there, so the 30s budget only holds off Windows.
+    testTimeout: process.platform === "win32" ? 120_000 : 30_000,
     hookTimeout: 60_000,
   },
 });
