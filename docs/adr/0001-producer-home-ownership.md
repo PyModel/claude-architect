@@ -139,8 +139,14 @@ There is no pathname-only recursive deletion anywhere.
   allocation name → retire; at the quarantine name (crash between rename and
   phase write) → continue; `quarantined` with the quarantine gone → remove the
   claim; anything else → preserved, diagnosed.
+- Owner dead but a recorded Producer still `live` → an orphaned Producer may
+  still use the HOME: preserved, diagnosed.
 - Allocation or quarantine directories without a claim are never inferred
-  from their name or age: preserved and diagnosed.
+  from their name or age: preserved and diagnosed, after re-checking that a
+  concurrent owner did not just claim or remove them.
+- A leftover claim temporary (`.<id>.claim.<uuid>.tmp`) from a crashed write
+  is removed only when it is a plain single-link file older than ten minutes;
+  a younger one is left alone, anything else is reported.
 
 Diagnostics are returned as `producerHomeIssues` (redacted reasons), logged
 once at server start, and kept out of `worktreeSweepIssues` so a preserved

@@ -379,18 +379,37 @@ export class ProducerHomeLease {
 
 let ownProcessToken: Promise<string | null> | undefined;
 
+/** `writeAtomic`'s temporary for a claim: `.<id>.claim.<uuid>.tmp`. */
+const CLAIM_TEMPORARY = /^\.[0-9a-f]{8}\.claim\.[0-9a-f-]{36}\.tmp$/u;
+/** Far longer than any claim write; younger temporaries may still be in use. */
+const CLAIM_TEMPORARY_STALE_MS = 10 * 60 * 1000;
+
+/** Remove a crashed claim write's temporary: only a stale plain single-link file. */
+async function removeStaleClaimTemporary(target: string): Promise<void> {
+  const metadata = await lstatOrNull(target);
+  if (metadata === null) return;
+  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1n) {
+    throw new RuntimeError("a Producer HOME claim temporary is not a plain file");
+  }
+  if (Date.now() - Number(metadata.mtimeMs) < CLAIM_TEMPORARY_STALE_MS) return;
+  await rm(target);
+}
+
 /**
  * Allocate a private HOME under the state directory, capture its identity and
  * record its claim before any adapter sees the path.
  */
 export async function allocateProducerHome(args: {
   writeScope: readonly string[];
+  /** The runtime's own start token; probed once per process by default. */
+  processToken?: () => Promise<string | null>;
 }): Promise<ProducerHomeLease> {
-  // The runtime's own start token never changes; probe it once per process.
-  ownProcessToken ??= getPlatformServices().getProcessStartToken(nodeProcess.pid);
-  const ownerToken = await ownProcessToken.catch(() => null);
+  const ownerToken = args.processToken !== undefined
+    ? await args.processToken().catch(() => null)
+    : await (ownProcessToken ??= getPlatformServices().getProcessStartToken(nodeProcess.pid))
+      .catch(() => null);
   if (ownerToken === null) {
-    ownProcessToken = undefined;
+    if (args.processToken === undefined) ownProcessToken = undefined;
     throw new RuntimeError("the runtime process identity is unavailable; a Producer HOME cannot be claimed");
   }
   const root = await ensureRoot();
@@ -469,17 +488,20 @@ export async function recoverProducerHomes(args: {
       const metadata = await lstat(claimPath, { bigint: true });
       if (metadata.size > BigInt(MAX_CLAIM_BYTES)) throw new RuntimeError("Producer HOME claim is oversized");
       const claim = parseClaim(await readFile(claimPath, "utf8"), homeId);
-      const statuses = new Set<string>();
-      for (const process of [claim.owner, ...claim.producers]) {
-        statuses.add(await lockOwnerStatus(
-          process,
-          args.isProcessAlive,
-          pid => args.ps.getProcessStartToken(pid),
-        ).catch(() => "unverifiable" as const));
-      }
+      const status = (process: ClaimProcess) => lockOwnerStatus(
+        process,
+        args.isProcessAlive,
+        pid => args.ps.getProcessStartToken(pid),
+      ).catch(() => "unverifiable" as const);
+      const ownerStatus = await status(claim.owner);
       // A live owner is an allocation in use: preserved without a report, as
       // run recovery treats a live run.
-      if (statuses.has("live")) continue;
+      if (ownerStatus === "live") continue;
+      const statuses = new Set<string>([ownerStatus]);
+      for (const producer of claim.producers) statuses.add(await status(producer));
+      if (statuses.has("live")) {
+        throw new RuntimeError("an orphaned Producer outlived its dead owner and may still use its HOME");
+      }
       if (statuses.has("unverifiable")) {
         throw new RuntimeError(
           "a recorded Producer HOME owner is running but its identity cannot be verified",
@@ -496,12 +518,24 @@ export async function recoverProducerHomes(args: {
     }
   }
   for (const entry of entries) {
+    const entryPath = path.join(root.directory, entry.name);
+    if (CLAIM_TEMPORARY.test(entry.name)) {
+      try {
+        await removeStaleClaimTemporary(entryPath);
+      } catch (error) {
+        issues.push({ path: entryPath, error });
+      }
+      continue;
+    }
     const homeId = entry.name.startsWith(QUARANTINE_PREFIX)
       ? entry.name.slice(QUARANTINE_PREFIX.length)
       : entry.name;
     if (!HOME_ID.test(homeId) || claimed.has(homeId)) continue;
+    // A concurrent owner may have finished claiming or removing it mid-scan.
+    if (await lstatOrNull(entryPath) === null) continue;
+    if (await lstatOrNull(path.join(root.directory, `${homeId}${CLAIM_SUFFIX}`)) !== null) continue;
     issues.push({
-      path: path.join(root.directory, entry.name),
+      path: entryPath,
       error: new RuntimeError("a Producer HOME without an ownership claim was preserved"),
     });
   }

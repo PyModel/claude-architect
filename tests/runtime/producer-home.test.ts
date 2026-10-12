@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { renameSync } from "node:fs";
-import { access, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { existsSync, renameSync, rmdirSync, writeFileSync } from "node:fs";
+import { access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -675,3 +675,201 @@ describe("Producer HOME recovery", () => {
     await expect(access(malformed.path)).resolves.toBeUndefined();
   });
 });
+
+describe("Producer HOME edge cases", () => {
+  const recover = () => recoverProducerHomes({
+    stateRoot: dirname(producerHomeRoot()),
+    ps: getPlatformServices(),
+    isProcessAlive: pid => pid === process.pid,
+  });
+
+  async function deadLease() {
+    const lease = await allocateProducerHome({ writeScope: [worktreePath] });
+    const deadPid = await deadProcess();
+    await rewriteClaim(lease.path, claim => {
+      claim.owner = { pid: deadPid, processToken: "exited" };
+    });
+    return lease;
+  }
+
+  function reasonOf(issues: Awaited<ReturnType<typeof recover>>, name: string): string | undefined {
+    const issue = issues.find(entry => basename(entry.path) === name);
+    return issue === undefined ? undefined : String((issue.error as Error).message);
+  }
+
+  it("removes the claim of a quarantined HOME whose quarantine is already gone", async () => {
+    const lease = await deadLease();
+    await rewriteClaim(lease.path, claim => { claim.phase = "quarantined"; });
+    await rm(lease.path, { recursive: true });
+
+    expect(await recover()).toEqual([]);
+    expect(await homeRootEntries()).toEqual([]);
+  });
+
+  it("refuses to claim a HOME when the runtime's own start token is unavailable", async () => {
+    await expect(allocateProducerHome({ writeScope: [worktreePath], processToken: async () => null }))
+      .rejects.toThrow(/process identity is unavailable/u);
+    expect(await homeRootEntries()).toEqual([]);
+  });
+
+  it("preserves and reports oversized and symlinked claims", async () => {
+    const oversized = await deadLease();
+    await writeFile(`${oversized.path}.claim`, `${" ".repeat(20_000)}{}`);
+    const linked = await deadLease();
+    const target = join(worktreePath, "claim-target.json");
+    await rename(`${linked.path}.claim`, target);
+    await symlink(target, `${linked.path}.claim`);
+
+    const issues = await recover();
+
+    expect(reasonOf(issues, basename(oversized.path))).toMatch(/oversized/u);
+    expect(reasonOf(issues, basename(linked.path))).toMatch(/not a plain file/u);
+    await expect(access(oversized.path)).resolves.toBeUndefined();
+    await expect(access(linked.path)).resolves.toBeUndefined();
+  });
+
+  it.runIf(process.platform !== "win32")("refuses a HOME root that is not private", async () => {
+    const lease = await deadLease();
+    await chmod(producerHomeRoot(), 0o755);
+    try {
+      const issues = await recover();
+      expect(issues).toHaveLength(1);
+      expect(String((issues[0]!.error as Error).message)).toMatch(/not private/u);
+      await expect(access(lease.path)).resolves.toBeUndefined();
+      await expect(allocateProducerHome({ writeScope: [worktreePath] })).rejects.toThrow(/not private/u);
+    } finally {
+      await chmod(producerHomeRoot(), 0o700);
+    }
+  });
+
+  it("reports an orphaned Producer that outlived its dead owner", async () => {
+    const lease = await deadLease();
+    const token = await getPlatformServices().getProcessStartToken(process.pid);
+    await rewriteClaim(lease.path, claim => {
+      claim.producers = [{ pid: process.pid, processToken: token }];
+    });
+
+    const issues = await recover();
+
+    expect(reasonOf(issues, basename(lease.path))).toMatch(/orphaned Producer/u);
+    await expect(access(lease.path)).resolves.toBeUndefined();
+  });
+
+  it("does not report allocations that a concurrent owner claims or removes during the scan", async () => {
+    const trigger = await deadLease();
+    const late = await allocateProducerHome({ writeScope: [worktreePath] });
+    const lateClaim = await readFile(`${late.path}.claim`, "utf8");
+    await rm(`${late.path}.claim`);
+    const vanishing = join(producerHomeRoot(), "0dd0dd00");
+    await mkdir(vanishing);
+
+    const issues = await recoverProducerHomes({
+      stateRoot: dirname(producerHomeRoot()),
+      ps: getPlatformServices(),
+      isProcessAlive: pid => {
+        // Mid-scan, another process finishes one allocation and removes one.
+        if (pid !== process.pid) {
+          writeFileSyncOnce(`${late.path}.claim`, lateClaim);
+          rmdirSyncOnce(vanishing);
+        }
+        return pid === process.pid;
+      },
+    });
+
+    expect(issues).toEqual([]);
+    await expect(access(trigger.path)).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await late.retire()).ok).toBe(true);
+  });
+
+  it("removes stale claim temporaries, keeps fresh ones, and reports anything else", async () => {
+    const lease = await allocateProducerHome({ writeScope: [worktreePath] });
+    const root = producerHomeRoot();
+    const id = basename(lease.path);
+    const stale = join(root, `.${id}.claim.11111111-1111-4111-8111-111111111111.tmp`);
+    const fresh = join(root, `.${id}.claim.22222222-2222-4222-8222-222222222222.tmp`);
+    const odd = join(root, `.${id}.claim.33333333-3333-4333-8333-333333333333.tmp`);
+    await writeFile(stale, "{}");
+    const past = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await utimes(stale, past, past);
+    await writeFile(fresh, "{}");
+    await mkdir(odd);
+
+    const issues = await recover();
+
+    await expect(access(stale)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(access(fresh)).resolves.toBeUndefined();
+    expect(reasonOf(issues, basename(odd))).toMatch(/not a plain file/u);
+    expect(issues).toHaveLength(1);
+    expect((await lease.retire()).ok).toBe(true);
+  });
+
+  it("terminates the Producer when its claim cannot record it", async () => {
+    const lease = await allocateProducerHome({ writeScope: [worktreePath] });
+    for (let index = 0; index < 16; index += 1) await lease.recordProducer(1_000_000 + index, null);
+    const spawned: number[] = [];
+    const real = getPlatformServices();
+    const ps = platformServicesDouble({
+      async spawnSupervised(request) {
+        const child = await real.spawnSupervised(request);
+        spawned.push(child.pid);
+        return child;
+      },
+    });
+    const adapter = new ScriptedAdapter("setTimeout(() => {}, 30000)");
+    const runtime = new ProducerRuntime(new ProducerRegistry([adapter]));
+
+    await expect(runtime.launch({
+      adapter,
+      spec: spec(),
+      worktreePath,
+      intent: "read-only",
+      ps,
+      tempHome: lease.path,
+      homeLease: lease,
+    })).rejects.toThrow(/too many processes/u);
+
+    expect(spawned).toHaveLength(1);
+    const deadline = Date.now() + 10_000;
+    while (isAlive(spawned[0]!)) {
+      if (Date.now() > deadline) throw new Error("the unrecorded Producer survived");
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    expect((await lease.retire()).ok).toBe(true);
+  });
+
+  it.each(["extraWritableRoots", "gitObjectAccess"] as const)("refuses a HOME root reachable through %s", async via => {
+    const adapter = new ScriptedAdapter("process.exit(0)");
+    const runtime = new ProducerRuntime(new ProducerRegistry([adapter]));
+    const stateDir = dirname(producerHomeRoot());
+
+    await expect(runtime.planLaunch({
+      adapter,
+      spec: spec(),
+      worktreePath,
+      intent: "edit",
+      ps: getPlatformServices(),
+      ...(via === "extraWritableRoots"
+        ? { extraWritableRoots: [stateDir] }
+        : { gitObjectAccess: { privateObjectsDir: join(worktreePath, "objects"), sharedObjectsDir: [stateDir] } }),
+    })).rejects.toThrow(/overlaps the Producer's writable scope/u);
+
+    expect(adapter.homes).toEqual([]);
+  });
+});
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function writeFileSyncOnce(target: string, contents: string): void {
+  if (!existsSync(target)) writeFileSync(target, contents);
+}
+
+function rmdirSyncOnce(target: string): void {
+  if (existsSync(target)) rmdirSync(target);
+}
