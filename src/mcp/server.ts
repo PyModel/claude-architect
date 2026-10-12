@@ -441,14 +441,24 @@ export async function createServer(
   }
   const recover = dependencies.recoverStaleRuns ?? recoverStaleRuns;
   const recovery = await recover();
+  const homeIssues = recovery.producerHomeIssues ?? [];
+  if (homeIssues.length > 0) {
+    // Reasons only: the paths name the user's plugin data directory.
+    console.error(
+      `Claude Architect recovery preserved ${homeIssues.length} Producer HOME ${homeIssues.length === 1 ? "allocation" : "allocations"}: ${
+        // Redact each reason on its own: path redaction runs to the end of a
+        // line, so redacting the joined text would swallow later reasons.
+        homeIssues.map(issue => boundedRedactedDiagnostic(issue.reason, 400)).join("; ").slice(0, 2_000)}`,
+    );
+  }
   const sweepIssues = recovery.worktreeSweepIssues ?? [];
   let unresolvedSweepIssues = sweepIssues;
   if (sweepIssues.length > 0) {
     const noun = sweepIssues.length === 1 ? "path" : "paths";
-    const diagnostic = boundedRedactedDiagnostic(
-      sweepIssues.map(issue => issue.reason).join("; "),
-      2_000,
-    );
+    const diagnostic = sweepIssues
+      .map(issue => boundedRedactedDiagnostic(issue.reason, 400))
+      .join("; ")
+      .slice(0, 2_000);
     // Paths themselves can contain user and repository names. Recovery already
     // retained them in its structured in-process result; stderr gets only the
     // bounded redacted reasons so startup ambiguity is visible without PII.

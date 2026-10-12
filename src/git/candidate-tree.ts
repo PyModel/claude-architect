@@ -1,6 +1,6 @@
-import { lstat, mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { lstat } from "node:fs/promises";
 import path from "node:path";
+import { withRuntimeScratch } from "../runtime/producer-home.js";
 import type { CandidateArtifact } from "../protocol/attempt-result.js";
 import { redact } from "../runtime/redaction.js";
 import { globMatches } from "../util/glob.js";
@@ -160,9 +160,8 @@ export async function freezeCandidate(args: FreezeCandidateArgs): Promise<Freeze
     return { ok: false, reason: "modified-symlink" };
   }
 
-  const indexDirectory = await mkdtemp(path.join(tmpdir(), "claude-architect-index-"));
-  const indexFile = path.join(indexDirectory, "index");
-  try {
+  return await withRuntimeScratch(async indexDirectory => {
+    const indexFile = path.join(indexDirectory, "index");
     await checkedGit(args.worktreePath, ["read-tree", args.baseCommitOid], indexFile);
     if (inventory.changedPaths.length > 0) {
       const literalPathspecs = inventory.changedPaths.map(changedPath => `:(literal)${changedPath}`);
@@ -255,7 +254,5 @@ export async function freezeCandidate(args: FreezeCandidateArgs): Promise<Freeze
           .sort((left, right) => left < right ? -1 : left > right ? 1 : 0),
       },
     };
-  } finally {
-    await rm(indexDirectory, { recursive: true, force: true });
-  }
+  });
 }

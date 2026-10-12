@@ -40,7 +40,7 @@ A declarative specification defining a Producer's identification, executable res
 
 ### Producer Runtime
 
-The unified execution layer for Producers. It coordinates capability probing, probe caching within a run, shared prompt rendering, launch planning (computing sandbox policy, environment, and secure temporary HOME only when isolation profiles mandate it), and process supervision with watchdog protection.
+The unified execution layer for Producers. It coordinates capability probing, probe caching within a run, shared prompt rendering, launch planning (computing sandbox policy, environment, and a runtime-owned temporary HOME only when isolation profiles mandate it — allocated under the plugin data directory, claimed per HOME, and retired only by identity, see ADR-0001), and process supervision with watchdog protection.
 
 ### Producer Adapter
 

@@ -1,4 +1,3 @@
-import { rm } from "node:fs/promises";
 import type { PlatformServices, SupervisedExit } from "../platform/platform-services.js";
 import { selectSandboxBackend } from "../platform/sandbox/backends.js";
 import { selectOsWriteConfinementBackend } from "../producers/plain-text.js";
@@ -16,6 +15,7 @@ import { route } from "../producers/routing-policy.js";
 import { type BuiltEnvironment } from "../runtime/environment-policy.js";
 import { redact } from "../runtime/redaction.js";
 import type { RunStartContext } from "../runtime/run-start.js";
+import type { ProducerHomeLease, ProducerHomeRetirement } from "../runtime/producer-home.js";
 import {
   buildRoleSpec,
   type PipelineRole,
@@ -44,6 +44,11 @@ export interface RoleRunResult {
   archiveSafeRawOutput?: string;
   failure: FailureClassification | null;
   producerId: string | null;
+  /**
+   * A runtime-allocated HOME that could not be retired was preserved; this is
+   * its bounded, redacted diagnostic. The primary outcome is kept beside it.
+   */
+  cleanupFailure?: string;
 }
 
 export const READ_ONLY_ROLES: ReadonlySet<PipelineRole> = new Set<PipelineRole>([
@@ -83,23 +88,24 @@ function hasFailureSignal(signals: FailureSignals): boolean {
 }
 
 async function cleanupProcessAttempt(
-  tempHome: string | null,
+  home: ProducerHomeLease | null,
   builtEnvironment: BuiltEnvironment | null,
-): Promise<unknown | null> {
-  const failures: unknown[] = [];
+): Promise<{ error: unknown | null; home: ProducerHomeRetirement | null }> {
+  // Identity-bound retirement after the supervised tree settled; it never
+  // throws and never deletes by name. It runs while the launch's secrets are
+  // still registered, so its diagnostic is redacted against them.
+  const retirement = home === null ? null : await home.retire();
+  let failure: unknown | null = null;
   try {
     builtEnvironment?.secretRegistration.dispose();
   } catch (error) {
-    failures.push(error);
+    failure = error;
   }
-  if (tempHome !== null) {
-    try {
-      await rm(tempHome, { recursive: true, force: true });
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  return failures[0] ?? null;
+  return { error: failure, home: retirement === null || retirement.ok ? null : retirement };
+}
+
+function withCleanupFailure(result: RoleRunResult, failures: string[]): RoleRunResult {
+  return failures.length === 0 ? result : { ...result, cleanupFailure: failures.join("; ") };
 }
 
 export async function runRole(args: RoleRunArgs): Promise<RoleRunResult> {
@@ -195,10 +201,13 @@ export async function runRole(args: RoleRunArgs): Promise<RoleRunResult> {
     };
   }
 
+  const cleanupFailures: string[] = [];
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    let tempHome: string | null = null;
+    let home: ProducerHomeLease | null = null;
     let builtEnvironment: BuiltEnvironment | null = null;
     let primaryError: unknown;
+    let outcome: RoleRunResult | null = null;
+    let homeConflict = false;
     try {
       const runtime = new ProducerRuntime(args.registry);
       const launchResult = await runtime.launch({
@@ -216,7 +225,7 @@ export async function runRole(args: RoleRunArgs): Promise<RoleRunResult> {
         runStartContext: writer && runStart !== undefined ? runStart : undefined,
         capabilityReport: report,
       });
-      tempHome = launchResult.tempHome;
+      home = launchResult.home;
       builtEnvironment = launchResult.builtEnvironment;
       const exit = launchResult.exit;
 
@@ -238,18 +247,42 @@ export async function runRole(args: RoleRunArgs): Promise<RoleRunResult> {
         ? {}
         : { archiveSafeRawOutput: redact(rawOutput) };
       if (failure === null) {
-        return { ok: true, rawOutput, ...archiveSafeRawOutput, failure: null, producerId };
-      }
-      if (exit.cancelled || attempt === 2) {
-        return { ok: false, rawOutput, ...archiveSafeRawOutput, failure, producerId };
+        outcome = { ok: true, rawOutput, ...archiveSafeRawOutput, failure: null, producerId };
+      } else if (exit.cancelled || attempt === 2) {
+        outcome = { ok: false, rawOutput, ...archiveSafeRawOutput, failure, producerId };
+      } else {
+        // Retried below; its output is not the outcome.
+        outcome = null;
       }
     } catch (error) {
       primaryError = error;
       throw error;
     } finally {
-      const cleanupError = await cleanupProcessAttempt(tempHome, builtEnvironment);
-      if (primaryError === undefined && cleanupError !== null) throw cleanupError;
+      const cleanup = await cleanupProcessAttempt(home, builtEnvironment);
+      if (cleanup.home !== null) cleanupFailures.push(cleanup.home.diagnostic ?? "Producer HOME preserved");
+      if (primaryError !== undefined && cleanupFailures.length > 0
+        && typeof primaryError === "object" && primaryError !== null) {
+        // The thrown error is the outcome now; earlier attempts' preserved
+        // HOMEs ride on it rather than vanishing with the result.
+        const carried = (primaryError as { producerHomeFailure?: unknown }).producerHomeFailure;
+        Object.assign(primaryError, {
+          producerHomeFailure: [...cleanupFailures, ...(typeof carried === "string" ? [carried] : [])].join("; "),
+        });
+      }
+      if (primaryError === undefined && cleanup.error !== null) throw cleanup.error;
+      homeConflict = cleanup.home?.conflict === true;
     }
+    if (homeConflict) {
+      // The Producer acted on its own allocation from outside it (moved or
+      // replaced the HOME). Its output is kept for the log, but the role fails
+      // closed: nothing it reported can be trusted.
+      return withCleanupFailure({
+        ...(outcome ?? { rawOutput: "", producerId }),
+        ok: false,
+        failure: "sandbox-violation",
+      }, cleanupFailures);
+    }
+    if (outcome !== null) return withCleanupFailure(outcome, cleanupFailures);
   }
 
   throw new Error("unreachable role attempt state");

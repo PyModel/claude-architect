@@ -97,6 +97,29 @@ describe("MCP server handshake", () => {
     }
   });
 
+  it("logs every preserved Producer HOME reason without gating mutation", async () => {
+    const recover = vi.fn(async () => ({
+      recovered: [],
+      quarantined: [],
+      producerHomeIssues: [
+        { worktreePath: "/state/h/0123abcd", reason: "first reason at /state/h/0123abcd" },
+        { worktreePath: "/state/h/89abcdef", reason: "second reason" },
+      ],
+    }));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await createServer({ recoverStaleRuns: recover, pruneRuns: async () => {} });
+      const line = log.mock.calls.map(call => String(call[0])).find(text => text.includes("Producer HOME"));
+      expect(line).toContain("2 Producer HOME allocations");
+      expect(line).toContain("first reason at [path]");
+      expect(line).toContain("second reason");
+      expect(line).not.toContain("/state");
+      expect(recover).toHaveBeenCalledTimes(1);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("keeps read-only tools available but gates mutations while recovery is ambiguous", async () => {
     const recover = vi.fn(async () => ({
       recovered: [],

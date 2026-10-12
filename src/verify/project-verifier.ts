@@ -1,10 +1,16 @@
-import { mkdtemp, realpath, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { realpath } from "node:fs/promises";
+import { RuntimeError } from "../util/errors.js";
+import { resolveStateDir } from "../runtime/state-dir.js";
 import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
 import { seatbeltArgv } from "../platform/sandbox/seatbelt.js";
 import { gitChecked as checkedGit } from "../git/checked-git.js";
 import path from "node:path";
 import { WorktreeManager } from "../runtime/worktree-manager.js";
+import {
+  allocateProducerHome,
+  withClaimRecording,
+  type ProducerHomeLease,
+} from "../runtime/producer-home.js";
 import type {
   CheckoutLock,
   PlatformServices,
@@ -58,6 +64,8 @@ export interface VerificationConfinement {
   backend: "macos-seatbelt";
   worktreePath: string;
   scratchDir: string;
+  /** Denied to the command except beneath `scratchDir` (the runtime HOME root). */
+  protectedRoots: string[];
 }
 
 export type VerificationConfinementBackend = VerificationConfinement["backend"] | "none";
@@ -407,15 +415,23 @@ export async function projectVerify(args: ProjectVerifyArgs): Promise<ProjectVer
   );
   const materialized = await manager.create(args.artifact.candidateCommitOid);
   const backend = verificationConfinementBackend(ps.os, arch);
-  let scratchDir: string | null = null;
+  // The confined command's TMPDIR: an identity-bound private allocation,
+  // retired through quarantine, never a pathname in shared system temp.
+  let scratch: ProducerHomeLease | null = null;
   let primaryError: unknown;
   try {
-    scratchDir = backend === null
+    scratch = backend === null
       ? null
-      : await mkdtemp(path.join(tmpdir(), "claude-architect-verify-"));
-    const confinement: VerificationConfinement | null = backend === null || scratchDir === null
+      : await allocateProducerHome({ writeScope: [materialized.path] });
+    const confinement: VerificationConfinement | null = backend === null || scratch === null
       ? null
-      : { backend, worktreePath: materialized.path, scratchDir };
+      : {
+        backend,
+        worktreePath: materialized.path,
+        scratchDir: scratch.path,
+        protectedRoots: [resolveStateDir()],
+      };
+    const commandServices = scratch === null ? ps : withClaimRecording(ps, scratch);
     const dependencyLink = await linkPrimaryDependencies(args.repoRoot, materialized.path);
     const materializedTree = (await checkedGit(
       materialized.path,
@@ -466,7 +482,7 @@ export async function projectVerify(args: ProjectVerifyArgs): Promise<ProjectVer
         command,
         index,
         cwd,
-        ps,
+        ps: commandServices,
         now,
         confinement,
         ...(args.logNamePrefix === undefined ? {} : { logNamePrefix: args.logNamePrefix }),
@@ -502,15 +518,33 @@ export async function projectVerify(args: ProjectVerifyArgs): Promise<ProjectVer
     primaryError = error;
     throw error;
   } finally {
-    if (scratchDir !== null) await rm(scratchDir, { recursive: true, force: true });
+    const retirement = scratch === null ? null : await scratch.retire();
+    const scratchFailure = retirement === null || retirement.ok
+      ? null
+      : new RuntimeError(
+        `verification scratch directory preserved (${retirement.diagnostic ?? "unknown"})`,
+        { classification: "runtime-scratch-preserved", conflict: retirement.conflict },
+      );
+    if (scratchFailure !== null && primaryError !== undefined
+      && typeof primaryError === "object" && primaryError !== null) {
+      Object.assign(primaryError, { producerHomeFailure: scratchFailure.message });
+    }
     try {
       await materialized.cleanup();
     } catch (cleanupError) {
+      if (primaryError === undefined && scratchFailure !== null) {
+        throw new AggregateError(
+          [scratchFailure, cleanupError],
+          "project verification scratch and worktree could not be cleaned up",
+        );
+      }
       if (primaryError === undefined) throw cleanupError;
       throw new AggregateError(
         [primaryError, cleanupError],
         "project verification failed and its worktree could not be cleaned up",
       );
     }
+    // A scratch the verified code moved or replaced is never a clean result.
+    if (primaryError === undefined && scratchFailure !== null) throw scratchFailure;
   }
 }

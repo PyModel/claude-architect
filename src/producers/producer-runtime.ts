@@ -20,6 +20,14 @@ import {
   withRunStartPidRecording,
   type RunStartContext,
 } from "../runtime/run-start.js";
+import { resolveStateDir } from "../runtime/state-dir.js";
+import {
+  allocateProducerHome,
+  assertOutsideProducerWriteScope,
+  withClaimRecording,
+  type ProducerHomeLease,
+  type ProducerHomeRetirement,
+} from "../runtime/producer-home.js";
 import type {
   AdapterEvent,
   CapabilityReport,
@@ -64,7 +72,10 @@ export interface ProducerLaunchRequest {
   abortSignal?: AbortSignal | undefined;
   timeoutMs?: number | undefined;
   maxOutputBytes?: number | undefined;
+  /** A borrowed HOME: the runtime never retires it. */
   tempHome?: string | null | undefined;
+  /** The caller's lease on a borrowed `tempHome`, so this launch's spawn is claimed too. */
+  homeLease?: ProducerHomeLease | null | undefined;
   extraWritableRoots?: string[] | undefined;
   gitObjectAccess?: {
     privateObjectsDir: string;
@@ -81,6 +92,11 @@ export interface ProducerLaunchPlan {
   adapter: ProducerAdapter;
   capabilityReport: CapabilityReport;
   tempHome: string | null;
+  /**
+   * The runtime-allocated HOME this plan owns, or null when the HOME is
+   * borrowed or absent. Its holder retires it once the Producer has settled.
+   */
+  home: ProducerHomeLease | null;
   invocation: ProducerInvocation;
   supervisedInvocation: { executable: ResolvedExecutable; args: string[] };
   builtEnvironment: BuiltEnvironment;
@@ -222,15 +238,60 @@ export class ProducerRuntime {
       );
     }
 
+    // No grant the runtime hands out may reach its own state.
+    await assertOutsideProducerWriteScope(resolveStateDir(), [
+      request.worktreePath,
+      ...(request.extraWritableRoots ?? []),
+      ...(request.gitObjectAccess === undefined ? [] : [
+        request.gitObjectAccess.privateObjectsDir,
+        ...[request.gitObjectAccess.sharedObjectsDir].flat(),
+      ]),
+    ]);
+
+    let home: ProducerHomeLease | null = null;
     let tempHome: string | null;
     if (request.tempHome !== undefined) {
       tempHome = request.tempHome;
     } else if (requiresTempHome) {
-      tempHome = await request.ps.createSecureTempDirectory();
+      const backend = selectSandboxBackend(report).backend;
+      home = await allocateProducerHome({
+        writeScope: [
+          ...(backend?.kind === "producer-native"
+            ? descriptor?.nativeWritableRoots?.({
+              readOnly: request.intent === "read-only",
+              platform: process.platform,
+            }) ?? []
+            : []),
+          request.worktreePath,
+          ...(request.extraWritableRoots ?? []),
+          ...(request.gitObjectAccess === undefined ? [] : [
+            request.gitObjectAccess.privateObjectsDir,
+            ...[request.gitObjectAccess.sharedObjectsDir].flat(),
+          ]),
+        ],
+      });
+      tempHome = home.path;
     } else {
       tempHome = null;
     }
 
+    try {
+      return await this.planWithHome(request, adapter, descriptor, report, report.resolvedExecutable, tempHome, home);
+    } catch (error) {
+      if (home === null) throw error;
+      throw withHomeFailure(error, await home.retire());
+    }
+  }
+
+  private async planWithHome(
+    request: ProducerLaunchRequest,
+    adapter: ProducerAdapter,
+    descriptor: ProducerDescriptor | undefined,
+    report: CapabilityReport,
+    executable: ResolvedExecutable,
+    tempHome: string | null,
+    home: ProducerHomeLease | null,
+  ): Promise<ProducerLaunchPlan> {
     const selection = selectSandboxBackend(report);
     const confinementBackend = selection.backend?.id ?? null;
     const isSeatbelt = selection.backend?.kind === "os" && selection.backend.id === "macos-seatbelt";
@@ -244,7 +305,7 @@ export class ProducerRuntime {
       runId: request.runId ?? "anonymous-run",
       ...(tempHome === null ? {} : { tempHome }),
       capabilityReport: report,
-      executable: report.resolvedExecutable,
+      executable,
       readOnly: nativeReadOnly,
       ...(request.extraWritableRoots && request.extraWritableRoots.length > 0
         ? { extraWritableRoots: request.extraWritableRoots }
@@ -258,12 +319,24 @@ export class ProducerRuntime {
     };
 
     let invocation = adapter.buildInvocation(request.spec, invocationContext);
+    // The whole plugin state directory (archives, decisions, locks, HOMEs) is
+    // denied after every Seatbelt grant. Without Seatbelt nothing can carve it
+    // out of a declared grant, so such a launch is refused instead.
+    const stateDirectory = resolveStateDir();
+    if (!isSeatbelt) {
+      await assertOutsideProducerWriteScope(stateDirectory, [
+        ...(tempHome === null ? invocation.inheritedStateWritablePaths ?? [] : []),
+        ...(selection.backend?.kind === "producer-native"
+          ? descriptor?.nativeWritableRoots?.({ readOnly, platform: process.platform }) ?? []
+          : []),
+      ]);
+    }
 
     if (readOnly && !nativeReadOnly) {
       if (isSeatbelt) {
         invocation = wrapInvocationWithSeatbelt(
           invocation,
-          buildReadOnlySeatbeltPolicy({ tempHome }),
+          buildReadOnlySeatbeltPolicy({ tempHome, protectedRoots: [stateDirectory] }),
         );
       }
     } else if (isSeatbelt) {
@@ -273,6 +346,7 @@ export class ProducerRuntime {
           worktreePath: request.worktreePath,
           tempHome,
           extraWritableRoots: request.extraWritableRoots ?? [],
+          protectedRoots: [stateDirectory],
         }),
       );
     }
@@ -294,15 +368,23 @@ export class ProducerRuntime {
     });
 
     const isWriter = request.intent !== "read-only";
-    const supervisedInvocation = isWriter
-      ? await parentDeathWatchdogInvocation(invocation.executable, invocation.args)
-      : { executable: invocation.executable, args: invocation.args };
+    let supervisedInvocation: { executable: ResolvedExecutable; args: string[] };
+    try {
+      supervisedInvocation = isWriter
+        ? await parentDeathWatchdogInvocation(invocation.executable, invocation.args)
+        : { executable: invocation.executable, args: invocation.args };
+    } catch (error) {
+      // No caller will ever hold this environment: release its secrets here.
+      builtEnvironment.secretRegistration.dispose();
+      throw error;
+    }
 
     return {
       descriptor,
       adapter,
       capabilityReport: report,
       tempHome,
+      home,
       invocation,
       supervisedInvocation,
       builtEnvironment,
@@ -311,11 +393,28 @@ export class ProducerRuntime {
   }
 
   async launch(request: ProducerLaunchRequest): Promise<ProducerLaunchResult> {
-    const plan = request.plan ?? await this.planLaunch(request);
+    if (request.plan !== undefined) return await this.launchPlanned(request, request.plan);
+    const plan = await this.planLaunch(request);
+    try {
+      return await this.launchPlanned(request, plan);
+    } catch (error) {
+      // The plan never reached the caller, so this call still owns its HOME
+      // and its environment. Retire first, while secrets still redact.
+      const retirement = plan.home === null ? null : await plan.home.retire();
+      plan.builtEnvironment.secretRegistration.dispose();
+      throw retirement === null ? error : withHomeFailure(error, retirement);
+    }
+  }
 
+  private async launchPlanned(
+    request: ProducerLaunchRequest,
+    plan: ProducerLaunchPlan,
+  ): Promise<ProducerLaunchResult> {
+    const lease = plan.home ?? request.homeLease ?? null;
+    const claimedServices = lease === null ? request.ps : withClaimRecording(request.ps, lease);
     const processServices = request.runStartContext !== undefined
-      ? withRunStartPidRecording(request.ps, request.runStartContext)
-      : request.ps;
+      ? withRunStartPidRecording(claimedServices, request.runStartContext)
+      : claimedServices;
 
     const exit = request.abortSignal?.aborted === true
       ? preCancelledExit()
@@ -345,6 +444,20 @@ export class ProducerRuntime {
       ok: normalized.ok,
     };
   }
+}
+
+/**
+ * The primary error stays the thrown value, so its classification reaches the
+ * caller; a HOME that could not be retired rides on it as a redacted
+ * `producerHomeFailure` diagnostic.
+ */
+function withHomeFailure(error: unknown, retirement: ProducerHomeRetirement): unknown {
+  if (retirement.ok) return error;
+  const diagnostic = retirement.diagnostic ?? "Producer HOME preserved";
+  if (typeof error === "object" && error !== null) {
+    return Object.assign(error, { producerHomeFailure: diagnostic });
+  }
+  return new RuntimeError(String(error), { producerHomeFailure: diagnostic });
 }
 
 export const producerRuntime = new ProducerRuntime();

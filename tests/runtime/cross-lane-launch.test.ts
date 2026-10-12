@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PosixPlatformServices } from "../../src/platform/posix-platform-services.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import { producerRuntime } from "../../src/producers/producer-runtime.js";
@@ -22,6 +22,16 @@ function sampleSpec(lane: string): DelegationSpec {
 }
 
 describe("cross-lane launch consistency", () => {
+  // Plans only, nothing is allocated: the state directory need not exist, but
+  // it must sit outside every lane's writable roots (the per-file test state
+  // lives in system temp, which the Codex edit lane may write on macOS).
+  beforeEach(() => {
+    vi.stubEnv("CLAUDE_ARCHITECT_STATE_DIR", "/claude-architect-cross-lane-state");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("proves each lane produces identical invocation, environment, and sandbox policy for equivalent edit runs", async () => {
     const ps = new PosixPlatformServices();
     const worktreePath = "/tmp/claude-architect-test-worktree";

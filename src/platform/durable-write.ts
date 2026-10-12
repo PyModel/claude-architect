@@ -478,12 +478,15 @@ export async function publishExclusive(
 
 /**
  * Rename a plain directory to an absent leaf of the same session directory,
- * prove it kept its identity, and flush the parent.
+ * prove it kept its identity, and flush the parent. With `expectedIdentity`
+ * the source must be exactly that directory, checked on the same `lstat` the
+ * rename is decided from, so a substituted directory is never moved.
  */
 export async function moveDirectory(
   session: DurableDirectorySession,
   sourceName: string,
   destinationName: string,
+  expectedIdentity?: DirectoryIdentity,
 ): Promise<DirectoryIdentity> {
   assertSafeLeaf(sourceName, "directory move", SAFE_HIDDEN_COMPONENT);
   assertSafeLeaf(destinationName, "directory move", SAFE_HIDDEN_COMPONENT);
@@ -495,6 +498,12 @@ export async function moveDirectory(
     throw new RuntimeError(`directory move source is not a plain directory: ${sourceName}`);
   }
   const identity: DirectoryIdentity = { dev: before.dev, ino: before.ino, birthtimeNs: before.birthtimeNs };
+  if (expectedIdentity !== undefined && !sameDirectoryIdentity(identity, expectedIdentity)) {
+    throw new RuntimeError(
+      `directory move source is not the expected directory: ${sourceName}`,
+      { classification: "directory-identity-changed" },
+    );
+  }
   try {
     await lstat(destination);
     throw new RuntimeError(`directory move destination already exists: ${destinationName}`);
@@ -504,7 +513,10 @@ export async function moveDirectory(
   await renameWithRetry(source, destination, session.platform);
   const moved = await lstat(destination, { bigint: true });
   if (!moved.isDirectory() || moved.isSymbolicLink() || !sameDirectoryIdentity(moved, identity)) {
-    throw new RuntimeError(`moved directory identity changed: ${destinationName}`);
+    throw new RuntimeError(
+      `moved directory identity changed: ${destinationName}`,
+      { classification: "directory-identity-changed" },
+    );
   }
   await session.assertIdentity();
   await session.sync();

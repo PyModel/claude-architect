@@ -102,6 +102,7 @@ AGENTS.md's own carve-out, which never mocks the component whose security proper
 | tests/runtime/process-supervisor.test.ts | src/platform/process-supervisor.ts | supervise | integration | no |
 | tests/runtime/process-token.test.ts | src/platform/posix-platform-services.ts | getProcessStartToken, terminateProcessTreeByPid | integration | no |
 | tests/runtime/producer-adapter.test.ts | src/producers/producer-adapter.ts | detectEnvironmentType, DescriptorAdapter, ProducerAdapter | unit | no |
+| tests/runtime/producer-home.test.ts | src/runtime/producer-home.ts, src/producers/producer-runtime.ts, src/pipeline/role-runner.ts | allocateProducerHome, ProducerHomeLease.retire, recoverProducerHomes, ProducerRuntime.planLaunch/launch, runRole, recoverStaleRuns (real child processes; real Seatbelt on darwin) | adversarial | no — crashed owners are simulated by rewriting a claim's owner to an exited pid, and the unavailable cleanup backend by a platform double with an unsupported `os` |
 | tests/runtime/producer-preflight.test.ts | src/runtime/producer-preflight.ts | preflightExecutables, preflightProbeCommand, readProbe, runProducerPreflight | integration | no |
 | tests/runtime/project-verifier.test.ts | src/verify/project-verifier.ts | projectVerify | integration | no |
 | tests/runtime/protocol/autopilot-schema.test.ts | src/protocol/spec-validator.ts | validateAutopilotSpec | contract | no |

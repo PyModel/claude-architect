@@ -1283,6 +1283,10 @@ export class FinalBranchReviewer {
           }),
         checkoutLease,
       );
+      // A preserved Producer HOME stays visible in the report's reasons.
+      if (result.cleanupFailure !== undefined) {
+        addReason(reasons, `the final ${role} role left its Producer HOME preserved: ${result.cleanupFailure}`);
+      }
       return parseRoleReport<T>(result, validate);
     };
 
