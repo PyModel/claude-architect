@@ -17,6 +17,7 @@ import type {
   ProducerAdapter,
   ProducerInvocation,
 } from "../../src/producers/producer-adapter.js";
+import { codexDescriptor, sandboxSupportWritableRoots } from "../../src/producers/codex-adapter.js";
 import { ProducerRegistry } from "../../src/producers/producer-registry.js";
 import { ProducerRuntime } from "../../src/producers/producer-runtime.js";
 import {
@@ -477,6 +478,44 @@ describe("runtime-owned Producer HOME", () => {
 
     expect(adapter.homes).toEqual([]);
     expect(await homeRootEntries()).toEqual([]);
+  });
+
+  it("refuses a state directory inside a producer-native sandbox's declared writable roots", async () => {
+    const adapter = new ScriptedAdapter("process.exit(0)");
+    const nativeRoot = dirname(dirname(producerHomeRoot()));
+    const requests: boolean[] = [];
+    Object.assign(adapter, {
+      descriptor: {
+        id: adapter.producerId,
+        executable: { name: "scripted" },
+        isolation: "controlled-config-supported",
+        structuredOutput: true,
+        nativeWritableRoots: (args: { readOnly: boolean }) => {
+          requests.push(args.readOnly);
+          return [nativeRoot];
+        },
+      },
+    });
+    const runtime = new ProducerRuntime(new ProducerRegistry([adapter]));
+
+    await expect(runtime.planLaunch({
+      adapter,
+      spec: spec(),
+      worktreePath,
+      intent: "edit",
+      ps: getPlatformServices(),
+    })).rejects.toThrow(/overlaps the Producer's writable scope/u);
+
+    expect(requests).toEqual([false]);
+    expect(adapter.homes).toEqual([]);
+    expect(await homeRootEntries()).toEqual([]);
+  });
+
+  it("declares Codex's edit-lane support roots as native writable roots", () => {
+    expect(codexDescriptor.nativeWritableRoots?.({ readOnly: false, platform: process.platform }))
+      .toEqual(sandboxSupportWritableRoots(process.platform));
+    expect(codexDescriptor.nativeWritableRoots?.({ readOnly: true, platform: process.platform }))
+      .toEqual([]);
   });
 
   it.runIf(process.platform === "darwin")("denies a Seatbelt-confined Producer every write in the HOME root except its own HOME", async () => {

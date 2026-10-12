@@ -54,7 +54,8 @@ advisor all reach it).
   captured before the path reaches an adapter.
 - The root must be outside the launch's explicit Producer write scope:
   `planLaunch` refuses (fails closed, nothing allocated) when the root and the
-  worktree, any `extraWritableRoots`, or the Git object directories contain one
+  worktree, any `extraWritableRoots`, the Git object directories, or (for a
+  producer-native backend) the descriptor's `nativeWritableRoots` contain one
   another.
 - Every Seatbelt profile that carries `protectedRoots` ends with
   `(deny file-write* (subpath <root>))` followed by
@@ -147,12 +148,11 @@ HOME never gates repository mutation or re-runs recovery per call.
 
 ## Consequences and residual limits
 
-- Producer-native sandboxes (Codex) define their own write scope; the Codex
-  edit lane also grants the darwin per-user temp directory
-  (`sandboxSupportWritableRoots`), which `planLaunch` cannot see. The default
-  state directory (`CLAUDE_PLUGIN_DATA`) is not under it; a custom state
-  directory placed under the user temp directory is only protected by the
-  identity checks, not by write denial, on that lane.
+- Producer-native sandboxes (Codex) define their own write scope. Their extra
+  writable roots are declared on the descriptor (`nativeWritableRoots`; the
+  Codex edit lane declares the darwin per-user temp directory) and join the
+  placement check, so a state directory under them is refused. Writes the
+  native sandbox does not declare cannot be seen by the runtime.
 - A Producer grandchild that escapes the supervised tree can still write its
   own HOME until it exits; quarantine moves it out of that pathname first, and
   under Seatbelt the quarantine name is denied.

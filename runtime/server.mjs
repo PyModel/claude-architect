@@ -38334,6 +38334,9 @@ function sandboxSupportWritableRoots(platform) {
   const temporaryDirectory = resolveDarwinUserTempDirectory();
   return temporaryDirectory === null ? [] : [temporaryDirectory];
 }
+function codexNativeWritableRoots(args) {
+  return args.readOnly ? [] : sandboxSupportWritableRoots(args.platform);
+}
 function parseVersion2(stdout) {
   const match = /(?:^|\s)(\d+\.\d+\.\d+(?:[-+][^\s]+)?)(?:\s|$)/u.exec(stdout.trim());
   return match?.[1] ?? null;
@@ -38359,9 +38362,9 @@ function buildCodexInvocation(spec, ctx, deps) {
       GIT_ALTERNATE_OBJECT_DIRECTORIES: ctx.gitAlternateObjectDirectories
     } : {}
   };
-  const writableRoots = ctx.readOnly === true ? ctx.extraWritableRoots ?? [] : [.../* @__PURE__ */ new Set([
+  const writableRoots = [.../* @__PURE__ */ new Set([
     ...ctx.extraWritableRoots ?? [],
-    ...sandboxSupportWritableRoots(process.platform)
+    ...codexNativeWritableRoots({ readOnly: ctx.readOnly === true, platform: process.platform })
   ])];
   const args = [
     "exec",
@@ -38521,6 +38524,7 @@ var codexDescriptor = {
     writeConfinementBackend: "codex-native-sandbox",
     parseVersion: parseVersion2
   }),
+  nativeWritableRoots: codexNativeWritableRoots,
   buildInvocation: buildCodexInvocation,
   normalizeEvents: normalizeCodexEvents
 };
@@ -40375,8 +40379,13 @@ var ProducerRuntime = class {
     if (request.tempHome !== void 0) {
       tempHome = request.tempHome;
     } else if (requiresTempHome) {
+      const backend = selectSandboxBackend(report).backend;
       home = await allocateProducerHome({
         writeScope: [
+          ...backend?.kind === "producer-native" ? descriptor?.nativeWritableRoots?.({
+            readOnly: request.intent === "read-only",
+            platform: process.platform
+          }) ?? [] : [],
           request.worktreePath,
           ...request.extraWritableRoots ?? [],
           ...request.gitObjectAccess === void 0 ? [] : [

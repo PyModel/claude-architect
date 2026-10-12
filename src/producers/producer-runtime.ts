@@ -240,8 +240,15 @@ export class ProducerRuntime {
     if (request.tempHome !== undefined) {
       tempHome = request.tempHome;
     } else if (requiresTempHome) {
+      const backend = selectSandboxBackend(report).backend;
       home = await allocateProducerHome({
         writeScope: [
+          ...(backend?.kind === "producer-native"
+            ? descriptor?.nativeWritableRoots?.({
+              readOnly: request.intent === "read-only",
+              platform: process.platform,
+            }) ?? []
+            : []),
           request.worktreePath,
           ...(request.extraWritableRoots ?? []),
           ...(request.gitObjectAccess === undefined ? [] : [
