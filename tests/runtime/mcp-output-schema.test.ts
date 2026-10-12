@@ -31,6 +31,8 @@ function platformServices(): PlatformServices {
     async acquireCheckoutLock() { throw new Error("unexpected lock"); },
     async createSecureTempDirectory() { throw new Error("unexpected temp directory"); },
     async canonicalizePath() { throw new Error("unexpected canonicalization"); },
+    async acquireCleanupJournalLock() { throw new Error("unexpected cleanup journal lock"); },
+    async assertDirectoryWriteIntegrity() { throw new Error("unexpected directory integrity check"); },
   };
 }
 

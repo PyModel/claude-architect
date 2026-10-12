@@ -81,6 +81,9 @@ function mockPlatformServices(
     async canonicalizePath() {
       throw new Error("unexpected canonicalization");
     },
+    async assertDirectoryWriteIntegrity() {
+      throw new Error("unexpected directory integrity check");
+    },
   };
 }
 

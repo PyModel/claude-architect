@@ -29,6 +29,8 @@ import {
   makeBootstrapOwnerDead,
   makeLeaseDead,
 } from "../pipeline/autopilot-fixtures.js";
+import { asJournalJson } from "../../support/journal-json.js";
+import { platformServicesDouble } from "../../helpers/platform-services-double.js";
 
 interface Fixture {
   branchManager: WorkflowBranchManager;
@@ -42,7 +44,6 @@ const temporaryPaths: string[] = [];
 const savedEnvironment = new Map<string, string>();
 const savedAbsentEnvironment = new Set<string>();
 const CURRENT_PROCESS_TOKEN = "autopilot-cutpoint-current-process";
-const STALE_PROCESS_TOKEN = "autopilot-cutpoint-stale-process";
 const GIT_ENVIRONMENT = /^(?:GIT_CONFIG_.*|GIT_(?:DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|CEILING_DIRECTORIES|DISCOVERY_ACROSS_FILESYSTEM|NAMESPACE))$/u;
 let workflowSequence = 0;
 
@@ -189,7 +190,7 @@ async function createFixture(): Promise<Fixture> {
     baseBranch: "main",
   });
   const store = new WorkflowStore(workflowId, {
-    stateDirectory: process.env.CLAUDE_PLUGIN_DATA,
+    stateDirectory: process.env.CLAUDE_PLUGIN_DATA!,
     now: () => "2026-07-21T18:01:00.000Z",
     isProcessAlive: pid => pid === process.pid,
     getProcessStartToken: async pid => pid === process.pid ? CURRENT_PROCESS_TOKEN : null,
@@ -215,7 +216,7 @@ async function recordWorkflowSpec(fixture: Fixture): Promise<void> {
   await fixture.store.completeIntent({
     expectedRevision: state.revision,
     idempotencyKey: "workflow-spec",
-    completion: { spec: autopilotSpec(), branch: fixture.branch },
+    completion: asJournalJson({ spec: autopilotSpec(), branch: fixture.branch }),
   });
 }
 
@@ -370,12 +371,12 @@ async function snapshot(directory: string): Promise<ByteSnapshot> {
 function recoveryDependencies() {
   return {
     isProcessAlive: (pid: number) => pid === process.pid,
-    platformServices: {
+    platformServices: platformServicesDouble({
       os: getPlatformServices().os,
       getProcessStartToken: async (pid: number) =>
         pid === process.pid ? CURRENT_PROCESS_TOKEN : null,
       terminateProcessTreeByPid: async () => undefined,
-    },
+    }),
     git,
   };
 }

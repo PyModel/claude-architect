@@ -12,7 +12,8 @@ const fixture = fileURLToPath(new URL("./fixtures/echo-sleep.mjs", import.meta.u
 async function run(args: string[], timeoutMs: number, onCancel?: AbortSignal) {
   const node = await ps.resolveExecutable({ name: "node", explicitPath: process.execPath });
   return supervise(ps, { executable: node, args: [fixture, ...args], cwd: process.cwd(),
-    env: { PATH: process.env.PATH ?? "" }, timeoutMs, maxOutputBytes: 1_000_000 }, { onCancel });
+    env: { PATH: process.env.PATH ?? "" }, timeoutMs, maxOutputBytes: 1_000_000 },
+    onCancel === undefined ? {} : { onCancel });
 }
 describe("supervise", () => {
   it("returns exit 0 for a fast process", async () => expect((await run(["hi", "", "0"], 5000)).exitCode).toBe(0));

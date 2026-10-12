@@ -37,6 +37,7 @@ import {
   removeManagedWorktreeDirectory,
   WorktreeManager,
 } from "../../src/runtime/worktree-manager.js";
+import { pathText } from "../support/path-like.js";
 
 // git prints worktree paths in its own format, which is forward-slashed on
 // Windows; resolve them so these assertions compare paths rather than bytes.
@@ -235,7 +236,7 @@ describe("WorktreeManager", () => {
     const physicalPath = join(managedRootOf(directory), "run-retry");
     const manager = new WorktreeManager(directory, "run-retry", { os: "win32" }, {
       async rename(source, destination) {
-        if (await canonicalPathsEqual(source, physicalPath)) {
+        if (await canonicalPathsEqual(pathText(source), physicalPath)) {
           physicalMoves += 1;
           if (physicalMoves < 3) {
             const error = new Error("locked") as NodeJS.ErrnoException;
@@ -262,7 +263,7 @@ describe("WorktreeManager", () => {
     const physicalPath = join(managedRootOf(directory), "run-exhausted");
     const manager = new WorktreeManager(directory, "run-exhausted", { os: "win32" }, {
       async rename(source, destination) {
-        if (!await canonicalPathsEqual(source, physicalPath)) {
+        if (!await canonicalPathsEqual(pathText(source), physicalPath)) {
           await rename(source, destination);
           return;
         }
@@ -358,7 +359,7 @@ describe("WorktreeManager", () => {
     const manager = new WorktreeManager(directory, "run-registration-root-race", undefined, {
       async rename(source, destination) {
         await rename(source, destination);
-        if (!substituted && resolve(dirname(source)) === resolve(registrationRoot)) {
+        if (!substituted && resolve(dirname(pathText(source))) === resolve(registrationRoot)) {
           await rename(registrationRoot, displacedRoot);
           await mkdir(registrationRoot, { mode: 0o700 });
           substituted = true;
@@ -456,7 +457,7 @@ describe("WorktreeManager", () => {
     let registrationMoves = 0;
     const manager = new WorktreeManager(directory, "run-registration-failure", undefined, {
       async rename(source, destination) {
-        if (source.includes(`${sep}.git${sep}worktrees${sep}`)) {
+        if (pathText(source).includes(`${sep}.git${sep}worktrees${sep}`)) {
           registrationMoves += 1;
           const error = new Error("simulated registration removal failure") as NodeJS.ErrnoException;
           error.code = "EBUSY";
@@ -488,7 +489,7 @@ describe("WorktreeManager", () => {
       async rmdir(directoryPath) {
         await removeEmptyDirectory(directoryPath);
         if (registrationPath !== ""
-          && await canonicalPathsEqual(dirname(directoryPath), quarantineRoot)) {
+          && await canonicalPathsEqual(dirname(pathText(directoryPath)), quarantineRoot)) {
           await mkdir(registrationPath, { mode: 0o700 });
         }
       },
@@ -843,7 +844,7 @@ describe("WorktreeManager", () => {
     let physicalPath = "";
     const manager = new WorktreeManager(directory, "run-intent-disappeared", undefined, {
       async rename(source, destination) {
-        if (physicalPath !== "" && await canonicalPathsEqual(source, physicalPath)) {
+        if (physicalPath !== "" && await canonicalPathsEqual(pathText(source), physicalPath)) {
           await rm(source, { recursive: true, force: true });
           throw new Error("simulated external physical disappearance");
         }
@@ -996,7 +997,7 @@ describe("WorktreeManager", () => {
     const physicalRoot = managedRootOf(directory);
     const manager = new WorktreeManager(directory, "run-rmdir-failure", undefined, {
       async rmdir(directoryPath) {
-        if (await canonicalPathsEqual(dirname(directoryPath), physicalRoot)) {
+        if (await canonicalPathsEqual(dirname(pathText(directoryPath)), physicalRoot)) {
           const error = new Error("simulated final rmdir failure") as NodeJS.ErrnoException;
           error.code = "EBUSY";
           throw error;
@@ -1036,7 +1037,7 @@ describe("WorktreeManager", () => {
       const physicalRoot = managedRootOf(directory);
       const manager = new WorktreeManager(directory, "run-moved-quarantine", undefined, {
         async rmdir(directoryPath) {
-          if (await canonicalPathsEqual(dirname(directoryPath), physicalRoot)) {
+          if (await canonicalPathsEqual(dirname(pathText(directoryPath)), physicalRoot)) {
             const error = new Error("simulated final rmdir failure") as NodeJS.ErrnoException;
             error.code = "EBUSY";
             throw error;
@@ -1076,7 +1077,7 @@ describe("WorktreeManager", () => {
     const physicalRoot = managedRootOf(directory);
     const manager = new WorktreeManager(directory, "run-root-substitution", undefined, {
       async rmdir(directoryPath) {
-        if (await canonicalPathsEqual(dirname(directoryPath), physicalRoot)) {
+        if (await canonicalPathsEqual(dirname(pathText(directoryPath)), physicalRoot)) {
           const error = new Error("simulated final rmdir failure") as NodeJS.ErrnoException;
           error.code = "EBUSY";
           throw error;
@@ -1122,7 +1123,7 @@ describe("WorktreeManager", () => {
     const physicalRoot = managedRootOf(directory);
     const manager = new WorktreeManager(directory, "run-malformed-manifest", undefined, {
       async rmdir(directoryPath) {
-        if (await canonicalPathsEqual(dirname(directoryPath), physicalRoot)) {
+        if (await canonicalPathsEqual(dirname(pathText(directoryPath)), physicalRoot)) {
           const error = new Error("simulated final rmdir failure") as NodeJS.ErrnoException;
           error.code = "EBUSY";
           throw error;
@@ -1298,8 +1299,8 @@ describe("WorktreeManager", () => {
     const manager = new WorktreeManager(directory, "run-create-intent-crash", undefined, {
       async rename(source, destination) {
         if (!interrupted
-          && basename(source).startsWith(".create-run-create-intent-crash-")
-          && basename(destination) === "run-create-intent-crash") {
+          && basename(pathText(source)).startsWith(".create-run-create-intent-crash-")
+          && basename(pathText(destination)) === "run-create-intent-crash") {
           interrupted = true;
           throw new Error("simulated crash before placeholder promotion");
         }
@@ -1846,7 +1847,7 @@ describe("WorktreeManager", () => {
         async rmdir(directory) {
           await rename(directory, displaced);
           await mkdir(directory);
-          await writeFile(join(directory, "sentinel.txt"), "preserve replacement\n");
+          await writeFile(join(pathText(directory), "sentinel.txt"), "preserve replacement\n");
           await removeEmptyDirectory(directory);
         },
       })).rejects.toBeDefined();
@@ -2021,7 +2022,7 @@ describe("WorktreeManager", () => {
         async rename(source, destination) {
           await rename(source, displaced);
           await mkdir(source);
-          await writeFile(join(source, "sentinel.txt"), "preserve replacement\n");
+          await writeFile(join(pathText(source), "sentinel.txt"), "preserve replacement\n");
           await rename(source, destination);
         },
       })).rejects.toThrow("identity changed during quarantine");

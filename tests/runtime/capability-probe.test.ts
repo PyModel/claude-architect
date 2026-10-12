@@ -45,6 +45,9 @@ function platformServices(probeCount: { value: number }): PlatformServices {
     },
     async requestCooperativeCancellation() {},
     async terminateProcessTree() {},
+    async getProcessStartToken() {
+      return null;
+    },
     async terminateProcessTreeByPid() {},
     async acquireCheckoutLock() {
       throw new Error("unexpected lock acquisition");
@@ -54,6 +57,12 @@ function platformServices(probeCount: { value: number }): PlatformServices {
     },
     async canonicalizePath() {
       throw new Error("unexpected path canonicalization");
+    },
+    async acquireCleanupJournalLock() {
+      throw new Error("unexpected cleanup journal lock");
+    },
+    async assertDirectoryWriteIntegrity() {
+      throw new Error("unexpected directory integrity check");
     },
   };
 }

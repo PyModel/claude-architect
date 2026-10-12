@@ -84,7 +84,11 @@ export async function runStructuredRole<T>(args: {
     const output = result.rawOutput === ""
       ? `role produced no stdout; failure: ${result.failure ?? "none"}\n`
       : result.archiveSafeRawOutput ?? result.rawOutput;
-    return { result, logRef: await args.store.writeLog(logName, output) };
+    // A preserved Producer HOME is evidence of this run, kept beside its output.
+    const evidence = result.cleanupFailure === undefined
+      ? output
+      : `${output}${output.endsWith("\n") ? "" : "\n"}[runtime] ${result.cleanupFailure}\n`;
+    return { result, logRef: await args.store.writeLog(logName, evidence) };
   };
   const initial = await runArchived(callArgs, args.logName);
   const roleLogRefs = [initial.logRef];

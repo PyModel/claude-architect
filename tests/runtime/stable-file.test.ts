@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { readStableRegularFile } from "../../src/util/stable-file.js";
+import { lstatDouble } from "../support/fs-seams.js";
 
 describe("readStableRegularFile", () => {
   it.skipIf(process.platform === "win32")(
@@ -68,7 +69,7 @@ describe("readStableRegularFile", () => {
 
     await expect(readStableRegularFile("ambiguous", 8n, {
       open: (async () => handle) as typeof open,
-      lstat: (async () => ambiguous) as typeof lstat,
+      lstat: lstatDouble(async () => ambiguous),
     })).resolves.toBeNull();
   });
 
@@ -105,10 +106,10 @@ describe("readStableRegularFile", () => {
 
       const result = await readStableRegularFile(filename, 4n, {
         open: (async () => observedHandle) as typeof open,
-        lstat: (async () => {
+        lstat: lstatDouble(async () => {
           namedStatCalls += 1;
           return namedStatCalls === 1 ? before : after;
-        }) as typeof lstat,
+        }),
       });
 
       expect(result).toBeNull();
@@ -153,10 +154,10 @@ describe("readStableRegularFile", () => {
 
       const result = await readStableRegularFile(filename, 4n, {
         open: (async () => observedHandle) as typeof open,
-        lstat: (async () => {
+        lstat: lstatDouble(async () => {
           namedStatCalls += 1;
           return namedStatCalls === 1 ? before : after;
-        }) as typeof lstat,
+        }),
       });
 
       expect(result).toBeNull();

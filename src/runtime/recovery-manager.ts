@@ -47,6 +47,7 @@ import {
   recoverRun,
 } from "./recovery-runs.js";
 import { recoverPendingWorktreeRemovals } from "./recovery-worktree-removals.js";
+import { recoverProducerHomes } from "./producer-home.js";
 import { sweepOrphanWorktrees } from "./recovery-worktree-sweep.js";
 import { type AutopilotRecoveryResult, recoverAutopilotWorkflows } from "./recovery-autopilot.js";
 
@@ -69,6 +70,12 @@ export interface RecoveryResult {
   quarantined: string[];
   workflows?: AutopilotRecoveryResult[];
   worktreeSweepIssues?: WorktreeSweepIssue[];
+  /**
+   * Producer HOMEs recovery preserved (ADR-0001). Kept apart from the sweep
+   * issues: they never gate repository mutation, which would otherwise re-run
+   * recovery on every call while a human has not removed them.
+   */
+  producerHomeIssues?: WorktreeSweepIssue[];
 }
 
 async function reclaimPendingRemovalLocks(
@@ -454,6 +461,13 @@ export async function recoverStaleRuns(
         runGit,
       })
       : [];
+    // Producer HOMEs are reclaimed only when every recorded owner is proven
+    // dead; anything else is preserved and reported beside the sweep issues.
+    const producerHomeIssues = (await recoverProducerHomes({
+      stateRoot: root,
+      ps,
+      isProcessAlive,
+    })).map(issue => worktreeSweepIssue(issue.path, issue.error));
     const worktreeSweepIssues = boundedWorktreeSweepIssues([
       ...pendingRemovalIssues.map(issue => worktreeSweepIssue(
         issue.manifestPath,
@@ -464,9 +478,12 @@ export async function recoverStaleRuns(
       ...workflowRecoveryIssues,
       ...orphanWorktreeIssues,
     ], path.join(root, "worktrees"));
-    const result: RecoveryResult = workflows.length === 0
+    const base: RecoveryResult = workflows.length === 0
       ? { recovered, quarantined }
       : { recovered, quarantined, workflows };
+    const result: RecoveryResult = producerHomeIssues.length === 0
+      ? base
+      : { ...base, producerHomeIssues: boundedWorktreeSweepIssues(producerHomeIssues, path.join(root, "h")) };
     return worktreeSweepIssues.length === 0
       ? result
       : { ...result, worktreeSweepIssues };

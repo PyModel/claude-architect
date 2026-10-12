@@ -6,7 +6,6 @@ import {
   lstat,
   mkdtemp,
   readFile,
-  readdir,
   realpath,
   rename,
   rm,
@@ -1001,7 +1000,7 @@ describe("recoverStaleRuns", () => {
       startedAt: "2026-07-14T12:00:00.000Z",
     })}\n`);
     const worktree = await new WorktreeManager(repo.directory, runId).create(repo.head);
-    const calls: Array<{ pid: number; expectedToken?: string | null }> = [];
+    const calls: Array<{ pid: number; expectedToken: string | null | undefined }> = [];
     const liveToken = "darwin:live-start";
 
     const result = await recoverStaleRuns({
@@ -1434,7 +1433,7 @@ describe("recoverStaleRuns", () => {
   });
 
   it("rejects a COW update when the validated journal snapshot has a hard-link alias", async () => {
-    const repo = await initRepo();
+    await initRepo();
     const firstRunId = "run-cow-alias-first";
     const secondRunId = "run-cow-alias-second";
     const missingCommonDir = path.join(process.env.CLAUDE_PLUGIN_DATA!, "missing-common-dir");

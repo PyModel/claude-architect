@@ -26,6 +26,8 @@ import {
   makeBootstrapOwnerDead,
   makeLeaseDead,
 } from "../pipeline/autopilot-fixtures.js";
+import { asJournalJson } from "../../support/journal-json.js";
+import { platformServicesDouble } from "../../helpers/platform-services-double.js";
 
 interface Fixture {
   root: string;
@@ -156,7 +158,7 @@ async function createFixture(options: { createState?: boolean } = {}): Promise<F
     baseBranch: "main",
   });
   const store = new WorkflowStore(workflowId, {
-    stateDirectory: process.env.CLAUDE_PLUGIN_DATA,
+    stateDirectory: process.env.CLAUDE_PLUGIN_DATA!,
     now: () => "2026-07-21T18:01:00.000Z",
     getProcessStartToken: async pid => pid === process.pid ? CURRENT_PROCESS_TOKEN : null,
   });
@@ -171,7 +173,7 @@ async function createFixture(options: { createState?: boolean } = {}): Promise<F
     await store.completeIntent({
       expectedRevision: 0,
       idempotencyKey: "workflow-spec",
-      completion: { spec: { version: "test" }, branch },
+      completion: asJournalJson({ spec: { version: "test" }, branch }),
     });
   }
   return { root, repository, remote, branchManager, branch, store };
@@ -223,12 +225,12 @@ async function snapshot(directory: string): Promise<ByteSnapshot> {
 async function recoveryDependencies() {
   return {
     isProcessAlive: (pid: number) => pid === process.pid,
-    platformServices: {
+    platformServices: platformServicesDouble({
       os: getPlatformServices().os,
       getProcessStartToken: async (pid: number) =>
         pid === process.pid ? CURRENT_PROCESS_TOKEN : null,
       terminateProcessTreeByPid: async () => undefined,
-    },
+    }),
     git,
   };
 }

@@ -5,7 +5,14 @@ import {
   type StructuralFailure,
   type VerificationMode,
 } from "../../src/verify/structural-verifier.js";
-import { AcceptanceVerifier } from "../../src/verify/acceptance-verifier.js";
+import { getPlatformServices } from "../../src/platform/select-platform.js";
+import type { CandidateArtifact } from "../../src/protocol/attempt-result.js";
+import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
+import {
+  AcceptanceVerifier,
+  type AcceptanceVerifyArgs,
+} from "../../src/verify/acceptance-verifier.js";
+import type { ProjectVerifyResult } from "../../src/verify/project-verifier.js";
 
 describe("VerificationMode", () => {
   describe("mode failure classes contract", () => {
@@ -77,20 +84,50 @@ describe("VerificationMode", () => {
   });
 
   describe("AcceptanceVerifier mode configuration", () => {
+    const head = "1".repeat(40);
+    const artifact: CandidateArtifact = {
+      baseCommitOid: head,
+      candidateCommitOid: "2".repeat(40),
+      candidateTreeOid: "3".repeat(40),
+      anchorRef: "refs/test",
+      manifestHash: "hash",
+      changedPaths: [],
+      patch: "",
+    };
+    const spec: DelegationSpec = {
+      specVersion: "1",
+      objective: "test",
+      context: "test",
+      writeAllowlist: ["."],
+      forbiddenScope: [],
+      successCriteria: ["test"],
+      verification: [],
+      executionMode: "edit",
+      timeoutMs: 10_000,
+      producerPreferences: ["codex"],
+      expectedOutput: "candidate-patch",
+    };
+    const project = async (): Promise<ProjectVerifyResult> => ({
+      mutated: false,
+      failures: [],
+      evidence: { commands: [], dependencyLink: "inherited" },
+      commandOutcomes: [],
+      outputLogs: [],
+    });
+    const verifyArgs = (): AcceptanceVerifyArgs => ({
+      repoRoot: "/test/repo",
+      worktreePath: "/test/worktree",
+      baseCommitOid: head,
+      artifact,
+      spec,
+      ps: getPlatformServices(),
+      artifactStore: { writeLog: async () => "logs/test.log" },
+    });
+
     it("defaults to candidate mode", () => {
-      let observedMode: VerificationMode | undefined;
       const verifier = new AcceptanceVerifier({
-        structural: async (_args, mode) => {
-          observedMode = mode;
-          return { ok: true, failures: [], manifestHash: "hash" };
-        },
-        project: async () => ({
-          ok: true,
-          failures: [],
-          evidence: { commands: [] },
-          commandOutcomes: [],
-          outputLogs: [],
-        }),
+        structural: async () => ({ ok: true, failures: [], manifestHash: "hash" }),
+        project,
       });
 
       expect(verifier).toBeDefined();
@@ -104,42 +141,10 @@ describe("VerificationMode", () => {
           observedMode = mode;
           return { ok: true, failures: [], manifestHash: "hash" };
         },
-        project: async () => ({
-          ok: true,
-          failures: [],
-          evidence: { commands: [] },
-          commandOutcomes: [],
-          outputLogs: [],
-        }),
+        project,
       });
 
-      await verifier.verify({
-        repoRoot: "/test/repo",
-        worktreePath: "/test/worktree",
-        baseCommitOid: "1111111111111111111111111111111111111111",
-        artifact: {
-          baseCommitOid: "1111111111111111111111111111111111111111",
-          candidateCommitOid: "2222222222222222222222222222222222222222",
-          candidateTreeOid: "3333333333333333333333333333333333333333",
-          anchorRef: "refs/test",
-          manifestHash: "hash",
-          changedPaths: [],
-          patchRef: "patch.diff",
-        },
-        spec: {
-          id: "test",
-          protocolVersion: "1",
-          targetRepo: { path: "/test/repo", head: "1111111111111111111111111111111111111111" },
-          producer: { name: "codex" },
-          policy: { writeScope: ["."], forbiddenScope: [], networkAccess: "none" },
-          writeAllowlist: ["."],
-          forbiddenScope: [],
-          instructions: { goal: "test" },
-          verification: [],
-        },
-        ps: {} as any,
-        artifactStore: { writeLog: async () => "logs/test.log" },
-      });
+      await verifier.verify(verifyArgs());
 
       expect(observedMode).toBe("composed-slice");
     });
@@ -152,42 +157,10 @@ describe("VerificationMode", () => {
           observedMode = mode;
           return { ok: true, failures: [], manifestHash: "hash" };
         },
-        project: async () => ({
-          ok: true,
-          failures: [],
-          evidence: { commands: [] },
-          commandOutcomes: [],
-          outputLogs: [],
-        }),
+        project,
       });
 
-      await verifier.verify({
-        repoRoot: "/test/repo",
-        worktreePath: "/test/worktree",
-        baseCommitOid: "1111111111111111111111111111111111111111",
-        artifact: {
-          baseCommitOid: "1111111111111111111111111111111111111111",
-          candidateCommitOid: "2222222222222222222222222222222222222222",
-          candidateTreeOid: "3333333333333333333333333333333333333333",
-          anchorRef: "refs/test",
-          manifestHash: "hash",
-          changedPaths: [],
-          patchRef: "patch.diff",
-        },
-        spec: {
-          id: "test",
-          protocolVersion: "1",
-          targetRepo: { path: "/test/repo", head: "1111111111111111111111111111111111111111" },
-          producer: { name: "codex" },
-          policy: { writeScope: ["."], forbiddenScope: [], networkAccess: "none" },
-          writeAllowlist: ["."],
-          forbiddenScope: [],
-          instructions: { goal: "test" },
-          verification: [],
-        },
-        ps: {} as any,
-        artifactStore: { writeLog: async () => "logs/test.log" },
-      });
+      await verifier.verify(verifyArgs());
 
       expect(observedMode).toBe("final-branch");
     });

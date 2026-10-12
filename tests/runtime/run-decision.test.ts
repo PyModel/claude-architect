@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { AttemptResult, CandidateArtifact } from "../../src/protocol/attempt-result.js";
 import type { RunManifest } from "../../src/runtime/run-manifest.js";
 import { type ReviewSnapshot, reviewSnapshotHash } from "../../src/runtime/review-snapshot.js";
+import { PROTOCOL_VERSION } from "../../src/protocol/versions.js";
 import type { PipelineGateCleared } from "../../src/protocol/pipeline-gate-cleared.js";
 import type { CandidateDecisionV2 } from "../../src/protocol/candidate-decision.js";
 import {
-  RunDecision,
   readRunDecisionSnapshot,
   runDecision,
   type RunDecisionStore,
@@ -25,7 +25,7 @@ function makeArtifact(): CandidateArtifact {
     anchorRef: "refs/claude-architect/candidates/test-run",
     manifestHash: MANIFEST_HASH,
     changedPaths: [],
-    patchRef: "patch.diff",
+    patch: "",
   };
 }
 
@@ -36,42 +36,38 @@ function makeManifest(runId: string): RunManifest {
     repoRoot: "/test/repo",
     baseCommitOid: BASE_COMMIT,
     candidateManifestHash: MANIFEST_HASH,
-    producer: {
-      name: "codex",
-      version: "1.0.0",
-      model: "test-model",
-    },
-    effectiveConfig: {},
+    producer: { id: "codex", version: "1.0.0", model: "test-model" },
     effectivePolicy: { verificationPolicy: [{ id: "unit", confinement: "macos-seatbelt", skipped: false }] },
-    policy: {
-      confinement: "none",
-      writeScope: ["."],
-      forbiddenScope: [],
-      networkAccess: "none",
-      budget: {},
-    },
-    instructionPaths: [],
-    instructionHashes: [],
+    repositoryInstructions: [],
     promptHash: "prompt-hash",
-    environmentSanitized: true,
+    executionPolicy: {},
+    environment: [],
     runtimeVersion: "1.0.0",
-    startedAt: new Date().toISOString(),
+    protocolVersion: PROTOCOL_VERSION,
+    schemaVersions: { delegationSpec: "1", attemptResult: "1" },
+    packagedVerifier: { version: "test", hash: "7".repeat(64) },
+    manifestHash: "8".repeat(64),
   };
 }
 
 function makeResult(runId: string, overrides: Partial<AttemptResult> = {}): AttemptResult {
   return {
+    resultVersion: "1",
     runId,
     status: "verified-candidate",
     failure: null,
     candidate: makeArtifact(),
     unresolvedIssues: [],
     summary: "Candidate verified successfully.",
-    stdoutRef: "logs/stdout.log",
-    stderrRef: "logs/stderr.log",
-    timing: { start: 0, finish: 1000 },
-    commandOutcomes: [],
+    producerSummary: null,
+    requestedVerification: [],
     executedVerification: [],
+    logsRef: "logs/producer.log",
+    producerId: "codex",
+    producerVersion: "1.0.0",
+    producerModel: "test-model",
+    durationMs: 1000,
+    sessionId: null,
     evidence: {
       pipelineGateCleared: {
         candidateCommitOid: CANDIDATE_COMMIT,

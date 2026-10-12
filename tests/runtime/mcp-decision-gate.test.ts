@@ -14,6 +14,7 @@ import type { CandidateDecisionV2 } from "../../src/protocol/candidate-decision.
 import type { RunManifest } from "../../src/runtime/run-manifest.js";
 import type { JevScreen } from "../../src/mcp/jev-screen.js";
 import type { ReviewSnapshot } from "../../src/runtime/review-snapshot.js";
+import { pruneNothing } from "../support/server-stubs.js";
 
 function minimalResult(runId: string): AttemptResult {
   return {
@@ -87,6 +88,7 @@ const candidate: CandidateArtifact = {
   // mismatch, so derive it rather than inventing a value.
   manifestHash: createHash("sha256").update(JSON.stringify([])).digest("hex"),
   changedPaths: [],
+  patch: "",
 };
 
 const verifiedResult = {
@@ -150,7 +152,7 @@ async function decideVia(
   await start({
     transport: serverTransport,
     recoverStaleRuns: async () => ({ recovered: [], quarantined: [] }),
-    pruneRuns: async () => {},
+    pruneRuns: pruneNothing,
     ps: fakePlatform(options.onAcquireLock),
     decisionAuthority: () => authority,
     // Hermetic by default: the real screen is opt-in and networked.
@@ -168,7 +170,7 @@ async function decideVia(
         recorded = record;
       },
       readCandidateDecision: async () => recorded,
-      writeReviewSnapshot: async snapshot => { persistedSnapshot = snapshot; },
+      writeReviewSnapshot: async (snapshot: ReviewSnapshot) => { persistedSnapshot = snapshot; },
       readReviewSnapshot: async () => persistedSnapshot,
       readRunStartSpecSha256: async () => null,
       readPipelineActiveMarker: async () => null,
@@ -308,7 +310,7 @@ describe("decideCandidate authority", () => {
         await start({
           transport: serverTransport,
           recoverStaleRuns: async () => ({ recovered: [], quarantined: [] }),
-          pruneRuns: async () => {},
+          pruneRuns: pruneNothing,
           ps: fakePlatform(),
           decisionAuthority: () => "human" as const,
           storeFactory: () => ({
@@ -324,7 +326,7 @@ describe("decideCandidate authority", () => {
               await persistentStore.writeCandidateDecisionRecord(record);
             },
             readCandidateDecision: async () => persistentStore.readCandidateDecision(),
-            writeReviewSnapshot: async snapshot => { persistedSnapshot = snapshot; },
+            writeReviewSnapshot: async (snapshot: ReviewSnapshot) => { persistedSnapshot = snapshot; },
             readReviewSnapshot: async () => persistedSnapshot,
             readRunStartSpecSha256: async () => null,
             readPipelineActiveMarker: async () => null,

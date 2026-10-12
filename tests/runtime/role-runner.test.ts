@@ -22,6 +22,7 @@ import type {
 } from "../../src/producers/producer-adapter.js";
 import { ProducerRegistry } from "../../src/producers/producer-registry.js";
 import type { RunStartContext } from "../../src/runtime/run-start.js";
+import { addSandboxRow } from "../support/sandbox-rows.js";
 
 const REVIEW_OUTPUT = [
   "```json",
@@ -206,6 +207,12 @@ function platformServices(adapter: FakeAdapter): PlatformServices {
     async canonicalizePath(input) {
       return { input, canonical: input, gitCommonDir: null };
     },
+    async acquireCleanupJournalLock() {
+      throw new Error("unexpected cleanup journal lock");
+    },
+    async assertDirectoryWriteIntegrity() {
+      throw new Error("unexpected directory integrity check");
+    },
   };
 }
 
@@ -379,9 +386,11 @@ describe("runRole", () => {
     // init, so the role must run the producer directly with readOnly=true.
     // Add a host-arch-independent producer-native row so the assertion holds on
     // any CI runner (the probe report's arch is the real process.arch).
-    const codex = SANDBOX_BACKENDS.find(backend => backend.id === "codex-native-sandbox");
-    if (codex === undefined) throw new Error("codex-native-sandbox backend is missing");
-    codex.platforms.push({ os: "darwin", environmentType: "native", state: "tested" });
+    const removeCodexRow = addSandboxRow(
+      "codex-native-sandbox",
+      { os: "darwin", environmentType: "native", state: "tested" },
+      "last",
+    );
     try {
       const adapter = new FakeAdapter({
         cannedStdout: REVIEW_OUTPUT,
@@ -395,7 +404,7 @@ describe("runRole", () => {
       expect(adapter.spawnedCommands).not.toContain("/usr/bin/sandbox-exec");
       expect(adapter.readOnlyRequests).toEqual([true]);
     } finally {
-      codex.platforms.pop();
+      removeCodexRow();
     }
   });
 
@@ -539,9 +548,11 @@ describe("runRole", () => {
   });
 
   it("keeps a producer-native fixer unwrapped", async () => {
-    const codex = SANDBOX_BACKENDS.find(backend => backend.id === "codex-native-sandbox");
-    if (codex === undefined) throw new Error("codex-native-sandbox backend is missing");
-    codex.platforms.push({ os: "darwin", environmentType: "native", state: "tested" });
+    const removeCodexRow = addSandboxRow(
+      "codex-native-sandbox",
+      { os: "darwin", environmentType: "native", state: "tested" },
+      "last",
+    );
     try {
       await configureFixerGitRoots();
       const adapter = new FakeAdapter({
@@ -563,7 +574,7 @@ describe("runRole", () => {
         processToken: "token-1",
       });
     } finally {
-      codex.platforms.pop();
+      removeCodexRow();
     }
   });
 

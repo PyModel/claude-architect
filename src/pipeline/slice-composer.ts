@@ -1,6 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
+import { withRuntimeScratch } from "../runtime/producer-home.js";
 import { git, type GitExecOptions, type GitResult } from "../git/git-exec.js";
 import { RuntimeError } from "../util/errors.js";
 
@@ -105,9 +104,8 @@ export async function composeSliceOntoHead(args: ComposeSliceArgs): Promise<stri
     );
   }
 
-  const indexRoot = await mkdtemp(path.join(tmpdir(), "ca-compose-"));
-  const indexFile = path.join(indexRoot, "index");
-  try {
+  return await withRuntimeScratch(async indexRoot => {
+    const indexFile = path.join(indexRoot, "index");
     const options: GitExecOptions = { ...args.objectReadOptions, indexFile };
     await checked(args.checkoutPath, ["read-tree", args.head], options, runGit);
     const instructions = changes.map(change =>
@@ -127,7 +125,5 @@ export async function composeSliceOntoHead(args: ComposeSliceArgs): Promise<stri
       args.objectReadOptions,
       runGit,
     )).trim();
-  } finally {
-    await rm(indexRoot, { recursive: true, force: true });
-  }
+  });
 }

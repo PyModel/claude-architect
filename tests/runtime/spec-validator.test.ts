@@ -143,7 +143,7 @@ describe("validateSpec", () => {
     expect(validateSpec({ ...base, timeoutMs: RUNTIME_MIN_EDIT_TIMEOUT_MS }).ok).toBe(true);
   });
   it("keeps the validator timeout floor aligned with the schema edit minimum", () => {
-    const schemaEditTimeoutMinimum = delegationSpecSchema.allOf[0]
+    const schemaEditTimeoutMinimum = delegationSpecSchema.allOf[0]!
       .then.properties.timeoutMs.minimum;
 
     expect(schemaEditTimeoutMinimum).toBe(600_000);

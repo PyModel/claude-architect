@@ -38,6 +38,7 @@ import {
 } from "../../src/runtime/redaction.js";
 import { collectReproducibilityInputs } from "../../src/runtime/reproducibility.js";
 import { NestedDelegationError, RuntimeError } from "../../src/util/errors.js";
+import { outOfContract } from "../support/out-of-contract.js";
 
 const fixturePath = fileURLToPath(new URL("fixtures/edit-file.mjs", import.meta.url));
 const sleepFixturePath = fileURLToPath(new URL("fixtures/echo-sleep.mjs", import.meta.url));
@@ -580,7 +581,7 @@ describe("runAttempt", () => {
     const fixture = await borrowedLeaseFixture(repoRoot);
     const create = WorktreeManager.prototype.create;
     const createSpy = vi.spyOn(WorktreeManager.prototype, "create")
-      .mockImplementationOnce(async function (baseCommitOid) {
+      .mockImplementationOnce(async function (this: WorktreeManager, baseCommitOid) {
         const worktree = await create.call(this, baseCommitOid);
         return {
           ...worktree,
@@ -622,6 +623,88 @@ describe("runAttempt", () => {
     expect(archived?.status).toBe("verified-candidate");
     expect(fixture.acquireCalls()).toBe(0);
     expect(fixture.releaseCalls()).toBe(0);
+  });
+
+  it("preserves a replaced Producer HOME and records it beside the outcome", async () => {
+    const repoRoot = await initRepo();
+    const runId = "run-replaced-home";
+    const homes: string[] = [];
+    const adapter = new FakeAdapter();
+    adapter.buildInvocation = (_spec, ctx) => {
+      if (ctx.tempHome !== undefined) homes.push(ctx.tempHome);
+      return {
+        executable: nodeExecutable,
+        args: ["-e", `
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const home = process.env.HOME || process.env.USERPROFILE;
+          fs.writeFileSync("a.txt", "changed\\n");
+          fs.writeFileSync(path.join(home, "owned.txt"), "allocated HOME");
+          fs.renameSync(home, home + ".moved");
+          fs.mkdirSync(home);
+          fs.writeFileSync(path.join(home, "replacement.txt"), "replacement HOME");
+        `],
+        requiredEnv: [],
+        network: "denied",
+      };
+    };
+
+    const result = await runAttempt(repoRoot, validSpec(), dependencies(adapter, runId));
+
+    expect(homes).toHaveLength(1);
+    const home = homes[0]!;
+    // The archived outcome itself is a failure, so no acceptance rule can
+    // read the Producer's candidate as clean.
+    expect(result.status).not.toBe("verified-candidate");
+    expect(result.failure).toBe("sandbox-violation");
+    expect(result.candidate).toBeNull();
+    expect(result.unresolvedIssues).toContain("producer-home-conflict");
+    expect(result.evidence.producerHomeFailure).toMatch(/replaced before retirement/u);
+    expect(String(result.evidence.producerHomeFailure)).not.toContain(home);
+    const archived = await new ArtifactStore(runId).readResult();
+    expect(archived).toMatchObject({ failure: "sandbox-violation" });
+    expect(archived?.evidence.producerHomeFailure).toMatch(/replaced before retirement/u);
+    await expect(readFile(join(home, "replacement.txt"), "utf8")).resolves.toBe("replacement HOME");
+    await expect(readFile(join(`${home}.moved`, "owned.txt"), "utf8")).resolves.toBe("allocated HOME");
+  });
+
+  it("records every cleanup failure, not only the first", async () => {
+    const repoRoot = await initRepo();
+    const runId = "run-two-cleanup-failures";
+    const adapter = new FakeAdapter();
+    adapter.buildInvocation = () => ({
+      executable: nodeExecutable,
+      args: ["-e", `
+        const fs = require("node:fs");
+        const home = process.env.HOME || process.env.USERPROFILE;
+        fs.writeFileSync("a.txt", "changed\\n");
+        fs.renameSync(home, home + ".moved");
+      `],
+      requiredEnv: [],
+      network: "denied",
+    });
+    const create = WorktreeManager.prototype.create;
+    const createSpy = vi.spyOn(WorktreeManager.prototype, "create")
+      .mockImplementationOnce(async function (this: WorktreeManager, baseCommitOid) {
+        const worktree = await create.call(this, baseCommitOid);
+        return {
+          ...worktree,
+          async cleanup() {
+            await worktree.cleanup();
+            throw new Error("attempt worktree cleanup failed");
+          },
+        };
+      });
+
+    let result;
+    try {
+      result = await runAttempt(repoRoot, validSpec(), dependencies(adapter, runId));
+    } finally {
+      createSpy.mockRestore();
+    }
+
+    expect(result.evidence.cleanupFailure).toContain("attempt worktree cleanup failed");
+    expect(result.evidence.cleanupFailure).toMatch(/moved away before retirement/u);
   });
 
   it("rejects a borrowed lock bound to another repository before Producer execution", async () => {
@@ -1263,7 +1346,7 @@ describe("runAttempt", () => {
     const repoRoot = await initRepo();
     let probed = false;
 
-    const result = await runAttempt(repoRoot, { ...validSpec(), executionMode: "read-only" }, dependencies(
+    const result = await runAttempt(repoRoot, outOfContract<DelegationSpec>({ ...validSpec(), executionMode: "read-only" }), dependencies(
       new FakeAdapter(),
       "run-preflight-readonly",
       {

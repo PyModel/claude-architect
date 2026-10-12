@@ -6,6 +6,8 @@ const exit = {
   signal: null,
   timedOut: false,
   cancelled: false,
+  stdout: "",
+  stderr: "",
   truncated: { stdout: false, stderr: false },
 };
 

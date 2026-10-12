@@ -24,6 +24,7 @@ import { doctor } from "../../../src/mcp/doctor.js";
 import type { PlatformServices } from "../../../src/platform/platform-services.js";
 import { getPlatformServices } from "../../../src/platform/select-platform.js";
 import type { AutopilotSpec } from "../../../src/protocol/autopilot-spec.js";
+import { asJournalJson } from "../../support/journal-json.js";
 
 interface Fixture {
   repository: string;
@@ -192,7 +193,7 @@ async function createFixture(): Promise<Fixture> {
     baseBranch: "main",
   });
   const store = new WorkflowStore(workflowId, {
-    stateDirectory: process.env.CLAUDE_PLUGIN_DATA,
+    stateDirectory: process.env.CLAUDE_PLUGIN_DATA!,
     now: () => "2026-07-21T18:01:00.000Z",
     isProcessAlive: pid => pid === process.pid,
     getProcessStartToken: async pid => pid === process.pid ? CURRENT_PROCESS_TOKEN : null,
@@ -207,7 +208,7 @@ async function createFixture(): Promise<Fixture> {
   await store.completeIntent({
     expectedRevision: 0,
     idempotencyKey: "workflow-spec",
-    completion: { spec: autopilotSpec(), branch },
+    completion: asJournalJson({ spec: autopilotSpec(), branch }),
   });
   return { repository, branchManager, branch, store };
 }
@@ -256,6 +257,8 @@ function doctorPlatform(): PlatformServices {
     async acquireCheckoutLock() { throw new Error("unexpected checkout mutation"); },
     async createSecureTempDirectory() { throw new Error("unexpected temp directory"); },
     async canonicalizePath() { throw new Error("unexpected canonicalization"); },
+    async acquireCleanupJournalLock() { throw new Error("unexpected cleanup journal lock"); },
+    async assertDirectoryWriteIntegrity() { throw new Error("unexpected directory integrity check"); },
   };
 }
 

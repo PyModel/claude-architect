@@ -125,6 +125,12 @@ export interface ProducerDescriptor {
   readonly structuredOutput: boolean;
   readonly executionModes?: string[];
   readonly configurationProfile?: ProducerConfigurationProfile;
+  /**
+   * Roots the Producer's own native sandbox lets it write beyond the worktree,
+   * its HOME and the runtime's declared roots. The runtime refuses a state
+   * directory inside any of them, since it could not protect its HOME root.
+   */
+  nativeWritableRoots?(args: { readOnly: boolean; platform: NodeJS.Platform }): string[];
   probe?(ctx: ProbeContext, deps: HostStoreContext): Promise<CapabilityReport>;
   buildInvocation?(
     spec: DelegationSpec,

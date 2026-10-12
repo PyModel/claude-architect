@@ -29,7 +29,7 @@ import { RuntimeError } from "../../src/util/errors.js";
 // standing in for a same-user writer racing the publish.
 vi.mock("node:fs/promises", async importOriginal => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
-  return { ...actual, open: vi.fn(actual.open), rm: vi.fn(actual.rm) };
+  return { ...actual, open: vi.fn(actual.open), rm: vi.fn(actual.rm), rename: vi.fn(actual.rename) };
 });
 
 const actualFs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
@@ -396,6 +396,41 @@ describe("PlatformSafety durable-write", () => {
       const after = await lstat(path.join(testDir, ".poisoned-run-1"), { bigint: true });
       expect([after.dev, after.ino]).toEqual([before.dev, before.ino]);
       expect(await readdir(testDir)).toEqual([".poisoned-run-1"]);
+    });
+
+    it("refuses to move a directory that is not the expected one", async () => {
+      await mkdir(path.join(testDir, "home"));
+      const expected = await lstat(path.join(testDir, "home"), { bigint: true });
+      await rename(path.join(testDir, "home"), path.join(testDir, "home-aside"));
+      await mkdir(path.join(testDir, "home"));
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        await expect(moveDirectory(session, "home", ".q-home", expected))
+          .rejects.toThrow("directory move source is not the expected directory");
+      } finally {
+        await session.close();
+      }
+      expect((await readdir(testDir)).sort()).toEqual(["home", "home-aside"]);
+    });
+
+    it("detects a source substituted between its identity check and the rename", async () => {
+      await mkdir(path.join(testDir, "home"));
+      const expected = await lstat(path.join(testDir, "home"), { bigint: true });
+      vi.mocked(rename).mockImplementationOnce(async (source, destination) => {
+        await actualFs.rename(source, `${String(source)}-aside`);
+        await actualFs.mkdir(source);
+        await actualFs.rename(source, destination);
+      });
+      const session = await openDurableDirectorySession(testDir);
+      let failure: unknown;
+      try {
+        failure = await moveDirectory(session, "home", ".q-home", expected).catch((error: unknown) => error);
+      } finally {
+        await session.close();
+      }
+      expect(failure).toBeInstanceOf(RuntimeError);
+      expect((failure as RuntimeError).message).toMatch(/moved directory identity changed/u);
+      expect((failure as RuntimeError).detail?.classification).toBe("directory-identity-changed");
     });
 
     it("refuses to move onto an existing entry", async () => {

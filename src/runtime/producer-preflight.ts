@@ -8,6 +8,7 @@ import type {
 } from "../producers/producer-adapter.js";
 import { producerRuntime, type ProducerLaunchResult } from "../producers/producer-runtime.js";
 import { RuntimeError } from "../util/errors.js";
+import type { ProducerHomeLease } from "./producer-home.js";
 import { boundedRedactedDiagnostic } from "./redaction.js";
 import { readStableRegularFile } from "../util/stable-file.js";
 import { linkPrimaryDependencies } from "../verify/dependency-link.js";
@@ -108,6 +109,8 @@ export interface ProducerPreflightArgs {
   runId: string;
   ps: PlatformServices;
   tempHome: string | null;
+  /** The attempt's lease on `tempHome`; the probe's spawn is claimed under it. */
+  homeLease?: ProducerHomeLease | null;
   abortSignal?: AbortSignal;
   borrowedCheckoutLease?: CheckoutLock;
   worktreeManager?: Pick<WorktreeManager, "create">;
@@ -147,6 +150,7 @@ export async function runProducerPreflight(
         ps: args.ps,
         runId: args.runId,
         tempHome: args.tempHome,
+        homeLease: args.homeLease ?? null,
         timeoutMs: PREFLIGHT_TIMEOUT_MS,
         maxOutputBytes: PREFLIGHT_OUTPUT_LIMIT,
         capabilityReport: args.capabilityReport,
@@ -168,6 +172,7 @@ export async function runProducerPreflight(
         ps: args.ps,
         runId: args.runId,
         tempHome: args.tempHome,
+        homeLease: args.homeLease ?? null,
         timeoutMs: PREFLIGHT_TIMEOUT_MS,
         maxOutputBytes: PREFLIGHT_OUTPUT_LIMIT,
         capabilityReport: args.capabilityReport,

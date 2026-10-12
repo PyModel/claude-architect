@@ -47,6 +47,8 @@ import type { ReviewReport } from "../../../src/pipeline/report-types.js";
 import type { RolePackage } from "../../../src/pipeline/role-prompts.js";
 import type { RoleRunArgs, RoleRunResult } from "../../../src/pipeline/role-runner.js";
 import { ArtifactStore } from "../../../src/runtime/artifact-store.js";
+import { readBackAs } from "../../support/journal-json.js";
+import type { RunEvidenceStore } from "../../../src/autopilot/run-evidence.js";
 
 interface FixtureCore {
   root: string;
@@ -392,6 +394,8 @@ function inMemoryEvidenceStore(
   });
 }
 
+type Served<K extends keyof RunEvidenceStore> = Awaited<ReturnType<RunEvidenceStore[K]>>;
+
 /** A coherent archived run whose eligibility and decision bind every artifact. */
 function coherentRunEvidence(ids: {
   runId: string;
@@ -447,14 +451,18 @@ function coherentRunEvidence(ids: {
     evaluatedAt: "2026-07-20T12:00:00.000Z",
   };
   const eligibilityHash = autopilotEligibilityRecordHash(eligibility);
+  // The fake archive serves documents shaped for what the loader reads, so each
+  // reader hands its fixture back through JSON, as a real archive would.
   const store = {
-    readResult: vi.fn(async () => ({ runId: ids.runId, status: "verified-candidate", candidate })),
-    readManifest: vi.fn(async () => ({
+    readResult: vi.fn(async (): Promise<Served<"readResult">> => readBackAs({
+      runId: ids.runId, status: "verified-candidate", candidate,
+    })),
+    readManifest: vi.fn(async (): Promise<Served<"readManifest">> => readBackAs({
       runId: ids.runId, repoRoot: ids.repo, baseCommitOid: ids.baseOid,
       candidateManifestHash: manifestHash,
     })),
-    readReviewSnapshot: vi.fn(async () => reviewSnapshot),
-    readCandidateDecision: vi.fn(async () => ({
+    readReviewSnapshot: vi.fn(async (): Promise<Served<"readReviewSnapshot">> => readBackAs(reviewSnapshot)),
+    readCandidateDecision: vi.fn(async (): Promise<Served<"readCandidateDecision">> => readBackAs({
       decisionVersion: "2",
       decision: "accepted",
       authority: "autopilot-policy",
@@ -463,9 +471,11 @@ function coherentRunEvidence(ids: {
       policyVersion: "1",
       recordedAt: "2026-07-20T12:01:00.000Z",
     })),
-    readPipelineArtifact: vi.fn(async () => pipelineResult),
-    readAdvisorReport: vi.fn(async () => advisor),
-    readAutopilotEligibility: vi.fn(async () => eligibility),
+    async readPipelineArtifact<T>(): Promise<T | null> {
+      return readBackAs<T>(pipelineResult);
+    },
+    readAdvisorReport: vi.fn(async (): Promise<Served<"readAdvisorReport">> => readBackAs(advisor)),
+    readAutopilotEligibility: vi.fn(async (): Promise<Served<"readAutopilotEligibility">> => readBackAs(eligibility)),
   };
   return { store, advisor, manifestHash, eligibilityHash };
 }

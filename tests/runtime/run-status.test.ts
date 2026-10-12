@@ -395,7 +395,7 @@ async function slicedRoleRunner(args: RoleRunArgs): Promise<RoleRunResult> {
 function observeDiskStatuses(): RunStatus[] {
   const statuses: RunStatus[] = [];
   const original = ArtifactStore.prototype.writeRunStatus;
-  vi.spyOn(ArtifactStore.prototype, "writeRunStatus").mockImplementation(async function (status) {
+  vi.spyOn(ArtifactStore.prototype, "writeRunStatus").mockImplementation(async function (this: ArtifactStore, status) {
     await original.call(this, status);
     try {
       statuses.push(JSON.parse(await readFile(path.join(this.runDirectory, "status.json"), "utf8")) as RunStatus);

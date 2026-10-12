@@ -150,7 +150,7 @@ export function pipelineResult(runId = "run-advisor"): PipelineResult {
         { reviewer: "correctness", report: approve },
         { reviewer: "systems", report: approve },
       ],
-      consolidated: { findings: [], contradictions: [] },
+      consolidated: { findings: [] },
       fix: null,
       roleLogRefs: ["logs/reviewer-correctness.log", "logs/reviewer-systems.log"],
     }],

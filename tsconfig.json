@@ -4,7 +4,7 @@
     "strict": true, "noUncheckedIndexedAccess": true, "exactOptionalPropertyTypes": true,
     "noUnusedLocals": true,
     "resolveJsonModule": true, "skipLibCheck": true, "declaration": false, "types": ["node"],
-    "outDir": "dist", "rootDir": "src"
+    "outDir": "dist", "rootDir": "."
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

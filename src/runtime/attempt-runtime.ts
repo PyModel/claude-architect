@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
 import { freezeCandidate } from "../git/candidate-tree.js";
 import { git } from "../git/git-exec.js";
 import { checkPreconditions } from "../git/repo-preconditions.js";
@@ -45,6 +44,7 @@ import {
   type EnvProvenance,
 } from "./environment-policy.js";
 import { runProducerPreflight } from "./producer-preflight.js";
+import type { ProducerHomeLease } from "./producer-home.js";
 import { redact, redactValues } from "./redaction.js";
 import {
   collectReproducibilityInputs,
@@ -310,10 +310,14 @@ async function archiveTerminal(context: TerminalContext): Promise<AttemptResult>
 async function cleanupAttemptResources(args: {
   builtEnvironment: BuiltEnvironment | null;
   worktree: { cleanup(): Promise<void> } | null;
-  tempHome: string | null;
+  home: ProducerHomeLease | null;
   lock: CheckoutLock | null;
 }): Promise<unknown | null> {
   const failures: unknown[] = [];
+  // Identity-bound retirement; it never throws and never deletes by name. It
+  // runs before the launch's secrets are released so its diagnostic is
+  // redacted against them.
+  const retirement = args.home === null ? null : await args.home.retire();
   try {
     args.builtEnvironment?.secretRegistration.dispose();
   } catch (error) {
@@ -326,12 +330,8 @@ async function cleanupAttemptResources(args: {
       failures.push(error);
     }
   }
-  if (args.tempHome !== null) {
-    try {
-      await rm(args.tempHome, { recursive: true, force: true });
-    } catch (error) {
-      failures.push(error);
-    }
+  if (retirement !== null && !retirement.ok) {
+    failures.push(new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved"));
   }
   if (args.lock !== null) {
     try {
@@ -340,7 +340,12 @@ async function cleanupAttemptResources(args: {
       failures.push(error);
     }
   }
-  return failures[0] ?? null;
+  if (failures.length <= 1) return failures[0] ?? null;
+  // Every failure stays visible; the first leads so its classification holds.
+  const message = failures
+    .map(failure => (failure instanceof Error ? failure.message : String(failure)))
+    .join("; ");
+  return Object.assign(new AggregateError(failures, message), { cause: failures[0] });
 }
 
 export async function runAttempt(
@@ -413,6 +418,7 @@ export async function runAttempt(
   const runWithLease = async (lock: CheckoutLock, ownership: "borrowed" | "owned"): Promise<AttemptResult> => {
     let worktree: { path: string; cleanup(): Promise<void> } | null = null;
     let tempHome: string | null = null;
+    let home: ProducerHomeLease | null = null;
     let builtEnvironment: BuiltEnvironment | null = null;
     let primaryError: unknown;
     let archivedResult: AttemptResult | null = null;
@@ -597,6 +603,7 @@ export async function runAttempt(
       capabilityReport: report,
     });
     tempHome = launchPlan.tempHome;
+    home = launchPlan.home;
     builtEnvironment = launchPlan.builtEnvironment;
     let invocation = launchPlan.invocation;
     let confinement: string | null = launchPlan.confinementBackend;
@@ -604,7 +611,7 @@ export async function runAttempt(
     if (spec.executionMode === "edit") {
       const selection = selectSandboxBackend(report);
       if (selection.backend === null) {
-        return await archiveWithStatus({
+        return archivedResult = await archiveWithStatus({
           store,
           spec,
           runId,
@@ -651,12 +658,13 @@ export async function runAttempt(
         runId,
         ps,
         tempHome,
+        homeLease: home,
         borrowedCheckoutLease: lock,
         ...(deps.abortSignal === undefined ? {} : { abortSignal: deps.abortSignal }),
       });
       baselineEvidence = { ...baselineEvidence, producerPreflight: preflight };
       if (preflight.status === "environment-defect") {
-        return await archiveWithStatus({
+        return archivedResult = await archiveWithStatus({
           store,
           spec,
           runId,
@@ -716,6 +724,17 @@ export async function runAttempt(
     if (exit.spawnError !== undefined) signals["spawn-failure"] = true;
     if (exit.cancelled) signals.cancelled = true;
     if (exit.timedOut) signals.timeout = true;
+
+    // The Producer tree has settled: retire its HOME before anything is
+    // archived, so a HOME it moved or replaced fails the outcome itself rather
+    // than trailing an archived success. Other retirement failures are
+    // recorded by the final cleanup, beside the outcome.
+    const homeRetirement = home === null ? null : await home.retire();
+    if (homeRetirement?.conflict === true) {
+      signals["sandbox-violation"] = true;
+      unresolvedIssues = ["producer-home-conflict"];
+      evidence = { ...evidence, producerHomeFailure: homeRetirement.diagnostic ?? "Producer HOME preserved" };
+    }
 
     if (!hasFailureSignal(signals)) {
       producerSummary = launchResult.producerSummary;
@@ -821,6 +840,10 @@ export async function runAttempt(
     return archivedResult;
   } catch (error) {
     primaryError = error;
+    const homeFailure = (error as { producerHomeFailure?: unknown } | null)?.producerHomeFailure;
+    if (typeof homeFailure === "string") {
+      logger.warn("attempt Producer HOME was preserved", { error: homeFailure });
+    }
     // Guarded like every other status site: for a pipeline-managed run the
     // pipeline owns the terminal status and writes `failed` itself, and writing
     // it here too resets round/role from this thinner context.
@@ -834,7 +857,7 @@ export async function runAttempt(
     const cleanupError = await cleanupAttemptResources({
       builtEnvironment,
       worktree,
-      tempHome,
+      home,
       lock: null,
     });
     if (cleanupError !== null) {

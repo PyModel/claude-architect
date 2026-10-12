@@ -95,6 +95,10 @@ export function sandboxSupportWritableRoots(platform: NodeJS.Platform): string[]
   const temporaryDirectory = resolveDarwinUserTempDirectory();
   return temporaryDirectory === null ? [] : [temporaryDirectory];
 }
+function codexNativeWritableRoots(args: { readOnly: boolean; platform: NodeJS.Platform }): string[] {
+  return args.readOnly ? [] : sandboxSupportWritableRoots(args.platform);
+}
+
 function parseVersion(stdout: string): string | null {
   const match = /(?:^|\s)(\d+\.\d+\.\d+(?:[-+][^\s]+)?)(?:\s|$)/u.exec(stdout.trim());
   return match?.[1] ?? null;
@@ -143,12 +147,10 @@ function buildCodexInvocation(
   };
   // Read-only roles get Codex's read-only sandbox, which has no writable roots
   // at all; the support roots below only make sense for the edit lane.
-  const writableRoots = ctx.readOnly === true
-    ? (ctx.extraWritableRoots ?? [])
-    : [...new Set([
-      ...(ctx.extraWritableRoots ?? []),
-      ...sandboxSupportWritableRoots(process.platform),
-    ])];
+  const writableRoots = [...new Set([
+    ...(ctx.extraWritableRoots ?? []),
+    ...codexNativeWritableRoots({ readOnly: ctx.readOnly === true, platform: process.platform }),
+  ])];
   const args = [
     "exec",
     "--json",
@@ -323,6 +325,7 @@ export const codexDescriptor: ProducerDescriptor = {
     writeConfinementBackend: "codex-native-sandbox",
     parseVersion,
   }),
+  nativeWritableRoots: codexNativeWritableRoots,
   buildInvocation: buildCodexInvocation,
   normalizeEvents: normalizeCodexEvents,
 };

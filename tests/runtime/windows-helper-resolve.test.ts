@@ -138,7 +138,7 @@ describe("Windows job helper resolution (all OSes)", () => {
     const calls: unknown[][] = [];
     const services = await servicesWithExec((...args: unknown[]) => {
       calls.push(args);
-      (args[3] as (error: NodeJS.ErrnoException, stdout: string) => void)(
+      (args[3] as (error: Error & { code: number }, stdout: string) => void)(
         Object.assign(new Error("gone"), { code: 2 }),
         "",
       );

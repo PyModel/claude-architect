@@ -122,7 +122,7 @@ All dependencies track latest, with one deliberate pin. Provenance for future se
 
 - `typescript` 7.x — the stable native Go compiler (successor of the `tsgo`
   `@typescript/native-preview` line, which is no longer installed); `npx tsc --noEmit`
-  is the single type gate. tsconfig pins `types: ["node"]` because the native
+  is the single type gate, covering `src/` and `tests/**/*.ts` under the same strict options. tsconfig pins `types: ["node"]` because the native
   compiler does not auto-discover `@types` packages the way tsc 5.x did.
 - `zod` tracks latest **v4** as of 2026-07-27; the long-standing v3 pin is gone.
   The original constraint was real: `@modelcontextprotocol/sdk` 1.29.0 and

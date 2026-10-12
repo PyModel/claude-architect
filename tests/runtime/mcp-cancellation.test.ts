@@ -5,6 +5,7 @@ import { start } from "../../src/mcp/server.js";
 import type { PlatformServices } from "../../src/platform/platform-services.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import { PROTOCOL_VERSION } from "../../src/protocol/versions.js";
+import { noAllowlistGaps, notSelfHosted, pruneNothing } from "../support/server-stubs.js";
 
 /**
  * Cancellation is only real if the caller's abort actually reaches the runtime.
@@ -71,10 +72,10 @@ describe("MCP cancellation reaches the runtime", () => {
     await start({
       transport: serverTransport,
       recoverStaleRuns: async () => ({ recovered: [], quarantined: [] }),
-      pruneRuns: async () => {},
+      pruneRuns: pruneNothing,
       ps: fakePlatform(),
-      checkLiveBundle: async () => null,
-      checkAllowlistSufficiency: async () => [],
+      checkLiveBundle: notSelfHosted,
+      checkAllowlistSufficiency: noAllowlistGaps,
       runAttempt: async (_checkout, _spec, deps) => {
         reportRunning(deps.abortSignal);
         // Model a Producer that outlives the caller: never finish on its own.

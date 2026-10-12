@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { withRuntimeScratch } from "../runtime/producer-home.js";
 import { promisify } from "node:util";
 
 export type DependencyLink =
@@ -69,8 +69,7 @@ export async function probeCowSupport(
   if (platform !== "darwin" && platform !== "linux") {
     return { cowSupported: false, strategy: "unsupported" };
   }
-  const probeRoot = await mkdtemp(path.join(tmpdir(), "ca-cow-probe-"));
-  try {
+  return await withRuntimeScratch(async probeRoot => {
     const source = path.join(probeRoot, "source");
     const target = path.join(probeRoot, "target");
     const clone = cowClone(platform, source, target);
@@ -86,9 +85,7 @@ export async function probeCowSupport(
     } catch {
       return { cowSupported: false, strategy: clone.strategy };
     }
-  } finally {
-    await rm(probeRoot, { recursive: true, force: true });
-  }
+  });
 }
 
 export async function linkPrimaryDependencies(

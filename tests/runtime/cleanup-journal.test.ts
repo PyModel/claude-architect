@@ -40,7 +40,7 @@ vi.mock("node:fs/promises", async importOriginal => {
     lstat: async (...args: Parameters<typeof actual.lstat>) => {
       const metadata = await actual.lstat(...args);
       if (birthtimeFault.directory !== null && args[0] === birthtimeFault.directory
-        && typeof metadata.birthtimeNs === "bigint") {
+        && "birthtimeNs" in metadata && typeof metadata.birthtimeNs === "bigint") {
         metadata.birthtimeNs = 0n;
       }
       return metadata;
