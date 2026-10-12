@@ -18,7 +18,8 @@ import { projectVerify } from "../../src/verify/project-verifier.js";
  */
 
 const temporaryPaths: string[] = [];
-let previousTmpdir: string | undefined;
+/** TMPDIR before lockSharedTemp; `null` means not locked (CI Linux has no TMPDIR). */
+let previousTmpdir: string | undefined | null = null;
 
 async function run(cwd: string, args: string[]): Promise<string> {
   const result = await git(cwd, args);
@@ -55,11 +56,12 @@ async function lockSharedTemp(): Promise<void> {
 }
 
 beforeEach(() => {
-  previousTmpdir = undefined;
+  previousTmpdir = null;
 });
 
 afterEach(async () => {
-  if (previousTmpdir !== undefined) process.env.TMPDIR = previousTmpdir;
+  if (previousTmpdir === undefined) delete process.env.TMPDIR;
+  else if (previousTmpdir !== null) process.env.TMPDIR = previousTmpdir;
   for (const entry of temporaryPaths) await chmod(entry, 0o700).catch(() => undefined);
   temporaryPaths.push(producerHomeRoot());
   await Promise.all(temporaryPaths.splice(0).map(entry =>
