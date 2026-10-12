@@ -8,15 +8,32 @@ import type {
   ProducerAdapter,
 } from "../../src/producers/producer-adapter.js";
 
+/** These tests only probe; launching or parsing through them is a test bug. */
+function unusedAdapterMembers(): Pick<
+  ProducerAdapter,
+  "buildInvocation" | "normalizeEvents" | "configurationProfile"
+> {
+  return {
+    buildInvocation() {
+      throw new Error("unexpected buildInvocation");
+    },
+    normalizeEvents() {
+      throw new Error("unexpected normalizeEvents");
+    },
+    configurationProfile() {
+      throw new Error("unexpected configurationProfile");
+    },
+  };
+}
+
 function makeTestAdapter(id: string, version = "1.0.0"): {
   adapter: ProducerAdapter;
   probeCalls: number;
 } {
   let probeCalls = 0;
   const adapter: ProducerAdapter = {
+    ...unusedAdapterMembers(),
     producerId: id,
-    structuredOutput: false,
-    executionModes: ["edit"],
     async probe(ctx: ProbeContext): Promise<CapabilityReport> {
       probeCalls++;
       return {
@@ -119,9 +136,8 @@ describe("producer probe cache", () => {
     let probeCalls = 0;
 
     const adapter: ProducerAdapter = {
+      ...unusedAdapterMembers(),
       producerId: "custom",
-      structuredOutput: false,
-      executionModes: ["edit"],
       async probe(ctx: ProbeContext): Promise<CapabilityReport> {
         probeCalls++;
         return {

@@ -7,9 +7,7 @@ describe("logger", () => {
     const errChunks: string[] = [];
     const out = process.stdout.write.bind(process.stdout);
     const err = process.stderr.write.bind(process.stderr);
-    // @ts-expect-error test shim
     process.stdout.write = (c: string) => { outChunks.push(String(c)); return true; };
-    // @ts-expect-error test shim
     process.stderr.write = (c: string) => { errChunks.push(String(c)); return true; };
     try { logger.info("hello", { a: 1 }); } finally {
       process.stdout.write = out; process.stderr.write = err;

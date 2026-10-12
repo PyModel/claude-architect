@@ -5,7 +5,6 @@ import {
   open,
   readFile,
   readdir,
-  rename,
   rm,
   symlink,
   writeFile,

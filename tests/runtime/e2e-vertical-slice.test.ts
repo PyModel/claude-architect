@@ -214,7 +214,7 @@ function dependencies(
   runId: string,
   options: {
     verifier?: AcceptanceVerifierLike;
-    abortSignal?: AbortSignal;
+    abortSignal?: AbortSignal | undefined;
     env?: Record<string, string | undefined>;
   } = {},
 ): ToolDependencies {
@@ -275,6 +275,7 @@ describe("P0-A end-to-end vertical slice", () => {
       result: { runId, status: "verified-candidate", failure: null },
     });
     if (!delegated.ok) throw new Error("delegation unexpectedly failed");
+    if (!("candidate" in delegated.result)) throw new Error("expected the full attempt result");
     const candidate = delegated.result.candidate;
     expect(candidate).not.toBeNull();
 

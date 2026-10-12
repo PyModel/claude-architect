@@ -313,10 +313,10 @@ class MemoryWorkflowStore implements WorkflowStorePort {
     if (intent === undefined) throw new Error("intent not created");
     intent.completion = structuredClone(args.completion ?? null);
     if (args.idempotencyKey === "workflow-spec") {
-      const completion = args.completion as {
-        spec: unknown;
-        branch?: WorkflowBranchIdentity;
-      };
+      // The journal types completions as plain JSON; the controller records
+      // `{ spec, branch }`, so read it back through the same JSON round trip.
+      const completion: { spec: unknown; branch?: WorkflowBranchIdentity } =
+        JSON.parse(JSON.stringify(args.completion));
       this.recordedSpec = completion.spec;
       this.recordedBranch = completion.branch ?? null;
     }
@@ -365,18 +365,18 @@ class MemoryWorkflowStore implements WorkflowStorePort {
 }
 
 function harness(overrides: {
-  branchError?: Error & { classification?: string };
+  branchError?: (Error & { classification?: string }) | undefined;
   branchIdentity?: WorkflowBranchIdentity;
   storeCreateError?: Error;
   storeAcquireLeaseError?: Error;
   storeAdoptLeaseError?: Error;
   storeReleaseLeaseError?: Error;
   beginIntentError?: Error;
-  pipelineError?: Error & { classification?: string };
-  snapshotError?: Error & { classification?: string };
-  eligibilityError?: Error & { classification?: string };
-  promotionError?: Error & { classification?: string };
-  finalReviewError?: Error & { classification?: string };
+  pipelineError?: (Error & { classification?: string }) | undefined;
+  snapshotError?: (Error & { classification?: string }) | undefined;
+  eligibilityError?: (Error & { classification?: string }) | undefined;
+  promotionError?: (Error & { classification?: string }) | undefined;
+  finalReviewError?: (Error & { classification?: string }) | undefined;
   firstPipeline?: PipelineResult;
   snapshotMismatch?: boolean;
   eligibilityRed?: boolean;

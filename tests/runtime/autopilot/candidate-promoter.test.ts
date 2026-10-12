@@ -14,7 +14,7 @@ import type { WorkflowBranchManager } from "../../../src/autopilot/branch-manage
 import type { WorkflowStore } from "../../../src/autopilot/workflow-store.js";
 import type { ArtifactStore } from "../../../src/runtime/artifact-store.js";
 import type { PlatformServices } from "../../../src/platform/platform-services.js";
-import type { GitResult } from "../../../src/git/git-exec.js";
+import type { GitExecOptions, GitResult } from "../../../src/git/git-exec.js";
 import { RuntimeError } from "../../../src/util/errors.js";
 import { logger } from "../../../src/util/logger.js";
 
@@ -211,7 +211,11 @@ function fixture(options: {
   let anchorExists = true;
   let anchorDeleteFails = options.anchorDeleteFailsOnce ?? false;
   let crashAfterCommitTree = options.crashAfterCommitTreeOnce ?? false;
-  const runGit = vi.fn(async (_cwd: string, args: string[]): Promise<GitResult> => {
+  const runGit = vi.fn(async (
+    _cwd: string,
+    args: string[],
+    _options?: string | GitExecOptions,
+  ): Promise<GitResult> => {
     if (args[0] === "rev-parse" && args[2] === "HEAD") return ok(`${head}\n`);
     if (args[0] === "rev-parse" && args.at(-1) === anchorRef) {
       return anchorExists

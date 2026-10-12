@@ -196,19 +196,24 @@ describe("ProducerAdapter", () => {
 
     const invocation = adapter.buildInvocation(
       {
-        id: "spec-seventh",
+        specVersion: "1",
         objective: "Build seventh lane",
         context: "test",
         writeAllowlist: ["a.ts"],
         forbiddenScope: [],
         successCriteria: ["works"],
+        verification: [],
         executionMode: "edit",
         timeoutMs: 10_000,
+        producerPreferences: ["seventh"],
+        expectedOutput: "candidate-patch",
       },
       {
         executable,
         worktreePath: "/tmp/worktree",
         tempHome: "/tmp/home",
+        runId: "run-seventh",
+        capabilityReport: probeReport,
       },
     );
     expect(invocation.stdin).toContain(EDIT_ACTION_PREAMBLE);

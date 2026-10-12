@@ -80,6 +80,9 @@ function unavailablePlatformServices(): PlatformServices {
     async canonicalizePath() {
       throw new Error("unexpected canonicalization");
     },
+    async assertDirectoryWriteIntegrity() {
+      throw new Error("unexpected directory integrity check");
+    },
   };
 }
 
@@ -119,6 +122,9 @@ function versionPlatformServices(
     },
     async canonicalizePath() {
       throw new Error("unexpected canonicalization");
+    },
+    async assertDirectoryWriteIntegrity() {
+      throw new Error("unexpected directory integrity check");
     },
   };
 }

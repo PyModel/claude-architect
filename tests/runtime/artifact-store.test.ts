@@ -21,7 +21,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AttemptResult, CandidateArtifact } from "../../src/protocol/attempt-result.js";
+import type { AttemptResult } from "../../src/protocol/attempt-result.js";
 import { ArtifactStore, pruneRuns } from "../../src/runtime/artifact-store.js";
 import {
   buildRunManifest,

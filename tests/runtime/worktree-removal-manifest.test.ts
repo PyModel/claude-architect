@@ -95,6 +95,7 @@ describe("worktree removal manifest recovery", () => {
         release,
       })),
       canonicalizePath: vi.fn(async (p: string) => ({
+        input: p,
         canonical: p,
         gitCommonDir: commonDir,
       })),

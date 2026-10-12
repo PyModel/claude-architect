@@ -18,6 +18,7 @@ import type { CandidateDecisionV2 } from "../../src/protocol/candidate-decision.
 import type { RunManifest } from "../../src/runtime/run-manifest.js";
 import { manifestHashOf } from "../../src/git/changed-path-manifest.js";
 import type { ReviewSnapshot } from "../../src/runtime/review-snapshot.js";
+import { pruneNothing } from "../support/server-stubs.js";
 
 describe("decisionAuthority", () => {
   it("defaults to autonomous when unset or empty", () => {
@@ -113,6 +114,7 @@ const candidate: CandidateArtifact = {
   // mismatch, so derive it rather than inventing a value.
   manifestHash: createHash("sha256").update(JSON.stringify([])).digest("hex"),
   changedPaths: [],
+  patch: "",
 };
 
 let confinedVerification: unknown[] = [
@@ -198,7 +200,7 @@ async function decideVia(
     await start({
       transport: serverTransport,
       recoverStaleRuns: async () => ({ recovered: [], quarantined: [] }),
-      pruneRuns: async () => {},
+      pruneRuns: pruneNothing,
       ps: fakePlatform(),
       decisionAuthority: () => authority,
       storeFactory: () => ({
@@ -214,7 +216,7 @@ async function decideVia(
           recorded = record;
         },
         readCandidateDecision: async () => recorded,
-        writeReviewSnapshot: async snapshot => { persistedSnapshot = snapshot; },
+        writeReviewSnapshot: async (snapshot: ReviewSnapshot) => { persistedSnapshot = snapshot; },
         readReviewSnapshot: async () => persistedSnapshot,
         readRunStartSpecSha256: async () => null,
         readPipelineActiveMarker: async () => null,

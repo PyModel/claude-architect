@@ -6,7 +6,7 @@ import { handleDecideCandidate } from "../../src/mcp/tools.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 import type { AttemptResult } from "../../src/protocol/attempt-result.js";
 import { ProducerRegistry } from "../../src/producers/producer-registry.js";
-import { runPipeline } from "../../src/pipeline/pipeline-runtime.js";
+import { runPipeline, type PipelineVerificationReport } from "../../src/pipeline/pipeline-runtime.js";
 import { resolveLinkedWorktreeWritableRoots } from "../../src/pipeline/git-writable-roots.js";
 import type { RoleRunArgs, RoleRunResult } from "../../src/pipeline/role-runner.js";
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
@@ -55,7 +55,7 @@ describe("runPipeline", () => {
     // Salvage must never turn an unverifiable candidate into a decision the
     // human can act on: a red clean room still archives and discards.
     const verify = AcceptanceVerifier.prototype.verify;
-    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(async function (args) {
+    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(async function (this: AcceptanceVerifier, args) {
       const report = await verify.call(this, args);
       return { ...report, ok: false, failures: ["salvage clean room is red"] };
     });
@@ -200,8 +200,8 @@ describe("runPipeline", () => {
       .resolves.toEqual(approve);
     await expect(store.readPipelineArtifact("round-1-consolidated"))
       .resolves.toMatchObject({ findings: [] });
-    const persistedVerification = await store.readPipelineArtifact("verification");
-    expect(persistedVerification.evidence).not.toHaveProperty("authorizedTestDeletions");
+    const persistedVerification = await store.readPipelineArtifact<PipelineVerificationReport>("verification");
+    expect(persistedVerification?.evidence).not.toHaveProperty("authorizedTestDeletions");
     expect(persistedVerification)
       .toMatchObject({
         pass: true,

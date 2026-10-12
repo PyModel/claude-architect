@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -10,6 +11,7 @@ import type { AutopilotWorkflowState } from "../../../src/autopilot/types.js";
 import type { AutopilotSpec } from "../../../src/protocol/autopilot-spec.js";
 import { PROTOCOL_VERSION } from "../../../src/protocol/versions.js";
 import { createServer } from "../../../src/mcp/server.js";
+import { pruneNothing } from "../../support/server-stubs.js";
 
 const CHECKOUT = "/canonical/repository";
 const WORKFLOW_ID = "workflow-mcp-12345678";
@@ -94,12 +96,13 @@ function redactedProjectionOf(state: AutopilotWorkflowState): AutopilotWorkflowS
 }
 
 function structured(result: Awaited<ReturnType<Client["callTool"]>>): Record<string, unknown> {
-  return result.structuredContent ?? {};
+  return CallToolResultSchema.parse(result).structuredContent ?? {};
 }
 
 function toolErrorText(result: Awaited<ReturnType<Client["callTool"]>>): string {
-  expect(result.isError).toBe(true);
-  return result.content.map(item => "text" in item ? item.text : "").join("\n");
+  const parsed = CallToolResultSchema.parse(result);
+  expect(parsed.isError).toBe(true);
+  return parsed.content.map(item => "text" in item ? item.text : "").join("\n");
 }
 
 describe("autopilot MCP surface", () => {
@@ -109,15 +112,6 @@ describe("autopilot MCP surface", () => {
     ...workflowState(),
     status: "ready-for-human-review",
     headCommitOid: OID,
-    pullRequest: {
-      number: 42,
-      url: "https://github.com/example/repository/pull/42",
-      repository: "example/repository",
-      baseBranch: "main",
-      headBranch: "feat/autopilot-mcp-workflow",
-      headCommitOid: OID,
-      draft: false,
-    },
   }));
   const status = vi.fn(async (checkoutPath: string, workflowId: string) => {
     if (workflowId === "unknown-workflow") {
@@ -133,7 +127,7 @@ describe("autopilot MCP surface", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     server = await createServer({
-      recoverStaleRuns: async () => ({ recovered: [], skipped: [] }),
+      recoverStaleRuns: async () => ({ recovered: [], quarantined: [] }),
       autopilotControllerFactory: () => ({ start, status, resume }),
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -176,7 +170,7 @@ describe("autopilot MCP surface", () => {
         quarantined: [],
         worktreeSweepIssues: [{ worktreePath: "/redacted", reason: "ambiguous removal" }],
       }),
-      pruneRuns: async () => {},
+      pruneRuns: pruneNothing,
       autopilotControllerFactory: () => ({ start, status, resume }),
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

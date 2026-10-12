@@ -446,7 +446,7 @@ describe("runPipeline", () => {
       await writeFile(path.join(checkout, "slice-one.txt"), "slice one candidate\n");
     });
     const originalVerify = AcceptanceVerifier.prototype.verify;
-    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(function (args) {
+    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(function (this: AcceptanceVerifier, args) {
       if (String(args.logNamePrefix).includes("salvage")) {
         return Promise.reject(new Error("salvage verification infrastructure failed"));
       }
@@ -496,7 +496,7 @@ describe("runPipeline", () => {
     deps.runAttempt = initialRun;
     const originalVerify = AcceptanceVerifier.prototype.verify;
     let verificationCalls = 0;
-    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(function (args) {
+    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(function (this: AcceptanceVerifier, args) {
       verificationCalls += 1;
       if (verificationCalls === 3) {
         return Promise.reject(new Error("final verification infrastructure failed"));

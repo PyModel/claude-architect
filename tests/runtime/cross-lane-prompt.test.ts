@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import type { PlatformServices, ResolvedExecutable } from "../../src/platform/platform-services.js";
+import type { ResolvedExecutable } from "../../src/platform/platform-services.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import {
   EDIT_ACTION_PREAMBLE,
@@ -35,12 +35,28 @@ function invocationContext(readOnly = false): InvocationContext {
     worktreePath: "/tmp/worktree",
     tempHome: "/tmp/home",
     readOnly,
+    runId: "run-cross-lane-prompt",
+    capabilityReport: {
+      producerId: "cross-lane-prompt",
+      available: true,
+      reason: null,
+      os: "darwin",
+      arch: "arm64",
+      environmentType: "native",
+      resolvedExecutable: executable,
+      version: "1.0.0",
+      authState: "unknown",
+      executionModes: ["edit"],
+      structuredOutput: true,
+      writeConfinementBackend: null,
+      laneEligibility: { edit: true },
+    },
   };
 }
 
 function sampleSpec(): DelegationSpec {
   return {
-    id: "cross-lane-spec-001",
+    specVersion: "1",
     objective: "Implement unified cross-lane prompt rendering",
     context: "Slice 2.2 unifies prompt assembly across all producer descriptors.",
     writeAllowlist: ["src/producers/prompt-renderer.ts", "tests/runtime/cross-lane-prompt.test.ts"],
@@ -49,8 +65,11 @@ function sampleSpec(): DelegationSpec {
       "Every edit-lane prompt carries action-first preamble",
       "Every edit-lane prompt carries lint-before-typecheck ordering",
     ],
+    verification: [],
     executionMode: "edit",
     timeoutMs: 30_000,
+    producerPreferences: ["codex"],
+    expectedOutput: "candidate-patch",
   };
 }
 

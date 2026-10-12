@@ -78,14 +78,17 @@ describe("human decision gate", () => {
   );
 
   it("names the decision and run in the prompt the human sees", async () => {
-    const elicitInput = vi.fn(async () => ({ action: "accept", content: { confirm: true } }));
+    const elicitInput = vi.fn(async (_params: { message: string }, _options?: { timeout?: number }) => ({
+      action: "accept",
+      content: { confirm: true },
+    }));
     const server = {
       server: { getClientCapabilities: () => ({ elicitation: {} }), elicitInput },
     } as unknown as Pick<McpServer, "server">;
 
     await confirmWithHuman(server, "run-abc", "accepted");
 
-    const message = String((elicitInput.mock.calls[0]?.[0] as { message: string }).message);
+    const message = String(elicitInput.mock.calls[0]?.[0].message);
     expect(message).toContain("run-abc");
     expect(message).toContain("accepted");
   });
@@ -97,14 +100,17 @@ describe("elicitation timeout", () => {
   // acceptance attempts in a live session failed at exactly 60s. A required
   // human decision is worthless if the human cannot answer in time.
   it("gives a person a human-scale window, not the SDK's 60-second default", async () => {
-    const elicitInput = vi.fn(async () => ({ action: "accept", content: { confirm: true } }));
+    const elicitInput = vi.fn(async (_params: { message: string }, _options?: { timeout?: number }) => ({
+      action: "accept",
+      content: { confirm: true },
+    }));
     const server = {
       server: { getClientCapabilities: () => ({ elicitation: {} }), elicitInput },
     } as unknown as Pick<McpServer, "server">;
 
     await confirmWithHuman(server, "run-timeout", "accepted");
 
-    const options = elicitInput.mock.calls[0]?.[1] as { timeout?: number } | undefined;
+    const options = elicitInput.mock.calls[0]?.[1];
     expect(options?.timeout).toBeGreaterThanOrEqual(15 * 60_000);
   });
 });

@@ -15,6 +15,7 @@ import type {
   InvocationContext,
   ProbeContext,
   ProducerAdapter,
+  ProducerConfigurationProfile,
   ProducerInvocation,
 } from "../../src/producers/producer-adapter.js";
 import { codexDescriptor, sandboxSupportWritableRoots } from "../../src/producers/codex-adapter.js";
@@ -29,6 +30,7 @@ import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
 import { containsRegisteredSecret } from "../../src/runtime/redaction.js";
 import { RuntimeError } from "../../src/util/errors.js";
 import { platformServicesDouble } from "../helpers/platform-services-double.js";
+import { addSandboxRow } from "../support/sandbox-rows.js";
 
 const REVIEW_JSON = JSON.stringify({ reportVersion: "1", verdict: "approve", findings: [], coverageGaps: [] });
 const REVIEW_OUTPUT = "```json\n" + REVIEW_JSON + "\n```";
@@ -123,9 +125,9 @@ class ScriptedAdapter implements ProducerAdapter {
     return { events: [], producerSummary: raw.stdout, ok: true };
   }
 
-  configurationProfile() {
+  configurationProfile(): ProducerConfigurationProfile {
     return {
-      isolationState: "controlled-config-supported" as const,
+      isolationState: "controlled-config-supported",
       credentialSources: [],
       behavioralConfigSources: [],
       repositoryInstructionSources: [],
@@ -186,14 +188,11 @@ function roleArgs(adapter: ScriptedAdapter, overrides: Partial<RoleRunArgs> = {}
 }
 
 function promoteBackend(id: string): void {
-  const backend = SANDBOX_BACKENDS.find(candidate => candidate.id === id);
-  if (backend === undefined) throw new Error(`${id} backend is missing`);
-  const row = { os: getPlatformServices().os, environmentType: "native" as const, state: "tested" as const };
-  backend.platforms.unshift(row);
-  restoreBackends.push(() => {
-    const index = backend.platforms.indexOf(row);
-    if (index !== -1) backend.platforms.splice(index, 1);
-  });
+  restoreBackends.push(addSandboxRow(
+    id,
+    { os: getPlatformServices().os, environmentType: "native", state: "tested" },
+    "first",
+  ));
 }
 
 async function homeRootEntries(): Promise<string[]> {

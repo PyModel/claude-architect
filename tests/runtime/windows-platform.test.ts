@@ -131,7 +131,6 @@ describe.runIf(process.platform === "win32")("WindowsPlatformServices (win32-gat
       env: { ...process.env } as Record<string, string>,
       timeoutMs: 1_000,
       maxOutputBytes: 1_024,
-      stdin: undefined,
     });
     const exit = await proc.done;
     expect(exit.exitCode).toBe(0);

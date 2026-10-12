@@ -7,7 +7,12 @@ import type { CheckoutLock, PlatformServices } from "../../src/platform/platform
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import { ProducerRegistry } from "../../src/producers/producer-registry.js";
-import { runPipeline, scopeSpecToSlice } from "../../src/pipeline/pipeline-runtime.js";
+import {
+  runPipeline,
+  scopeSpecToSlice,
+  type PipelineVerificationReport,
+} from "../../src/pipeline/pipeline-runtime.js";
+import type { VerificationReport } from "../../src/pipeline/report-types.js";
 import type { RoleRunArgs, RoleRunResult } from "../../src/pipeline/role-runner.js";
 import { ArtifactStore } from "../../src/runtime/artifact-store.js";
 import type { AttemptRuntimeDependencies } from "../../src/runtime/attempt-runtime.js";
@@ -15,8 +20,21 @@ import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
 import { specSha256 } from "../../src/protocol/spec-hash.js";
 import { AcceptanceVerifier } from "../../src/verify/acceptance-verifier.js";
 import { runGit, expectRefMissing, initRepo, validSpec, fenced, success, approve, blocker, passingVerifier, failedAttemptResult, checkoutLeaseHarness, fakeAttempt, dependencies, expectPipelineAuthorityBlocksTools, roundReviews, commitFix, commitIncrement, initSlicedRepo, slicedSpec, commitRoleFile, installPipelineRuntimeHooks } from "../support/pipeline-runtime-harness.js";
+import { platformServicesDouble } from "../helpers/platform-services-double.js";
 
 installPipelineRuntimeHooks();
+
+// Slices type their verification as the bare report, but the pipeline stores
+// the evidence-carrying one; the guard checks that instead of assuming it.
+function carriesEvidence(report: VerificationReport): report is PipelineVerificationReport {
+  return "evidence" in report;
+}
+
+function firstStdoutRef(report: VerificationReport | null | undefined): string | undefined {
+  return report !== null && report !== undefined && carriesEvidence(report)
+    ? report.evidence.commandOutcomes[0]?.stdoutRef
+    : undefined;
+}
 
 describe("runPipeline", () => {
   it("passes the acquisition-bound identity when canonicalization changes before lock acquisition", async () => {
@@ -126,13 +144,13 @@ describe("runPipeline", () => {
     };
     const verify = AcceptanceVerifier.prototype.verify;
     const verifySpy = vi.spyOn(AcceptanceVerifier.prototype, "verify")
-      .mockImplementation(function (args) {
+      .mockImplementation(function (this: AcceptanceVerifier, args) {
         expect(lease.held()).toBe(true);
         return verify.call(this, args);
       });
     const clearMarker = ArtifactStore.prototype.clearPipelineActiveMarker;
     const clearMarkerSpy = vi.spyOn(ArtifactStore.prototype, "clearPipelineActiveMarker")
-      .mockImplementation(function () {
+      .mockImplementation(function (this: ArtifactStore) {
         expect(lease.held()).toBe(true);
         return clearMarker.call(this);
       });
@@ -208,7 +226,7 @@ describe("runPipeline", () => {
       return initialRun(checkoutPath, receivedSpec, attemptDeps);
     };
     const verify = AcceptanceVerifier.prototype.verify;
-    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(function (args) {
+    vi.spyOn(AcceptanceVerifier.prototype, "verify").mockImplementation(function (this: AcceptanceVerifier, args) {
       expect(lease.held()).toBe(true);
       return verify.call(this, args);
     });
@@ -321,6 +339,9 @@ describe("runPipeline", () => {
       edit: async checkout => {
         await writeFile(path.join(checkout, "slice-one.txt"), "slice one candidate\n");
       },
+      roleRunner: async () => {
+        throw new Error("unexpected role run");
+      },
     });
     const realAttempt = deps.runAttempt!;
     let handed: string | undefined;
@@ -343,7 +364,7 @@ describe("runPipeline", () => {
   it("establishes sliced lifecycle authority before the initial candidate is created", async () => {
     const repo = await initSlicedRepo();
     const runId = "pipeline-slices-early-marker";
-    let markerBeforeEdit: Awaited<ReturnType<ArtifactStore["readPipelineActiveMarker"]>>;
+    let markerBeforeEdit: Awaited<ReturnType<ArtifactStore["readPipelineActiveMarker"]>> | undefined;
 
     const result = await runPipeline(repo, slicedSpec(), dependencies({
       runId,
@@ -495,8 +516,8 @@ describe("runPipeline", () => {
       `${runId}-final-pipeline`,
     ]);
     const store = new ArtifactStore(runId);
-    const sliceOneStdout = result.slices[0]?.verification?.evidence.commandOutcomes[0]?.stdoutRef;
-    const sliceTwoStdout = result.slices[1]?.verification?.evidence.commandOutcomes[0]?.stdoutRef;
+    const sliceOneStdout = firstStdoutRef(result.slices[0]?.verification);
+    const sliceTwoStdout = firstStdoutRef(result.slices[1]?.verification);
     const finalStdout = result.verification?.evidence.commandOutcomes[0]?.stdoutRef;
     expect([sliceOneStdout, sliceTwoStdout, finalStdout]).toEqual([
       "logs/slice-1-attempt-0-pipeline-verification-0-stdout.log",
@@ -702,11 +723,11 @@ describe("runPipeline", () => {
 
     promotion.mockRestore();
     await expect(recoverStaleRuns({
-      platformServices: {
+      platformServices: platformServicesDouble({
         os: "darwin",
         async getProcessStartToken() { return null; },
         async terminateProcessTreeByPid() {},
-      },
+      }),
       isProcessAlive: () => false,
     })).resolves.toEqual({ recovered: [], quarantined: [] });
 

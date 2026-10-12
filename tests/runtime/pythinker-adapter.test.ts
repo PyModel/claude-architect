@@ -10,6 +10,7 @@ import type {
   ResolvedExecutable,
   SupervisedExit,
 } from "../../src/platform/platform-services.js";
+import type { BuiltEnvironment } from "../../src/runtime/environment-policy.js";
 import { PosixPlatformServices } from "../../src/platform/posix-platform-services.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import {
@@ -590,7 +591,7 @@ describe("PythinkerAdapter", () => {
       const root = await mkdtemp(join(tmpdir(), "claude-architect-pythinker-smoke-"));
       const worktreePath = join(root, "worktree");
       const smokePath = join(worktreePath, "smoke.txt");
-      let builtEnvironment: ReturnType<typeof buildEnvironment> | undefined;
+      let builtEnvironment: BuiltEnvironment | undefined;
 
       try {
         await mkdir(worktreePath);

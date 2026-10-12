@@ -106,7 +106,7 @@ describe("evaluateGates", () => {
     ["dirty verify worktree", base({ verification: passVerification({ workspaceClean: false }) }), false],
     ["out-of-scope diff", base({ verification: passVerification({ scopeViolations: ["src/forbidden.ts"] }) }), false],
     ["invalid artifact", base({ artifactsValid: false }), false],
-    ["baseline drift", base({ baselineDrift: false, ...{ baselineDrift: true } }), false],
+    ["baseline drift", base({ baselineDrift: true }), false],
     ["round cap exceeded", base({ roundsUsed: 3 }), true],
   ])("%s → not decision-ready (human=%s)", (_name, input, expectHuman) => {
     const out = evaluateGates(input);

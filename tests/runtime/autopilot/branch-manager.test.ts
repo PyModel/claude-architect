@@ -29,6 +29,7 @@ import { getPlatformServices } from "../../../src/platform/select-platform.js";
 import { recoverPendingWorktreeRemovals } from "../../../src/runtime/recovery-worktree-removals.js";
 import { RuntimeError } from "../../../src/util/errors.js";
 import { logger } from "../../../src/util/logger.js";
+import { pathText } from "../../support/path-like.js";
 
 interface Fixture {
   repoRoot: string;
@@ -1103,7 +1104,7 @@ describe("WorkflowBranchManager", () => {
             return;
           }
           displaced = `${source}-displaced`;
-          quarantine = destination;
+          quarantine = pathText(destination);
           sentinel = path.join(quarantine, "sentinel.txt");
           await rename(source, displaced);
           await mkdir(source);
@@ -1135,7 +1136,7 @@ describe("WorkflowBranchManager", () => {
       remoteTransport: localTransport(fixture.bareRemote),
       worktreeManagerDependencies: {
         async rmdir(directory) {
-          if (failFinalRmdir && directory.includes("claude-architect-quarantine")) {
+          if (failFinalRmdir && pathText(directory).includes("claude-architect-quarantine")) {
             failFinalRmdir = false;
             const error = new Error("simulated stale registration rmdir failure") as NodeJS.ErrnoException;
             error.code = "EBUSY";

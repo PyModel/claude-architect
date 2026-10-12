@@ -9,15 +9,17 @@ const LANES = ["agy", "claude", "codex", "opencode", "pi", "pythinker"] as const
 
 function sampleSpec(lane: string): DelegationSpec {
   return {
-    schemaVersion: 1,
-    producer: lane,
+    specVersion: "1",
     executionMode: "edit",
     objective: "Implement feature X in src/lib.ts",
     context: "Unit tests are failing",
     writeAllowlist: ["src/**"],
     forbiddenScope: ["dist/**"],
     successCriteria: ["Unit tests pass"],
+    verification: [],
     timeoutMs: 60_000,
+    producerPreferences: [lane],
+    expectedOutput: "candidate-patch",
   };
 }
 

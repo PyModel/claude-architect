@@ -11,6 +11,7 @@ import { createServer } from "../../src/mcp/server.js";
 import type { PlatformServices } from "../../src/platform/platform-services.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 import { PROTOCOL_VERSION } from "../../src/protocol/versions.js";
+import { pruneNothing } from "../support/server-stubs.js";
 
 const bootstrapPath = fileURLToPath(new URL("../../runtime/bootstrap.mjs", import.meta.url));
 const serverPath = fileURLToPath(new URL("../../runtime/server.mjs", import.meta.url));
@@ -89,7 +90,7 @@ describe("MCP server handshake", () => {
     try {
       await expect(createServer({
         recoverStaleRuns: async () => ({ recovered: [], quarantined: [] }),
-        pruneRuns: async () => {},
+        pruneRuns: pruneNothing,
       })).rejects.toThrow("CLAUDE_ARCHITECT_DELEGATED");
     } finally {
       if (previous === undefined) delete process.env.CLAUDE_ARCHITECT_DELEGATED;
@@ -108,7 +109,7 @@ describe("MCP server handshake", () => {
     }));
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      await createServer({ recoverStaleRuns: recover, pruneRuns: async () => {} });
+      await createServer({ recoverStaleRuns: recover, pruneRuns: pruneNothing });
       const line = log.mock.calls.map(call => String(call[0])).find(text => text.includes("Producer HOME"));
       expect(line).toContain("2 Producer HOME allocations");
       expect(line).toContain("first reason at [path]");
@@ -140,7 +141,7 @@ describe("MCP server handshake", () => {
     const server = await createServer({
       ps,
       recoverStaleRuns: recover,
-      pruneRuns: async () => {},
+      pruneRuns: pruneNothing,
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
@@ -186,7 +187,7 @@ describe("MCP server handshake", () => {
   it("advertises the source autopilot lifecycle schemas", async () => {
     const server = await createServer({
       recoverStaleRuns: async () => ({ recovered: [], quarantined: [] }),
-      pruneRuns: async () => {},
+      pruneRuns: pruneNothing,
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);

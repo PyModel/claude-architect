@@ -21,6 +21,7 @@ import type { PipelineResult } from "../../src/pipeline/pipeline-runtime.js";
 import type { CheckoutLock, PlatformServices } from "../../src/platform/platform-services.js";
 import { getPlatformServices } from "../../src/platform/select-platform.js";
 import type { AttemptResult, CandidateArtifact } from "../../src/protocol/attempt-result.js";
+import type { CandidateDecisionV2 } from "../../src/protocol/candidate-decision.js";
 import type { DelegationSpec } from "../../src/protocol/delegation-spec.js";
 import { PROTOCOL_VERSION } from "../../src/protocol/versions.js";
 import type { PipelineActiveMarker } from "../../src/runtime/artifact-store.js";
@@ -181,11 +182,11 @@ class FakeStore implements ToolArtifactStore {
     public storedManifest: RunManifest = manifest,
   ) {}
 
-  async readResult(_runId: string): Promise<AttemptResult | null> {
+  async readResult(): Promise<AttemptResult | null> {
     return this.storedResult;
   }
 
-  async readManifest(_runId: string): Promise<RunManifest | null> {
+  async readManifest(): Promise<RunManifest | null> {
     return this.storedManifest;
   }
 
@@ -201,7 +202,7 @@ class FakeStore implements ToolArtifactStore {
     );
   }
 
-  async readReviewSnapshot(_runId: string): Promise<ReviewSnapshot | null> {
+  async readReviewSnapshot(): Promise<ReviewSnapshot | null> {
     return this.reviewSnapshot === null ? null : structuredClone(this.reviewSnapshot);
   }
 
@@ -222,17 +223,17 @@ class FakeStore implements ToolArtifactStore {
     this.decision = structuredClone(decision);
   }
 
-  async readCandidateDecision(_runId: string): Promise<RunDecision | null> {
+  async readCandidateDecision(): Promise<RunDecision | null> {
     return this.decision;
   }
 
   storedSpecSha256: string | null = null;
 
-  async readRunStartSpecSha256(_runId: string): Promise<string | null> {
+  async readRunStartSpecSha256(): Promise<string | null> {
     return this.storedSpecSha256;
   }
 
-  async readPipelineActiveMarker(_runId: string): Promise<PipelineActiveMarker | null> {
+  async readPipelineActiveMarker(): Promise<PipelineActiveMarker | null> {
     return this.pipelineActiveMarker;
   }
 }
@@ -1557,10 +1558,8 @@ describe("MCP tool handlers", () => {
     // expectedReviewSnapshot while the canonical, key-order-independent hash
     // stays equal — exactly the archive inconsistency the tool must catch. The
     // values are unchanged (same evidence reference), only their insertion order.
-    store.reviewSnapshot = {
-      evidence: expectedReviewSnapshot.evidence,
-      ...expectedReviewSnapshot,
-    };
+    const { evidence, ...remainder } = expectedReviewSnapshot;
+    store.reviewSnapshot = { evidence, ...remainder };
     expect(reviewSnapshotHash(store.reviewSnapshot)).toBe(
       reviewSnapshotHash(expectedReviewSnapshot),
     );

@@ -21,8 +21,8 @@ describe("consolidate", () => {
       { reviewer: "systems", report: report([finding({ severity: "blocker", claim: "  OFF-BY-ONE in loop bound " })]) },
     ]);
     expect(out.findings).toHaveLength(1);
-    expect(out.findings[0].severity).toBe("blocker");
-    expect(out.findings[0].reviewers.sort()).toEqual(["correctness", "systems"]);
+    expect(out.findings[0]!.severity).toBe("blocker");
+    expect(out.findings[0]!.reviewers.sort()).toEqual(["correctness", "systems"]);
   });
 
   it("assigns stable sequential ids ordered by severity then location", () => {

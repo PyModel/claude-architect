@@ -231,7 +231,7 @@ describe("runPipeline", () => {
     const phases: string[] = [];
     const result = await runPipeline(repo, validSpec(), {
       ...dependencies({ runId: "pipeline-phases", roleRunner }),
-      onPhase: phase => phases.push(phase),
+      onPhase: phase => { phases.push(phase); },
     });
 
     expect(result.status).toBe("decision-ready");

@@ -15,17 +15,16 @@ import {
   syncDirectoryMetadata,
   syncDirectoryTreeMetadata,
 } from "../../src/platform/durable-directory.js";
+import { lstatDouble } from "../support/fs-seams.js";
 
 function stableDirectoryInspection() {
-  const inspect = vi.fn<typeof lstat>();
-  inspect.mockResolvedValue({
+  return lstatDouble(async () => ({
     isDirectory: () => true,
     isSymbolicLink: () => false,
     dev: 11n,
     ino: 22n,
     birthtimeNs: 33n,
-  } as never);
-  return inspect;
+  }));
 }
 
 describe("directory metadata durability", () => {
@@ -230,8 +229,8 @@ describe("directory metadata durability", () => {
       birthtimeNs: 33n,
     };
     const replacement = { ...original, ino: 44n };
-    const inspect = vi.fn<typeof lstat>();
-    inspect.mockResolvedValueOnce(original as never).mockResolvedValueOnce(replacement as never);
+    const identities = [original, replacement];
+    const inspect = lstatDouble(async () => identities.shift() ?? {});
     const openDirectory = vi.fn<typeof open>();
     openDirectory.mockResolvedValue({
       stat: async () => original,

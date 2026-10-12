@@ -132,7 +132,7 @@ describe("runPipeline", () => {
     // open. Losing the whole slice result to that is finding 16.
     const create = WorktreeManager.prototype.create;
     let failedOnce = false;
-    vi.spyOn(WorktreeManager.prototype, "create").mockImplementation(async function (commit) {
+    vi.spyOn(WorktreeManager.prototype, "create").mockImplementation(async function (this: WorktreeManager, commit) {
       const worktree = await create.call(this, commit);
       if (failedOnce) return worktree;
       failedOnce = true;

@@ -16,6 +16,7 @@ import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
 import { RunDecision } from "../../src/runtime/run-decision.js";
 import { AcceptanceVerifier } from "../../src/verify/acceptance-verifier.js";
 import { runGit, expectRefMissing, initRepo, validSpec, fenced, success, approve, artifactFor, attemptResult, failedAttemptResult, fakeAttempt, dependencies, implementationSpec, incrementRoleRunner, commitIncrement, initSlicedRepo, slicedSpec, commitRoleFile, installPipelineRuntimeHooks } from "../support/pipeline-runtime-harness.js";
+import { platformServicesDouble } from "../helpers/platform-services-double.js";
 
 installPipelineRuntimeHooks();
 
@@ -73,8 +74,8 @@ describe("runPipeline", () => {
       ok: true,
       result: { ...result, slices: [{ index: 1, route: "advance" }], haltedSliceIndex: 2 },
     });
-    expect(sliced.result?.slices).toEqual([{ index: 1, route: "advance" }]);
-    expect(sliced.result?.haltedSliceIndex).toBe(2);
+    expect(sliced.result).toHaveProperty("slices", [{ index: 1, route: "advance" }]);
+    expect(sliced.result).toHaveProperty("haltedSliceIndex", 2);
   }, 120_000);
 
   it("exhausts the increment budget after continued real progress and still reviews", async () => {
@@ -781,11 +782,11 @@ describe("runPipeline", () => {
     const terminated: number[] = [];
 
     const recovery = await recoverStaleRuns({
-      platformServices: {
+      platformServices: platformServicesDouble({
         os: "darwin",
         async getProcessStartToken() { return null; },
         async terminateProcessTreeByPid(pid) { terminated.push(pid); },
-      },
+      }),
       isProcessAlive: () => false,
     });
 

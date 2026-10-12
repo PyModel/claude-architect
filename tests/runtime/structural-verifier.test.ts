@@ -101,7 +101,7 @@ async function candidateWithAddedPaths(
   ]);
   const changedPaths: CandidateArtifact["changedPaths"] = paths.map(candidatePath => ({
     path: candidatePath,
-    changeType: "added",
+    changeType: "added" as const,
     mode: "100644",
     contentHash: blobOid,
   })).sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
@@ -289,7 +289,7 @@ describe("structuralVerify", () => {
     const candidateTreeOid = await runGit(fixture.repoRoot, ["write-tree"], indexFile);
     const changedPaths: CandidateArtifact["changedPaths"] = [{
       path: "link.txt",
-      changeType: "added",
+      changeType: "added" as const,
       mode: "120000",
       contentHash: blobOid,
     }];
@@ -372,7 +372,7 @@ describe("structuralVerify", () => {
     const candidateTreeOid = await runGit(fixture.repoRoot, ["write-tree"], indexFile);
     const changedPaths: CandidateArtifact["changedPaths"] = [{
       path: "nested",
-      changeType: "added",
+      changeType: "added" as const,
       mode: "160000",
       contentHash: fixture.baseCommitOid,
     }];
@@ -403,7 +403,7 @@ describe("structuralVerify", () => {
     const candidateTreeOid = await runGit(fixture.repoRoot, ["write-tree"], indexFile);
     const changedPaths: CandidateArtifact["changedPaths"] = [{
       path: "vendor",
-      changeType: "added",
+      changeType: "added" as const,
       mode: "160000",
       contentHash: fixture.baseCommitOid,
     }];

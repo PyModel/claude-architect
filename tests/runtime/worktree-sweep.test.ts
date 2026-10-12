@@ -711,7 +711,7 @@ describe("startup worktree sweep", () => {
       await expect(recoverStaleRuns({
         isProcessAlive: pid => pid === process.pid,
         platformServices: platformServicesDouble({
-          os: process.platform,
+          os: getPlatformServices().os,
           getProcessStartToken: async () => null,
           async terminateProcessTreeByPid() {},
         }),

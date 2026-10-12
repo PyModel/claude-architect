@@ -402,7 +402,7 @@ export async function candidateArtifactWithEntries(
   await runGit(fixture.checkout, ["update-ref", anchorRef, candidateCommitOid]);
   const changedPaths: CandidateArtifact["changedPaths"] = entries.map(entry => ({
     path: entry.path,
-    changeType: "added",
+    changeType: "added" as const,
     mode: entry.mode,
     contentHash: blobOid,
   })).sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);

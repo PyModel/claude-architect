@@ -9,6 +9,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import type { BigIntStats } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -22,7 +23,7 @@ const execFileAsync = promisify(execFile);
 async function invokeRemove(
   command: string,
   directory: string,
-  identity: Awaited<ReturnType<typeof lstat>>,
+  identity: BigIntStats,
   expectedDirectory: boolean,
 ) {
   return await execFileAsync(command, [

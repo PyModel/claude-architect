@@ -38,6 +38,7 @@ import {
 } from "../../src/runtime/redaction.js";
 import { collectReproducibilityInputs } from "../../src/runtime/reproducibility.js";
 import { NestedDelegationError, RuntimeError } from "../../src/util/errors.js";
+import { outOfContract } from "../support/out-of-contract.js";
 
 const fixturePath = fileURLToPath(new URL("fixtures/edit-file.mjs", import.meta.url));
 const sleepFixturePath = fileURLToPath(new URL("fixtures/echo-sleep.mjs", import.meta.url));
@@ -580,7 +581,7 @@ describe("runAttempt", () => {
     const fixture = await borrowedLeaseFixture(repoRoot);
     const create = WorktreeManager.prototype.create;
     const createSpy = vi.spyOn(WorktreeManager.prototype, "create")
-      .mockImplementationOnce(async function (baseCommitOid) {
+      .mockImplementationOnce(async function (this: WorktreeManager, baseCommitOid) {
         const worktree = await create.call(this, baseCommitOid);
         return {
           ...worktree,
@@ -684,7 +685,7 @@ describe("runAttempt", () => {
     });
     const create = WorktreeManager.prototype.create;
     const createSpy = vi.spyOn(WorktreeManager.prototype, "create")
-      .mockImplementationOnce(async function (baseCommitOid) {
+      .mockImplementationOnce(async function (this: WorktreeManager, baseCommitOid) {
         const worktree = await create.call(this, baseCommitOid);
         return {
           ...worktree,
@@ -1345,7 +1346,7 @@ describe("runAttempt", () => {
     const repoRoot = await initRepo();
     let probed = false;
 
-    const result = await runAttempt(repoRoot, { ...validSpec(), executionMode: "read-only" }, dependencies(
+    const result = await runAttempt(repoRoot, outOfContract<DelegationSpec>({ ...validSpec(), executionMode: "read-only" }), dependencies(
       new FakeAdapter(),
       "run-preflight-readonly",
       {

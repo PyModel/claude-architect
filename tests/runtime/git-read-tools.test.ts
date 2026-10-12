@@ -113,7 +113,7 @@ describe("read-only Git tools", () => {
       ps: {
         os: "darwin",
         canonicalizePath: async input => ({ input, canonical: "/canonical/repo", gitCommonDir: null }),
-      } as GitReadDependencies["ps"],
+      } as NonNullable<GitReadDependencies["ps"]>,
       git: async (cwd, args) => {
         expect(cwd).toBe("/canonical/repo");
         calls.push(args);

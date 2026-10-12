@@ -17,7 +17,7 @@ import {
   readDecisionAdvisory,
   type ToolDependencies,
 } from "../../src/mcp/tools.js";
-import { runPipeline } from "../../src/pipeline/pipeline-runtime.js";
+import { runPipeline, type PipelineResult } from "../../src/pipeline/pipeline-runtime.js";
 import type { ReviewReport } from "../../src/pipeline/report-types.js";
 import type { ResolvedExecutable } from "../../src/platform/platform-services.js";
 import { SANDBOX_BACKENDS } from "../../src/platform/sandbox/backends.js";
@@ -357,6 +357,14 @@ afterEach(async () => {
 // the default per-test budget.
 const PIPELINE_TIMEOUT_MS = 90_000;
 
+function fullPipelineResult(
+  result: Awaited<ReturnType<typeof handleDelegatePipeline>>,
+): PipelineResult {
+  if (!result.ok) throw new Error("pipeline delegation unexpectedly failed");
+  if (!("rounds" in result.result)) throw new Error("expected the full pipeline result");
+  return result.result;
+}
+
 describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () => {
   it("full lifecycle: a gate-cleared pipeline remains autonomously eligible", async () => {
     const repo = await initRepo();
@@ -374,16 +382,16 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
       ok: true,
       result: { runId, status: "decision-ready" },
     });
-    if (!result.ok) throw new Error("pipeline delegation unexpectedly failed");
-    expect(result.result.rounds).toHaveLength(2);
+    const pipeline = fullPipelineResult(result);
+    expect(pipeline.rounds).toHaveLength(2);
     // implement: 2 = one Producer environment probe + one real implementation.
     // The stub never writes the probe file, so the probe is inconclusive and
     // correctly declines to block the attempt.
     expect(adapter.calls).toEqual({ implement: 2, correctness: 2, systems: 2, fixer: 1 });
-    expect(result.result.attempt.evidence.producerPreflight)
+    expect(pipeline.attempt.evidence.producerPreflight)
       .toMatchObject({ status: "inconclusive" });
-    expect(result.result.attempt.evidence.pipelineGateCleared).toEqual({
-      candidateCommitOid: result.result.finalCandidateCommit,
+    expect(pipeline.attempt.evidence.pipelineGateCleared).toEqual({
+      candidateCommitOid: pipeline.finalCandidateCommit,
       requiresHumanDecision: false,
     });
 
@@ -394,7 +402,7 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
       unreadable: false,
     });
 
-    const candidateHash = result.result.attempt.candidate?.manifestHash;
+    const candidateHash = pipeline.attempt.candidate?.manifestHash;
     expect(candidateHash).toBeDefined();
     await expect(handleDecideCandidate(repo, runId, "accepted", candidateHash!, lifecycleDeps))
       .resolves.toEqual({ recorded: true });
@@ -442,8 +450,8 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
       ok: true,
       result: { runId, status: "human-decision-required" },
     });
-    if (!result.ok) throw new Error("pipeline delegation unexpectedly failed");
-    expect(result.result.rounds).toHaveLength(2);
+    const pipeline = fullPipelineResult(result);
+    expect(pipeline.rounds).toHaveLength(2);
     expect(adapter.calls).toEqual({ implement: 2, correctness: 2, systems: 2, fixer: 2 });
   }, PIPELINE_TIMEOUT_MS);
 
@@ -454,8 +462,8 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
 
     const result = await handleDelegatePipeline(repo, validSpec(), deps);
     expect(result).toMatchObject({ ok: true, result: { status: "human-decision-required" } });
-    if (!result.ok) throw new Error("pipeline delegation unexpectedly failed");
-    expect(result.result.gate.decisionReady).toBe(false);
+    const pipeline = fullPipelineResult(result);
+    expect(pipeline.gate.decisionReady).toBe(false);
 
     // The gate's refusal used to live only in the pipeline-result artifact. The
     // accept path loads the archived attempt, so a candidate the gate rejected
@@ -467,8 +475,11 @@ describe.runIf(process.platform === "darwin")("end-to-end review pipeline", () =
 
     // It has to reach the text the human reads before spending a decision, and
     // block autonomous acceptance: the advisory is the autonomous verdict.
+    const refusal = archived?.evidence.pipelineGateRefused;
     await expect(readDecisionAdvisory(runId, deps)).resolves.toMatchObject({
-      warnings: archived?.evidence.pipelineGateRefused?.reasons,
+      warnings: typeof refusal === "object" && refusal !== null && "reasons" in refusal
+        ? refusal.reasons
+        : undefined,
       verifiedClean: false,
     });
   }, PIPELINE_TIMEOUT_MS);

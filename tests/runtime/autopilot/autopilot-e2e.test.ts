@@ -21,7 +21,7 @@ import {
   type CumulativeBranchArtifact,
 } from "../../../src/autopilot/final-branch-reviewer.js";
 import { WorkflowStore } from "../../../src/autopilot/workflow-store.js";
-import { git, type GitResult } from "../../../src/git/git-exec.js";
+import { git } from "../../../src/git/git-exec.js";
 import { withRepoLock } from "../../../src/mcp/serialize.js";
 import { runAdvisorStage } from "../../../src/pipeline/advisor-stage.js";
 import {

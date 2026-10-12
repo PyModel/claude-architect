@@ -92,6 +92,7 @@ describe("autopilot adversarial trust boundaries", () => {
     const workflowId = `${harness.workflowId}-branch-substitution`;
     const branch = await harness.branchManager.create({
       workflowId,
+      topic: "adversarial",
       checkoutPath: harness.fixture.checkout,
       remote: "origin",
       baseBranch: "main",
