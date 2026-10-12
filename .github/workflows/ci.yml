@@ -1,14 +1,35 @@
 name: ci
-on: [push, pull_request]
+# One run per change: main pushes and PRs. Tags are not rebuilt; the tag gate
+# reads the run for the tagged main commit. Dispatch a run for any other branch.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   test:
     strategy:
       fail-fast: false
       matrix:
         os: [macos-15, ubuntu-latest, windows-latest]
+        shard: [1, 2, 3]
+        # Windows runs the suite ~15x slower, so only it is split three ways.
+        exclude:
+          - { os: macos-15, shard: 2 }
+          - { os: macos-15, shard: 3 }
+          - { os: ubuntu-latest, shard: 2 }
+          - { os: ubuntu-latest, shard: 3 }
+    # Keeps the required check names; Windows shards report under their own
+    # names and the windows-latest gate job below stands in for them.
+    name: test (${{ matrix.os }}${{ matrix.os == 'windows-latest' && format(' shard {0}/3', matrix.shard) || '' }})
     runs-on: ${{ matrix.os }}
+    env:
+      SHARDS: ${{ matrix.os == 'windows-latest' && 3 || 1 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -29,9 +50,15 @@ jobs:
           zig cc -target x86_64-windows-gnu -O2 -s -municode -Wl,/Brepro native\win32-filesystem.c -ladvapi32 -o native\bin\win32-filesystem-x64.exe
           fc /b native\build\win32-filesystem-x64-reviewed.exe native\bin\win32-filesystem-x64.exe
           cl /O2 /W4 native\win32-job-kill.c /Fe:native\bin\win32-job-kill-x64.exe
+      # The runner's temp drive (D:) is faster than C:, and its path is shorter.
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - run: npx vitest run --shard=${{ matrix.shard }}/${{ env.SHARDS }}
       - run: npm run build
       # validate-release runs `claude plugin validate`; the CLI is not on
       # hosted runners, so install it for the POSIX legs.
@@ -39,12 +66,21 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@2.1.282
       - if: runner.os != 'Windows'
         run: bash scripts/validate-release.sh
-      - if: runner.os == 'Windows'
+      - if: runner.os == 'Windows' && matrix.shard == 1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: win32-job-kill-x64
           path: native/bin/win32-job-kill-x64.exe
           if-no-files-found: error
+
+  windows-gate:
+    name: test (windows-latest)
+    needs: test
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "$RESULT" = success
+        env: { RESULT: "${{ needs.test.result }}" }
 
   windows-arm64-filesystem:
     runs-on: windows-11-arm
