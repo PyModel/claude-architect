@@ -340,7 +340,12 @@ async function cleanupAttemptResources(args: {
       failures.push(error);
     }
   }
-  return failures[0] ?? null;
+  if (failures.length <= 1) return failures[0] ?? null;
+  // Every failure stays visible; the first leads so its classification holds.
+  const message = failures
+    .map(failure => (failure instanceof Error ? failure.message : String(failure)))
+    .join("; ");
+  return Object.assign(new AggregateError(failures, message), { cause: failures[0] });
 }
 
 export async function runAttempt(

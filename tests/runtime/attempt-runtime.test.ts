@@ -667,6 +667,45 @@ describe("runAttempt", () => {
     await expect(readFile(join(`${home}.moved`, "owned.txt"), "utf8")).resolves.toBe("allocated HOME");
   });
 
+  it("records every cleanup failure, not only the first", async () => {
+    const repoRoot = await initRepo();
+    const runId = "run-two-cleanup-failures";
+    const adapter = new FakeAdapter();
+    adapter.buildInvocation = () => ({
+      executable: nodeExecutable,
+      args: ["-e", `
+        const fs = require("node:fs");
+        const home = process.env.HOME || process.env.USERPROFILE;
+        fs.writeFileSync("a.txt", "changed\\n");
+        fs.renameSync(home, home + ".moved");
+      `],
+      requiredEnv: [],
+      network: "denied",
+    });
+    const create = WorktreeManager.prototype.create;
+    const createSpy = vi.spyOn(WorktreeManager.prototype, "create")
+      .mockImplementationOnce(async function (baseCommitOid) {
+        const worktree = await create.call(this, baseCommitOid);
+        return {
+          ...worktree,
+          async cleanup() {
+            await worktree.cleanup();
+            throw new Error("attempt worktree cleanup failed");
+          },
+        };
+      });
+
+    let result;
+    try {
+      result = await runAttempt(repoRoot, validSpec(), dependencies(adapter, runId));
+    } finally {
+      createSpy.mockRestore();
+    }
+
+    expect(result.evidence.cleanupFailure).toContain("attempt worktree cleanup failed");
+    expect(result.evidence.cleanupFailure).toMatch(/moved away before retirement/u);
+  });
+
   it("rejects a borrowed lock bound to another repository before Producer execution", async () => {
     const repoRoot = await initRepo();
     const fixture = await borrowedLeaseFixture(repoRoot);

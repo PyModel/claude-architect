@@ -52222,7 +52222,9 @@ async function cleanupAttemptResources(args) {
       failures.push(error51);
     }
   }
-  return failures[0] ?? null;
+  if (failures.length <= 1) return failures[0] ?? null;
+  const message = failures.map((failure3) => failure3 instanceof Error ? failure3.message : String(failure3)).join("; ");
+  return Object.assign(new AggregateError(failures, message), { cause: failures[0] });
 }
 async function runAttempt(checkoutPath, spec, deps) {
   if (hasEnvironmentMarker(deps.env ?? process.env)) throw new NestedDelegationError();
