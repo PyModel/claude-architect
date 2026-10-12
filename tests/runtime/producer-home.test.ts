@@ -837,6 +837,31 @@ describe("Producer HOME edge cases", () => {
     expect((await lease.retire()).ok).toBe(true);
   });
 
+  it.runIf(process.platform !== "win32")("keeps an earlier attempt's preserved HOME on the error a later attempt throws", async () => {
+    const adapter = new ScriptedAdapter(`
+      const fs = require("node:fs");
+      const locked = require("node:path").join(${HOME_EXPRESSION}, "locked");
+      fs.mkdirSync(locked);
+      fs.chmodSync(locked, 0);
+      process.exit(1);
+    `);
+    const failure = new Error("second attempt rejected");
+    const build = adapter.buildInvocation.bind(adapter);
+    adapter.buildInvocation = (planned, ctx) => {
+      if (adapter.homes.length > 0) throw failure;
+      return build(planned, ctx);
+    };
+
+    const error = await runRole(roleArgs(adapter)).catch((caught: unknown) => caught);
+
+    const home = adapter.homes[0]!;
+    const quarantined = join(dirname(home), `.q-${basename(home)}`);
+    await chmod(join(quarantined, "locked"), 0o700);
+    expect(error).toBe(failure);
+    expect((failure as Error & { producerHomeFailure?: string }).producerHomeFailure)
+      .toMatch(/could not be removed/u);
+  });
+
   it.each(["extraWritableRoots", "gitObjectAccess"] as const)("refuses a HOME root reachable through %s", async via => {
     const adapter = new ScriptedAdapter("process.exit(0)");
     const runtime = new ProducerRuntime(new ProducerRegistry([adapter]));

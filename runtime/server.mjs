@@ -40553,8 +40553,9 @@ function withHomeFailure(error51, retirement) {
   return new RuntimeError(String(error51), { producerHomeFailure: diagnostic });
 }
 function withHomeClaimRecording(ps, lease) {
-  return Object.assign(Object.create(ps), {
+  return {
     os: ps.os,
+    resolveExecutable: (request) => ps.resolveExecutable(request),
     async spawnSupervised(request) {
       await lease.beforeSpawn();
       const child = await ps.spawnSupervised(request);
@@ -40567,8 +40568,17 @@ function withHomeClaimRecording(ps, lease) {
         throw error51;
       }
       return child;
-    }
-  });
+    },
+    requestCooperativeCancellation: (process4) => ps.requestCooperativeCancellation(process4),
+    terminateProcessTree: (process4) => ps.terminateProcessTree(process4),
+    getProcessStartToken: (pid) => ps.getProcessStartToken(pid),
+    terminateProcessTreeByPid: (pid, expectedToken) => ps.terminateProcessTreeByPid(pid, expectedToken),
+    acquireCheckoutLock: (checkout) => ps.acquireCheckoutLock(checkout),
+    acquireCleanupJournalLock: () => ps.acquireCleanupJournalLock(),
+    createSecureTempDirectory: () => ps.createSecureTempDirectory(),
+    canonicalizePath: (input) => ps.canonicalizePath(input),
+    assertDirectoryWriteIntegrity: (directory, identity) => ps.assertDirectoryWriteIntegrity(directory, identity)
+  };
 }
 var producerRuntime = new ProducerRuntime();
 
@@ -47746,6 +47756,12 @@ async function runRole(args) {
     } finally {
       const cleanup = await cleanupProcessAttempt(home, builtEnvironment);
       if (cleanup.home !== null) cleanupFailures.push(cleanup.home.diagnostic ?? "Producer HOME preserved");
+      if (primaryError !== void 0 && cleanupFailures.length > 0 && typeof primaryError === "object" && primaryError !== null) {
+        const carried = primaryError.producerHomeFailure;
+        Object.assign(primaryError, {
+          producerHomeFailure: [...cleanupFailures, ...typeof carried === "string" ? [carried] : []].join("; ")
+        });
+      }
       if (primaryError === void 0 && cleanup.error !== null) throw cleanup.error;
       homeConflict = cleanup.home?.conflict === true;
     }
@@ -58642,17 +58658,16 @@ async function createServer(dependencies = {}) {
   const homeIssues = recovery.producerHomeIssues ?? [];
   if (homeIssues.length > 0) {
     console.error(
-      `Claude Architect recovery preserved ${homeIssues.length} Producer HOME ${homeIssues.length === 1 ? "allocation" : "allocations"}: ${boundedRedactedDiagnostic(homeIssues.map((issue2) => issue2.reason).join("; "), 2e3)}`
+      `Claude Architect recovery preserved ${homeIssues.length} Producer HOME ${homeIssues.length === 1 ? "allocation" : "allocations"}: ${// Redact each reason on its own: path redaction runs to the end of a
+      // line, so redacting the joined text would swallow later reasons.
+      homeIssues.map((issue2) => boundedRedactedDiagnostic(issue2.reason, 400)).join("; ").slice(0, 2e3)}`
     );
   }
   const sweepIssues = recovery.worktreeSweepIssues ?? [];
   let unresolvedSweepIssues = sweepIssues;
   if (sweepIssues.length > 0) {
     const noun = sweepIssues.length === 1 ? "path" : "paths";
-    const diagnostic = boundedRedactedDiagnostic(
-      sweepIssues.map((issue2) => issue2.reason).join("; "),
-      2e3
-    );
+    const diagnostic = sweepIssues.map((issue2) => boundedRedactedDiagnostic(issue2.reason, 400)).join("; ").slice(0, 2e3);
     console.error(
       `Claude Architect worktree sweep preserved ${sweepIssues.length} ambiguous ${noun}: ${diagnostic}`
     );

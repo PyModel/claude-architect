@@ -442,9 +442,10 @@ function withHomeFailure(error: unknown, retirement: ProducerHomeRetirement): un
  * tree, as run-start recording does.
  */
 function withHomeClaimRecording(ps: PlatformServices, lease: ProducerHomeLease): PlatformServices {
-  return Object.assign(Object.create(ps) as PlatformServices, {
+  return {
     os: ps.os,
-    async spawnSupervised(request: Parameters<PlatformServices["spawnSupervised"]>[0]) {
+    resolveExecutable: request => ps.resolveExecutable(request),
+    async spawnSupervised(request) {
       await lease.beforeSpawn();
       const child = await ps.spawnSupervised(request);
       try {
@@ -458,7 +459,18 @@ function withHomeClaimRecording(ps: PlatformServices, lease: ProducerHomeLease):
       }
       return child;
     },
-  });
+    requestCooperativeCancellation: process => ps.requestCooperativeCancellation(process),
+    terminateProcessTree: process => ps.terminateProcessTree(process),
+    getProcessStartToken: pid => ps.getProcessStartToken(pid),
+    terminateProcessTreeByPid: (pid, expectedToken) =>
+      ps.terminateProcessTreeByPid(pid, expectedToken),
+    acquireCheckoutLock: checkout => ps.acquireCheckoutLock(checkout),
+    acquireCleanupJournalLock: () => ps.acquireCleanupJournalLock(),
+    createSecureTempDirectory: () => ps.createSecureTempDirectory(),
+    canonicalizePath: input => ps.canonicalizePath(input),
+    assertDirectoryWriteIntegrity: (directory, identity) =>
+      ps.assertDirectoryWriteIntegrity(directory, identity),
+  };
 }
 
 export const producerRuntime = new ProducerRuntime();

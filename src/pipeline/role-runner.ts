@@ -260,6 +260,15 @@ export async function runRole(args: RoleRunArgs): Promise<RoleRunResult> {
     } finally {
       const cleanup = await cleanupProcessAttempt(home, builtEnvironment);
       if (cleanup.home !== null) cleanupFailures.push(cleanup.home.diagnostic ?? "Producer HOME preserved");
+      if (primaryError !== undefined && cleanupFailures.length > 0
+        && typeof primaryError === "object" && primaryError !== null) {
+        // The thrown error is the outcome now; earlier attempts' preserved
+        // HOMEs ride on it rather than vanishing with the result.
+        const carried = (primaryError as { producerHomeFailure?: unknown }).producerHomeFailure;
+        Object.assign(primaryError, {
+          producerHomeFailure: [...cleanupFailures, ...(typeof carried === "string" ? [carried] : [])].join("; "),
+        });
+      }
       if (primaryError === undefined && cleanup.error !== null) throw cleanup.error;
       homeConflict = cleanup.home?.conflict === true;
     }
