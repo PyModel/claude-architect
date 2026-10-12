@@ -490,23 +490,38 @@ describe("runtime-owned Producer HOME", () => {
       const fs = require("node:fs");
       const path = require("node:path");
       const home = ${HOME_EXPRESSION};
-      const attempt = target => { try { fs.writeFileSync(target, "x"); return "written"; } catch (error) { return error.code; } };
+      const os = require("node:os");
+      const attempt = action => { try { action(); return "written"; } catch (error) { return error.code; } };
+      const write = target => attempt(() => fs.writeFileSync(target, "x"));
       process.stdout.write(JSON.stringify({
-        own: attempt(path.join(home, "own.txt")),
-        sibling: attempt(path.join(path.dirname(home), "planted")),
-        claim: attempt(path.join(path.dirname(home), path.basename(home) + ".claim")),
-        quarantine: attempt(path.join(path.dirname(home), ".q-" + path.basename(home))),
+        own: write(path.join(home, "own.txt")),
+        nested: attempt(() => {
+          fs.mkdirSync(path.join(home, ".config", "producer"), { recursive: true });
+          fs.writeFileSync(path.join(home, ".config", "producer", "auth.json"), "{}");
+        }),
+        sibling: write(path.join(path.dirname(home), "planted")),
+        claim: write(path.join(path.dirname(home), path.basename(home) + ".claim")),
+        quarantine: write(path.join(path.dirname(home), ".q-" + path.basename(home))),
+        // The HOME pathname itself is the runtime's: it can be neither moved
+        // away (into writable temp) nor recreated.
+        moveOut: attempt(() => fs.renameSync(home, path.join(os.tmpdir(), "stolen-" + path.basename(home)))),
+        recreate: attempt(() => { fs.rmSync(home, { recursive: true }); fs.mkdirSync(home); }),
       }));
     `, "macos-seatbelt");
 
     const result = await runRole(roleArgs(adapter));
+    temporaryPaths.push(join(tmpdir(), `stolen-${basename(adapter.homes[0]!)}`));
 
     expect(JSON.parse(result.rawOutput)).toEqual({
       own: "written",
+      nested: "written",
       sibling: "EPERM",
       claim: "EPERM",
       quarantine: "EPERM",
+      moveOut: "EPERM",
+      recreate: "EPERM",
     });
+    expect(result.cleanupFailure).toBeUndefined();
     expect(await homeRootEntries()).toEqual([]);
   });
 });

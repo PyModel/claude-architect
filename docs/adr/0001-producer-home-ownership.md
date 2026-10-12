@@ -58,10 +58,16 @@ advisor all reach it).
   another.
 - Every Seatbelt profile that carries `protectedRoots` ends with
   `(deny file-write* (subpath <root>))` followed by
-  `(allow file-write* (subpath <own HOME>))`. The root, sibling HOMEs, claims
-  and quarantines are therefore unwritable by construction, even where the
-  state directory sits under `$TMPDIR` or an inherited-state grant would cover
-  it. Producer launches always pass the root.
+  `(allow file-write* (regex #"^<own HOME>/"))` for the raw path and its
+  realpath. The regex matches only entries beneath the HOME, never the HOME
+  pathname itself (a `subpath` reopen does, and real `sandbox-exec` then lets
+  the Producer rename its HOME into `$TMPDIR` or recreate it). Under Seatbelt
+  the root, sibling HOMEs, claims, quarantines and the HOME name are therefore
+  unwritable by construction, even where the state directory sits under
+  `$TMPDIR` or an inherited-state grant would cover it. The Producer can still
+  move its own *subdirectories* out to writable `$TMPDIR`; that changes only
+  what it keeps, and the HOME itself is caught by the identity checks at
+  retirement. Producer launches always pass the root.
 - Borrowed HOMEs (`request.tempHome` supplied, e.g. the preflight) and launches
   without a temp HOME are unchanged: the runtime never deletes a HOME it did not
   allocate in that call.

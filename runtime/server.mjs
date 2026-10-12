@@ -39152,6 +39152,12 @@ function sbPath(path46) {
   }
   return `"${path46.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
 }
+function sbContentsRegex(path46) {
+  sbPath(path46);
+  if (path46.includes('"')) throw new Error(`seatbelt: quote in path: ${JSON.stringify(path46)}`);
+  const escaped = path46.replace(/\/+$/u, "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return `#"^${escaped}/"`;
+}
 function isDeclaredStateRoot(normalized, invocation, policy) {
   const roots = [];
   const homeCandidates = [
@@ -39272,7 +39278,7 @@ function buildProfile(policy, additionalWritable) {
     ...writable.map((path46) => `(allow file-write* (subpath ${sbPath(path46)}))`),
     '(allow file-write* (literal "/dev/null") (literal "/dev/tty"))',
     ...protectedRoots.map((path46) => `(deny file-write* (subpath ${sbPath(path46)}))`),
-    ...protectedRoots.length === 0 ? [] : withRealpaths([policy.tempHome]).map((path46) => `(allow file-write* (subpath ${sbPath(path46)}))`),
+    ...protectedRoots.length === 0 ? [] : withRealpaths([policy.tempHome]).map((path46) => `(allow file-write* (regex ${sbContentsRegex(path46)}))`),
     ...credentialReadDenials().map((path46) => `(deny file-read* (subpath ${sbPath(path46)}))`)
   ];
   if (!policy.allowNetwork) lines.push("(deny network*)");

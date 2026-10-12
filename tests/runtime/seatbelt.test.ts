@@ -44,12 +44,22 @@ describe("seatbelt profile", () => {
     });
     const lines = profile.split("\n");
     const deny = lines.indexOf('(deny file-write* (subpath "/state/h"))');
-    const reopen = lines.lastIndexOf('(allow file-write* (subpath "/state/h/0123abcd"))');
+    const reopen = lines.lastIndexOf('(allow file-write* (regex #"^/state/h/0123abcd/"))');
     const lastGrant = lines.lastIndexOf('(allow file-write* (subpath "/state"))');
     expect(deny).toBeGreaterThan(lastGrant);
     expect(reopen).toBeGreaterThan(deny);
     expect(lines.slice(deny + 1).filter(line => line.startsWith("(allow file-write*")))
-      .toEqual(['(allow file-write* (subpath "/state/h/0123abcd"))']);
+      .toEqual(['(allow file-write* (regex #"^/state/h/0123abcd/"))']);
+  });
+
+  it("escapes regex metacharacters in the reopened HOME", () => {
+    const profile = buildSeatbeltProfile({
+      worktreePath: "/tmp/wt",
+      tempHome: "/st.ate+(x)/h/0123abcd",
+      allowNetwork: true,
+      protectedRoots: ["/st.ate+(x)/h"],
+    });
+    expect(profile).toContain('(allow file-write* (regex #"^/st\\.ate\\+\\(x\\)/h/0123abcd/"))');
   });
 
   it.skipIf(process.platform !== "darwin")(

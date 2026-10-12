@@ -63,6 +63,18 @@ function sbPath(path: string): string {
   return `"${path.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`;
 }
 
+/**
+ * A regex matching only entries strictly beneath `path`. Reopening a HOME with
+ * `subpath` would also match the HOME pathname itself, letting the Producer
+ * rename its HOME out of the protected root or recreate it.
+ */
+function sbContentsRegex(path: string): string {
+  sbPath(path);
+  if (path.includes('"')) throw new Error(`seatbelt: quote in path: ${JSON.stringify(path)}`);
+  const escaped = path.replace(/\/+$/u, "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return `#"^${escaped}/"`;
+}
+
 function isDeclaredStateRoot(
   normalized: string,
   invocation: ProducerInvocation,
@@ -223,7 +235,7 @@ function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): str
     ...protectedRoots.map(path => `(deny file-write* (subpath ${sbPath(path)}))`),
     ...(protectedRoots.length === 0
       ? []
-      : withRealpaths([policy.tempHome]).map(path => `(allow file-write* (subpath ${sbPath(path)}))`)),
+      : withRealpaths([policy.tempHome]).map(path => `(allow file-write* (regex ${sbContentsRegex(path)}))`)),
     ...credentialReadDenials().map(path => `(deny file-read* (subpath ${sbPath(path)}))`),
   ];
   if (!policy.allowNetwork) lines.push("(deny network*)");
