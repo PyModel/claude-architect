@@ -6,6 +6,8 @@ All notable changes to Claude Architect are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-10-12
+
 ### Security
 
 - A Producer can no longer make the runtime delete a directory it did not allocate. Runtime-allocated Producer HOMEs move from the system temp directory to a private `h/` root in the plugin data directory, each bound to its birth-time identity and its own ownership claim. Retirement renames the identity-matched HOME to a quarantine and removes it with the bound cleanup primitives; a HOME that was moved or replaced is preserved and the role or attempt fails as `sandbox-violation` (the attempt's archived result itself, so it can never be accepted as clean). Planning failures after allocation now retire the HOME instead of leaking it, Seatbelt denies every write in the HOME root except entries beneath the Producer's own HOME (the HOME pathname itself can be neither moved nor recreated; a Producer moving its own subdirectories out to `$TMPDIR` is caught only by the identity checks), startup recovery reclaims a HOME only when every recorded owner is proven dead and reports the rest, and a plugin data directory inside the Producer's writable scope is refused (ADR-0001). Every Producer and verification Seatbelt profile now denies the whole plugin state directory after all grants (an inherited-config Producer such as Claude, whose declared `~/.claude` grant contains the default plugin data directory, could write archives, decisions and locks), and a launch without Seatbelt is refused when a declared writable root covers the state directory. Runtime scratch directories (candidate and slice Git index directories, the copy-on-write probe, and the confined verification `TMPDIR`) move out of shared system temp into the same identity-bound allocation and are retired the same way instead of by pathname.
@@ -1441,7 +1443,8 @@ Initial public release.
 - Native OpenCode assets under `.opencode/` and `opencode.json`, so the same lanes and skill work outside Claude Code.
 - SVG banner and shields badges for the README.
 
-[Unreleased]: https://github.com/PyModel/claude-architect/compare/v0.53.0...HEAD
+[Unreleased]: https://github.com/PyModel/claude-architect/compare/v0.54.0...HEAD
+[0.54.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.54.0
 [0.53.0]: https://github.com/PyModel/claude-architect/releases/tag/v0.53.0
 [0.43.0]: https://github.com/PyModel/claude-architect/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/PyModel/claude-architect/compare/v0.41.0...v0.42.0

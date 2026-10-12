@@ -34474,7 +34474,7 @@ import path45 from "node:path";
 var PROTOCOL_VERSION = "3.0.0";
 var DELEGATION_SPEC_VERSION = "1";
 var ATTEMPT_RESULT_VERSION = "1";
-var RUNTIME_VERSION = "0.53.0";
+var RUNTIME_VERSION = "0.54.0";
 
 // src/protocol/attempt-result.ts
 var FAILURE_PRECEDENCE = [
