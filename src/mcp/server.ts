@@ -441,6 +441,13 @@ export async function createServer(
   }
   const recover = dependencies.recoverStaleRuns ?? recoverStaleRuns;
   const recovery = await recover();
+  const homeIssues = recovery.producerHomeIssues ?? [];
+  if (homeIssues.length > 0) {
+    // Reasons only: the paths name the user's plugin data directory.
+    console.error(
+      `Claude Architect recovery preserved ${homeIssues.length} Producer HOME ${homeIssues.length === 1 ? "allocation" : "allocations"}: ${boundedRedactedDiagnostic(homeIssues.map(issue => issue.reason).join("; "), 2_000)}`,
+    );
+  }
   const sweepIssues = recovery.worktreeSweepIssues ?? [];
   let unresolvedSweepIssues = sweepIssues;
   if (sweepIssues.length > 0) {

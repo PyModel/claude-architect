@@ -118,8 +118,10 @@ There is no pathname-only recursive deletion anywhere.
 `recoverStaleRuns`, under the existing recovery lock, scans the root:
 
 - A claim that fails strict parsing → preserved, diagnosed.
-- Any recorded owner or producer `live` or `unverifiable`
-  (`lockOwnerStatus`) → preserved silently (it may still be running).
+- Any recorded owner or producer `live` (`lockOwnerStatus`) → preserved
+  silently, as run recovery treats a live run.
+- Otherwise any `unverifiable` (alive, but its start token cannot be
+  confirmed) → preserved, diagnosed.
 - `launching` (the owner died between the spawn and its record, so a child
   may be running unrecorded) → preserved, diagnosed.
 - All owners `dead` → replay from the phase: `held` with the identity at the
@@ -129,8 +131,9 @@ There is no pathname-only recursive deletion anywhere.
 - Allocation or quarantine directories without a claim are never inferred
   from their name or age: preserved and diagnosed.
 
-Diagnostics join `worktreeSweepIssues` (redacted reason; the path is not under
-a `worktrees` directory, so they inform startup without blocking mutation).
+Diagnostics are returned as `producerHomeIssues` (redacted reasons), logged
+once at server start, and kept out of `worktreeSweepIssues` so a preserved
+HOME never gates repository mutation or re-runs recovery per call.
 
 ## Consequences and residual limits
 

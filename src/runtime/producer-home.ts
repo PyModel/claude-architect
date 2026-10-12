@@ -432,9 +432,9 @@ export async function allocateProducerHome(args: {
 
 /**
  * Startup recovery: reclaim allocations whose every recorded owner is proven
- * dead. Live or unverifiable owners are preserved silently; malformed,
- * conflicting, unclaimed, or interrupted-launch allocations are preserved and
- * reported. Callers hold the recovery lock.
+ * dead. A live owner's allocation is preserved silently; unverifiable owners
+ * and malformed, conflicting, unclaimed, or interrupted-launch allocations are
+ * preserved and reported. Callers hold the recovery lock.
  */
 export async function recoverProducerHomes(args: {
   stateRoot: string;
@@ -469,16 +469,22 @@ export async function recoverProducerHomes(args: {
       const metadata = await lstat(claimPath, { bigint: true });
       if (metadata.size > BigInt(MAX_CLAIM_BYTES)) throw new RuntimeError("Producer HOME claim is oversized");
       const claim = parseClaim(await readFile(claimPath, "utf8"), homeId);
-      let anyAlive = false;
+      const statuses = new Set<string>();
       for (const process of [claim.owner, ...claim.producers]) {
-        const status = await lockOwnerStatus(
+        statuses.add(await lockOwnerStatus(
           process,
           args.isProcessAlive,
           pid => args.ps.getProcessStartToken(pid),
-        ).catch(() => "unverifiable" as const);
-        if (status !== "dead") anyAlive = true;
+        ).catch(() => "unverifiable" as const));
       }
-      if (anyAlive) continue;
+      // A live owner is an allocation in use: preserved without a report, as
+      // run recovery treats a live run.
+      if (statuses.has("live")) continue;
+      if (statuses.has("unverifiable")) {
+        throw new RuntimeError(
+          "a recorded Producer HOME owner is running but its identity cannot be verified",
+        );
+      }
       if (claim.phase === "launching") {
         throw new RuntimeError(
           "the Producer HOME owner exited between a spawn and its record; a child may still use it",

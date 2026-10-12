@@ -70,6 +70,12 @@ export interface RecoveryResult {
   quarantined: string[];
   workflows?: AutopilotRecoveryResult[];
   worktreeSweepIssues?: WorktreeSweepIssue[];
+  /**
+   * Producer HOMEs recovery preserved (ADR-0001). Kept apart from the sweep
+   * issues: they never gate repository mutation, which would otherwise re-run
+   * recovery on every call while a human has not removed them.
+   */
+  producerHomeIssues?: WorktreeSweepIssue[];
 }
 
 async function reclaimPendingRemovalLocks(
@@ -471,11 +477,13 @@ export async function recoverStaleRuns(
       ...terminalCleanupIssues,
       ...workflowRecoveryIssues,
       ...orphanWorktreeIssues,
-      ...producerHomeIssues,
     ], path.join(root, "worktrees"));
-    const result: RecoveryResult = workflows.length === 0
+    const base: RecoveryResult = workflows.length === 0
       ? { recovered, quarantined }
       : { recovered, quarantined, workflows };
+    const result: RecoveryResult = producerHomeIssues.length === 0
+      ? base
+      : { ...base, producerHomeIssues: boundedWorktreeSweepIssues(producerHomeIssues, path.join(root, "h")) };
     return worktreeSweepIssues.length === 0
       ? result
       : { ...result, worktreeSweepIssues };

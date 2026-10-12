@@ -25,6 +25,7 @@ import {
   recoverProducerHomes,
 } from "../../src/runtime/producer-home.js";
 import { recoverStaleRuns } from "../../src/runtime/recovery-manager.js";
+import { containsRegisteredSecret } from "../../src/runtime/redaction.js";
 import { platformServicesDouble } from "../helpers/platform-services-double.js";
 
 const REVIEW_JSON = JSON.stringify({ reportVersion: "1", verdict: "approve", findings: [], coverageGaps: [] });
@@ -70,7 +71,9 @@ const home = ${HOME_EXPRESSION};
 const claimPath = path.join(path.dirname(home), path.basename(home) + ".claim");
 const deadline = Date.now() + 10000;
 const poll = () => {
-  const claim = JSON.parse(fs.readFileSync(claimPath, "utf8"));
+  let claim = { producers: [] };
+  // The runtime replaces the claim by rename; a reader can briefly lose the race.
+  try { claim = JSON.parse(fs.readFileSync(claimPath, "utf8")); } catch {}
   if (claim.producers.some(entry => entry.pid === process.pid)) {
     setTimeout(() => process.stdout.write(JSON.stringify(claim)), 300);
   } else if (Date.now() > deadline) {
@@ -284,8 +287,10 @@ describe("runtime-owned Producer HOME", () => {
       worktreePath,
       intent: "read-only",
       ps: getPlatformServices(),
-      envAdditions: { "BAD=NAME": "value" },
+      envAdditions: { "BAD=NAME": "value", HOME_OWNERSHIP_TOKEN: "planning-secret-value-1" },
     })).rejects.toThrow(/environment variable name/u);
+
+    expect(containsRegisteredSecret("planning-secret-value-1")).toBe(false);
 
     expect(adapter.homes).toHaveLength(1);
     await expect(access(adapter.homes[0]!)).rejects.toMatchObject({ code: "ENOENT" });
@@ -304,7 +309,11 @@ describe("runtime-owned Producer HOME", () => {
       worktreePath,
       intent: "read-only",
       ps: getPlatformServices(),
+      envAdditions: { HOME_OWNERSHIP_TOKEN: "launch-secret-value-2" },
     })).rejects.toBe(failure);
+
+    // The plan never reached a caller, so the launch released its secrets.
+    expect(containsRegisteredSecret("launch-secret-value-2")).toBe(false);
 
     await expect(access(adapter.homes[0]!)).rejects.toMatchObject({ code: "ENOENT" });
     expect(await homeRootEntries()).toEqual([]);
@@ -513,6 +522,12 @@ describe("Producer HOME recovery", () => {
       claim.producers = [{ pid: deadPid, processToken: null }];
     });
     const live = await allocateProducerHome({ writeScope: [worktreePath] });
+    const unverifiable = await allocateProducerHome({ writeScope: [worktreePath] });
+    await rewriteClaim(unverifiable.path, claim => {
+      claim.owner = { pid: deadPid, processToken: "exited" };
+      // Alive, but recorded without a start token: a reused pid is possible.
+      claim.producers = [{ pid: process.pid, processToken: null }];
+    });
 
     const issues = await recoverProducerHomes({
       stateRoot: dirname(producerHomeRoot()),
@@ -520,12 +535,14 @@ describe("Producer HOME recovery", () => {
       isProcessAlive: pid => pid === process.pid,
     });
 
-    expect(issues).toEqual([]);
+    expect(issues.map(issue => [issue.path, String((issue.error as Error).message)])).toEqual([
+      [unverifiable.path, expect.stringMatching(/identity cannot be verified/u)],
+    ]);
+    await expect(access(unverifiable.path)).resolves.toBeUndefined();
     await expect(access(dead.path)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(access(`${dead.path}.claim`)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(access(live.path)).resolves.toBeUndefined();
     expect((await live.retire()).ok).toBe(true);
-    expect(await homeRootEntries()).toEqual([]);
   });
 
   it("completes a retirement interrupted after the quarantine rename", async () => {
@@ -587,7 +604,9 @@ describe("Producer HOME recovery", () => {
 
     const result = await recoverStaleRuns({ platformServices: getPlatformServices() });
 
-    const issue = result.worktreeSweepIssues?.find(entry => entry.worktreePath === malformed.path);
+    // Reported apart from the worktree sweep, so it never gates mutation.
+    expect(result.worktreeSweepIssues ?? []).toEqual([]);
+    const issue = result.producerHomeIssues?.find(entry => entry.worktreePath === malformed.path);
     expect(issue?.reason).toMatch(/malformed/u);
     expect(issue?.reason).not.toContain(producerHomeRoot());
     await expect(access(malformed.path)).resolves.toBeUndefined();

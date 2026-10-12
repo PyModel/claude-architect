@@ -341,9 +341,16 @@ export class ProducerRuntime {
     });
 
     const isWriter = request.intent !== "read-only";
-    const supervisedInvocation = isWriter
-      ? await parentDeathWatchdogInvocation(invocation.executable, invocation.args)
-      : { executable: invocation.executable, args: invocation.args };
+    let supervisedInvocation: { executable: ResolvedExecutable; args: string[] };
+    try {
+      supervisedInvocation = isWriter
+        ? await parentDeathWatchdogInvocation(invocation.executable, invocation.args)
+        : { executable: invocation.executable, args: invocation.args };
+    } catch (error) {
+      // No caller will ever hold this environment: release its secrets here.
+      builtEnvironment.secretRegistration.dispose();
+      throw error;
+    }
 
     return {
       descriptor,
@@ -364,10 +371,11 @@ export class ProducerRuntime {
     try {
       return await this.launchPlanned(request, plan);
     } catch (error) {
-      // The plan never reached the caller, so this call still owns its HOME.
-      if (plan.home === null) throw error;
-      const retirement = await plan.home.retire();
-      if (retirement.ok) throw error;
+      // The plan never reached the caller, so this call still owns its HOME
+      // and its environment. Retire first, while secrets still redact.
+      const retirement = plan.home === null ? null : await plan.home.retire();
+      plan.builtEnvironment.secretRegistration.dispose();
+      if (retirement === null || retirement.ok) throw error;
       throw new AggregateError(
         [error, new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved")],
         "Producer launch failed and its HOME could not be retired",

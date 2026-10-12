@@ -40224,16 +40224,20 @@ async function recoverProducerHomes(args) {
       const metadata = await lstat10(claimPath, { bigint: true });
       if (metadata.size > BigInt(MAX_CLAIM_BYTES)) throw new RuntimeError("Producer HOME claim is oversized");
       const claim = parseClaim(await readFile3(claimPath, "utf8"), homeId);
-      let anyAlive = false;
+      const statuses = /* @__PURE__ */ new Set();
       for (const process4 of [claim.owner, ...claim.producers]) {
-        const status = await lockOwnerStatus(
+        statuses.add(await lockOwnerStatus(
           process4,
           args.isProcessAlive,
           (pid) => args.ps.getProcessStartToken(pid)
-        ).catch(() => "unverifiable");
-        if (status !== "dead") anyAlive = true;
+        ).catch(() => "unverifiable"));
       }
-      if (anyAlive) continue;
+      if (statuses.has("live")) continue;
+      if (statuses.has("unverifiable")) {
+        throw new RuntimeError(
+          "a recorded Producer HOME owner is running but its identity cannot be verified"
+        );
+      }
       if (claim.phase === "launching") {
         throw new RuntimeError(
           "the Producer HOME owner exited between a spawn and its record; a child may still use it"
@@ -40443,7 +40447,13 @@ var ProducerRuntime = class {
       ...tempHome === null ? {} : { tempHome }
     });
     const isWriter = request.intent !== "read-only";
-    const supervisedInvocation = isWriter ? await parentDeathWatchdogInvocation(invocation.executable, invocation.args) : { executable: invocation.executable, args: invocation.args };
+    let supervisedInvocation;
+    try {
+      supervisedInvocation = isWriter ? await parentDeathWatchdogInvocation(invocation.executable, invocation.args) : { executable: invocation.executable, args: invocation.args };
+    } catch (error51) {
+      builtEnvironment.secretRegistration.dispose();
+      throw error51;
+    }
     return {
       descriptor,
       adapter,
@@ -40462,9 +40472,9 @@ var ProducerRuntime = class {
     try {
       return await this.launchPlanned(request, plan);
     } catch (error51) {
-      if (plan.home === null) throw error51;
-      const retirement = await plan.home.retire();
-      if (retirement.ok) throw error51;
+      const retirement = plan.home === null ? null : await plan.home.retire();
+      plan.builtEnvironment.secretRegistration.dispose();
+      if (retirement === null || retirement.ok) throw error51;
       throw new AggregateError(
         [error51, new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved")],
         "Producer launch failed and its HOME could not be retired"
@@ -58245,10 +58255,10 @@ async function recoverStaleRuns(dependencies = {}) {
       )),
       ...terminalCleanupIssues,
       ...workflowRecoveryIssues,
-      ...orphanWorktreeIssues,
-      ...producerHomeIssues
+      ...orphanWorktreeIssues
     ], path44.join(root, "worktrees"));
-    const result = workflows.length === 0 ? { recovered, quarantined } : { recovered, quarantined, workflows };
+    const base = workflows.length === 0 ? { recovered, quarantined } : { recovered, quarantined, workflows };
+    const result = producerHomeIssues.length === 0 ? base : { ...base, producerHomeIssues: boundedWorktreeSweepIssues(producerHomeIssues, path44.join(root, "h")) };
     return worktreeSweepIssues.length === 0 ? result : { ...result, worktreeSweepIssues };
   } catch (error51) {
     primaryError = error51;
@@ -58573,6 +58583,12 @@ async function createServer(dependencies = {}) {
   }
   const recover = dependencies.recoverStaleRuns ?? recoverStaleRuns;
   const recovery = await recover();
+  const homeIssues = recovery.producerHomeIssues ?? [];
+  if (homeIssues.length > 0) {
+    console.error(
+      `Claude Architect recovery preserved ${homeIssues.length} Producer HOME ${homeIssues.length === 1 ? "allocation" : "allocations"}: ${boundedRedactedDiagnostic(homeIssues.map((issue2) => issue2.reason).join("; "), 2e3)}`
+    );
+  }
   const sweepIssues = recovery.worktreeSweepIssues ?? [];
   let unresolvedSweepIssues = sweepIssues;
   if (sweepIssues.length > 0) {
