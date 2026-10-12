@@ -52570,6 +52570,12 @@ async function runAttempt(checkoutPath, spec, deps) {
       if (exit.spawnError !== void 0) signals["spawn-failure"] = true;
       if (exit.cancelled) signals.cancelled = true;
       if (exit.timedOut) signals.timeout = true;
+      const homeRetirement = home === null ? null : await home.retire();
+      if (homeRetirement?.conflict === true) {
+        signals["sandbox-violation"] = true;
+        unresolvedIssues = ["producer-home-conflict"];
+        evidence = { ...evidence, producerHomeFailure: homeRetirement.diagnostic ?? "Producer HOME preserved" };
+      }
       if (!hasFailureSignal2(signals)) {
         producerSummary = launchResult.producerSummary;
         if (!launchResult.ok) signals["invalid-output"] = true;

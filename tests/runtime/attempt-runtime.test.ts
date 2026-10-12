@@ -652,10 +652,17 @@ describe("runAttempt", () => {
 
     expect(homes).toHaveLength(1);
     const home = homes[0]!;
-    expect(result.status).toBe("verified-candidate");
-    expect(result.unresolvedIssues).toContain("attempt-cleanup-failed");
-    expect(result.evidence.cleanupFailure).toMatch(/replaced before retirement/u);
-    expect(String(result.evidence.cleanupFailure)).not.toContain(home);
+    // The archived outcome itself is a failure, so no acceptance rule can
+    // read the Producer's candidate as clean.
+    expect(result.status).not.toBe("verified-candidate");
+    expect(result.failure).toBe("sandbox-violation");
+    expect(result.candidate).toBeNull();
+    expect(result.unresolvedIssues).toContain("producer-home-conflict");
+    expect(result.evidence.producerHomeFailure).toMatch(/replaced before retirement/u);
+    expect(String(result.evidence.producerHomeFailure)).not.toContain(home);
+    const archived = await new ArtifactStore(runId).readResult();
+    expect(archived).toMatchObject({ failure: "sandbox-violation" });
+    expect(archived?.evidence.producerHomeFailure).toMatch(/replaced before retirement/u);
     await expect(readFile(join(home, "replacement.txt"), "utf8")).resolves.toBe("replacement HOME");
     await expect(readFile(join(`${home}.moved`, "owned.txt"), "utf8")).resolves.toBe("allocated HOME");
   });

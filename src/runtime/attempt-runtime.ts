@@ -720,6 +720,17 @@ export async function runAttempt(
     if (exit.cancelled) signals.cancelled = true;
     if (exit.timedOut) signals.timeout = true;
 
+    // The Producer tree has settled: retire its HOME before anything is
+    // archived, so a HOME it moved or replaced fails the outcome itself rather
+    // than trailing an archived success. Other retirement failures are
+    // recorded by the final cleanup, beside the outcome.
+    const homeRetirement = home === null ? null : await home.retire();
+    if (homeRetirement?.conflict === true) {
+      signals["sandbox-violation"] = true;
+      unresolvedIssues = ["producer-home-conflict"];
+      evidence = { ...evidence, producerHomeFailure: homeRetirement.diagnostic ?? "Producer HOME preserved" };
+    }
+
     if (!hasFailureSignal(signals)) {
       producerSummary = launchResult.producerSummary;
       if (!launchResult.ok) signals["invalid-output"] = true;

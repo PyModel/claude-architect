@@ -110,13 +110,17 @@ tree is settled):
 4. Remove the claim.
 
 Any failure keeps the directory and claim and returns a bounded
-(`boundedRedactedDiagnostic`, paths become `[path]`) diagnostic. Callers keep
-their primary outcome: the attempt lane records `evidence.cleanupFailure` and
-`attempt-cleanup-failed`; the role lane returns its result with
-`cleanupFailure`, archived beside the role log, and a replaced/missing HOME
-additionally fails the role as `sandbox-violation`, since the Producer acted on
-its own allocation from outside it. A planning failure retires the allocation
-before rethrowing, aggregating a retirement failure with the primary error.
+(`boundedRedactedDiagnostic`, paths become `[path]`) diagnostic. A
+replaced/missing HOME fails the run as `sandbox-violation`, since the Producer
+acted on its own allocation from outside it: the attempt lane retires the HOME
+as soon as the Producer settles and before archiving, so the archived result
+itself is the failure (`producer-home-conflict`, `evidence.producerHomeFailure`)
+and no acceptance rule reads the candidate as clean; the role lane returns
+`ok: false` with `cleanupFailure`, archived beside the role log. Any other
+retirement failure keeps the primary outcome and is recorded beside it
+(`evidence.cleanupFailure` and `attempt-cleanup-failed`; the role's
+`cleanupFailure`). A planning failure retires the allocation before
+rethrowing the primary error, with the retirement diagnostic attached.
 There is no pathname-only recursive deletion anywhere.
 
 ### Recovery
