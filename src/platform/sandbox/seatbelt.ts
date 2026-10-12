@@ -10,6 +10,13 @@ export interface SeatbeltPolicy {
   extraWritableRoots?: string[];
   /** false confines temporary files to `tempHome` instead of the shared tmp roots. */
   sharedTemp?: boolean;
+  /**
+   * Roots no grant may reach (the runtime-owned Producer HOME root): denied
+   * after every allow, then only `tempHome` is reopened. SBPL applies the last
+   * matching rule, so this holds even when a root sits under shared temp or an
+   * inherited-state grant.
+   */
+  protectedRoots?: string[];
 }
 
 /**
@@ -17,11 +24,12 @@ export interface SeatbeltPolicy {
  * The producer may write only to its temp home; the worktree and repo remain read-only.
  */
 export function buildReadOnlySeatbeltPolicy(
-  args: { tempHome: string | null },
+  args: { tempHome: string | null; protectedRoots?: string[] },
 ): SeatbeltPolicy {
   return {
     worktreePath: "",
     tempHome: args.tempHome,
+    protectedRoots: [...(args.protectedRoots ?? [])],
     // Read-only roles ARE model sessions: they must reach the provider API.
     // The confinement goal here is write-protection, not offline isolation —
     // matching the edit lane, where Codex's native sandbox permits its own
@@ -34,12 +42,14 @@ export function buildWriteSeatbeltPolicy(args: {
   worktreePath: string;
   tempHome: string | null;
   extraWritableRoots: string[];
+  protectedRoots?: string[];
 }): SeatbeltPolicy {
   return {
     worktreePath: args.worktreePath,
     tempHome: args.tempHome,
     allowNetwork: true,
     extraWritableRoots: [...args.extraWritableRoots],
+    protectedRoots: [...(args.protectedRoots ?? [])],
   };
 }
 
@@ -182,15 +192,8 @@ function credentialReadDenials(): string[] {
   }))];
 }
 
-function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): string {
-  const writable = [...new Set([
-    policy.worktreePath,
-    policy.tempHome,
-    ...(policy.sharedTemp === false ? [] : [process.env.TMPDIR ?? "/private/tmp", "/private/tmp"]),
-    "/dev",
-    ...(policy.extraWritableRoots ?? []),
-    ...additionalWritable,
-  ]
+function withRealpaths(paths: Array<string | null | undefined>): string[] {
+  return [...new Set(paths
     .filter((path): path is string => typeof path === "string" && path.length > 0)
     .flatMap(path => {
       try {
@@ -199,12 +202,28 @@ function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): str
         return [path];
       }
     }))];
+}
+
+function buildProfile(policy: SeatbeltPolicy, additionalWritable: string[]): string {
+  const writable = withRealpaths([
+    policy.worktreePath,
+    policy.tempHome,
+    ...(policy.sharedTemp === false ? [] : [process.env.TMPDIR ?? "/private/tmp", "/private/tmp"]),
+    "/dev",
+    ...(policy.extraWritableRoots ?? []),
+    ...additionalWritable,
+  ]);
+  const protectedRoots = withRealpaths(policy.protectedRoots ?? []);
   const lines = [
     "(version 1)",
     "(allow default)",
     "(deny file-write*)",
     ...writable.map(path => `(allow file-write* (subpath ${sbPath(path)}))`),
     '(allow file-write* (literal "/dev/null") (literal "/dev/tty"))',
+    ...protectedRoots.map(path => `(deny file-write* (subpath ${sbPath(path)}))`),
+    ...(protectedRoots.length === 0
+      ? []
+      : withRealpaths([policy.tempHome]).map(path => `(allow file-write* (subpath ${sbPath(path)}))`)),
     ...credentialReadDenials().map(path => `(deny file-read* (subpath ${sbPath(path)}))`),
   ];
   if (!policy.allowNetwork) lines.push("(deny network*)");

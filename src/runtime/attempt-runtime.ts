@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
 import { freezeCandidate } from "../git/candidate-tree.js";
 import { git } from "../git/git-exec.js";
 import { checkPreconditions } from "../git/repo-preconditions.js";
@@ -45,6 +44,7 @@ import {
   type EnvProvenance,
 } from "./environment-policy.js";
 import { runProducerPreflight } from "./producer-preflight.js";
+import type { ProducerHomeLease } from "./producer-home.js";
 import { redact, redactValues } from "./redaction.js";
 import {
   collectReproducibilityInputs,
@@ -310,10 +310,14 @@ async function archiveTerminal(context: TerminalContext): Promise<AttemptResult>
 async function cleanupAttemptResources(args: {
   builtEnvironment: BuiltEnvironment | null;
   worktree: { cleanup(): Promise<void> } | null;
-  tempHome: string | null;
+  home: ProducerHomeLease | null;
   lock: CheckoutLock | null;
 }): Promise<unknown | null> {
   const failures: unknown[] = [];
+  // Identity-bound retirement; it never throws and never deletes by name. It
+  // runs before the launch's secrets are released so its diagnostic is
+  // redacted against them.
+  const retirement = args.home === null ? null : await args.home.retire();
   try {
     args.builtEnvironment?.secretRegistration.dispose();
   } catch (error) {
@@ -326,12 +330,8 @@ async function cleanupAttemptResources(args: {
       failures.push(error);
     }
   }
-  if (args.tempHome !== null) {
-    try {
-      await rm(args.tempHome, { recursive: true, force: true });
-    } catch (error) {
-      failures.push(error);
-    }
+  if (retirement !== null && !retirement.ok) {
+    failures.push(new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved"));
   }
   if (args.lock !== null) {
     try {
@@ -413,6 +413,7 @@ export async function runAttempt(
   const runWithLease = async (lock: CheckoutLock, ownership: "borrowed" | "owned"): Promise<AttemptResult> => {
     let worktree: { path: string; cleanup(): Promise<void> } | null = null;
     let tempHome: string | null = null;
+    let home: ProducerHomeLease | null = null;
     let builtEnvironment: BuiltEnvironment | null = null;
     let primaryError: unknown;
     let archivedResult: AttemptResult | null = null;
@@ -597,6 +598,7 @@ export async function runAttempt(
       capabilityReport: report,
     });
     tempHome = launchPlan.tempHome;
+    home = launchPlan.home;
     builtEnvironment = launchPlan.builtEnvironment;
     let invocation = launchPlan.invocation;
     let confinement: string | null = launchPlan.confinementBackend;
@@ -604,7 +606,7 @@ export async function runAttempt(
     if (spec.executionMode === "edit") {
       const selection = selectSandboxBackend(report);
       if (selection.backend === null) {
-        return await archiveWithStatus({
+        return archivedResult = await archiveWithStatus({
           store,
           spec,
           runId,
@@ -651,12 +653,13 @@ export async function runAttempt(
         runId,
         ps,
         tempHome,
+        homeLease: home,
         borrowedCheckoutLease: lock,
         ...(deps.abortSignal === undefined ? {} : { abortSignal: deps.abortSignal }),
       });
       baselineEvidence = { ...baselineEvidence, producerPreflight: preflight };
       if (preflight.status === "environment-defect") {
-        return await archiveWithStatus({
+        return archivedResult = await archiveWithStatus({
           store,
           spec,
           runId,
@@ -834,7 +837,7 @@ export async function runAttempt(
     const cleanupError = await cleanupAttemptResources({
       builtEnvironment,
       worktree,
-      tempHome,
+      home,
       lock: null,
     });
     if (cleanupError !== null) {

@@ -624,6 +624,42 @@ describe("runAttempt", () => {
     expect(fixture.releaseCalls()).toBe(0);
   });
 
+  it("preserves a replaced Producer HOME and records it beside the outcome", async () => {
+    const repoRoot = await initRepo();
+    const runId = "run-replaced-home";
+    const homes: string[] = [];
+    const adapter = new FakeAdapter();
+    adapter.buildInvocation = (_spec, ctx) => {
+      if (ctx.tempHome !== undefined) homes.push(ctx.tempHome);
+      return {
+        executable: nodeExecutable,
+        args: ["-e", `
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const home = process.env.HOME || process.env.USERPROFILE;
+          fs.writeFileSync("a.txt", "changed\\n");
+          fs.writeFileSync(path.join(home, "owned.txt"), "allocated HOME");
+          fs.renameSync(home, home + ".moved");
+          fs.mkdirSync(home);
+          fs.writeFileSync(path.join(home, "replacement.txt"), "replacement HOME");
+        `],
+        requiredEnv: [],
+        network: "denied",
+      };
+    };
+
+    const result = await runAttempt(repoRoot, validSpec(), dependencies(adapter, runId));
+
+    expect(homes).toHaveLength(1);
+    const home = homes[0]!;
+    expect(result.status).toBe("verified-candidate");
+    expect(result.unresolvedIssues).toContain("attempt-cleanup-failed");
+    expect(result.evidence.cleanupFailure).toMatch(/replaced before retirement/u);
+    expect(String(result.evidence.cleanupFailure)).not.toContain(home);
+    await expect(readFile(join(home, "replacement.txt"), "utf8")).resolves.toBe("replacement HOME");
+    await expect(readFile(join(`${home}.moved`, "owned.txt"), "utf8")).resolves.toBe("allocated HOME");
+  });
+
   it("rejects a borrowed lock bound to another repository before Producer execution", async () => {
     const repoRoot = await initRepo();
     const fixture = await borrowedLeaseFixture(repoRoot);

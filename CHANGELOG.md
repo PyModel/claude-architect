@@ -6,6 +6,10 @@ All notable changes to Claude Architect are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- A Producer can no longer make the runtime delete a directory it did not allocate. Runtime-allocated Producer HOMEs move from the system temp directory to a private `h/` root in the plugin data directory, each bound to its birth-time identity and its own ownership claim. Retirement renames the identity-matched HOME to a quarantine and removes it with the bound cleanup primitives; a HOME that was moved or replaced is preserved, the role fails as `sandbox-violation`, and the attempt records `cleanupFailure` beside its outcome. Planning failures after allocation now retire the HOME instead of leaking it, Seatbelt denies every write in the HOME root except the Producer's own HOME, startup recovery reclaims a HOME only when every recorded owner is proven dead and reports the rest, and a plugin data directory inside the Producer's writable scope is refused (ADR-0001).
+
 ## [0.53.0] - 2026-10-11
 
 ### Security

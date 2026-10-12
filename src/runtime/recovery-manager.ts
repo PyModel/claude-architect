@@ -47,6 +47,7 @@ import {
   recoverRun,
 } from "./recovery-runs.js";
 import { recoverPendingWorktreeRemovals } from "./recovery-worktree-removals.js";
+import { recoverProducerHomes } from "./producer-home.js";
 import { sweepOrphanWorktrees } from "./recovery-worktree-sweep.js";
 import { type AutopilotRecoveryResult, recoverAutopilotWorkflows } from "./recovery-autopilot.js";
 
@@ -454,6 +455,13 @@ export async function recoverStaleRuns(
         runGit,
       })
       : [];
+    // Producer HOMEs are reclaimed only when every recorded owner is proven
+    // dead; anything else is preserved and reported beside the sweep issues.
+    const producerHomeIssues = (await recoverProducerHomes({
+      stateRoot: root,
+      ps,
+      isProcessAlive,
+    })).map(issue => worktreeSweepIssue(issue.path, issue.error));
     const worktreeSweepIssues = boundedWorktreeSweepIssues([
       ...pendingRemovalIssues.map(issue => worktreeSweepIssue(
         issue.manifestPath,
@@ -463,6 +471,7 @@ export async function recoverStaleRuns(
       ...terminalCleanupIssues,
       ...workflowRecoveryIssues,
       ...orphanWorktreeIssues,
+      ...producerHomeIssues,
     ], path.join(root, "worktrees"));
     const result: RecoveryResult = workflows.length === 0
       ? { recovered, quarantined }

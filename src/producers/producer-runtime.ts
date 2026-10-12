@@ -20,6 +20,11 @@ import {
   withRunStartPidRecording,
   type RunStartContext,
 } from "../runtime/run-start.js";
+import {
+  allocateProducerHome,
+  producerHomeRoot,
+  type ProducerHomeLease,
+} from "../runtime/producer-home.js";
 import type {
   AdapterEvent,
   CapabilityReport,
@@ -64,7 +69,10 @@ export interface ProducerLaunchRequest {
   abortSignal?: AbortSignal | undefined;
   timeoutMs?: number | undefined;
   maxOutputBytes?: number | undefined;
+  /** A borrowed HOME: the runtime never retires it. */
   tempHome?: string | null | undefined;
+  /** The caller's lease on a borrowed `tempHome`, so this launch's spawn is claimed too. */
+  homeLease?: ProducerHomeLease | null | undefined;
   extraWritableRoots?: string[] | undefined;
   gitObjectAccess?: {
     privateObjectsDir: string;
@@ -81,6 +89,11 @@ export interface ProducerLaunchPlan {
   adapter: ProducerAdapter;
   capabilityReport: CapabilityReport;
   tempHome: string | null;
+  /**
+   * The runtime-allocated HOME this plan owns, or null when the HOME is
+   * borrowed or absent. Its holder retires it once the Producer has settled.
+   */
+  home: ProducerHomeLease | null;
   invocation: ProducerInvocation;
   supervisedInvocation: { executable: ResolvedExecutable; args: string[] };
   builtEnvironment: BuiltEnvironment;
@@ -222,15 +235,48 @@ export class ProducerRuntime {
       );
     }
 
+    let home: ProducerHomeLease | null = null;
     let tempHome: string | null;
     if (request.tempHome !== undefined) {
       tempHome = request.tempHome;
     } else if (requiresTempHome) {
-      tempHome = await request.ps.createSecureTempDirectory();
+      home = await allocateProducerHome({
+        writeScope: [
+          request.worktreePath,
+          ...(request.extraWritableRoots ?? []),
+          ...(request.gitObjectAccess === undefined ? [] : [
+            request.gitObjectAccess.privateObjectsDir,
+            ...[request.gitObjectAccess.sharedObjectsDir].flat(),
+          ]),
+        ],
+      });
+      tempHome = home.path;
     } else {
       tempHome = null;
     }
 
+    try {
+      return await this.planWithHome(request, adapter, descriptor, report, report.resolvedExecutable, tempHome, home);
+    } catch (error) {
+      if (home === null) throw error;
+      const retirement = await home.retire();
+      if (retirement.ok) throw error;
+      throw new AggregateError(
+        [error, new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved")],
+        "launch planning failed and its Producer HOME could not be retired",
+      );
+    }
+  }
+
+  private async planWithHome(
+    request: ProducerLaunchRequest,
+    adapter: ProducerAdapter,
+    descriptor: ProducerDescriptor | undefined,
+    report: CapabilityReport,
+    executable: ResolvedExecutable,
+    tempHome: string | null,
+    home: ProducerHomeLease | null,
+  ): Promise<ProducerLaunchPlan> {
     const selection = selectSandboxBackend(report);
     const confinementBackend = selection.backend?.id ?? null;
     const isSeatbelt = selection.backend?.kind === "os" && selection.backend.id === "macos-seatbelt";
@@ -244,7 +290,7 @@ export class ProducerRuntime {
       runId: request.runId ?? "anonymous-run",
       ...(tempHome === null ? {} : { tempHome }),
       capabilityReport: report,
-      executable: report.resolvedExecutable,
+      executable,
       readOnly: nativeReadOnly,
       ...(request.extraWritableRoots && request.extraWritableRoots.length > 0
         ? { extraWritableRoots: request.extraWritableRoots }
@@ -263,7 +309,7 @@ export class ProducerRuntime {
       if (isSeatbelt) {
         invocation = wrapInvocationWithSeatbelt(
           invocation,
-          buildReadOnlySeatbeltPolicy({ tempHome }),
+          buildReadOnlySeatbeltPolicy({ tempHome, protectedRoots: [producerHomeRoot()] }),
         );
       }
     } else if (isSeatbelt) {
@@ -273,6 +319,7 @@ export class ProducerRuntime {
           worktreePath: request.worktreePath,
           tempHome,
           extraWritableRoots: request.extraWritableRoots ?? [],
+          protectedRoots: [producerHomeRoot()],
         }),
       );
     }
@@ -303,6 +350,7 @@ export class ProducerRuntime {
       adapter,
       capabilityReport: report,
       tempHome,
+      home,
       invocation,
       supervisedInvocation,
       builtEnvironment,
@@ -311,11 +359,31 @@ export class ProducerRuntime {
   }
 
   async launch(request: ProducerLaunchRequest): Promise<ProducerLaunchResult> {
-    const plan = request.plan ?? await this.planLaunch(request);
+    if (request.plan !== undefined) return await this.launchPlanned(request, request.plan);
+    const plan = await this.planLaunch(request);
+    try {
+      return await this.launchPlanned(request, plan);
+    } catch (error) {
+      // The plan never reached the caller, so this call still owns its HOME.
+      if (plan.home === null) throw error;
+      const retirement = await plan.home.retire();
+      if (retirement.ok) throw error;
+      throw new AggregateError(
+        [error, new RuntimeError(retirement.diagnostic ?? "Producer HOME preserved")],
+        "Producer launch failed and its HOME could not be retired",
+      );
+    }
+  }
 
+  private async launchPlanned(
+    request: ProducerLaunchRequest,
+    plan: ProducerLaunchPlan,
+  ): Promise<ProducerLaunchResult> {
+    const lease = plan.home ?? request.homeLease ?? null;
+    const claimedServices = lease === null ? request.ps : withHomeClaimRecording(request.ps, lease);
     const processServices = request.runStartContext !== undefined
-      ? withRunStartPidRecording(request.ps, request.runStartContext)
-      : request.ps;
+      ? withRunStartPidRecording(claimedServices, request.runStartContext)
+      : claimedServices;
 
     const exit = request.abortSignal?.aborted === true
       ? preCancelledExit()
@@ -345,6 +413,31 @@ export class ProducerRuntime {
       ok: normalized.ok,
     };
   }
+}
+
+/**
+ * Record each spawned Producer in its HOME claim: `launching` before the
+ * spawn, the process identity right after it. A failed record terminates the
+ * tree, as run-start recording does.
+ */
+function withHomeClaimRecording(ps: PlatformServices, lease: ProducerHomeLease): PlatformServices {
+  return Object.assign(Object.create(ps) as PlatformServices, {
+    os: ps.os,
+    async spawnSupervised(request: Parameters<PlatformServices["spawnSupervised"]>[0]) {
+      await lease.beforeSpawn();
+      const child = await ps.spawnSupervised(request);
+      try {
+        const processToken = child.pid > 1
+          ? await ps.getProcessStartToken(child.pid).catch(() => null)
+          : null;
+        if (child.pid > 1) await lease.recordProducer(child.pid, processToken);
+      } catch (error) {
+        await ps.terminateProcessTree(child).catch(() => {});
+        throw error;
+      }
+      return child;
+    },
+  });
 }
 
 export const producerRuntime = new ProducerRuntime();

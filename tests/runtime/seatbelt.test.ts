@@ -34,6 +34,24 @@ describe("seatbelt profile", () => {
     expect(profile).toContain("(deny network*)");
   });
 
+  it("denies protected roots after every grant and reopens only the temp home", () => {
+    const profile = buildSeatbeltProfile({
+      worktreePath: "/tmp/wt",
+      tempHome: "/state/h/0123abcd",
+      allowNetwork: true,
+      extraWritableRoots: ["/state"],
+      protectedRoots: ["/state/h"],
+    });
+    const lines = profile.split("\n");
+    const deny = lines.indexOf('(deny file-write* (subpath "/state/h"))');
+    const reopen = lines.lastIndexOf('(allow file-write* (subpath "/state/h/0123abcd"))');
+    const lastGrant = lines.lastIndexOf('(allow file-write* (subpath "/state"))');
+    expect(deny).toBeGreaterThan(lastGrant);
+    expect(reopen).toBeGreaterThan(deny);
+    expect(lines.slice(deny + 1).filter(line => line.startsWith("(allow file-write*")))
+      .toEqual(['(allow file-write* (subpath "/state/h/0123abcd"))']);
+  });
+
   it.skipIf(process.platform !== "darwin")(
     "includes both raw and canonical writable paths",
     () => {

@@ -398,6 +398,21 @@ describe("PlatformSafety durable-write", () => {
       expect(await readdir(testDir)).toEqual([".poisoned-run-1"]);
     });
 
+    it("refuses to move a directory that is not the expected one", async () => {
+      await mkdir(path.join(testDir, "home"));
+      const expected = await lstat(path.join(testDir, "home"), { bigint: true });
+      await rename(path.join(testDir, "home"), path.join(testDir, "home-aside"));
+      await mkdir(path.join(testDir, "home"));
+      const session = await openDurableDirectorySession(testDir);
+      try {
+        await expect(moveDirectory(session, "home", ".q-home", expected))
+          .rejects.toThrow("directory move source is not the expected directory");
+      } finally {
+        await session.close();
+      }
+      expect((await readdir(testDir)).sort()).toEqual(["home", "home-aside"]);
+    });
+
     it("refuses to move onto an existing entry", async () => {
       await mkdir(path.join(testDir, "run-1"));
       await mkdir(path.join(testDir, ".poisoned-run-1"));
