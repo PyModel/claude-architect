@@ -39317,7 +39317,8 @@ function seatbeltArgv(policy, argv) {
     worktreePath: policy.worktreePath,
     tempHome: policy.scratchDir,
     allowNetwork: true,
-    sharedTemp: false
+    sharedTemp: false,
+    protectedRoots: [...policy.protectedRoots ?? []]
   }, []);
   return { command: "/usr/bin/sandbox-exec", args: ["-p", profile, ...argv] };
 }
@@ -40146,13 +40147,14 @@ var ProducerHomeLease = class {
     await this.update({ ...this.claim, phase: "launching" });
   }
   async recordProducer(pid, processToken) {
-    if (this.claim.producers.length >= MAX_CLAIM_PRODUCERS) {
+    const producers = this.claim.producers.length < MAX_CLAIM_PRODUCERS ? this.claim.producers : this.claim.producers.filter((entry) => defaultIsProcessAlive(entry.pid));
+    if (producers.length >= MAX_CLAIM_PRODUCERS) {
       throw new RuntimeError("Producer HOME claim records too many processes");
     }
     await this.update({
       ...this.claim,
       phase: "held",
-      producers: [...this.claim.producers, { pid, processToken }]
+      producers: [...producers, { pid, processToken }]
     });
   }
   /**
@@ -40297,6 +40299,55 @@ async function recoverProducerHomes(args) {
     });
   }
   return issues;
+}
+function withClaimRecording(ps, lease) {
+  return {
+    os: ps.os,
+    resolveExecutable: (request) => ps.resolveExecutable(request),
+    async spawnSupervised(request) {
+      await lease.beforeSpawn();
+      const child = await ps.spawnSupervised(request);
+      try {
+        const processToken = child.pid > 1 ? await ps.getProcessStartToken(child.pid).catch(() => null) : null;
+        if (child.pid > 1) await lease.recordProducer(child.pid, processToken);
+      } catch (error51) {
+        await ps.terminateProcessTree(child).catch(() => {
+        });
+        throw error51;
+      }
+      return child;
+    },
+    requestCooperativeCancellation: (process4) => ps.requestCooperativeCancellation(process4),
+    terminateProcessTree: (process4) => ps.terminateProcessTree(process4),
+    getProcessStartToken: (pid) => ps.getProcessStartToken(pid),
+    terminateProcessTreeByPid: (pid, expectedToken) => ps.terminateProcessTreeByPid(pid, expectedToken),
+    acquireCheckoutLock: (checkout) => ps.acquireCheckoutLock(checkout),
+    acquireCleanupJournalLock: () => ps.acquireCleanupJournalLock(),
+    createSecureTempDirectory: () => ps.createSecureTempDirectory(),
+    canonicalizePath: (input) => ps.canonicalizePath(input),
+    assertDirectoryWriteIntegrity: (directory, identity) => ps.assertDirectoryWriteIntegrity(directory, identity)
+  };
+}
+async function withRuntimeScratch(work) {
+  const lease = await allocateProducerHome({ writeScope: [] });
+  let result;
+  try {
+    result = await work(lease.path, lease);
+  } catch (error51) {
+    const retirement2 = await lease.retire();
+    if (!retirement2.ok && typeof error51 === "object" && error51 !== null) {
+      Object.assign(error51, { producerHomeFailure: retirement2.diagnostic ?? "runtime scratch preserved" });
+    }
+    throw error51;
+  }
+  const retirement = await lease.retire();
+  if (!retirement.ok) {
+    throw new RuntimeError(
+      `runtime scratch directory preserved (${retirement.diagnostic ?? "unknown"})`,
+      { classification: "runtime-scratch-preserved", conflict: retirement.conflict }
+    );
+  }
+  return result;
 }
 
 // src/producers/producer-runtime.ts
@@ -40519,7 +40570,7 @@ var ProducerRuntime = class {
   }
   async launchPlanned(request, plan) {
     const lease = plan.home ?? request.homeLease ?? null;
-    const claimedServices = lease === null ? request.ps : withHomeClaimRecording(request.ps, lease);
+    const claimedServices = lease === null ? request.ps : withClaimRecording(request.ps, lease);
     const processServices = request.runStartContext !== void 0 ? withRunStartPidRecording(claimedServices, request.runStartContext) : claimedServices;
     const exit = request.abortSignal?.aborted === true ? preCancelledExit() : await supervise(processServices, {
       executable: plan.supervisedInvocation.executable,
@@ -40552,34 +40603,6 @@ function withHomeFailure(error51, retirement) {
   }
   return new RuntimeError(String(error51), { producerHomeFailure: diagnostic });
 }
-function withHomeClaimRecording(ps, lease) {
-  return {
-    os: ps.os,
-    resolveExecutable: (request) => ps.resolveExecutable(request),
-    async spawnSupervised(request) {
-      await lease.beforeSpawn();
-      const child = await ps.spawnSupervised(request);
-      try {
-        const processToken = child.pid > 1 ? await ps.getProcessStartToken(child.pid).catch(() => null) : null;
-        if (child.pid > 1) await lease.recordProducer(child.pid, processToken);
-      } catch (error51) {
-        await ps.terminateProcessTree(child).catch(() => {
-        });
-        throw error51;
-      }
-      return child;
-    },
-    requestCooperativeCancellation: (process4) => ps.requestCooperativeCancellation(process4),
-    terminateProcessTree: (process4) => ps.terminateProcessTree(process4),
-    getProcessStartToken: (pid) => ps.getProcessStartToken(pid),
-    terminateProcessTreeByPid: (pid, expectedToken) => ps.terminateProcessTreeByPid(pid, expectedToken),
-    acquireCheckoutLock: (checkout) => ps.acquireCheckoutLock(checkout),
-    acquireCleanupJournalLock: () => ps.acquireCleanupJournalLock(),
-    createSecureTempDirectory: () => ps.createSecureTempDirectory(),
-    canonicalizePath: (input) => ps.canonicalizePath(input),
-    assertDirectoryWriteIntegrity: (directory, identity) => ps.assertDirectoryWriteIntegrity(directory, identity)
-  };
-}
 var producerRuntime = new ProducerRuntime();
 
 // src/producers/capability-probe.ts
@@ -40589,8 +40612,7 @@ async function probeAll(ctx, producerRegistry = registry2, options) {
 
 // src/verify/dependency-link.ts
 import { execFile as execFile3 } from "node:child_process";
-import { access as access4, mkdir as mkdir7, mkdtemp, readFile as readFile4, rm as rm5, stat, writeFile } from "node:fs/promises";
-import { tmpdir as tmpdir5 } from "node:os";
+import { access as access4, mkdir as mkdir7, readFile as readFile4, rm as rm5, stat, writeFile } from "node:fs/promises";
 import path18 from "node:path";
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile3);
@@ -40626,8 +40648,7 @@ async function probeCowSupport(dependencies = {}) {
   if (platform !== "darwin" && platform !== "linux") {
     return { cowSupported: false, strategy: "unsupported" };
   }
-  const probeRoot = await mkdtemp(path18.join(tmpdir5(), "ca-cow-probe-"));
-  try {
+  return await withRuntimeScratch(async (probeRoot) => {
     const source = path18.join(probeRoot, "source");
     const target = path18.join(probeRoot, "target");
     const clone2 = cowClone(platform, source, target);
@@ -40642,9 +40663,7 @@ async function probeCowSupport(dependencies = {}) {
     } catch {
       return { cowSupported: false, strategy: clone2.strategy };
     }
-  } finally {
-    await rm5(probeRoot, { recursive: true, force: true });
-  }
+  });
 }
 async function linkPrimaryDependencies(primaryRepo, worktreePath, dependencies = {}) {
   const primaryModules = path18.join(primaryRepo, "node_modules");
@@ -41816,8 +41835,7 @@ function computeChangedPathManifest(inputs) {
 import { createHash as createHash7 } from "node:crypto";
 
 // src/git/candidate-tree.ts
-import { lstat as lstat12, mkdtemp as mkdtemp2, rm as rm6 } from "node:fs/promises";
-import { tmpdir as tmpdir6 } from "node:os";
+import { lstat as lstat12 } from "node:fs/promises";
 import path22 from "node:path";
 
 // src/util/glob.ts
@@ -41979,9 +41997,8 @@ async function freezeCandidate(args) {
   if (await advisoryLstatScan(args.worktreePath, inventory.changedPaths)) {
     return { ok: false, reason: "modified-symlink" };
   }
-  const indexDirectory = await mkdtemp2(path22.join(tmpdir6(), "claude-architect-index-"));
-  const indexFile = path22.join(indexDirectory, "index");
-  try {
+  return await withRuntimeScratch(async (indexDirectory) => {
+    const indexFile = path22.join(indexDirectory, "index");
     await checkedGit(args.worktreePath, ["read-tree", args.baseCommitOid], indexFile);
     if (inventory.changedPaths.length > 0) {
       const literalPathspecs = inventory.changedPaths.map((changedPath) => `:(literal)${changedPath}`);
@@ -42066,9 +42083,7 @@ async function freezeCandidate(args) {
         ignoredPaths: inventory.ignoredPaths.map((ignoredPath) => redact(ignoredPath)).sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
       }
     };
-  } finally {
-    await rm6(indexDirectory, { recursive: true, force: true });
-  }
+  });
 }
 
 // src/runtime/review-snapshot.ts
@@ -42443,7 +42458,7 @@ import {
   open as open11,
   readdir as readdir7,
   realpath as realpath8,
-  rm as rm7
+  rm as rm6
 } from "node:fs/promises";
 import path23 from "node:path";
 var MANIFEST_DIRECTORY = "worktree-removals";
@@ -42602,8 +42617,8 @@ async function verifyWorktreeRemovalManifestStorage() {
   const cleanupErrors = [];
   try {
     await assertDirectoryIdentity3(root, rootIdentity);
-    if (linkedExists) await rm7(linkedPath, { force: false });
-    if (sourceExists) await rm7(sourcePath, { force: false });
+    if (linkedExists) await rm6(linkedPath, { force: false });
+    if (sourceExists) await rm6(sourcePath, { force: false });
     await syncDirectoryMetadata(root);
     await assertDirectoryIdentity3(root, rootIdentity);
   } catch (error51) {
@@ -42664,11 +42679,11 @@ async function removeWorktreeRemovalManifest(manifestPath, transactionId) {
     assertManifestIdentity(manifestPath, identity, 2n),
     assertManifestIdentity(guardPath, identity, 2n)
   ]);
-  await rm7(manifestPath, { force: false });
+  await rm6(manifestPath, { force: false });
   await assertDirectoryIdentity3(root, rootIdentity);
   await assertMissing(manifestPath, "worktree removal manifest");
   await assertManifestIdentity(guardPath, identity, 1n);
-  await rm7(guardPath, { force: false });
+  await rm6(guardPath, { force: false });
   await syncDirectoryMetadata(root);
   await assertDirectoryIdentity3(root, rootIdentity);
   await Promise.all([
@@ -42753,7 +42768,7 @@ async function settleLinkedWorktreeRemovalManifest(manifestPath, temporaryPath, 
     birthtimeNs: published.birthtimeNs
   };
   await assertDirectoryIdentity3(root, rootIdentity);
-  await rm7(temporaryPath, { force: false });
+  await rm6(temporaryPath, { force: false });
   await assertDirectoryIdentity3(root, rootIdentity);
   await assertManifestIdentity(manifestPath, publishedIdentity, 1n);
   await syncDirectoryMetadata(root);
@@ -42867,7 +42882,7 @@ async function readPendingWorktreeRemovalManifests() {
       } else {
         await assertMissing(publishedPath, "removed worktree manifest");
       }
-      await rm7(guardPath, { force: false });
+      await rm6(guardPath, { force: false });
       await syncDirectoryMetadata(root);
       await assertDirectoryIdentity3(root, rootIdentity);
     } catch (error51) {
@@ -42901,7 +42916,7 @@ async function readPendingWorktreeRemovalManifests() {
         throw new RuntimeError("manifest hard-link probe pair is inconsistent");
       }
       for (const { path: probePath } of metadata.reverse()) {
-        await rm7(probePath, { force: false });
+        await rm6(probePath, { force: false });
       }
       await syncDirectoryMetadata(root);
       await assertDirectoryIdentity3(root, rootIdentity);
@@ -42930,7 +42945,7 @@ async function readPendingWorktreeRemovalManifests() {
         if (contents === null) {
           throw new RuntimeError("unpublished worktree removal manifest is not stable");
         }
-        await rm7(temporaryPath, { force: false });
+        await rm6(temporaryPath, { force: false });
         await syncDirectoryMetadata(root);
         await assertDirectoryIdentity3(root, rootIdentity);
       } else {
@@ -44608,8 +44623,7 @@ async function withManagedWorktree(args) {
 }
 
 // src/verify/project-verifier.ts
-import { mkdtemp as mkdtemp3, realpath as realpath10, rm as rm8 } from "node:fs/promises";
-import { tmpdir as tmpdir7 } from "node:os";
+import { realpath as realpath10 } from "node:fs/promises";
 import path25 from "node:path";
 var MAX_COMMAND_OUTPUT_BYTES = 1e6;
 var POSIX_ESSENTIAL_ENV2 = [
@@ -44831,11 +44845,17 @@ async function projectVerify(args) {
   );
   const materialized = await manager.create(args.artifact.candidateCommitOid);
   const backend = verificationConfinementBackend(ps.os, arch);
-  let scratchDir = null;
+  let scratch = null;
   let primaryError;
   try {
-    scratchDir = backend === null ? null : await mkdtemp3(path25.join(tmpdir7(), "claude-architect-verify-"));
-    const confinement = backend === null || scratchDir === null ? null : { backend, worktreePath: materialized.path, scratchDir };
+    scratch = backend === null ? null : await allocateProducerHome({ writeScope: [materialized.path] });
+    const confinement = backend === null || scratch === null ? null : {
+      backend,
+      worktreePath: materialized.path,
+      scratchDir: scratch.path,
+      protectedRoots: [scratch.rootDirectory]
+    };
+    const commandServices = scratch === null ? ps : withClaimRecording(ps, scratch);
     const dependencyLink = await linkPrimaryDependencies(args.repoRoot, materialized.path);
     const materializedTree = (await gitChecked(
       materialized.path,
@@ -44883,7 +44903,7 @@ async function projectVerify(args) {
         command,
         index,
         cwd,
-        ps,
+        ps: commandServices,
         now,
         confinement,
         ...args.logNamePrefix === void 0 ? {} : { logNamePrefix: args.logNamePrefix }
@@ -44915,16 +44935,30 @@ async function projectVerify(args) {
     primaryError = error51;
     throw error51;
   } finally {
-    if (scratchDir !== null) await rm8(scratchDir, { recursive: true, force: true });
+    const retirement = scratch === null ? null : await scratch.retire();
+    const scratchFailure = retirement === null || retirement.ok ? null : new RuntimeError(
+      `verification scratch directory preserved (${retirement.diagnostic ?? "unknown"})`,
+      { classification: "runtime-scratch-preserved", conflict: retirement.conflict }
+    );
+    if (scratchFailure !== null && primaryError !== void 0 && typeof primaryError === "object" && primaryError !== null) {
+      Object.assign(primaryError, { producerHomeFailure: scratchFailure.message });
+    }
     try {
       await materialized.cleanup();
     } catch (cleanupError) {
+      if (primaryError === void 0 && scratchFailure !== null) {
+        throw new AggregateError(
+          [scratchFailure, cleanupError],
+          "project verification scratch and worktree could not be cleaned up"
+        );
+      }
       if (primaryError === void 0) throw cleanupError;
       throw new AggregateError(
         [primaryError, cleanupError],
         "project verification failed and its worktree could not be cleaned up"
       );
     }
+    if (primaryError === void 0 && scratchFailure !== null) throw scratchFailure;
   }
 }
 
@@ -45279,7 +45313,7 @@ import {
   readdir as readdir9,
   realpath as realpath12,
   rename as rename3,
-  rm as rm9
+  rm as rm7
 } from "node:fs/promises";
 import path28 from "node:path";
 
@@ -46822,7 +46856,7 @@ var ArtifactStore = class _ArtifactStore {
   async clearPipelineActiveMarker() {
     const directory = await this.ensureRunDirectory(false);
     if (directory === null) return;
-    await rm9(path28.join(directory, PIPELINE_ACTIVE_MARKER.relativePath), { force: true });
+    await rm7(path28.join(directory, PIPELINE_ACTIVE_MARKER.relativePath), { force: true });
   }
   async list() {
     await this.ensureRunsRoot();
@@ -47017,7 +47051,7 @@ var ArtifactStore = class _ArtifactStore {
     await flushDirectory(this.runsRoot);
     await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
     await assertDirectoryIdentity5(quarantinePath, entry.identity);
-    await rm9(quarantinePath, { recursive: true, force: false });
+    await rm7(quarantinePath, { recursive: true, force: false });
     await flushDirectory(this.runsRoot);
     await this.appendCleanupRecord({
       event: "prune-cleanup-complete",
@@ -47132,7 +47166,7 @@ var ArtifactStore = class _ArtifactStore {
           await assertDirectoryIdentity5(this.runsRoot, runsRootIdentity);
           await assertDirectoryIdentity5(quarantinePath, entry.identity);
           archiveRemovalCommitted = true;
-          await rm9(quarantinePath, { recursive: true, force: false });
+          await rm7(quarantinePath, { recursive: true, force: false });
           await flushDirectory(this.runsRoot);
           await transaction.commit();
           await this.appendCleanupRecord({
@@ -48128,7 +48162,7 @@ async function loadRunEvidence(runId, expected, store = new ArtifactStore(runId)
 
 // src/autopilot/branch-manager.ts
 import { createHash as createHash10, randomUUID as randomUUID7 } from "node:crypto";
-import { chmod, lstat as lstat20, mkdir as mkdir11, mkdtemp as mkdtemp4, realpath as realpath15, rm as rm10 } from "node:fs/promises";
+import { chmod, lstat as lstat20, mkdir as mkdir11, mkdtemp, realpath as realpath15, rm as rm8 } from "node:fs/promises";
 import path31 from "node:path";
 
 // src/git/repo-preconditions.ts
@@ -48415,11 +48449,11 @@ function createIsolatedRemoteTransport(runGit = git) {
     const root = path31.join(resolveStateDir(), "autopilot-remote");
     await mkdir11(root, { recursive: true, mode: 448 });
     await chmod(root, 448);
-    const repository = await mkdtemp4(path31.join(root, "operation-"));
+    const repository = await mkdtemp(path31.join(root, "operation-"));
     await chmod(repository, 448);
     const initialized = await runIsolatedGit(repository, ["init", "--bare", "--quiet", "."]);
     if (!gitSucceeded(initialized)) {
-      await rm10(repository, { recursive: true, force: true });
+      await rm8(repository, { recursive: true, force: true });
       throw new RuntimeError("isolated remote repository initialization failed");
     }
     return repository;
@@ -48436,7 +48470,7 @@ function createIsolatedRemoteTransport(runGit = git) {
       }
       if (repository !== void 0) {
         try {
-          await rm10(repository, { recursive: true });
+          await rm8(repository, { recursive: true });
         } catch {
           return transportFailure("isolated remote repository cleanup");
         }
@@ -48483,7 +48517,7 @@ function createIsolatedRemoteTransport(runGit = git) {
       } finally {
         if (repository !== void 0) {
           try {
-            await rm10(repository, { recursive: true });
+            await rm8(repository, { recursive: true });
           } catch {
             result = transportFailure("isolated remote repository cleanup");
             fetchedOid = void 0;
@@ -48690,7 +48724,7 @@ var WorkflowBranchManager = class {
   constructor(dependencies = {}) {
     this.runGit = dependencies.git ?? git;
     this.remoteTransport = dependencies.remoteTransport ?? createIsolatedRemoteTransport(this.runGit);
-    this.removeOwnership = dependencies.removeOwnership ?? ((ownershipPath) => rm10(ownershipPath));
+    this.removeOwnership = dependencies.removeOwnership ?? ((ownershipPath) => rm8(ownershipPath));
     const platformServices = dependencies.platformServices ?? getPlatformServices();
     this.platformServices = platformServices;
     this.getProcessStartToken = platformServices.getProcessStartToken?.bind(platformServices) ?? getPlatformServices().getProcessStartToken.bind(getPlatformServices());
@@ -52970,8 +53004,6 @@ function routeSlice(input) {
 }
 
 // src/pipeline/slice-composer.ts
-import { mkdtemp as mkdtemp5, rm as rm11 } from "node:fs/promises";
-import { tmpdir as tmpdir8 } from "node:os";
 import path35 from "node:path";
 var NULL_OID = "0000000000000000000000000000000000000000";
 function parseRawDiffEntries(raw) {
@@ -53026,9 +53058,8 @@ async function composeSliceOntoHead(args) {
       `slice ${args.sliceIndex} changed paths already written by its wave: ${collisions.join(", ")}`
     );
   }
-  const indexRoot = await mkdtemp5(path35.join(tmpdir8(), "ca-compose-"));
-  const indexFile = path35.join(indexRoot, "index");
-  try {
+  return await withRuntimeScratch(async (indexRoot) => {
+    const indexFile = path35.join(indexRoot, "index");
     const options = { ...args.objectReadOptions, indexFile };
     await checked(args.checkoutPath, ["read-tree", args.head], options, runGit);
     const instructions = changes.map((change) => change.deleted ? `0 ${NULL_OID}	${change.path}` : `${change.mode} ${change.oid}	${change.path}`).join("\n");
@@ -53046,9 +53077,7 @@ async function composeSliceOntoHead(args) {
       args.objectReadOptions,
       runGit
     )).trim();
-  } finally {
-    await rm11(indexRoot, { recursive: true, force: true });
-  }
+  });
 }
 
 // src/pipeline/pipeline-roles.ts

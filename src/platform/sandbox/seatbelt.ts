@@ -273,7 +273,7 @@ export function wrapInvocationWithSeatbelt(
  * Producer-authored code: writes only to its worktree and scratch directory.
  */
 export function seatbeltArgv(
-  policy: { worktreePath: string; scratchDir: string },
+  policy: { worktreePath: string; scratchDir: string; protectedRoots?: string[] },
   argv: readonly string[],
 ): { command: string; args: string[] } {
   const profile = buildProfile({
@@ -281,6 +281,7 @@ export function seatbeltArgv(
     tempHome: policy.scratchDir,
     allowNetwork: true,
     sharedTemp: false,
+    protectedRoots: [...(policy.protectedRoots ?? [])],
   }, []);
   return { command: "/usr/bin/sandbox-exec", args: ["-p", profile, ...argv] };
 }

@@ -706,6 +706,18 @@ describe("Producer HOME edge cases", () => {
     expect(await homeRootEntries()).toEqual([]);
   });
 
+  it("prunes exited Producers from a full claim to record the next one", async () => {
+    const lease = await allocateProducerHome({ writeScope: [worktreePath] });
+    const deadPid = await deadProcess();
+    for (let index = 0; index < 16; index += 1) await lease.recordProducer(deadPid, null);
+
+    await lease.recordProducer(process.pid, null);
+
+    const claim = JSON.parse(await readFile(`${lease.path}.claim`, "utf8")) as { producers: Array<{ pid: number }> };
+    expect(claim.producers.map(entry => entry.pid)).toEqual([process.pid]);
+    expect((await lease.retire()).ok).toBe(true);
+  });
+
   it("refuses to claim a HOME when the runtime's own start token is unavailable", async () => {
     await expect(allocateProducerHome({ writeScope: [worktreePath], processToken: async () => null }))
       .rejects.toThrow(/process identity is unavailable/u);
@@ -805,7 +817,8 @@ describe("Producer HOME edge cases", () => {
 
   it("terminates the Producer when its claim cannot record it", async () => {
     const lease = await allocateProducerHome({ writeScope: [worktreePath] });
-    for (let index = 0; index < 16; index += 1) await lease.recordProducer(1_000_000 + index, null);
+    // Live entries: exited ones would be pruned to make room.
+    for (let index = 0; index < 16; index += 1) await lease.recordProducer(process.pid, null);
     const spawned: number[] = [];
     const real = getPlatformServices();
     const ps = platformServicesDouble({

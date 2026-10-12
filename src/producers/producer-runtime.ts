@@ -23,6 +23,7 @@ import {
 import {
   allocateProducerHome,
   producerHomeRoot,
+  withClaimRecording,
   type ProducerHomeLease,
   type ProducerHomeRetirement,
 } from "../runtime/producer-home.js";
@@ -387,7 +388,7 @@ export class ProducerRuntime {
     plan: ProducerLaunchPlan,
   ): Promise<ProducerLaunchResult> {
     const lease = plan.home ?? request.homeLease ?? null;
-    const claimedServices = lease === null ? request.ps : withHomeClaimRecording(request.ps, lease);
+    const claimedServices = lease === null ? request.ps : withClaimRecording(request.ps, lease);
     const processServices = request.runStartContext !== undefined
       ? withRunStartPidRecording(claimedServices, request.runStartContext)
       : claimedServices;
@@ -434,43 +435,6 @@ function withHomeFailure(error: unknown, retirement: ProducerHomeRetirement): un
     return Object.assign(error, { producerHomeFailure: diagnostic });
   }
   return new RuntimeError(String(error), { producerHomeFailure: diagnostic });
-}
-
-/**
- * Record each spawned Producer in its HOME claim: `launching` before the
- * spawn, the process identity right after it. A failed record terminates the
- * tree, as run-start recording does.
- */
-function withHomeClaimRecording(ps: PlatformServices, lease: ProducerHomeLease): PlatformServices {
-  return {
-    os: ps.os,
-    resolveExecutable: request => ps.resolveExecutable(request),
-    async spawnSupervised(request) {
-      await lease.beforeSpawn();
-      const child = await ps.spawnSupervised(request);
-      try {
-        const processToken = child.pid > 1
-          ? await ps.getProcessStartToken(child.pid).catch(() => null)
-          : null;
-        if (child.pid > 1) await lease.recordProducer(child.pid, processToken);
-      } catch (error) {
-        await ps.terminateProcessTree(child).catch(() => {});
-        throw error;
-      }
-      return child;
-    },
-    requestCooperativeCancellation: process => ps.requestCooperativeCancellation(process),
-    terminateProcessTree: process => ps.terminateProcessTree(process),
-    getProcessStartToken: pid => ps.getProcessStartToken(pid),
-    terminateProcessTreeByPid: (pid, expectedToken) =>
-      ps.terminateProcessTreeByPid(pid, expectedToken),
-    acquireCheckoutLock: checkout => ps.acquireCheckoutLock(checkout),
-    acquireCleanupJournalLock: () => ps.acquireCleanupJournalLock(),
-    createSecureTempDirectory: () => ps.createSecureTempDirectory(),
-    canonicalizePath: input => ps.canonicalizePath(input),
-    assertDirectoryWriteIntegrity: (directory, identity) =>
-      ps.assertDirectoryWriteIntegrity(directory, identity),
-  };
 }
 
 export const producerRuntime = new ProducerRuntime();

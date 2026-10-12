@@ -18,7 +18,7 @@ import {
   moveDirectory,
   writeAtomic,
 } from "../platform/durable-write.js";
-import { lockOwnerStatus } from "../platform/lock-ownership.js";
+import { defaultIsProcessAlive, lockOwnerStatus } from "../platform/lock-ownership.js";
 import type { PlatformServices } from "../platform/platform-services.js";
 import { getPlatformServices } from "../platform/select-platform.js";
 import { RuntimeError, errorCode, isMissing } from "../util/errors.js";
@@ -353,13 +353,18 @@ export class ProducerHomeLease {
   }
 
   async recordProducer(pid: number, processToken: string | null): Promise<void> {
-    if (this.claim.producers.length >= MAX_CLAIM_PRODUCERS) {
+    // Sequential spawns (verification commands) settle before the next one:
+    // drop recorded processes that have exited before refusing for room.
+    const producers = this.claim.producers.length < MAX_CLAIM_PRODUCERS
+      ? this.claim.producers
+      : this.claim.producers.filter(entry => defaultIsProcessAlive(entry.pid));
+    if (producers.length >= MAX_CLAIM_PRODUCERS) {
       throw new RuntimeError("Producer HOME claim records too many processes");
     }
     await this.update({
       ...this.claim,
       phase: "held",
-      producers: [...this.claim.producers, { pid, processToken }],
+      producers: [...producers, { pid, processToken }],
     });
   }
 
@@ -541,4 +546,73 @@ export async function recoverProducerHomes(args: {
     });
   }
   return issues;
+}
+
+/**
+ * Record each spawned Producer in its HOME claim: `launching` before the
+ * spawn, the process identity right after it. A failed record terminates the
+ * tree, as run-start recording does.
+ */
+export function withClaimRecording(ps: PlatformServices, lease: ProducerHomeLease): PlatformServices {
+  return {
+    os: ps.os,
+    resolveExecutable: request => ps.resolveExecutable(request),
+    async spawnSupervised(request) {
+      await lease.beforeSpawn();
+      const child = await ps.spawnSupervised(request);
+      try {
+        const processToken = child.pid > 1
+          ? await ps.getProcessStartToken(child.pid).catch(() => null)
+          : null;
+        if (child.pid > 1) await lease.recordProducer(child.pid, processToken);
+      } catch (error) {
+        await ps.terminateProcessTree(child).catch(() => {});
+        throw error;
+      }
+      return child;
+    },
+    requestCooperativeCancellation: process => ps.requestCooperativeCancellation(process),
+    terminateProcessTree: process => ps.terminateProcessTree(process),
+    getProcessStartToken: pid => ps.getProcessStartToken(pid),
+    terminateProcessTreeByPid: (pid, expectedToken) =>
+      ps.terminateProcessTreeByPid(pid, expectedToken),
+    acquireCheckoutLock: checkout => ps.acquireCheckoutLock(checkout),
+    acquireCleanupJournalLock: () => ps.acquireCleanupJournalLock(),
+    createSecureTempDirectory: () => ps.createSecureTempDirectory(),
+    canonicalizePath: input => ps.canonicalizePath(input),
+    assertDirectoryWriteIntegrity: (directory, identity) =>
+      ps.assertDirectoryWriteIntegrity(directory, identity),
+  };
+}
+
+/**
+ * Run `work` in a fresh runtime-owned private directory under the HOME root
+ * and retire it afterwards through the same identity-checked quarantine. For
+ * runtime scratch (Git index files, probes, verification TMPDIR) that must
+ * not live in the shared, Producer-writable system temp directory. The work's
+ * own error wins, carrying any retirement diagnostic; a retirement failure
+ * after successful work is a classified `runtime-scratch-preserved` error.
+ */
+export async function withRuntimeScratch<T>(
+  work: (directory: string, lease: ProducerHomeLease) => Promise<T>,
+): Promise<T> {
+  const lease = await allocateProducerHome({ writeScope: [] });
+  let result: T;
+  try {
+    result = await work(lease.path, lease);
+  } catch (error) {
+    const retirement = await lease.retire();
+    if (!retirement.ok && typeof error === "object" && error !== null) {
+      Object.assign(error, { producerHomeFailure: retirement.diagnostic ?? "runtime scratch preserved" });
+    }
+    throw error;
+  }
+  const retirement = await lease.retire();
+  if (!retirement.ok) {
+    throw new RuntimeError(
+      `runtime scratch directory preserved (${retirement.diagnostic ?? "unknown"})`,
+      { classification: "runtime-scratch-preserved", conflict: retirement.conflict },
+    );
+  }
+  return result;
 }

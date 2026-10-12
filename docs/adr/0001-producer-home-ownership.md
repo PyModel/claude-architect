@@ -152,6 +152,20 @@ Diagnostics are returned as `producerHomeIssues` (redacted reasons), logged
 once at server start, and kept out of `worktreeSweepIssues` so a preserved
 HOME never gates repository mutation or re-runs recovery per call.
 
+### Runtime scratch
+
+The same root, claim and retirement serve every other runtime-owned scratch
+directory that previously lived in shared system temp and was removed by
+pathname: the Git index directories of candidate freezing and slice
+composition and the copy-on-write probe (`withRuntimeScratch`), and the
+confined verification command's `TMPDIR` (`projectVerify`, whose command
+spawns are recorded in the scratch claim and whose Seatbelt profile reopens
+only the scratch contents). Shared `$TMPDIR` is writable by every concurrently
+running Seatbelt-confined Producer, so a pathname there was never the
+runtime's alone. A scratch that cannot be retired fails the operation with a
+classified `runtime-scratch-preserved` error, or rides on its primary error as
+`producerHomeFailure`.
+
 ## Consequences and residual limits
 
 - Producer-native sandboxes (Codex) define their own write scope. Their extra
