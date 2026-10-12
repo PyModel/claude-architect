@@ -34143,7 +34143,10 @@ async function moveDirectory(session, sourceName, destinationName, expectedIdent
   }
   const identity = { dev: before.dev, ino: before.ino, birthtimeNs: before.birthtimeNs };
   if (expectedIdentity !== void 0 && !sameDirectoryIdentity(identity, expectedIdentity)) {
-    throw new RuntimeError(`directory move source is not the expected directory: ${sourceName}`);
+    throw new RuntimeError(
+      `directory move source is not the expected directory: ${sourceName}`,
+      { classification: "directory-identity-changed" }
+    );
   }
   try {
     await lstat4(destination);
@@ -34154,7 +34157,10 @@ async function moveDirectory(session, sourceName, destinationName, expectedIdent
   await renameWithRetry(source, destination, session.platform);
   const moved = await lstat4(destination, { bigint: true });
   if (!moved.isDirectory() || moved.isSymbolicLink() || !sameDirectoryIdentity(moved, identity)) {
-    throw new RuntimeError(`moved directory identity changed: ${destinationName}`);
+    throw new RuntimeError(
+      `moved directory identity changed: ${destinationName}`,
+      { classification: "directory-identity-changed" }
+    );
   }
   await session.assertIdentity();
   await session.sync();
@@ -40089,7 +40095,7 @@ async function retireClaimed(root, claim, ps) {
       try {
         await moveDirectory(rootSession(root), claim.homeId, quarantineName, claim.identity);
       } catch (error51) {
-        if (error51 instanceof RuntimeError && /not the expected directory/u.test(error51.message)) {
+        if (error51 instanceof RuntimeError && error51.detail?.classification === "directory-identity-changed") {
           throw conflict("the Producer HOME changed identity at retirement");
         }
         throw error51;

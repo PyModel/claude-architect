@@ -287,7 +287,8 @@ async function retireClaimed(
       try {
         await moveDirectory(rootSession(root), claim.homeId, quarantineName, claim.identity);
       } catch (error) {
-        if (error instanceof RuntimeError && /not the expected directory/u.test(error.message)) {
+        if (error instanceof RuntimeError
+          && error.detail?.classification === "directory-identity-changed") {
           throw conflict("the Producer HOME changed identity at retirement");
         }
         throw error;

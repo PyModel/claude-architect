@@ -499,7 +499,10 @@ export async function moveDirectory(
   }
   const identity: DirectoryIdentity = { dev: before.dev, ino: before.ino, birthtimeNs: before.birthtimeNs };
   if (expectedIdentity !== undefined && !sameDirectoryIdentity(identity, expectedIdentity)) {
-    throw new RuntimeError(`directory move source is not the expected directory: ${sourceName}`);
+    throw new RuntimeError(
+      `directory move source is not the expected directory: ${sourceName}`,
+      { classification: "directory-identity-changed" },
+    );
   }
   try {
     await lstat(destination);
@@ -510,7 +513,10 @@ export async function moveDirectory(
   await renameWithRetry(source, destination, session.platform);
   const moved = await lstat(destination, { bigint: true });
   if (!moved.isDirectory() || moved.isSymbolicLink() || !sameDirectoryIdentity(moved, identity)) {
-    throw new RuntimeError(`moved directory identity changed: ${destinationName}`);
+    throw new RuntimeError(
+      `moved directory identity changed: ${destinationName}`,
+      { classification: "directory-identity-changed" },
+    );
   }
   await session.assertIdentity();
   await session.sync();
