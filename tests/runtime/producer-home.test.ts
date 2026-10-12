@@ -911,3 +911,108 @@ function writeFileSyncOnce(target: string, contents: string): void {
 function rmdirSyncOnce(target: string): void {
   if (existsSync(target)) rmdirSync(target);
 }
+
+describe("plugin state directory confinement", () => {
+  /** An inherited-config Producer (Claude, Pi): no temp HOME, declared writable state. */
+  function inheritedAdapter(script: string, backend: string, declared: () => string[]): ScriptedAdapter {
+    const adapter = new ScriptedAdapter(script, backend);
+    adapter.configurationProfile = () => ({
+      isolationState: "inherited-config-only" as const,
+      credentialSources: [],
+      behavioralConfigSources: ["HOME"],
+      repositoryInstructionSources: [],
+      environmentDependencies: [],
+      temporaryHomeStrategy: "inherit HOME",
+    });
+    const build = adapter.buildInvocation.bind(adapter);
+    adapter.buildInvocation = (planned, ctx) => {
+      const roots = declared();
+      return {
+        ...build(planned, ctx),
+        // A declared state root makes the inherited grant valid under Seatbelt.
+        env: { CLAUDE_CONFIG_DIR: roots[0]! },
+        inheritedStateWritablePaths: roots,
+      };
+    };
+    return adapter;
+  }
+
+  it.runIf(process.platform === "darwin")("denies a Seatbelt-confined inherited Producer every write in the state directory", async () => {
+    restoreBackends.push((() => {
+      const seatbelt = SANDBOX_BACKENDS.find(backend => backend.id === "macos-seatbelt")!;
+      const saved = seatbelt.platforms.map(platform => platform.state);
+      for (const platform of seatbelt.platforms) platform.state = "tested";
+      return () => seatbelt.platforms.forEach((platform, index) => { platform.state = saved[index]!; });
+    })());
+    const stateDir = await realpath(dirname(producerHomeRoot()));
+    // Like ~/.claude containing ~/.claude/plugins/data/<id>: the declared
+    // grant is the state directory's parent.
+    const grant = dirname(stateDir);
+    const allowed = join(grant, `ca-inherited-allowed-${process.pid}`);
+    temporaryPaths.push(allowed);
+    await mkdir(join(stateDir, "runs"), { recursive: true });
+    const adapter = inheritedAdapter(`
+      const fs = require("node:fs");
+      const path = require("node:path");
+      const attempt = action => { try { action(); return "written"; } catch (error) { return error.code; } };
+      const state = ${JSON.stringify(stateDir)};
+      process.stdout.write(JSON.stringify({
+        grant: attempt(() => fs.writeFileSync(${JSON.stringify(allowed)}, "x")),
+        runs: attempt(() => fs.writeFileSync(path.join(state, "runs", "planted"), "x")),
+        decisions: attempt(() => fs.mkdirSync(path.join(state, "decisions-planted"))),
+        stateMove: attempt(() => fs.renameSync(path.join(state, "runs"), path.join(${JSON.stringify(grant)}, "stolen-runs-${process.pid}"))),
+      }));
+    `, "macos-seatbelt", () => [grant]);
+    const runtime = new ProducerRuntime(new ProducerRegistry([adapter]));
+
+    temporaryPaths.push(join(grant, `stolen-runs-${process.pid}`));
+    const result = await runtime.launch({
+      adapter,
+      spec: spec(),
+      worktreePath,
+      intent: "edit",
+      ps: getPlatformServices(),
+      runId: "state-dir-confinement",
+    });
+    result.builtEnvironment.secretRegistration.dispose();
+
+    expect(JSON.parse(result.exit.stdout)).toEqual({
+      grant: "written",
+      runs: "EPERM",
+      decisions: "EPERM",
+      stateMove: "EPERM",
+    });
+  });
+
+  it("refuses an unconfined launch whose declared writable state covers the state directory", async () => {
+    const stateDir = dirname(producerHomeRoot());
+    const adapter = inheritedAdapter("process.exit(0)", "codex-native-sandbox", () => [dirname(stateDir)]);
+    const runtime = new ProducerRuntime(new ProducerRegistry([adapter]));
+
+    const error = await runtime.planLaunch({
+      adapter,
+      spec: spec(),
+      worktreePath,
+      intent: "edit",
+      ps: getPlatformServices(),
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(RuntimeError);
+    expect((error as RuntimeError).message).toMatch(/overlaps the Producer's writable scope/u);
+    expect((error as RuntimeError).detail?.classification).toBe("unsafe-state-directory");
+  });
+
+  it("refuses any launch whose worktree contains the state directory", async () => {
+    const stateDir = dirname(producerHomeRoot());
+    const adapter = inheritedAdapter("process.exit(0)", "codex-native-sandbox", () => [join(worktreePath, "state")]);
+    const runtime = new ProducerRuntime(new ProducerRegistry([adapter]));
+
+    await expect(runtime.planLaunch({
+      adapter,
+      spec: spec(),
+      worktreePath: dirname(stateDir),
+      intent: "edit",
+      ps: getPlatformServices(),
+    })).rejects.toThrow(/overlaps the Producer's writable scope/u);
+  });
+});

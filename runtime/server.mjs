@@ -40052,7 +40052,7 @@ async function assertOutsideProducerWriteScope(root, writeScope) {
     const scope = await canonical(entry);
     if (contains(scope, canonicalRoot) || contains(canonicalRoot, scope)) {
       throw new RuntimeError(
-        "the Producer HOME root overlaps the Producer's writable scope; place the plugin data directory outside the repository and its worktrees",
+        "the plugin state directory overlaps the Producer's writable scope; place the plugin data directory outside the repository, its worktrees, and every Producer's writable state",
         { classification: "unsafe-state-directory" }
       );
     }
@@ -40455,6 +40455,14 @@ var ProducerRuntime = class {
         `Declared writable state cannot be combined with temporary HOME isolation for producer '${producerId}'`
       );
     }
+    await assertOutsideProducerWriteScope(resolveStateDir(), [
+      request.worktreePath,
+      ...request.extraWritableRoots ?? [],
+      ...request.gitObjectAccess === void 0 ? [] : [
+        request.gitObjectAccess.privateObjectsDir,
+        ...[request.gitObjectAccess.sharedObjectsDir].flat()
+      ]
+    ]);
     let home = null;
     let tempHome;
     if (request.tempHome !== void 0) {
@@ -40506,11 +40514,18 @@ var ProducerRuntime = class {
       } : {}
     };
     let invocation = adapter.buildInvocation(request.spec, invocationContext);
+    const stateDirectory = resolveStateDir();
+    if (!isSeatbelt) {
+      await assertOutsideProducerWriteScope(stateDirectory, [
+        ...tempHome === null ? invocation.inheritedStateWritablePaths ?? [] : [],
+        ...selection.backend?.kind === "producer-native" ? descriptor?.nativeWritableRoots?.({ readOnly, platform: process.platform }) ?? [] : []
+      ]);
+    }
     if (readOnly && !nativeReadOnly) {
       if (isSeatbelt) {
         invocation = wrapInvocationWithSeatbelt(
           invocation,
-          buildReadOnlySeatbeltPolicy({ tempHome, protectedRoots: [producerHomeRoot()] })
+          buildReadOnlySeatbeltPolicy({ tempHome, protectedRoots: [stateDirectory] })
         );
       }
     } else if (isSeatbelt) {
@@ -40520,7 +40535,7 @@ var ProducerRuntime = class {
           worktreePath: request.worktreePath,
           tempHome,
           extraWritableRoots: request.extraWritableRoots ?? [],
-          protectedRoots: [producerHomeRoot()]
+          protectedRoots: [stateDirectory]
         })
       );
     }
@@ -44853,7 +44868,7 @@ async function projectVerify(args) {
       backend,
       worktreePath: materialized.path,
       scratchDir: scratch.path,
-      protectedRoots: [scratch.rootDirectory]
+      protectedRoots: [resolveStateDir()]
     };
     const commandServices = scratch === null ? ps : withClaimRecording(ps, scratch);
     const dependencyLink = await linkPrimaryDependencies(args.repoRoot, materialized.path);

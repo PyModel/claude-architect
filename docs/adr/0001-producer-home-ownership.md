@@ -166,6 +166,28 @@ runtime's alone. A scratch that cannot be retired fails the operation with a
 classified `runtime-scratch-preserved` error, or rides on its primary error as
 `producerHomeFailure`.
 
+### Plugin state directory
+
+Inherited-config Producers (Claude, Pi, Agy, Pythinker, OpenCode) run without a
+temp HOME and declare writable host state. Claude declares `~/.claude`, which
+contains the default plugin data directory (`~/.claude/plugins/data/<id>`), so
+its grant used to reach archives, decisions, locks and HOMEs. Every Producer
+Seatbelt profile now denies the whole resolved state directory (raw and
+realpath) after all grants and reopens only the Producer's own HOME contents
+(regex, as above); verification profiles do the same. Where no Seatbelt
+profile applies, nothing can carve the state directory out of a grant, so
+`planLaunch` refuses (`unsafe-state-directory`) when a declared inherited or
+native writable root contains or equals it. Every launch also refuses a
+worktree, extra writable root or Git object directory that overlaps it.
+
+Deliberate deviation from a literal "refuse every declared root that contains
+the state directory": under Seatbelt the deny carves the state directory out,
+and refusing instead would disable the Claude Producer on every default
+install. Off macOS no OS write-confinement backend exists in this codebase
+(no bubblewrap, Landlock or Windows ACL sandbox): the only other backend is
+Codex's producer-native sandbox, covered by the native-root refusal, and
+inherited-config Producers, which depend on Seatbelt, are not eligible there.
+
 ## Consequences and residual limits
 
 - Producer-native sandboxes (Codex) define their own write scope. Their extra

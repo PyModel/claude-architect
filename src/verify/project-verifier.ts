@@ -1,5 +1,6 @@
 import { realpath } from "node:fs/promises";
 import { RuntimeError } from "../util/errors.js";
+import { resolveStateDir } from "../runtime/state-dir.js";
 import { SANDBOX_BACKENDS } from "../platform/sandbox/backends.js";
 import { seatbeltArgv } from "../platform/sandbox/seatbelt.js";
 import { gitChecked as checkedGit } from "../git/checked-git.js";
@@ -428,7 +429,7 @@ export async function projectVerify(args: ProjectVerifyArgs): Promise<ProjectVer
         backend,
         worktreePath: materialized.path,
         scratchDir: scratch.path,
-        protectedRoots: [scratch.rootDirectory],
+        protectedRoots: [resolveStateDir()],
       };
     const commandServices = scratch === null ? ps : withClaimRecording(ps, scratch);
     const dependencyLink = await linkPrimaryDependencies(args.repoRoot, materialized.path);

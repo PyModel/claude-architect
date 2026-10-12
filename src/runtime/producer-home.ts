@@ -222,7 +222,7 @@ export async function assertOutsideProducerWriteScope(
     const scope = await canonical(entry);
     if (contains(scope, canonicalRoot) || contains(canonicalRoot, scope)) {
       throw new RuntimeError(
-        "the Producer HOME root overlaps the Producer's writable scope; place the plugin data directory outside the repository and its worktrees",
+        "the plugin state directory overlaps the Producer's writable scope; place the plugin data directory outside the repository, its worktrees, and every Producer's writable state",
         { classification: "unsafe-state-directory" },
       );
     }

@@ -20,9 +20,10 @@ import {
   withRunStartPidRecording,
   type RunStartContext,
 } from "../runtime/run-start.js";
+import { resolveStateDir } from "../runtime/state-dir.js";
 import {
   allocateProducerHome,
-  producerHomeRoot,
+  assertOutsideProducerWriteScope,
   withClaimRecording,
   type ProducerHomeLease,
   type ProducerHomeRetirement,
@@ -237,6 +238,16 @@ export class ProducerRuntime {
       );
     }
 
+    // No grant the runtime hands out may reach its own state.
+    await assertOutsideProducerWriteScope(resolveStateDir(), [
+      request.worktreePath,
+      ...(request.extraWritableRoots ?? []),
+      ...(request.gitObjectAccess === undefined ? [] : [
+        request.gitObjectAccess.privateObjectsDir,
+        ...[request.gitObjectAccess.sharedObjectsDir].flat(),
+      ]),
+    ]);
+
     let home: ProducerHomeLease | null = null;
     let tempHome: string | null;
     if (request.tempHome !== undefined) {
@@ -308,12 +319,24 @@ export class ProducerRuntime {
     };
 
     let invocation = adapter.buildInvocation(request.spec, invocationContext);
+    // The whole plugin state directory (archives, decisions, locks, HOMEs) is
+    // denied after every Seatbelt grant. Without Seatbelt nothing can carve it
+    // out of a declared grant, so such a launch is refused instead.
+    const stateDirectory = resolveStateDir();
+    if (!isSeatbelt) {
+      await assertOutsideProducerWriteScope(stateDirectory, [
+        ...(tempHome === null ? invocation.inheritedStateWritablePaths ?? [] : []),
+        ...(selection.backend?.kind === "producer-native"
+          ? descriptor?.nativeWritableRoots?.({ readOnly, platform: process.platform }) ?? []
+          : []),
+      ]);
+    }
 
     if (readOnly && !nativeReadOnly) {
       if (isSeatbelt) {
         invocation = wrapInvocationWithSeatbelt(
           invocation,
-          buildReadOnlySeatbeltPolicy({ tempHome, protectedRoots: [producerHomeRoot()] }),
+          buildReadOnlySeatbeltPolicy({ tempHome, protectedRoots: [stateDirectory] }),
         );
       }
     } else if (isSeatbelt) {
@@ -323,7 +346,7 @@ export class ProducerRuntime {
           worktreePath: request.worktreePath,
           tempHome,
           extraWritableRoots: request.extraWritableRoots ?? [],
-          protectedRoots: [producerHomeRoot()],
+          protectedRoots: [stateDirectory],
         }),
       );
     }
